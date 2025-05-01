@@ -429,6 +429,25 @@ def view_guide():
         guide=guide_data
     )
 
+@app.route('/clear_data', methods=['POST'])
+def clear_data():
+    """Clear uploaded marking guide and submission data from session and cache."""
+    # Remove session variables
+    session.pop('guide_uploaded', None)
+    session.pop('marking_guide', None)
+    session.pop('last_submission', None)
+    # Optionally clear storage (if you want to clear all cached guides/submissions)
+    try:
+        guide_storage.clear_storage()
+    except Exception:
+        pass
+    try:
+        submission_storage.clear_storage()
+    except Exception:
+        pass
+    flash('All uploaded data has been cleared.', 'success')
+    return redirect(url_for('index'))
+
 @app.errorhandler(413)
 def request_entity_too_large(error):
     """Handle file too large error."""

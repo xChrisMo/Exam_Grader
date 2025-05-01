@@ -95,22 +95,24 @@
     {% endwith %}
 
     <!-- Cache Management -->
-    <div class="row mt-4">
+    <hr class="my-4">
+    <h4 class="mb-3 text-center text-secondary"><i class="bi bi-hdd-stack"></i> Cache Management</h4>
+    <div class="row g-4 mb-2">
         <!-- Submission Cache -->
-        {% if storage_stats %}
-        <div class="col-md-6 mb-4">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Submission Cache</h5>
+        <div class="col-md-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                    <span><i class="bi bi-archive"></i> <strong>Submission Cache</strong></span>
                     <form action="{{ url_for('clear_cache') }}" method="post" class="d-inline">
                         <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to clear all cached submission results?')">
-                            Clear Cache
+                            <i class="bi bi-trash"></i> Clear
                         </button>
                     </form>
                 </div>
-                <div class="card-body">
+                <div class="card-body d-flex flex-column justify-content-between">
+                    {% if storage_stats %}
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-6">
                             <ul class="list-group">
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     Cached Files
@@ -122,7 +124,7 @@
                                 </li>
                             </ul>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-6">
                             <ul class="list-group">
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     Storage Limit
@@ -142,26 +144,30 @@
                         </small>
                     </div>
                     {% endif %}
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-inbox" style="font-size:2rem;"></i><br>
+                        No submission cache data available.
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
-        {% endif %}
-
         <!-- Guide Cache -->
-        {% if guide_stats %}
-        <div class="col-md-6 mb-4">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Guide Cache</h5>
+        <div class="col-md-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                    <span><i class="bi bi-journal-bookmark"></i> <strong>Guide Cache</strong></span>
                     <form action="{{ url_for('clear_guide_cache') }}" method="post" class="d-inline">
                         <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to clear all cached marking guides?')">
-                            Clear Cache
+                            <i class="bi bi-trash"></i> Clear
                         </button>
                     </form>
                 </div>
-                <div class="card-body">
+                <div class="card-body d-flex flex-column justify-content-between">
+                    {% if guide_stats %}
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-6">
                             <ul class="list-group">
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     Cached Guides
@@ -173,7 +179,7 @@
                                 </li>
                             </ul>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-6">
                             <ul class="list-group">
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     Storage Limit
@@ -193,10 +199,15 @@
                         </small>
                     </div>
                     {% endif %}
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-inbox" style="font-size:2rem;"></i><br>
+                        No guide cache data available.
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
-        {% endif %}
     </div>
 
     <!-- Last Submission -->
