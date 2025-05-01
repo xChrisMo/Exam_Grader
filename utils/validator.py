@@ -1,7 +1,10 @@
+"""
+Validation utilities for the Exam Grader application.
+"""
 from typing import List, Dict, Any, Union
 import os
 import re
-from src.utils.logger import Logger
+from utils.logger import Logger
 
 logger = Logger().get_logger()
 
@@ -70,8 +73,47 @@ class Validator:
         return True
     
     @staticmethod
+    def validate_marking_guide_question(question: Dict[str, Any]) -> bool:
+        """Validate a marking guide question format."""
+        required_fields = {
+            'question_number': (int, 'Question number must be an integer'),
+            'question_text': (str, 'Question text must be a string'),
+            'max_marks': (Union[int, float], 'Max marks must be a number'),
+            'keywords': (list, 'Keywords must be a list'),
+            'required_elements': (list, 'Required elements must be a list')
+        }
+        
+        # Check required fields
+        for field, (field_type, error_msg) in required_fields.items():
+            if field not in question:
+                logger.error(f"Missing required field in question: {field}")
+                return False
+            if not isinstance(question[field], field_type):
+                logger.error(f"{error_msg}: got {type(question[field])}")
+                return False
+        
+        # Validate question number
+        if question['question_number'] <= 0:
+            logger.error("Question number must be positive")
+            return False
+        
+        # Validate max marks
+        if question['max_marks'] <= 0:
+            logger.error("Max marks must be positive")
+            return False
+        
+        # Validate text content
+        if not question['question_text'].strip():
+            logger.error("Question text cannot be empty")
+            return False
+        
+        return True
+    
+    @staticmethod
     def validate_marking_guide_format(guide: Dict[str, Any]) -> bool:
         """Validate marking guide format with comprehensive checks."""
+        logger.debug(f"Validating marking guide format. Guide data: {guide}")
+        
         required_fields = {
             'questions': (list, 'Questions must be a list'),
             'total_marks': (Union[int, float], 'Total marks must be a number')
@@ -82,6 +124,7 @@ class Validator:
             if field not in guide:
                 logger.error(f"Missing required field in marking guide: {field}")
                 return False
+            logger.debug(f"Checking field {field}, type: {type(guide[field])}, expected: {field_type}")
             if not isinstance(guide[field], field_type):
                 logger.error(f"{error_msg}: {field}")
                 return False
@@ -98,7 +141,7 @@ class Validator:
         
         # Validate each question
         for question in guide['questions']:
-            if not Validator.validate_answer_format(question):
+            if not Validator.validate_marking_guide_question(question):
                 return False
         
         # Validate marks sum
@@ -107,6 +150,8 @@ class Validator:
             logger.error(f"Sum of question marks ({total_question_marks}) does not match total marks ({guide['total_marks']})")
             return False
         
+        # Log successful validation
+        logger.debug("Marking guide format validation successful")
         return True
     
     @staticmethod

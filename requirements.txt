@@ -1,7 +1,27 @@
-python-docx>=0.8.11
-PyMuPDF>=1.23.8
-streamlit>=1.32.0
-python-dotenv>=1.0.0
-pytest>=7.4.0
-pandas>=2.0.0
-numpy>=1.24.0 
+# Core Dependencies
+requests==2.31.0
+python-dotenv==1.0.1
+numpy==1.26.4
+pandas==2.2.0
+
+# Document Processing
+PyMuPDF==1.23.8  # For PDF processing
+python-docx==1.1.0  # For Word documents
+Pillow==10.2.0  # For image processing
+
+# Web Framework
+Flask==3.0.2
+Werkzeug==3.0.1
+
+# Development Dependencies
+pytest==8.0.0
+black==24.2.0
+isort==5.13.2
+flake8==7.0.0
+mypy==1.8.0
+pytest-cov==4.1.0
+
+# Type Stubs
+types-requests
+types-python-dateutil
+types-PyYAML 

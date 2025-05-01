@@ -4,7 +4,7 @@ import shutil
 from typing import Any, Optional, Dict
 from datetime import datetime, timedelta
 from src.config.config_manager import ConfigManager
-from src.utils.logger import Logger
+from utils.logger import Logger
 
 logger = Logger().get_logger()
 
@@ -16,6 +16,7 @@ class Cache:
         self.default_ttl = timedelta(hours=24)  # Default cache time-to-live
         self.max_cache_size = 100 * 1024 * 1024  # 100MB max cache size
         self.cleanup_threshold = 0.9  # Cleanup when 90% of max size is reached
+        logger.debug("Cache initialized")
     
     def _get_cache_path(self, key: str) -> str:
         """Get the cache file path for a given key."""
@@ -37,7 +38,7 @@ class Cache:
             if current_size < self.max_cache_size * self.cleanup_threshold:
                 return
             
-            logger.info(f"Cache size ({current_size / 1024 / 1024:.2f}MB) exceeds threshold, starting cleanup")
+            logger.debug(f"Cache size ({current_size / 1024 / 1024:.2f}MB) exceeds threshold, starting cleanup")
             
             # Get all cache files with their last access times
             cache_files = []
@@ -61,9 +62,9 @@ class Cache:
                 file_size = os.path.getsize(file_info['path'])
                 os.remove(file_info['path'])
                 removed_size += file_size
-                logger.info(f"Removed cache file: {os.path.basename(file_info['path'])}")
+                logger.debug(f"Removed cache file: {os.path.basename(file_info['path'])}")
             
-            logger.info(f"Cache cleanup complete. Removed {removed_size / 1024 / 1024:.2f}MB")
+            logger.debug(f"Cache cleanup complete. Removed {removed_size / 1024 / 1024:.2f}MB")
         except Exception as e:
             logger.error(f"Error during cache cleanup: {str(e)}")
     
@@ -81,12 +82,12 @@ class Cache:
             cache_time = datetime.fromisoformat(data['timestamp'])
             if datetime.now() - cache_time > self.default_ttl:
                 os.remove(cache_path)
-                logger.info(f"Removed expired cache entry: {key}")
+                logger.debug(f"Removed expired cache entry: {key}")
                 return None
             
             # Update last access time
             os.utime(cache_path, None)
-            
+            logger.debug(f"Cache hit for key: {key}")
             return data['value']
         except Exception as e:
             logger.error(f"Error reading cache: {str(e)}")
@@ -103,6 +104,7 @@ class Cache:
             with open(cache_path, 'w') as f:
                 json.dump(data, f)
             
+            logger.debug(f"Cache set for key: {key}")
             # Check if cleanup is needed
             self._cleanup_cache()
         except Exception as e:
@@ -113,7 +115,7 @@ class Cache:
         try:
             shutil.rmtree(self.cache_dir)
             os.makedirs(self.cache_dir, exist_ok=True)
-            logger.info("Cache cleared successfully")
+            logger.debug("Cache cleared successfully")
         except Exception as e:
             logger.error(f"Error clearing cache: {str(e)}")
     
@@ -123,7 +125,7 @@ class Cache:
         try:
             if os.path.exists(cache_path):
                 os.remove(cache_path)
-                logger.info(f"Removed cache entry: {key}")
+                logger.debug(f"Removed cache entry: {key}")
         except Exception as e:
             logger.error(f"Error removing cache item: {str(e)}")
     
@@ -133,13 +135,15 @@ class Cache:
             total_size = self._get_cache_size()
             file_count = len([f for f in os.listdir(self.cache_dir) if f.endswith('.json')])
             
-            return {
+            stats = {
                 'total_size_bytes': total_size,
                 'total_size_mb': total_size / 1024 / 1024,
                 'file_count': file_count,
                 'max_size_mb': self.max_cache_size / 1024 / 1024,
                 'cleanup_threshold': self.cleanup_threshold
             }
+            logger.debug(f"Cache stats: {stats}")
+            return stats
         except Exception as e:
             logger.error(f"Error getting cache stats: {str(e)}")
             return {} 

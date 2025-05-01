@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Processing Results - Exam Grader{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="text-center mb-4">Processing Results</h1>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-file-text"></i>
+                {{ filename }}
+            </h5>
+        </div>
+        <div class="card-body">
+            <!-- Debug Info -->
+            {% if debug %}
+            <div class="alert alert-info">
+                <strong>Debug Info:</strong><br>
+                Raw text available: {{ raw_text is not none }}<br>
+                Raw text length: {{ raw_text|length if raw_text else 0 }}<br>
+                Results available: {{ results is not none }}<br>
+                Number of results: {{ results|length if results else 0 }}
+            </div>
+            {% endif %}
+
+            <!-- Always show raw text section -->
+            <h4>Raw Extracted Text:</h4>
+            <div class="raw-text mb-4">
+                {% if raw_text %}
+                    <pre class="text-content">{{ raw_text|safe }}</pre>
+                {% else %}
+                    <div class="alert alert-warning">No raw text was extracted from the document.</div>
+                {% endif %}
+            </div>
+            <hr>
+
+            <h4>Parsed Questions and Answers:</h4>
+            {% if results %}
+                {% for question_num, answer in results.items() %}
+                    <div class="question-answer">
+                        <h5>Question {{ question_num }}</h5>
+                        <div class="answer">
+                            {{ answer|safe|nl2br }}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-warning">
+                    No questions or answers were found in the document.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="text-center">
+        <a href="{{ url_for('index') }}" class="btn btn-primary">
+            Process Another Document
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.raw-text {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.25rem;
+    border: 1px solid #dee2e6;
+    max-height: 300px;
+    overflow-y: auto;
+}
+.text-content {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: monospace;
+    margin: 0;
+    font-size: 0.9rem;
+}
+</style>
+{% endblock %} 

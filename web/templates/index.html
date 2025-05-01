@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Document - Exam Grader{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="text-center mb-4">Exam Grader</h1>
+    
+    <div class="row">
+        <!-- Marking Guide Upload -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Step 1: Upload Marking Guide</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('upload_guide') }}" method="post" enctype="multipart/form-data" id="guideForm">
+                        <div class="mb-3">
+                            <label for="guide" class="form-label">
+                                <i class="bi bi-file-earmark-text"></i>
+                                Choose marking guide
+                            </label>
+                            <input type="file" class="form-control" id="guide" name="guide" accept=".docx,.txt">
+                            <div class="form-text">Supported formats: .docx, .txt</div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary" id="guideButton">
+                                Upload Marking Guide
+                            </button>
+                            {% if session.get('guide_uploaded') %}
+                                <a href="{{ url_for('view_guide') }}" class="btn btn-outline-primary">
+                                    View Guide
+                                </a>
+                            {% endif %}
+                        </div>
+                    </form>
+                    {% if guide_data %}
+                        <div class="mt-3">
+                            <div class="alert alert-success mb-0">
+                                <i class="bi bi-check-circle-fill"></i>
+                                Guide loaded: {{ guide_data.total_marks }} total marks
+                                <br>
+                                <small>{{ guide_data.questions|length }} questions</small>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Student Submission Upload -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Step 2: Upload Student Submission</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" id="submissionForm">
+                        <div class="mb-3">
+                            <label for="file" class="form-label">
+                                <i class="bi bi-cloud-upload"></i>
+                                Choose student submission
+                            </label>
+                            <input type="file" class="form-control" id="file" name="file" accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.txt">
+                            <div class="form-text">Supported formats: PDF, Word, Images, Text</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="submissionButton" {% if not session.get('guide_uploaded') %}disabled{% endif %}>
+                            Upload Submission
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing Status -->
+    <div class="loading" id="processingStatus" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Processing...</span>
+        </div>
+        <p class="mt-2">Processing your document... This may take a few moments.</p>
+    </div>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="alert alert-info mt-3">
+                <ul class="mb-0">
+                    {% for message in messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Cache Management -->
+    <div class="row mt-4">
+        <!-- Submission Cache -->
+        {% if storage_stats %}
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Submission Cache</h5>
+                    <form action="{{ url_for('clear_cache') }}" method="post" class="d-inline">
+                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to clear all cached submission results?')">
+                            Clear Cache
+                        </button>
+                    </form>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Cached Files
+                                    <span class="badge bg-primary rounded-pill">{{ storage_stats.file_count }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Storage Used
+                                    <span class="badge bg-info rounded-pill">{{ "%.1f"|format(storage_stats.total_size_mb) }} MB</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Storage Limit
+                                    <span class="badge bg-secondary rounded-pill">{{ storage_stats.max_size_mb|int }} MB</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Cache Expiry
+                                    <span class="badge bg-secondary rounded-pill">{{ storage_stats.expiration_days|int }} days</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    {% if storage_stats.file_count > 0 %}
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            Files age: {{ "%.1f"|format(storage_stats.newest_file_days) }} to {{ "%.1f"|format(storage_stats.oldest_file_days) }} days old
+                        </small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Guide Cache -->
+        {% if guide_stats %}
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Guide Cache</h5>
+                    <form action="{{ url_for('clear_guide_cache') }}" method="post" class="d-inline">
+                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to clear all cached marking guides?')">
+                            Clear Cache
+                        </button>
+                    </form>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Cached Guides
+                                    <span class="badge bg-primary rounded-pill">{{ guide_stats.file_count }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Storage Used
+                                    <span class="badge bg-info rounded-pill">{{ "%.1f"|format(guide_stats.total_size_mb) }} MB</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Storage Limit
+                                    <span class="badge bg-secondary rounded-pill">{{ guide_stats.max_size_mb|int }} MB</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Cache Expiry
+                                    <span class="badge bg-secondary rounded-pill">{{ guide_stats.expiration_days|int }} days</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    {% if guide_stats.file_count > 0 %}
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            Files age: {{ "%.1f"|format(guide_stats.newest_file_days) }} to {{ "%.1f"|format(guide_stats.oldest_file_days) }} days old
+                        </small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Last Submission -->
+    {% if session.get('last_submission') %}
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">Last Processed Submission</h5>
+        </div>
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>{{ session.last_submission.filename }}</strong>
+                    <br>
+                    <small class="text-muted">
+                        {% if session.last_submission.results %}
+                            {% if 'raw' in session.last_submission.results %}
+                                Raw text extracted
+                            {% else %}
+                                {{ session.last_submission.results|length }} questions processed
+                            {% endif %}
+                        {% endif %}
+                    </small>
+                </div>
+                <a href="{{ url_for('view_submission') }}" class="btn btn-primary">
+                    View Results
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- File Size Info -->
+    <div class="mt-4">
+        <p class="text-muted">
+            <small>Maximum file size: 20MB</small>
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Handle guide form submission
+document.getElementById('guideForm').addEventListener('submit', function(e) {
+    const guideInput = document.getElementById('guide');
+    if (!guideInput.files.length) {
+        e.preventDefault();
+        alert('Please select a marking guide file');
+        return;
+    }
+    document.getElementById('guideButton').disabled = true;
+    document.getElementById('processingStatus').style.display = 'block';
+});
+
+// Handle submission form submission
+document.getElementById('submissionForm').addEventListener('submit', function(e) {
+    const fileInput = document.getElementById('file');
+    if (!fileInput.files.length) {
+        e.preventDefault();
+        alert('Please select a submission file');
+        return;
+    }
+    document.getElementById('submissionButton').disabled = true;
+    document.getElementById('processingStatus').style.display = 'block';
+});
+
+// Reset processing status on page load
+window.addEventListener('load', function() {
+    document.getElementById('processingStatus').style.display = 'none';
+    document.getElementById('guideButton').disabled = false;
+    document.getElementById('submissionButton').disabled = {% if not session.get('guide_uploaded') %}true{% else %}false{% endif %};
+});
+</script>
+{% endblock %} 

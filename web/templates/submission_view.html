@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Submission Results - Exam Grader{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="text-center">Submission Results</h1>
+            <div class="text-center mb-3">
+                <h5 class="text-muted">{{ filename }}</h5>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Section -->
+    {% if results %}
+        {% if 'raw' in results %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Extracted Text</h5>
+                </div>
+                <div class="card-body">
+                    <pre class="text-wrap">{{ results.raw|nl2br }}</pre>
+                </div>
+            </div>
+        {% else %}
+            {% for question_num, answer in results.items()|sort %}
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Question {{ question_num }}</h5>
+                        {% if marking_guide and marking_guide.questions %}
+                            {% set guide_question = marking_guide.questions|selectattr('question_number', 'equalto', question_num)|first %}
+                            {% if guide_question %}
+                                <span class="badge bg-primary">{{ guide_question.max_marks }} marks</span>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <div class="answer-text mb-3">
+                            {{ answer|nl2br }}
+                        </div>
+                        
+                        {% if marking_guide and marking_guide.questions %}
+                            {% set guide_question = marking_guide.questions|selectattr('question_number', 'equalto', question_num)|first %}
+                            {% if guide_question %}
+                                <div class="marking-guide mt-4">
+                                    <h6>Marking Guide:</h6>
+                                    <div class="guide-text text-muted mb-3">
+                                        {{ guide_question.question_text|nl2br }}
+                                    </div>
+                                    
+                                    {% if guide_question.keywords %}
+                                        <div class="keywords">
+                                            <h6>Key Points:</h6>
+                                            <ul class="list-group">
+                                                {% for keyword in guide_question.keywords %}
+                                                    <li class="list-group-item">{{ keyword }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% else %}
+        <div class="alert alert-warning">
+            No results found in the submission.
+        </div>
+    {% endif %}
+
+    <!-- Raw Text Section -->
+    {% if raw_text and not 'raw' in results %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Raw Extracted Text</h5>
+            </div>
+            <div class="card-body">
+                <pre class="text-wrap">{{ raw_text|nl2br }}</pre>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="text-center mt-4">
+        <a href="{{ url_for('index') }}" class="btn btn-primary">Back to Upload</a>
+    </div>
+</div>
+{% endblock %} 
