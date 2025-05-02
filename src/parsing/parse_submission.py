@@ -282,18 +282,16 @@ class QuestionParser:
         logger.debug(f"Splitting text with {len(question_numbers)} expected questions")
         
         for line in lines:
-            line = line.strip()
-            if not line:
-                if current_answer:  # Keep blank lines within answers
-                    current_answer.append('')
-                continue
+            # Don't strip the line to preserve original formatting
+            original_line = line
+            stripped_line = line.strip()
             
-            # Check if this line starts a new question
+            # Check if this line starts a new question (based on the stripped line)
             is_question = False
             question_number = None
             
             for pattern, _ in QUESTION_PATTERNS:
-                match = pattern.match(line)
+                match = pattern.match(stripped_line)
                 if match:
                     question_num = int(match.group(1))
                     if question_num in question_numbers:  # Only match numbers we're looking for
@@ -305,24 +303,26 @@ class QuestionParser:
             if is_question:
                 # Save previous question if exists
                 if current_question is not None and current_answer:
-                    answer_text = '\n'.join(current_answer).strip()
+                    # Join the answer preserving original formatting
+                    answer_text = '\n'.join(current_answer)
                     logger.debug(f"Saving question {current_question} with length {len(answer_text)}")
                     result[str(current_question)] = answer_text
                 
                 # Start new question
                 current_question = question_number
-                # Include the question line in the answer if it has content after the question number
-                parts = line.split(None, 2)
-                current_answer = [parts[2]] if len(parts) > 2 else []
+                
+                # Include the current line as the beginning of the new answer
+                current_answer = [original_line]
                 logger.debug(f"Started question {current_question}")
             else:
-                # Add line to current answer
+                # Add line to current answer with original formatting
                 if current_question is not None:
-                    current_answer.append(line)
+                    current_answer.append(original_line)
         
         # Save last question
         if current_question is not None and current_answer:
-            answer_text = '\n'.join(current_answer).strip()
+            # Join the answer preserving original formatting
+            answer_text = '\n'.join(current_answer)
             logger.debug(f"Saving final question {current_question} with length {len(answer_text)}")
             result[str(current_question)] = answer_text
         

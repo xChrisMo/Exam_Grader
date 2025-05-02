@@ -62,7 +62,7 @@ class MarkingGuide:
         """Add a question to the marking guide."""
         try:
             # Validate inputs
-            if not text or not text.strip():
+            if not text:
                 raise ValueError("Question text cannot be empty")
             if marks <= 0:
                 raise ValueError("Marks must be positive")
@@ -70,7 +70,7 @@ class MarkingGuide:
             question_number = convert_to_number(number)
             question = {
                 'question_number': question_number,
-                'question_text': text.strip(),
+                'question_text': text,  # Don't strip to preserve formatting
                 'max_marks': marks,
                 'model_answer': ' ',  # Space instead of empty string to pass validation
                 'student_answer': ' ',  # Space instead of empty string to pass validation
@@ -149,8 +149,13 @@ def _parse_docx_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[Mar
         logger.debug("Starting DOCX parsing")
         
         for para in doc.paragraphs:
+            # Preserve original text formatting
+            original_text = para.text
             text = para.text.strip()
             if not text:
+                # Preserve empty lines in the text
+                if current_question:
+                    current_text.append('')
                 continue
             
             logger.debug(f"Processing paragraph: {text[:100]}...")
@@ -160,7 +165,8 @@ def _parse_docx_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[Mar
                 logger.debug("Found question marker")
                 # Save previous question if exists
                 if current_question and current_marks > 0:  # Only save if we have valid marks
-                    question_text = '\n'.join(current_text).strip()
+                    # Preserve the formatting by joining with original line breaks
+                    question_text = '\n'.join(current_text)
                     logger.debug(f"Saving question {current_question}:")
                     logger.debug(f"- Text length: {len(question_text)}")
                     logger.debug(f"- Text preview: {question_text[:100]}...")
@@ -177,8 +183,8 @@ def _parse_docx_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[Mar
                 if len(parts) >= 2:
                     current_question = parts[1].rstrip('.:)')
                     current_text = []  # Reset text buffer
-                    if len(parts) > 2:  # Add any remaining text after question number
-                        current_text.append(parts[2])
+                    # Add the original text as the first line
+                    current_text.append(original_text)
                     current_marks = 0
                     current_keywords = []
                     logger.debug(f"Started new question {current_question}")
@@ -189,47 +195,49 @@ def _parse_docx_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[Mar
                 if parsed_marks:
                     current_marks = parsed_marks
                     logger.debug(f"Found marks: {current_marks}")
-                    # Don't add this line to question text if it only contains marks
-                    if not text.strip().startswith('(') or not text.strip().endswith(')'):
-                        current_text.append(text)
+                    # Add the original text to preserve formatting
+                    current_text.append(original_text)
                 else:
-                    current_text.append(text)
+                    current_text.append(original_text)
                     
             # Check for keywords/key points
             elif text.lower().startswith(('key point', 'keyword', '•', '-', '*')):
                 keyword = text.lstrip('•-* ').strip()
                 if keyword:
                     current_keywords.append(keyword)
-                    logger.debug(f"Added keyword: {keyword}")
-                    
-            # Add to current question text
-            elif current_question:
-                current_text.append(text)
-                logger.debug("Added line to current question")
+                    logger.debug(f"Found keyword: {keyword}")
+                
+                # Add the original text to preserve formatting
+                current_text.append(original_text)
+                
+            # Other text - just add to current question
+            else:
+                current_text.append(original_text)
         
-        # Save the last question
+        # Save last question if exists
         if current_question and current_marks > 0:
-            question_text = '\n'.join(current_text).strip()
+            # Preserve the formatting by joining with original line breaks
+            question_text = '\n'.join(current_text)
             logger.debug(f"Saving final question {current_question}:")
             logger.debug(f"- Text length: {len(question_text)}")
             logger.debug(f"- Text preview: {question_text[:100]}...")
-            logger.debug(f"- Marks: {current_marks}")
             guide.add_question(
                 current_question,
                 question_text,
                 current_marks,
                 current_keywords
             )
-            
+        
+        # Final validation
         if not guide.questions:
-            return None, "No questions found in marking guide"
-            
-        logger.info(f"Successfully parsed marking guide with {len(guide.questions)} questions")
+            return None, "No valid questions found in marking guide"
+        
+        logger.info(f"Successfully parsed {len(guide.questions)} questions with {guide.total_marks} total marks")
         return guide, None
         
     except Exception as e:
         logger.error(f"Error parsing DOCX marking guide: {str(e)}")
-        return None, f"Failed to parse DOCX marking guide: {str(e)}"
+        return None, f"Failed to parse DOCX guide: {str(e)}"
 
 def _parse_txt_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[MarkingGuide], Optional[str]]:
     """Parse a .txt marking guide."""
@@ -266,18 +274,20 @@ def _parse_txt_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[Mark
         current_text = []
         
         for line in content.split('\n'):
+            # Preserve original line formatting
+            original_line = line
             text = line.strip()
-            if not text:
-                continue
-                
-            # Check for new question
+            
+            # Check for new question, but use the stripped version for detection
             if text.startswith(('QUESTION', 'Question', 'question', 'Q.', 'q.')):
                 if current_text:
                     questions.append('\n'.join(current_text))
-                current_text = [text]
+                # Start with the original line to preserve formatting
+                current_text = [original_line]
                 logger.debug(f"Found new question: {text}")
             else:
-                current_text.append(text)
+                # Add original line with formatting preserved
+                current_text.append(original_line)
                 
         # Add the last question
         if current_text:
@@ -290,72 +300,46 @@ def _parse_txt_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[Mark
         
         # Process each question
         for question_text in questions:
-            # Find question number
-            first_line = question_text.split('\n')[0]
+            # Find question number from the first line (need stripped version for parsing)
+            first_line = question_text.split('\n')[0].strip()
             parts = first_line.split(None, 2)
             if len(parts) >= 2:
                 try:
                     question_num = parts[1].rstrip('.:)')
                     logger.debug(f"Processing question {question_num}")
                     
-                    # Get the question content - include everything after the question number
-                    content_lines = []
+                    # Get the original question content - include everything as is
+                    content_lines = question_text.split('\n')
                     
-                    # Process the first line - if it has content after the question number
-                    if len(parts) > 2:
-                        content_lines.append(parts[2])
-                        logger.debug(f"First line content: {parts[2]}")
-                    
-                    # Add all remaining lines except the last one (which might contain marks)
-                    lines = question_text.split('\n')[1:]
-                    logger.debug(f"Found {len(lines)} additional lines")
-                    
-                    # Find marks in the last line
+                    # Find marks (need stripped version for parsing)
                     marks = 0
-                    last_line = lines[-1] if lines else ''
-                    if '(' in last_line and ')' in last_line and 'mark' in last_line.lower():
-                        marks = _parse_marks(last_line)
-                        logger.debug(f"Found marks in last line: {marks}")
-                        # Don't include the marks line in content
-                        lines = lines[:-1]
-                    
-                    # If no marks found in last line, check all lines
-                    if marks == 0:
-                        for line in reversed(lines):
-                            marks = _parse_marks(line)
+                    for line in content_lines:
+                        stripped_line = line.strip()
+                        if '(' in stripped_line and ')' in stripped_line and 'mark' in stripped_line.lower():
+                            marks = _parse_marks(stripped_line)
                             if marks:
-                                logger.debug(f"Found marks in line: {marks}")
-                                # Remove this line from content if it only contains marks
-                                if line.strip().startswith('(') and line.strip().endswith(')'):
-                                    lines.remove(line)
+                                logger.debug(f"Found marks: {marks}")
                                 break
                     
-                    # Add remaining lines to content
-                    content_lines.extend(lines)
-                    
-                    # Join all content lines and clean up
-                    question_content = '\n'.join(content_lines).strip()
-                    logger.debug(f"Question {question_num} content length: {len(question_content)}")
-                    logger.debug(f"Question {question_num} content: {question_content[:100]}...")
-                    
                     if marks > 0:
-                        if not question_content:
-                            logger.error(f"Empty question text for question {question_num}")
+                        # Use the entire original text as the question content to preserve formatting
                         guide.add_question(
                             question_num,
-                            question_content,
+                            question_text,  # Use the full original text
                             marks,
                             []  # No keywords for now
                         )
                         logger.debug(f"Added question {question_num} with {marks} marks")
+                    else:
+                        logger.warning(f"No marks found for question {question_num}, skipping")
                 except ValueError as e:
                     logger.error(f"Error processing question: {str(e)}")
                     continue
                     
         if not guide.questions:
-            return None, "No questions found in marking guide"
+            return None, "No valid questions found in marking guide"
             
-        logger.debug(f"Successfully parsed {len(guide.questions)} questions")
+        logger.info(f"Successfully parsed {len(guide.questions)} questions with {guide.total_marks} total marks")
         return guide, None
         
     except Exception as e:
