@@ -64,9 +64,16 @@
                             <input type="file" class="form-control" id="file" name="file" accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.txt">
                             <div class="form-text">Supported formats: PDF, Word, Images, Text</div>
                         </div>
-                        <button type="submit" class="btn btn-primary" id="submissionButton" {% if not session.get('guide_uploaded') %}disabled{% endif %}>
-                            Upload Submission
-                        </button>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary" id="submissionButton" {% if not session.get('guide_uploaded') %}disabled{% endif %}>
+                                Upload Submission
+                            </button>
+                            {% if session.get('last_submission') %}
+                                <a href="{{ url_for('view_submission') }}" class="btn btn-outline-primary">
+                                    View Submission
+                                </a>
+                            {% endif %}
+                        </div>
                     </form>
                 </div>
             </div>

@@ -2,13 +2,11 @@
 Exam Submission Parser Module
 
 This module provides functionality for parsing student exam submissions in various formats
-(PDF, DOCX, images, text files) and extracting question-answer pairs. It supports multiple
-question numbering formats and uses OCR for handwritten submissions.
+(PDF, DOCX, images, text files) and extracting the raw content. It no longer parses 
+question-answer pairs but simply returns the extracted document text.
 
 Key Components:
     - DocumentParser: Handles different file formats and text extraction
-    - QuestionParser: Processes text to identify and extract question-answer pairs
-    - QUESTION_PATTERNS: Supported question number formats (e.g., "Q1", "1.", "(1)")
 
 Example Usage:
     ```python
@@ -16,18 +14,15 @@ Example Usage:
     if error:
         print(f"Error: {error}")
     else:
-        for question, answer in result.items():
-            print(f"Question {question}: {answer}")
+        print(text)  # Raw document content
     ```
 """
 
 import os
-import re
-from typing import Dict, Optional, Tuple, List, Pattern
+from typing import Dict, Optional, Tuple, List
 from pathlib import Path
 import fitz  # PyMuPDF
 from docx import Document
-import unicodedata
 import mimetypes
 
 from src.config.config_manager import ConfigManager
@@ -53,17 +48,6 @@ try:
 except Exception as e:
     logger.log_error("OCR Service Error", f"Failed to initialize OCR service: {str(e)}")
     raise
-
-# Question patterns with descriptions and examples
-QUESTION_PATTERNS: List[Tuple[Pattern, str]] = [
-    (re.compile(r'(?:^|\n)(?:[Qq]uestion\s+|[Qq]\.\s*)(\d+)'), 'Question 1, Q. 1'),  # Matches: Question 1, Q. 1
-    (re.compile(r'(?:^|\n)(\d+)\s*[.:]'), '1., 1:'),                                 # Matches: 1., 1:
-    (re.compile(r'(?:^|\n)\((\d+)\)'), '(1)'),                                       # Matches: (1), (2)
-    (re.compile(r'(?:^|\n)\[(\d+)\]'), '[1]'),                                       # Matches: [1], [2]
-    (re.compile(r'(?:^|\n)[A-Za-z]\.\s*(\d+)'), 'A. 1'),                            # Matches: A. 1, B. 2
-    (re.compile(r'(?:^|\n)[a-z]\)\s*(\d+)'), 'a) 1'),                               # Matches: a) 1, b) 2
-    (re.compile(r'(?:^|\n)(\d+)[.:]?\s*[A-Za-z]'), '1. Casting'),                   # Matches: 1. Casting
-]
 
 class DocumentParser:
     """
@@ -255,88 +239,9 @@ class DocumentParser:
             logger.log_error("File Error", f"Error reading text file: {str(e)}")
             raise
 
-class QuestionParser:
-    """
-    Handles the parsing and extraction of questions and answers from text content.
-    """
-    
-    @staticmethod
-    def find_question_numbers(text: str) -> list:
-        """Find all question numbers in the text."""
-        numbers = set()
-        for pattern, _ in QUESTION_PATTERNS:
-            matches = pattern.finditer(text)
-            for match in matches:
-                numbers.add(int(match.group(1)))
-        return sorted(list(numbers))
-    
-    @staticmethod
-    def split_text_by_questions(text: str, question_numbers: list) -> Dict[str, str]:
-        """Split text into questions and answers."""
-        result = {}
-        lines = text.split('\n')
-        current_question = None
-        current_answer = []
-        
-        # Add debug logging
-        logger.debug(f"Splitting text with {len(question_numbers)} expected questions")
-        
-        for line in lines:
-            # Don't strip the line to preserve original formatting
-            original_line = line
-            stripped_line = line.strip()
-            
-            # Check if this line starts a new question (based on the stripped line)
-            is_question = False
-            question_number = None
-            
-            for pattern, _ in QUESTION_PATTERNS:
-                match = pattern.match(stripped_line)
-                if match:
-                    question_num = int(match.group(1))
-                    if question_num in question_numbers:  # Only match numbers we're looking for
-                        is_question = True
-                        question_number = question_num
-                        logger.debug(f"Found question {question_number}")
-                        break
-            
-            if is_question:
-                # Save previous question if exists
-                if current_question is not None and current_answer:
-                    # Join the answer preserving original formatting
-                    answer_text = '\n'.join(current_answer)
-                    logger.debug(f"Saving question {current_question} with length {len(answer_text)}")
-                    result[str(current_question)] = answer_text
-                
-                # Start new question
-                current_question = question_number
-                
-                # Include the current line as the beginning of the new answer
-                current_answer = [original_line]
-                logger.debug(f"Started question {current_question}")
-            else:
-                # Add line to current answer with original formatting
-                if current_question is not None:
-                    current_answer.append(original_line)
-        
-        # Save last question
-        if current_question is not None and current_answer:
-            # Join the answer preserving original formatting
-            answer_text = '\n'.join(current_answer)
-            logger.debug(f"Saving final question {current_question} with length {len(answer_text)}")
-            result[str(current_question)] = answer_text
-        
-        # Log results
-        logger.debug(f"Found {len(result)} questions")
-        for q_num, text in result.items():
-            logger.debug(f"Question {q_num} length: {len(text)}")
-            logger.debug(f"Question {q_num} preview: {text[:100]}...")
-        
-        return result
-
 def parse_student_submission(file_path: str) -> Tuple[Dict[str, str], Optional[str], Optional[str]]:
     """
-    Parse a student's exam submission file and extract questions and answers.
+    Parse a student's exam submission file and extract raw text content.
     
     This function serves as the main entry point for processing student submissions.
     It handles multiple file formats and uses appropriate parsers based on the file type.
@@ -346,8 +251,8 @@ def parse_student_submission(file_path: str) -> Tuple[Dict[str, str], Optional[s
         
     Returns:
         Tuple containing:
-        - Dict[str, str]: Mapping of question numbers to answers
-        - Optional[str]: Raw text content of the submission (useful for debugging)
+        - Dict[str, str]: Contains a single entry with raw text content
+        - Optional[str]: Raw text content of the submission (same as in the dict)
         - Optional[str]: Error message if processing failed, None otherwise
         
     Example:
@@ -356,7 +261,7 @@ def parse_student_submission(file_path: str) -> Tuple[Dict[str, str], Optional[s
         if error:
             print(f"Failed to parse: {error}")
         else:
-            print(f"Found {len(answers)} questions")
+            print(f"Raw text: {raw_text}")
         ```
         
     Note:
@@ -385,18 +290,12 @@ def parse_student_submission(file_path: str) -> Tuple[Dict[str, str], Optional[s
         else:
             return {}, None, f"Unsupported file type: {file_type}"
         
-        # Find question numbers
-        question_numbers = QuestionParser.find_question_numbers(text)
-        if not question_numbers:
-            return {}, text, "No questions found in the document"
+        # Simply return the raw text without parsing for questions
+        if not text:
+            return {}, text, "No text extracted from the document"
         
-        # Split text into questions and answers
-        parsed_data = QuestionParser.split_text_by_questions(text, question_numbers)
-        
-        if not parsed_data:
-            return {}, text, "Could not parse questions and answers"
-        
-        return parsed_data, text, None
+        # Return a dictionary with a single 'raw' key containing the raw text
+        return {'raw': text}, text, None
         
     except Exception as e:
         logger.log_error("Parse Error", f"Error parsing submission: {str(e)}")

@@ -399,7 +399,7 @@ def upload_file():
             return redirect(url_for('index'))
             
         if not results:
-            flash('No questions or answers were identified in the submission')
+            flash('No content could be extracted from the submission')
             return redirect(url_for('index'))
             
         # Store results in session for viewing
@@ -446,7 +446,7 @@ def view_submission():
                 
         # Check if results is empty
         if not submission['results']:
-            flash('The submission contains no results. Please try uploading again.')
+            flash('The submission contains no extracted content. Please try uploading again.')
             return redirect(url_for('index'))
             
         marking_guide = session.get('marking_guide', {})
@@ -527,7 +527,7 @@ def process_api():
             return jsonify({'error': error}), 400
             
         if not results:
-            return jsonify({'error': 'No questions or answers were identified in the submission.'}), 400
+            return jsonify({'error': 'No content could be extracted from the submission.'}), 400
             
         # Get marking guide from session
         marking_guide = session.get('marking_guide', {})
