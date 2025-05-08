@@ -1,235 +1,115 @@
 # Exam Grader
 
-An automated system for grading exams using OCR and natural language processing. The system supports processing handwritten submissions, PDF documents, and text files, providing automated grading based on predefined marking guides.
+An AI-powered application for educators to grade student exam submissions against marking guides using DeepSeek LLM.
 
 ## Features
 
-- Handwriting OCR support for multiple file formats
-- Automated grading based on marking guides
-- Web interface for easy submission management
-- Caching system for improved performance
-- Detailed feedback and scoring
-- Support for multiple file formats:
-  - Images (JPG, PNG, TIFF, BMP, GIF)
-  - PDF documents
-  - Word documents (DOCX)
-  - Text files (TXT)
+### Document Processing
+- **Document Parsing**: Upload and parse marking guides and student submissions in various formats (PDF, Word, images, text)
+- **OCR Processing**: Extract text from image-based submissions automatically
 
-## Project Structure
+### AI-Powered Grading
+- **Marking Guide Analysis**: Extract questions, criteria, and mark allocation
+- **LLM Integration**: Utilize DeepSeek's LLM for intelligent analysis
+- **Detailed Feedback**: Generate per-criterion feedback with justifications
 
-```
-exam_grader/
-├── src/                  # Core application code
-│   ├── config/          # Configuration management
-│   ├── parsing/         # Document parsing and grading
-│   ├── services/        # External service integrations
-│   └── storage/         # Storage implementations
-├── web/                 # Web interface
-│   ├── static/         # Static assets
-│   └── templates/      # HTML templates
-├── utils/               # Utility modules
-│   ├── cache.py        # Caching implementation
-│   ├── logger.py       # Logging configuration
-│   ├── retry.py        # Retry mechanism
-│   └── validator.py    # Input validation
-├── logs/               # Application logs
-├── temp/               # Temporary files
-│   └── uploads/       # Upload directory
-└── output/             # Generated output files
-```
+### Criteria Mapping
+- **Submission-to-Criteria Mapping**: Map specific parts of student submissions to each marking criterion
+- **Confidence Scoring**: Evaluate how well each submission section addresses the criteria
+- **Gap Analysis**: Identify unmapped criteria and submission sections
 
-## Prerequisites
+### Web Interface
+- **Intuitive Upload Flow**: Step-by-step process for uploading and analyzing documents
+- **Visualized Results**: Clear presentation of grades and feedback
+- **Responsive Design**: Works on desktop and mobile devices
+- **Result Caching**: Store results to avoid redundant API calls
 
+## Getting Started
+
+### Prerequisites
 - Python 3.8 or higher
-- pip (Python package installer)
-- Virtual environment tool (venv)
-- Git
+- DeepSeek API key (set in `.env` file)
+- Required Python packages (see `requirements.txt`)
 
-## Installation
+### Installation
 
 1. Clone the repository:
-
-   ```bash
-   git clone <repository-url>
-   cd exam_grader
+   ```
+   git clone https://github.com/your-username/exam-grader.git
+   cd exam-grader
    ```
 
-2. Create and activate a virtual environment:
-
-   ```bash
-   # Windows
-   python -m venv venv
-   venv\Scripts\activate
-
-   # Linux/macOS
-   python3 -m venv venv
-   source venv/bin/activate
+2. Install dependencies:
    ```
-
-3. Install dependencies:
-
-   ```bash
    pip install -r requirements.txt
    ```
 
-4. Create necessary directories:
-   ```bash
-   mkdir -p logs temp/uploads output
+3. Create a `.env` file in the project root with your DeepSeek API key:
+   ```
+   DEEPSEEK_API_KEY=your_api_key_here
    ```
 
-## Configuration
-
-1. Create configuration file:
-
-   ```bash
-   cp config.env.example config.env
+4. Run the application:
    ```
-
-2. Configure the following settings in `config.env`:
-
-   ```ini
-   # API Configuration
-   HANDWRITING_OCR_API_KEY=your_api_key_here
-   OCR_API_BASE_URL=https://www.handwritingocr.com/api/v3
-
-   # Application Settings
-   DEBUG=False
-   HOST=127.0.0.1
-   PORT=8501
-   SECRET_KEY=your-secret-key-here
-
-   # Logging Configuration
-   LOG_LEVEL=INFO
-   MAX_LOG_SIZE_MB=10
-   LOG_BACKUP_COUNT=5
-
-   # File Upload Settings
-   MAX_CONTENT_LENGTH_MB=20
-   ALLOWED_EXTENSIONS=pdf,jpg,jpeg,png,gif,bmp,tiff,txt,docx
-
-   # Cache Settings
-   CACHE_TTL_HOURS=24
-   MAX_CACHE_SIZE_MB=100
-   CACHE_CLEANUP_THRESHOLD=0.9
-   ```
-
-3. Environment-specific settings:
-   - Development: Set `DEBUG=True` for detailed error messages
-   - Production: Set proper `SECRET_KEY` and disable debug mode
-
-## Running the Application
-
-1. Development mode:
-
-   ```bash
-   # Windows
-   run_dev.bat
-
-   # Linux/macOS
    python web/app.py
    ```
 
-2. Production mode:
-   ```bash
-   export FLASK_ENV=production
-   python web/app.py
-   ```
-
-The application will be available at `http://127.0.0.1:8501`
+5. Access the web interface at `http://localhost:8501`
 
 ## Usage Guide
 
-1. Prepare Marking Guide:
+### Step 1: Upload Marking Guide
+- Upload your marking guide document (DOCX or TXT format)
+- The system will extract criteria, questions, and mark allocations
 
-   - Create a marking guide document (DOCX or TXT format)
-   - Include clear question numbers and model answers
-   - Specify marks for each question
+### Step 2: Upload Student Submission
+- Upload a student's submission (PDF, DOCX, images, or TXT)
+- OCR will automatically extract text from images or scanned documents
 
-2. Upload Marking Guide:
+### Step 3: Map Submission to Criteria
+- Click "Map Submission to Criteria" to analyze how the submission addresses each criterion
+- View the mapping to see which parts of the submission match each criterion
+- Identify unmapped criteria and submission sections
 
-   - Click "Upload Marking Guide" on the main page
-   - Select your guide document
-   - The system will parse and validate the guide
+### Step 4: Grade Submission
+- Click "Grade Submission" to evaluate the submission against the marking guide
+- Review detailed feedback and scores for each criterion
+- Export results as needed
 
-3. Process Submissions:
+## Architecture
 
-   - Click "Upload Submission" to process student work
-   - Supported formats: PDF, images, DOCX, TXT
-   - Maximum file size: 20MB
+The application follows a modular architecture:
 
-4. View Results:
-   - Access processed submissions through the dashboard
-   - View detailed feedback and scores
-   - Export results if needed
+- `src/parsing/`: Document parsing modules
+- `src/services/`: Core services (OCR, LLM, grading, mapping)
+- `src/storage/`: Storage services for caching results
+- `web/`: Web interface using Flask
+- `utils/`: Utility functions and helpers
 
-## Troubleshooting
+## Key Components
 
-1. OCR Issues:
+### Mapping Service
+The mapping service analyzes both the marking guide and student submission to create detailed mappings between criteria and submission sections. It uses the DeepSeek LLM to:
 
-   - Ensure proper API key configuration
-   - Check file format and size limits
-   - Review logs in `logs/app.log`
+1. Identify individual criteria in the marking guide
+2. Find relevant sections in the student submission that address each criterion
+3. Assign confidence scores to indicate match quality
+4. Track unmapped criteria and submission sections
 
-2. Performance Issues:
+### Grading Service
+The grading service evaluates student submissions by:
 
-   - Check cache configuration
-   - Monitor disk space for logs and cache
-   - Adjust cleanup thresholds if needed
-
-3. Upload Errors:
-   - Verify file permissions
-   - Check upload directory exists
-   - Ensure file size within limits
-
-## Development
-
-1. Code Style:
-
-   ```bash
-   # Format code
-   black .
-
-   # Sort imports
-   isort .
-
-   # Check style
-   flake8
-   ```
-
-2. Type Checking:
-
-   ```bash
-   mypy .
-   ```
-
-3. Running Tests:
-   ```bash
-   pytest
-   ```
-
-## Maintenance
-
-1. Log Management:
-
-   - Logs are stored in `logs/app.log`
-   - Rotated automatically when size exceeds 10MB
-   - Keeps up to 5 backup files
-
-2. Cache Cleanup:
-
-   - Automatic cleanup when threshold reached
-   - Manual cleanup through web interface
-   - Cache expires after 24 hours by default
-
-3. Temporary Files:
-   - Automatically cleaned up after processing
-   - Located in `temp/uploads`
-   - Regular cleanup recommended
+1. Analyzing how well each criterion is addressed
+2. Assigning scores based on the marking guide
+3. Providing detailed feedback and justifications
+4. Calculating overall grades and percentages
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+[MIT License](LICENSE)
 
-## Support
+## Acknowledgements
 
-For issues and feature requests, please use the issue tracker on GitHub.
+- DeepSeek for providing the LLM API
+- OCR libraries for text extraction
+- Flask for the web framework

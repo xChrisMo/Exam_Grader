@@ -76,7 +76,8 @@ class Logger:
         if getattr(self, '_initialized', False):
             return
             
-        self.logger = setup_logger('exam_grader', 'logs/app.log')
+        # Let setup_logger handle directory creation by passing None
+        self.logger = setup_logger('exam_grader', None)
         
         # Performance metrics
         self.metrics = {

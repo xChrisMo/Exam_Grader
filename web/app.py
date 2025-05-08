@@ -29,8 +29,13 @@ from src.config.config_manager import ConfigManager
 from src.parsing.parse_submission import parse_student_submission
 from src.parsing.parse_guide import parse_marking_guide
 from src.services.ocr_service import OCRServiceError
+from src.services.llm_service import LLMService, LLMServiceError
+from src.services.grading_service import GradingService
+from src.services.mapping_service import MappingService
 from src.storage.submission_storage import SubmissionStorage
 from src.storage.guide_storage import GuideStorage
+from src.storage.grading_storage import GradingStorage
+from src.storage.mapping_storage import MappingStorage
 from utils.logger import Logger
 from utils.validator import Validator
 
@@ -46,6 +51,34 @@ config = ConfigManager()
 submission_storage = SubmissionStorage()
 guide_storage = GuideStorage()
 validator = Validator()
+
+# Initialize LLM and related services
+try:
+    llm_service = LLMService()
+    grading_service = GradingService(llm_service)
+    grading_storage = GradingStorage()
+    
+    # Initialize mapping service with a separate LLM instance for better concurrency
+    mapping_service = MappingService()
+    mapping_storage = MappingStorage()
+    
+    llm_status = True
+    logger.info("LLM and related services initialized successfully")
+except LLMServiceError as e:
+    logger.error(f"Failed to initialize LLM service: {str(e)}")
+    llm_service = None
+    grading_service = None
+    grading_storage = None
+    mapping_service = None
+    mapping_storage = None
+    llm_status = False
+
+# Check OCR service status
+try:
+    from src.services.ocr_service import ocr_service_instance
+    ocr_status = ocr_service_instance is not None
+except:
+    ocr_status = False
 
 # Configure upload settings
 UPLOAD_FOLDER = Path('temp/uploads')
@@ -208,21 +241,44 @@ def process_submission(file_path: str, file_content: bytes) -> Tuple[Dict[str, s
 @app.route('/')
 def index():
     """Render the main page."""
-    guide_data = None
-    if session.get('guide_uploaded'):
-        guide_data = session.get('marking_guide')
     
     # Get storage statistics
-    storage_stats = submission_storage.get_storage_stats()
-    guide_stats = guide_storage.get_storage_stats()
+    storage_stats = submission_storage.get_storage_stats() if submission_storage else None
+    guide_stats = guide_storage.get_storage_stats() if guide_storage else None
     
-    # Calculate expiration days from cache TTL (24 hours by default)
-    guide_stats['expiration_days'] = 1  # 24 hours = 1 day
+    # Get guide data from session
+    guide_data = session.get('guide_data')
     
-    return render_template('index.html', 
-                         guide_data=guide_data,
+    # Get grading statistics
+    grading_stats = None
+    if grading_storage:
+        results = grading_storage.get_all_results()
+        if results:
+            # Calculate statistics
+            scores = [r.get('percent_score', 0) for r in results if 'percent_score' in r]
+            if scores:
+                grading_stats = {
+                    'result_count': len(results),
+                    'avg_score': sum(scores) / len(scores) if scores else 0,
+                    'highest_score': max(scores) if scores else 0,
+                    'lowest_score': min(scores) if scores else 0
+                }
+    
+    # Check if processes are in progress
+    grading_in_progress = session.get('grading_in_progress', False)
+    mapping_in_progress = session.get('mapping_in_progress', False)
+    
+    return render_template(
+        'index.html', 
                          storage_stats=storage_stats,
-                         guide_stats=guide_stats)
+        guide_stats=guide_stats,
+        guide_data=guide_data,
+        grading_stats=grading_stats,
+        grading_in_progress=grading_in_progress,
+        mapping_in_progress=mapping_in_progress,
+        ocr_status=ocr_status,
+        llm_status=llm_status
+    )
 
 @app.route('/clear-cache', methods=['POST'])
 def clear_cache():
@@ -265,6 +321,15 @@ def upload_guide():
             
             session['guide_uploaded'] = True
             session['marking_guide'] = guide_data
+            
+            # Store the raw guide content for mapping and grading
+            # Convert bytes to string for session storage if needed
+            if isinstance(file_content, bytes):
+                guide_content = file_content.decode('utf-8', errors='ignore')
+            else:
+                guide_content = str(file_content)
+            session['guide_content'] = guide_content
+            
             flash('Marking guide loaded from cache')
             return redirect(url_for('index'))
         
@@ -325,6 +390,15 @@ def upload_guide():
         # Store in session
         session['guide_uploaded'] = True
         session['marking_guide'] = guide_data
+        
+        # Store the raw guide content for mapping and grading
+        # Convert bytes to string for session storage if needed
+        if isinstance(file_content, bytes):
+            guide_content = file_content.decode('utf-8', errors='ignore')
+        else:
+            guide_content = str(file_content)
+        session['guide_content'] = guide_content
+        
         flash('Marking guide uploaded successfully')
         
         return redirect(url_for('index'))
@@ -339,93 +413,97 @@ def upload_guide():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    """Handle student submission upload."""
+    """
+    Handle file upload for student submission.
+    """
     try:
+        # Check if a guide has been uploaded first
         if not session.get('guide_uploaded'):
             flash('Please upload a marking guide first')
             return redirect(url_for('index'))
             
+        # Check if file was provided
         if 'file' not in request.files:
-            flash('No file selected')
-            return redirect(url_for('index'))
+            flash('No file provided')
+            return redirect(request.url)
             
         file = request.files['file']
         
-        # Validate file input
-        is_valid, error_message, file_content = validate_input(file, ALLOWED_EXTENSIONS)
+        # Validate input
+        is_valid, error_msg, file_content = validate_input(file)
         if not is_valid:
-            flash(error_message)
+            flash(error_msg)
             return redirect(url_for('index'))
             
-        # Save uploaded file
+        # Create a secure filename and save to temp directory
         filename = secure_filename(file.filename)
-        if not filename:
-            flash('Invalid filename')
-            return redirect(url_for('index'))
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        file.save(file_path)
+        
+        # Check if we have stored results
+        stored_results = submission_storage.get_results(file_content)
+        if stored_results:
+            results, raw_text, _ = stored_results
+            logger.info(f"Using cached results for {filename}")
             
-        file_path = Path(app.config['UPLOAD_FOLDER']) / filename
-        try:
-            file.save(str(file_path))
-        except Exception as e:
-            logger.error(f"Failed to save uploaded file: {str(e)}")
-            flash('Failed to save uploaded file. Please try again.')
-            return redirect(url_for('index'))
-        
-        # Check if file exists and is readable
-        if not os.path.exists(file_path):
-            flash('File was not saved properly')
-            return redirect(url_for('index'))
+            # Store submission in session
+            session['last_submission'] = {
+                'filename': filename,
+                'results': results,
+                'raw_text': raw_text
+            }
             
-        if not os.access(file_path, os.R_OK):
-            flash('File cannot be read')
-            return redirect(url_for('index'))
+            # Clean up temp file
+            try:
+                os.remove(file_path)
+            except:
+                pass
+                
+            return redirect(url_for('view_submission'))
         
-        # Process submission
-        results, raw_text, error = process_submission(str(file_path), file_content)
-        
-        # Debug logging
-        logger.info(f"Raw text length: {len(raw_text) if raw_text else 0}")
-        logger.info(f"Results: {bool(results)}")
-        logger.info(f"Error: {error if error else 'None'}")
-        
-        # Clean up uploaded file
+        # Process the submission file
         try:
-            os.remove(file_path)
-        except Exception as e:
-            logger.warning(f"Failed to remove uploaded file: {str(e)}")
+            results, raw_text, error = process_submission(file_path, file_content)
         
         if error:
-            flash(error)
+                logger.error(f"Error processing submission: {error}")
+                flash(f"Error processing submission: {error}")
+                # Clean up temp file
+                try:
+                    os.remove(file_path)
+                except:
+                    pass
             return redirect(url_for('index'))
             
-        if not results:
-            flash('No content could be extracted from the submission')
-            return redirect(url_for('index'))
-            
-        # Store results in session for viewing
+            # Store submission in session
         session['last_submission'] = {
             'filename': filename,
             'results': results,
             'raw_text': raw_text
         }
         
-        # Get marking guide from session
-        marking_guide = session.get('marking_guide', {})
-        
-        return render_template(
-            'submission_view.html',
-            filename=filename,
-            results=results,
-            raw_text=raw_text,
-            marking_guide=marking_guide
-        )
+            # Clean up temp file
+            try:
+                os.remove(file_path)
+            except:
+                pass
+                
+            return redirect(url_for('view_submission'))
             
-    except MemoryError:
-        flash('File is too large to process')
+        except Exception as e:
+            logger.error(f"Error processing submission: {str(e)}")
+            flash(f"Error processing submission: {str(e)}")
+            # Clean up temp file
+            try:
+                os.remove(file_path)
+            except:
+                pass
         return redirect(url_for('index'))
+            
     except Exception as e:
-        logger.error(f"Upload failed: {str(e)}")
-        flash(f"Upload failed: {str(e)}")
+        logger.error(f"Unexpected error: {str(e)}")
+        flash(f"An unexpected error occurred: {str(e)}")
         return redirect(url_for('index'))
 
 @app.route('/view-submission')
@@ -563,6 +641,7 @@ def view_guide():
                 flash(f'Marking guide data is missing required information: {key}')
                 session.pop('guide_uploaded', None)
                 session.pop('marking_guide', None)
+                session.pop('guide_content', None)  # Also remove guide content
                 return redirect(url_for('index'))
         
         # Validate questions exist
@@ -570,9 +649,13 @@ def view_guide():
             flash('Marking guide contains no questions')
             return redirect(url_for('index'))
             
+        # Get raw guide content if available
+        guide_content = session.get('guide_content', '')
+            
         return render_template(
             'guide_view.html',
-            guide=guide_data
+            guide=guide_data,
+            guide_content=guide_content
         )
     except Exception as e:
         logger.error(f"Error viewing guide: {str(e)}")
@@ -586,7 +669,13 @@ def clear_data():
         # Remove session variables
         session.pop('guide_uploaded', None)
         session.pop('marking_guide', None)
+        session.pop('guide_content', None)
         session.pop('last_submission', None)
+        session.pop('last_mapping_result', None)
+        session.pop('last_grading_result', None)
+        session.pop('last_score', None)
+        session.pop('grading_in_progress', None)
+        session.pop('mapping_in_progress', None)
         
         # Clear storage
         errors = []
@@ -666,6 +755,292 @@ def handle_exception(error):
     flash('An unexpected error occurred. Our team has been notified.')
     
     # Return to index page
+    return redirect(url_for('index'))
+
+@app.route('/grade_submission', methods=['POST'])
+def grade_submission():
+    """Grade a student submission against the marking guide."""
+    try:
+        # Check if we have both a guide and submission
+        if not session.get('guide_uploaded'):
+            flash("Please upload a marking guide first")
+            return redirect(url_for('index'))
+            
+        if not session.get('last_submission'):
+            flash("Please upload a student submission first")
+            return redirect(url_for('index'))
+            
+        # Check if LLM service is available
+        if not llm_status or not grading_service:
+            flash("Grading service is not available. Please check your DeepSeek API key configuration.")
+            return redirect(url_for('index'))
+            
+        # Set grading in progress
+        session['grading_in_progress'] = True
+        
+        # Get guide content
+        guide_content = session.get('guide_content', '')
+        if not guide_content:
+            flash("Marking guide content is not available")
+            session['grading_in_progress'] = False
+            return redirect(url_for('index'))
+            
+        # Get submission content
+        submission_content = session.get('last_submission', {}).get('raw_text', '')
+        if not submission_content:
+            flash("Student submission content is not available")
+            session['grading_in_progress'] = False
+            return redirect(url_for('index'))
+            
+        # Get submission filename
+        submission_id = session.get('last_submission', {}).get('filename', 'unknown_submission')
+        
+        # Check if we have cached grading result
+        cached_result = grading_storage.get_result(guide_content, submission_content)
+        if cached_result:
+            logger.info(f"Using cached grading result for {submission_id}")
+            session['last_grading_result'] = cached_result
+            session['last_score'] = cached_result.get('percent_score', 0)
+            session['grading_in_progress'] = False
+            return redirect(url_for('view_results'))
+            
+        # Grade the submission
+        logger.info(f"Grading submission: {submission_id}")
+        grading_result, error = grading_service.grade_submission(
+            marking_guide_content=guide_content,
+            student_submission_content=submission_content
+        )
+        
+        if error:
+            logger.error(f"Grading error: {error}")
+            flash(f"Error grading submission: {error}")
+            session['grading_in_progress'] = False
+            return redirect(url_for('index'))
+            
+        # Store the grading result
+        grading_storage.store_result(
+            guide_content=guide_content,
+            submission_content=submission_content,
+            submission_id=submission_id,
+            result=grading_result
+        )
+        
+        # Save to session
+        session['last_grading_result'] = grading_result
+        session['last_score'] = grading_result.get('percent_score', 0)
+        
+        # Clear grading in progress
+        session['grading_in_progress'] = False
+        
+        logger.info(f"Grading completed for {submission_id} with score: {grading_result.get('percent_score', 0)}%")
+        return redirect(url_for('view_results'))
+        
+    except Exception as e:
+        logger.error(f"Error in grade_submission: {str(e)}")
+        flash(f"An unexpected error occurred: {str(e)}")
+        session['grading_in_progress'] = False
+        return redirect(url_for('index'))
+
+@app.route('/view_results')
+def view_results():
+    """View the results of the most recent grading."""
+    try:
+        # Check if we have a grading result
+        if not session.get('last_grading_result'):
+            flash("No grading results available")
+            return redirect(url_for('index'))
+            
+        # Get the grading result
+        result = session.get('last_grading_result')
+        
+        return render_template('results.html', result=result)
+        
+    except Exception as e:
+        logger.error(f"Error in view_results: {str(e)}")
+        flash(f"An unexpected error occurred: {str(e)}")
+        return redirect(url_for('index'))
+
+@app.route('/export_results')
+def export_results():
+    """Export all grading results to CSV."""
+    try:
+        # Check if grading storage is available
+        if not grading_storage:
+            flash("Grading storage is not available")
+            return redirect(url_for('index'))
+            
+        # Export results
+        success, path_or_error = grading_storage.export_to_csv(
+            session_id=session.get('session_id', 'default')
+        )
+        
+        if not success:
+            flash(f"Failed to export results: {path_or_error}")
+            return redirect(url_for('index'))
+            
+        # Get the filename from the path
+        filename = os.path.basename(path_or_error)
+        
+        # Send the file
+        return send_from_directory(
+            os.path.dirname(path_or_error),
+            filename,
+            as_attachment=True
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in export_results: {str(e)}")
+        flash(f"An unexpected error occurred: {str(e)}")
+        return redirect(url_for('index'))
+
+@app.route('/clear_grading_cache', methods=['POST'])
+def clear_grading_cache():
+    """Clear all grading results."""
+    try:
+        # Check if grading storage is available
+        if not grading_storage:
+            flash("Grading storage is not available")
+            return redirect(url_for('index'))
+            
+        # Clear session data
+        if 'last_grading_result' in session:
+            del session['last_grading_result']
+        if 'last_score' in session:
+            del session['last_score']
+            
+        # Reset grading in progress flag
+        session['grading_in_progress'] = False
+        
+        # Clear the storage
+        grading_storage.clear_all()
+        
+        flash("All grading results cleared")
+        return redirect(url_for('index'))
+        
+    except Exception as e:
+        logger.error(f"Error in clear_grading_cache: {str(e)}")
+        flash(f"An unexpected error occurred: {str(e)}")
+        return redirect(url_for('index'))
+
+@app.route('/map_submission', methods=['POST'])
+def map_submission():
+    """Map student submission to marking guide criteria."""
+    try:
+        # Check if we have both a guide and submission
+        if not session.get('guide_uploaded'):
+            flash("Please upload a marking guide first")
+            return redirect(url_for('index'))
+            
+        if not session.get('last_submission'):
+            flash("Please upload a student submission first")
+            return redirect(url_for('index'))
+            
+        # Check if mapping service is available
+        if not llm_status or not mapping_service:
+            flash("Mapping service is not available. Please check your DeepSeek API key configuration.")
+            return redirect(url_for('index'))
+            
+        # Set mapping in progress flag
+        session['mapping_in_progress'] = True
+        
+        # Get guide content
+        guide_content = session.get('guide_content', '')
+        if not guide_content:
+            flash("Marking guide content is not available")
+            session['mapping_in_progress'] = False
+            return redirect(url_for('index'))
+            
+        # Get submission content
+        submission_content = session.get('last_submission', {}).get('raw_text', '')
+        if not submission_content:
+            flash("Student submission content is not available")
+            session['mapping_in_progress'] = False
+            return redirect(url_for('index'))
+            
+        # Check if we have cached mapping result
+        cached_result = mapping_storage.get_result(guide_content, submission_content)
+        
+        # Map the submission to the guide
+        logger.info("Mapping submission to marking guide criteria...")
+        mapping_result, error = mapping_service.map_submission_to_guide(
+            marking_guide_content=guide_content,
+            student_submission_content=submission_content,
+            cached_results=cached_result
+        )
+        
+        if error:
+            logger.error(f"Mapping error: {error}")
+            flash(f"Error mapping submission: {error}")
+            session['mapping_in_progress'] = False
+            return redirect(url_for('index'))
+            
+        # Store mapping result if it's not from cache
+        if not cached_result:
+            mapping_storage.store_result(
+                guide_content=guide_content,
+                submission_content=submission_content,
+                mapping_result=mapping_result
+            )
+        
+        # Save to session
+        session['last_mapping_result'] = mapping_result
+        
+        # Clear mapping in progress flag
+        session['mapping_in_progress'] = False
+        
+        logger.info(f"Mapping completed with {mapping_result.get('metadata', {}).get('mapping_count', 0)} criteria mapped")
+        return redirect(url_for('view_mapping'))
+        
+    except Exception as e:
+        logger.error(f"Error in map_submission: {str(e)}")
+        flash(f"An unexpected error occurred: {str(e)}")
+        session['mapping_in_progress'] = False
+        return redirect(url_for('index'))
+
+@app.route('/view_mapping')
+def view_mapping():
+    """View the results of the criteria mapping."""
+    try:
+        # Check if we have a mapping result
+        if not session.get('last_mapping_result'):
+            flash("No mapping results available")
+            return redirect(url_for('index'))
+            
+        # Get the mapping result
+        mapping_result = session.get('last_mapping_result')
+        
+        return render_template('mapping_view.html', mapping_result=mapping_result)
+        
+    except Exception as e:
+        logger.error(f"Error in view_mapping: {str(e)}")
+        flash(f"An unexpected error occurred: {str(e)}")
+        return redirect(url_for('index'))
+
+@app.route('/clear_mapping_cache', methods=['POST'])
+def clear_mapping_cache():
+    """Clear all mapping results."""
+    try:
+        # Check if mapping storage is available
+        if not mapping_storage:
+            flash("Mapping storage is not available")
+            return redirect(url_for('index'))
+            
+        # Clear session data
+        if 'last_mapping_result' in session:
+            del session['last_mapping_result']
+        
+        # Reset mapping in progress flag
+        session['mapping_in_progress'] = False
+        
+        # Clear the storage
+        mapping_storage.clear_all()
+        
+        flash("All mapping results cleared")
+        return redirect(url_for('index'))
+        
+    except Exception as e:
+        logger.error(f"Error in clear_mapping_cache: {str(e)}")
+        flash(f"An unexpected error occurred: {str(e)}")
     return redirect(url_for('index'))
 
 if __name__ == '__main__':

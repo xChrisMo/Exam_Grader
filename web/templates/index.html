@@ -80,6 +80,110 @@
         </div>
     </div>
 
+    <!-- Mapping Section -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Step 3: Map Submission to Criteria</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <p class="mb-0">
+                                <i class="bi bi-link-45deg text-info"></i>
+                                Map student submission sections to marking guide criteria using DeepSeek's AI.
+                            </p>
+                            <p class="text-muted small mb-0 mt-1">
+                                This helps visualize how each part of the submission relates to specific criteria in the guide.
+                            </p>
+                        </div>
+                        <form action="{{ url_for('map_submission') }}" method="post">
+                            <button type="submit" class="btn btn-info text-white" id="mapButton" 
+                                {% if not session.get('guide_uploaded') or not session.get('last_submission') %}disabled{% endif %}
+                                {% if mapping_in_progress %}disabled{% endif %}>
+                                <i class="bi bi-diagram-3"></i>
+                                {% if mapping_in_progress %}
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    Mapping in Progress...
+                                {% else %}
+                                    Map Submission to Criteria
+                                {% endif %}
+                            </button>
+                        </form>
+                    </div>
+                    
+                    {% if session.get('last_mapping_result') %}
+                    <div class="mt-3">
+                        <div class="alert alert-info d-flex align-items-center justify-content-between">
+                            <div>
+                                <i class="bi bi-check-circle-fill"></i>
+                                Mapping completed! 
+                                <strong>{{ session.get('last_mapping_result', {}).get('metadata', {}).get('mapping_count', 0) }}</strong> 
+                                criteria mapped.
+                            </div>
+                            <a href="{{ url_for('view_mapping') }}" class="btn btn-primary btn-sm">
+                                <i class="bi bi-eye"></i> View Mapping
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grading Section -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Step 4: Grade the Submission</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <p class="mb-0">
+                                <i class="bi bi-lightning-fill text-warning"></i>
+                                Use DeepSeek's AI to grade the student submission against the marking guide.
+                            </p>
+                            <p class="text-muted small mb-0 mt-1">
+                                Make sure both a marking guide and student submission are uploaded first.
+                            </p>
+                        </div>
+                        <form action="{{ url_for('grade_submission') }}" method="post">
+                            <button type="submit" class="btn btn-success" id="gradeButton" 
+                                {% if not session.get('guide_uploaded') or not session.get('last_submission') %}disabled{% endif %}
+                                {% if grading_in_progress %}disabled{% endif %}>
+                                <i class="bi bi-stars"></i>
+                                {% if grading_in_progress %}
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    Grading in Progress...
+                                {% else %}
+                                    Grade Submission
+                                {% endif %}
+                            </button>
+                        </form>
+                    </div>
+                    
+                    {% if session.get('last_grading_result') %}
+                    <div class="mt-3">
+                        <div class="alert alert-success d-flex align-items-center justify-content-between">
+                            <div>
+                                <i class="bi bi-check-circle-fill"></i>
+                                Grading completed! Score: <strong>{{ session.get('last_score', '0') }}%</strong>
+                            </div>
+                            <a href="{{ url_for('view_results') }}" class="btn btn-primary btn-sm">
+                                <i class="bi bi-eye"></i> View Results
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Processing Status -->
     <div class="loading" id="processingStatus" style="display: none;">
         <div class="spinner-border text-primary" role="status">
@@ -106,7 +210,7 @@
     <h4 class="mb-3 text-center text-secondary"><i class="bi bi-hdd-stack"></i> Cache Management</h4>
     <div class="row g-4 mb-2">
         <!-- Submission Cache -->
-        <div class="col-md-6">
+        <div class="col-md-4">
             <div class="card h-100 shadow-sm">
                 <div class="card-header d-flex justify-content-between align-items-center bg-light">
                     <span><i class="bi bi-archive"></i> <strong>Submission Cache</strong></span>
@@ -139,7 +243,13 @@
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     Cache Expiry
-                                    <span class="badge bg-secondary rounded-pill">{{ storage_stats.expiration_days|int }} days</span>
+                                    <span class="badge bg-secondary rounded-pill">
+                                        {% if storage_stats.expiration_days is defined %}
+                                            {{ storage_stats.expiration_days|int }} days
+                                        {% else %}
+                                            30 days
+                                        {% endif %}
+                                    </span>
                                 </li>
                             </ul>
                         </div>
@@ -147,7 +257,12 @@
                     {% if storage_stats.file_count > 0 %}
                     <div class="mt-3">
                         <small class="text-muted">
-                            Files age: {{ "%.1f"|format(storage_stats.newest_file_days) }} to {{ "%.1f"|format(storage_stats.oldest_file_days) }} days old
+                            Files age: 
+                            {% if storage_stats.newest_file_days is defined and storage_stats.oldest_file_days is defined %}
+                                {{ "%.1f"|format(storage_stats.newest_file_days) }} to {{ "%.1f"|format(storage_stats.oldest_file_days) }} days old
+                            {% else %}
+                                Recently added
+                            {% endif %}
                         </small>
                     </div>
                     {% endif %}
@@ -161,7 +276,7 @@
             </div>
         </div>
         <!-- Guide Cache -->
-        <div class="col-md-6">
+        <div class="col-md-4">
             <div class="card h-100 shadow-sm">
                 <div class="card-header d-flex justify-content-between align-items-center bg-light">
                     <span><i class="bi bi-journal-bookmark"></i> <strong>Guide Cache</strong></span>
@@ -194,7 +309,13 @@
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     Cache Expiry
-                                    <span class="badge bg-secondary rounded-pill">{{ guide_stats.expiration_days|int }} days</span>
+                                    <span class="badge bg-secondary rounded-pill">
+                                        {% if guide_stats.expiration_days is defined %}
+                                            {{ guide_stats.expiration_days|int }} days
+                                        {% else %}
+                                            30 days
+                                        {% endif %}
+                                    </span>
                                 </li>
                             </ul>
                         </div>
@@ -202,7 +323,12 @@
                     {% if guide_stats.file_count > 0 %}
                     <div class="mt-3">
                         <small class="text-muted">
-                            Files age: {{ "%.1f"|format(guide_stats.newest_file_days) }} to {{ "%.1f"|format(guide_stats.oldest_file_days) }} days old
+                            Files age: 
+                            {% if guide_stats.newest_file_days is defined and guide_stats.oldest_file_days is defined %}
+                                {{ "%.1f"|format(guide_stats.newest_file_days) }} to {{ "%.1f"|format(guide_stats.oldest_file_days) }} days old
+                            {% else %}
+                                Recently added
+                            {% endif %}
                         </small>
                     </div>
                     {% endif %}
@@ -215,77 +341,205 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Last Submission -->
-    {% if session.get('last_submission') %}
-    <div class="card mt-4">
-        <div class="card-header">
-            <h5 class="mb-0">Last Processed Submission</h5>
-        </div>
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <strong>{{ session.last_submission.filename }}</strong>
-                    <br>
-                    <small class="text-muted">
-                        {% if session.last_submission.results %}
-                            {% if 'raw' in session.last_submission.results %}
-                                Raw text extracted
-                            {% else %}
-                                {{ session.last_submission.results|length }} questions processed
-                            {% endif %}
-                        {% endif %}
-                    </small>
+        <!-- Grading Results Cache -->
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                    <span><i class="bi bi-bar-chart-fill"></i> <strong>Grading Results</strong></span>
+                    <form action="{{ url_for('clear_grading_cache') }}" method="post" class="d-inline">
+                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to clear all grading results?')">
+                            <i class="bi bi-trash"></i> Clear
+                        </button>
+                    </form>
                 </div>
-                <a href="{{ url_for('view_submission') }}" class="btn btn-primary">
-                    View Results
-                </a>
+                <div class="card-body d-flex flex-column justify-content-between">
+                    {% if grading_stats %}
+                    <div class="row">
+                        <div class="col-6">
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Results Count
+                                    <span class="badge bg-primary rounded-pill">{{ grading_stats.result_count }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Avg Score
+                                    <span class="badge bg-success rounded-pill">{{ grading_stats.avg_score|round|int }}%</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-6">
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Highest Score
+                                    <span class="badge bg-success rounded-pill">{{ grading_stats.highest_score|round|int }}%</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Lowest Score
+                                    <span class="badge bg-warning rounded-pill">{{ grading_stats.lowest_score|round|int }}%</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    {% if grading_stats.result_count > 0 %}
+                    <div class="d-grid gap-2 mt-3">
+                        <a href="{{ url_for('export_results') }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-file-earmark-spreadsheet"></i> Export All Results to CSV
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-graph-up" style="font-size:2rem;"></i><br>
+                        No grading results available.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mapping Cache -->
+        <div class="col-md-4 mt-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                    <span><i class="bi bi-diagram-3"></i> <strong>Criteria Mappings</strong></span>
+                    <form action="{{ url_for('clear_mapping_cache') }}" method="post" class="d-inline">
+                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to clear all mapping results?')">
+                            <i class="bi bi-trash"></i> Clear
+                        </button>
+                    </form>
+                </div>
+                <div class="card-body d-flex flex-column justify-content-between">
+                    {% if session.get('last_mapping_result') %}
+                    <div>
+                        <ul class="list-group">
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                Criteria Mapped
+                                <span class="badge bg-info rounded-pill">
+                                    {{ session.get('last_mapping_result', {}).get('metadata', {}).get('mapping_count', 0) }}
+                                </span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                Unmapped Guide Sections
+                                <span class="badge bg-warning rounded-pill">
+                                    {{ session.get('last_mapping_result', {}).get('unmapped_guide_sections', [])|length }}
+                                </span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                Unmapped Submission Sections
+                                <span class="badge bg-danger rounded-pill">
+                                    {{ session.get('last_mapping_result', {}).get('unmapped_submission_sections', [])|length }}
+                                </span>
+                            </li>
+                        </ul>
+                        
+                        <div class="d-grid gap-2 mt-3">
+                            <a href="{{ url_for('view_mapping') }}" class="btn btn-sm btn-outline-info">
+                                <i class="bi bi-eye"></i> View Latest Mapping
+                            </a>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-diagram-3" style="font-size:2rem;"></i><br>
+                        No mapping results available.
+                    </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
-    {% endif %}
 
-    <!-- File Size Info -->
-    <div class="mt-4">
-        <p class="text-muted">
-            <small>Maximum file size: 20MB</small>
-        </p>
+    <!-- System Status -->
+    <div class="card mt-4 mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="bi bi-info-circle"></i> System Status</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="status-item">
+                        <div class="status-label">OCR Service</div>
+                        <div class="status-value {% if ocr_status %}text-success{% else %}text-danger{% endif %}">
+                            {% if ocr_status %}
+                                <i class="bi bi-check-circle-fill"></i> Available
+                            {% else %}
+                                <i class="bi bi-x-circle-fill"></i> Unavailable
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="status-item">
+                        <div class="status-label">DeepSeek LLM</div>
+                        <div class="status-value {% if llm_status %}text-success{% else %}text-danger{% endif %}">
+                            {% if llm_status %}
+                                <i class="bi bi-check-circle-fill"></i> Available
+                            {% else %}
+                                <i class="bi bi-x-circle-fill"></i> Unavailable
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="status-item">
+                        <div class="status-label">Storage</div>
+                        <div class="status-value {% if storage_stats and storage_stats.total_size_mb < storage_stats.max_size_mb %}text-success{% else %}text-warning{% endif %}">
+                            {% if storage_stats %}
+                                <i class="bi bi-hdd"></i> {{ "%.1f"|format(storage_stats.total_size_mb) }}/{{ storage_stats.max_size_mb|int }} MB
+                            {% else %}
+                                <i class="bi bi-question-circle"></i> Unknown
+                        {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// Handle guide form submission
-document.getElementById('guideForm').addEventListener('submit', function(e) {
-    const guideInput = document.getElementById('guide');
-    if (!guideInput.files.length) {
-        e.preventDefault();
-        alert('Please select a marking guide file');
-        return;
-    }
+    // Show loading spinner on form submissions
+    document.getElementById('guideForm').addEventListener('submit', function() {
     document.getElementById('guideButton').disabled = true;
-    document.getElementById('processingStatus').style.display = 'block';
+        document.getElementById('guideButton').innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading...';
+        document.getElementById('processingStatus').style.display = 'flex';
 });
 
-// Handle submission form submission
-document.getElementById('submissionForm').addEventListener('submit', function(e) {
-    const fileInput = document.getElementById('file');
-    if (!fileInput.files.length) {
-        e.preventDefault();
-        alert('Please select a submission file');
-        return;
-    }
+    document.getElementById('submissionForm').addEventListener('submit', function() {
     document.getElementById('submissionButton').disabled = true;
-    document.getElementById('processingStatus').style.display = 'block';
-});
-
-// Reset processing status on page load
-window.addEventListener('load', function() {
-    document.getElementById('processingStatus').style.display = 'none';
-    document.getElementById('guideButton').disabled = false;
-    document.getElementById('submissionButton').disabled = {% if not session.get('guide_uploaded') %}true{% else %}false{% endif %};
+        document.getElementById('submissionButton').innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading...';
+        document.getElementById('processingStatus').style.display = 'flex';
 });
 </script>
+
+<style>
+    .loading {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        margin: 2rem auto;
+        text-align: center;
+    }
+    
+    .status-item {
+        margin-bottom: 0.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem;
+        border-radius: 0.25rem;
+        background-color: #f8f9fa;
+    }
+    
+    .status-label {
+        font-weight: 500;
+    }
+    
+    .status-value {
+        font-weight: 600;
+    }
+</style>
 {% endblock %} 

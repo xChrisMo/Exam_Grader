@@ -3,6 +3,7 @@ requests==2.31.0
 python-dotenv==1.0.1
 numpy==1.26.4
 pandas==2.2.0
+openai==1.19.0  # For DeepSeek API integration
 
 # Document Processing
 PyMuPDF==1.23.8  # For PDF processing
