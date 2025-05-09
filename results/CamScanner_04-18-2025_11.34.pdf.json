@@ -1,48 +1,27 @@
 {
-  "overall_score": 85,
-  "max_possible_score": 100,
-  "percent_score": 85,
+  "overall_score": 0,
+  "max_possible_score": 0,
+  "percent_score": 0,
   "detailed_feedback": {
-    "strengths": [
-      "Demonstrates good understanding of core concepts",
-      "Provides detailed explanations with examples"
-    ],
+    "strengths": [],
     "weaknesses": [
-      "Some minor errors in technical explanations",
-      "Could include more specific examples"
+      "Overall understanding of key concepts needs improvement"
     ],
     "improvement_suggestions": [
-      "Review technical terminology for accuracy",
-      "Include more specific examples to strengthen arguments"
-    ]
+      "Review areas where scores were low",
+      "Focus on improving accuracy and completeness in your answers"
+    ],
+    "question_feedback": []
   },
-  "criterion_scores": [
-    {
-      "criterion": "Understanding of concepts",
-      "score": 18,
-      "max_score": 20
-    },
-    {
-      "criterion": "Application of knowledge",
-      "score": 17,
-      "max_score": 20
-    },
-    {
-      "criterion": "Critical analysis",
-      "score": 16,
-      "max_score": 20
-    },
-    {
-      "criterion": "Communication clarity",
-      "score": 17,
-      "max_score": 20
-    },
-    {
-      "criterion": "Technical accuracy",
-      "score": 17,
-      "max_score": 20
-    }
-  ],
-  "assessment_confidence": "high",
-  "grading_notes": "This is a simulated grade from the patched grading service"
+  "criterion_scores": [],
+  "criteria_scores": [],
+  "assessment_confidence": "medium",
+  "grading_notes": "Graded based on answer similarity. Overall score: 0/0 (0%)",
+  "metadata": {
+    "submission_id": "sub_20250509172159",
+    "timestamp": "2025-05-09T17:21:59.946157",
+    "grader": "Text Similarity Comparison",
+    "question_count": 0,
+    "used_llm": false
+  }
 }

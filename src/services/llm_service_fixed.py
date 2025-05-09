@@ -9,6 +9,7 @@ import os
 from typing import Dict, List, Optional, Tuple, Any
 import json
 import time
+import re
 
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -120,19 +121,185 @@ class LLMService:
             logger.error(f"Connection test failed: {str(e)}")
             raise LLMServiceError(f"Failed to connect to DeepSeek API: {str(e)}")
 
+    def compare_answers(
+        self,
+        question: str,
+        guide_answer: str,
+        submission_answer: str,
+        max_score: int = 10
+    ) -> Tuple[float, str]:
+        """
+        Compare a student's submission answer with the model answer from the marking guide.
+        
+        Args:
+            question: The question being answered
+            guide_answer: The model answer from the marking guide
+            submission_answer: The student's submission answer
+            max_score: The maximum possible score for this question
+            
+        Returns:
+            Tuple[float, str]: (Score, Feedback)
+            
+        Raises:
+            LLMServiceError: If the API call fails
+        """
+        try:
+            # Construct a prompt for the LLM to compare the answers
+            system_prompt = """
+            You are an educational grading assistant. Your task is to compare a student's answer 
+            to a model answer from a marking guide and assign a score based on how well the student's
+            answer matches the key points and understanding demonstrated in the model answer.
+            
+            Follow these guidelines:
+            - Assign a score from 0 to the maximum score
+            - Consider how well the student's answer addresses the key points in the model answer
+            - Be objective and consistent in your evaluation
+            - Focus on content accuracy rather than writing style or formatting
+            - Provide a brief explanation for your score
+            
+            Your response should be in this JSON format:
+            {
+                "score": <numeric_score>,
+                "feedback": "<brief_explanation>",
+                "key_points_matched": ["<point1>", "<point2>", ...],
+                "key_points_missed": ["<point1>", "<point2>", ...]
+            }
+            """
+            
+            user_prompt = f"""
+            Question: {question}
+            
+            Model Answer from Marking Guide: {guide_answer}
+            
+            Student's Answer: {submission_answer}
+            
+            Maximum Possible Score: {max_score}
+            
+            Please evaluate the student's answer and provide a score and feedback.
+            """
+            
+            # Make the API call
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.0,
+                max_tokens=500
+            )
+            
+            # Parse the response
+            if hasattr(response, 'choices') and len(response.choices) > 0:
+                response_text = response.choices[0].message.content.strip()
+                
+                try:
+                    # Attempt to parse as JSON
+                    result = json.loads(response_text)
+                    
+                    # Extract score and feedback
+                    score = float(result.get("score", 0))
+                    feedback = result.get("feedback", "No feedback provided")
+                    
+                    # Ensure score is within bounds
+                    score = max(0, min(score, max_score))
+                    
+                    return score, feedback
+                    
+                except json.JSONDecodeError:
+                    # If not valid JSON, extract score and feedback manually
+                    logger.warning("Response not in valid JSON format. Extracting manually.")
+                    
+                    # Try to find a numeric score in the response
+                    score_match = re.search(r'score[:\s]+(\d+(?:\.\d+)?)', response_text, re.IGNORECASE)
+                    score = float(score_match.group(1)) if score_match else 0
+                    
+                    # Ensure score is within bounds
+                    score = max(0, min(score, max_score))
+                    
+                    return score, response_text
+            else:
+                raise LLMServiceError("No valid response received from API")
+                
+        except Exception as e:
+            logger.error(f"Answer comparison failed: {str(e)}")
+            # Return a default score and error message
+            return 0, f"Error: {str(e)}"
+
     def grade_submission(
         self, 
         marking_guide_text: str, 
         student_submission_text: str,
         max_tokens: int = 2048
     ) -> Dict:
-        """Simplified grading function for testing"""
-        return {"status": "success", "message": "Grading service is working"}
+        """
+        Grade a student submission against a marking guide.
+        This method works with the mapping service to:
+        1. Identify questions and answers in both documents
+        2. Score each answer based on similarity to the expected answer
+        
+        Args:
+            marking_guide_text: Full text of the marking guide
+            student_submission_text: Full text of the student submission
+            max_tokens: Maximum tokens for the response
+            
+        Returns:
+            Dict: Grading result with scores and feedback
+        """
+        # Import here to avoid circular imports
+        from src.services.mapping_service import MappingService
+        
+        # Create mapping service if needed
+        mapping_service = MappingService(llm_service=self)
+        
+        # Map the submission to the guide
+        mapping_result, mapping_error = mapping_service.map_submission_to_guide(
+            marking_guide_text, 
+            student_submission_text
+        )
+        
+        if mapping_error:
+            return {"status": "error", "message": f"Mapping error: {mapping_error}"}
+        
+        # Create grading service
+        from src.services.grading_service import GradingService
+        grading_service = GradingService(llm_service=self, mapping_service=mapping_service)
+        
+        # Grade the submission
+        grading_result, grading_error = grading_service.grade_submission(
+            marking_guide_text, 
+            student_submission_text
+        )
+        
+        if grading_error:
+            return {"status": "error", "message": f"Grading error: {grading_error}"}
+        
+        return grading_result
 
     def map_submission_to_guide(
         self,
         marking_guide_content: str,
         student_submission_content: str
     ) -> Tuple[Dict, Optional[str]]:
-        """Simplified mapping function for testing"""
-        return {"status": "success", "message": "Mapping service is working"}, None 
+        """
+        Map a student submission to a marking guide.
+        This is a wrapper around the mapping service functionality.
+        
+        Args:
+            marking_guide_content: Full text of the marking guide
+            student_submission_content: Full text of the student submission
+            
+        Returns:
+            Tuple[Dict, Optional[str]]: (Mapping result, Error message if any)
+        """
+        # Import here to avoid circular imports
+        from src.services.mapping_service import MappingService
+        
+        # Create mapping service
+        mapping_service = MappingService(llm_service=self)
+        
+        # Map the submission to the guide
+        return mapping_service.map_submission_to_guide(
+            marking_guide_content, 
+            student_submission_content
+        ) 

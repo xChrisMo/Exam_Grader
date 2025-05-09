@@ -22,125 +22,40 @@
             <div class="col-md-4 mb-3">
                 <div class="p-3 bg-light rounded">
                     <h2 class="display-5 fw-bold text-success">{{ mapping_result.metadata.mapping_count }}</h2>
-                    <p class="mb-0">Criteria Mapped</p>
+                    <p class="mb-0">Questions/Answers Mapped</p>
                 </div>
             </div>
             <div class="col-md-4 mb-3">
                 <div class="p-3 bg-light rounded">
-                    <h2 class="display-5 fw-bold text-warning">{{ mapping_result.unmapped_guide_sections|length }}</h2>
-                    <p class="mb-0">Unmapped Guide Criteria</p>
+                    <h2 class="display-5 fw-bold text-warning">{{ mapping_result.unmapped_guide_items|length }}</h2>
+                    <p class="mb-0">Unmapped Guide Items</p>
                 </div>
             </div>
             <div class="col-md-4 mb-3">
                 <div class="p-3 bg-light rounded">
-                    <h2 class="display-5 fw-bold text-danger">{{ mapping_result.unmapped_submission_sections|length }}</h2>
-                    <p class="mb-0">Unmapped Submission Sections</p>
+                    <h2 class="display-5 fw-bold text-danger">{{ mapping_result.unmapped_submission_items|length }}</h2>
+                    <p class="mb-0">Unmapped Submission Items</p>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Mapped Criteria -->
+<!-- Mapped Questions and Answers -->
 <div class="card mb-4">
     <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">Mapped Criteria</h5>
+        <h5 class="mb-0">Mapped Questions and Answers</h5>
     </div>
-<!-- Categories -->
-{% if mapping_result.categories is defined and mapping_result.categories %}
-<div class="card mb-4">
-    <div class="card-header bg-success text-white">
-        <h5 class="mb-0">Criteria by Category</h5>
-    </div>
-    <div class="card-body">
-        <ul class="nav nav-tabs" id="categoryTabs" role="tablist">
-            {% for category, mappings in mapping_result.categories.items() %}
-            <li class="nav-item" role="presentation">
-                <button class="nav-link {% if loop.first %}active{% endif %}" 
-                        id="category-{{ category|lower|replace(' ', '-') }}-tab" 
-                        data-bs-toggle="tab" 
-                        data-bs-target="#category-{{ category|lower|replace(' ', '-') }}" 
-                        type="button" role="tab" 
-                        aria-controls="category-{{ category|lower|replace(' ', '-') }}" 
-                        aria-selected="{% if loop.first %}true{% else %}false{% endif %}">
-                    {{ category }} ({{ mappings|length }})
-                </button>
-            </li>
-            {% endfor %}
-        </ul>
-        <div class="tab-content p-3 border border-top-0 rounded-bottom" id="categoryTabsContent">
-            {% for category, mappings in mapping_result.categories.items() %}
-            <div class="tab-pane fade {% if loop.first %}show active{% endif %}" 
-                 id="category-{{ category|lower|replace(' ', '-') }}" 
-                 role="tabpanel" 
-                 aria-labelledby="category-{{ category|lower|replace(' ', '-') }}-tab">
-                 
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width: 5%">#</th>
-                                <th style="width: 40%">Guide Criteria</th>
-                                <th style="width: 40%">Student Submission</th>
-                                <th style="width: 15%">Match</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for mapping in mappings %}
-                            <tr>
-                                <td>{{ loop.index }}</td>
-                                <td>
-                                    <div class="guide-text">{{ mapping.guide_text|truncate(200) }}</div>
-                                    {% if mapping.guide_id %}
-                                    <span class="badge bg-primary">ID: {{ mapping.guide_id }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div class="submission-text">{{ mapping.submission_text|truncate(200) }}</div>
-                                    {% if mapping.submission_id %}
-                                    <span class="badge bg-info">ID: {{ mapping.submission_id }}</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-center">
-                                    {% if mapping.match_score is defined %}
-                                    <div class="progress" style="height: 20px;">
-                                        {% set score = (mapping.match_score * 100)|int %}
-                                        <div class="progress-bar 
-                                            {% if score >= 80 %}bg-success
-                                            {% elif score >= 60 %}bg-info
-                                            {% elif score >= 40 %}bg-warning
-                                            {% else %}bg-danger{% endif %}" 
-                                            role="progressbar" 
-                                            style="width: {{ score }}%;" 
-                                            aria-valuenow="{{ score }}" 
-                                            aria-valuemin="0" 
-                                            aria-valuemax="100">{{ score }}%</div>
-                                    </div>
-                                    {% else %}
-                                    <span class="badge bg-secondary">N/A</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-{% endif %}
-
     <div class="card-body">
         {% if mapping_result.mappings %}
             <div class="table-responsive">
                 <table class="table table-striped table-hover">
                     <thead class="table-light">
                         <tr>
-                            <th style="width: 10%">#</th>
-                            <th style="width: 40%">Guide Criteria</th>
-                            <th style="width: 40%">Student Submission</th>
+                            <th style="width: 5%">#</th>
+                            <th style="width: 30%">Guide Question</th>
+                            <th style="width: 25%">Guide Answer</th>
+                            <th style="width: 30%">Student Answer</th>
                             <th style="width: 10%">Match</th>
                         </tr>
                     </thead>
@@ -149,13 +64,19 @@
                         <tr>
                             <td>{{ loop.index }}</td>
                             <td>
-                                <div class="guide-text">{{ mapping.guide_text|truncate(200) }}</div>
+                                <div class="guide-text">{{ mapping.guide_text|truncate(150) }}</div>
                                 {% if mapping.guide_id %}
                                 <span class="badge bg-primary">ID: {{ mapping.guide_id }}</span>
                                 {% endif %}
+                                {% if mapping.max_score %}
+                                <span class="badge bg-success">{{ mapping.max_score }} points</span>
+                                {% endif %}
                             </td>
                             <td>
-                                <div class="submission-text">{{ mapping.submission_text|truncate(200) }}</div>
+                                <div class="guide-answer small">{{ mapping.guide_answer|truncate(150) }}</div>
+                            </td>
+                            <td>
+                                <div class="submission-answer small">{{ mapping.submission_answer|truncate(150) }}</div>
                                 {% if mapping.submission_id %}
                                 <span class="badge bg-info">ID: {{ mapping.submission_id }}</span>
                                 {% endif %}
@@ -187,7 +108,7 @@
         {% else %}
             <div class="alert alert-info">
                 <i class="bi bi-info-circle me-2"></i>
-                No mappings found between guide criteria and submission sections.
+                No mappings found between guide questions and submission answers.
             </div>
         {% endif %}
     </div>
@@ -195,20 +116,28 @@
 
 <!-- Unmapped Sections -->
 <div class="row">
-    <!-- Unmapped Guide Sections -->
+    <!-- Unmapped Guide Items -->
     <div class="col-md-6">
         <div class="card mb-4">
             <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0">Unmapped Guide Criteria</h5>
+                <h5 class="mb-0">Unmapped Guide Questions</h5>
             </div>
             <div class="card-body">
-                {% if mapping_result.unmapped_guide_sections %}
+                {% if mapping_result.unmapped_guide_items %}
                     <div class="list-group">
-                        {% for section in mapping_result.unmapped_guide_sections %}
+                        {% for item in mapping_result.unmapped_guide_items %}
                         <div class="list-group-item">
-                            <div class="guide-text">{{ section.text|truncate(200) }}</div>
-                            {% if section.id %}
-                            <span class="badge bg-primary">ID: {{ section.id }}</span>
+                            <div class="guide-text">{{ item.text|truncate(150) }}</div>
+                            {% if item.id %}
+                            <span class="badge bg-primary">ID: {{ item.id }}</span>
+                            {% endif %}
+                            {% if item.type %}
+                            <span class="badge bg-secondary">Type: {{ item.type }}</span>
+                            {% endif %}
+                            {% if item.answer %}
+                            <div class="guide-answer small text-muted mt-2">
+                                <strong>Answer:</strong> {{ item.answer|truncate(100) }}
+                            </div>
                             {% endif %}
                         </div>
                         {% endfor %}
@@ -216,27 +145,35 @@
                 {% else %}
                     <div class="alert alert-success">
                         <i class="bi bi-check-circle me-2"></i>
-                        All guide criteria have been mapped to submission sections!
+                        All guide questions have been mapped to submission answers!
                     </div>
                 {% endif %}
             </div>
         </div>
     </div>
     
-    <!-- Unmapped Submission Sections -->
+    <!-- Unmapped Submission Items -->
     <div class="col-md-6">
         <div class="card mb-4">
             <div class="card-header bg-danger text-white">
-                <h5 class="mb-0">Unmapped Submission Sections</h5>
+                <h5 class="mb-0">Unmapped Submission Answers</h5>
             </div>
             <div class="card-body">
-                {% if mapping_result.unmapped_submission_sections %}
+                {% if mapping_result.unmapped_submission_items %}
                     <div class="list-group">
-                        {% for section in mapping_result.unmapped_submission_sections %}
+                        {% for item in mapping_result.unmapped_submission_items %}
                         <div class="list-group-item">
-                            <div class="submission-text">{{ section.text|truncate(200) }}</div>
-                            {% if section.id %}
-                            <span class="badge bg-info">ID: {{ section.id }}</span>
+                            <div class="submission-text">{{ item.text|truncate(150) }}</div>
+                            {% if item.id %}
+                            <span class="badge bg-info">ID: {{ item.id }}</span>
+                            {% endif %}
+                            {% if item.type %}
+                            <span class="badge bg-secondary">Type: {{ item.type }}</span>
+                            {% endif %}
+                            {% if item.answer %}
+                            <div class="submission-answer small text-muted mt-2">
+                                <strong>Answer:</strong> {{ item.answer|truncate(100) }}
+                            </div>
                             {% endif %}
                         </div>
                         {% endfor %}
@@ -244,7 +181,7 @@
                 {% else %}
                     <div class="alert alert-success">
                         <i class="bi bi-check-circle me-2"></i>
-                        All submission sections have been mapped to guide criteria!
+                        All submission answers have been mapped to guide questions!
                     </div>
                 {% endif %}
             </div>
@@ -252,17 +189,25 @@
     </div>
 </div>
 
-<div class="d-flex justify-content-between mt-4">
-    <a href="{{ url_for('index') }}" class="btn btn-secondary">
-        <i class="bi bi-arrow-left me-1"></i> Back to Home
-    </a>
-    
-    <div>
-        <form action="{{ url_for('grade_submission') }}" method="post" class="d-inline">
-            <button type="submit" class="btn btn-primary">
-                <i class="bi bi-award me-1"></i> Grade Submission
-            </button>
-        </form>
+<!-- Actions -->
+<div class="card mb-4">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0">Actions</h5>
+    </div>
+    <div class="card-body">
+        <div class="d-flex justify-content-between">
+            <a href="{{ url_for('view_guide') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-file-text me-1"></i> View Marking Guide
+            </a>
+            <a href="{{ url_for('view_submission') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-file-text me-1"></i> View Submission
+            </a>
+            <form action="{{ url_for('grade_submission') }}" method="post">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-award me-1"></i> Grade Submission
+                </button>
+            </form>
+        </div>
     </div>
 </div>
 {% endblock %}
