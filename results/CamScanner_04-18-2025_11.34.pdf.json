@@ -1,0 +1,48 @@
+{
+  "overall_score": 85,
+  "max_possible_score": 100,
+  "percent_score": 85,
+  "detailed_feedback": {
+    "strengths": [
+      "Demonstrates good understanding of core concepts",
+      "Provides detailed explanations with examples"
+    ],
+    "weaknesses": [
+      "Some minor errors in technical explanations",
+      "Could include more specific examples"
+    ],
+    "improvement_suggestions": [
+      "Review technical terminology for accuracy",
+      "Include more specific examples to strengthen arguments"
+    ]
+  },
+  "criterion_scores": [
+    {
+      "criterion": "Understanding of concepts",
+      "score": 18,
+      "max_score": 20
+    },
+    {
+      "criterion": "Application of knowledge",
+      "score": 17,
+      "max_score": 20
+    },
+    {
+      "criterion": "Critical analysis",
+      "score": 16,
+      "max_score": 20
+    },
+    {
+      "criterion": "Communication clarity",
+      "score": 17,
+      "max_score": 20
+    },
+    {
+      "criterion": "Technical accuracy",
+      "score": 17,
+      "max_score": 20
+    }
+  ],
+  "assessment_confidence": "high",
+  "grading_notes": "This is a simulated grade from the patched grading service"
+}

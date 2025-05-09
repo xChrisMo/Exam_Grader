@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 import hashlib
+from datetime import datetime
 
 class SubmissionStorage:
     """Handles storage and retrieval of parsed submission results."""
@@ -189,4 +190,39 @@ class SubmissionStorage:
             except Exception:
                 continue
                 
-        return stats 
+        return stats
+        
+    def get_latest_submission(self) -> Optional[Dict]:
+        """
+        Get the most recent submission from storage.
+        
+        Returns:
+            Dictionary containing submission details if found, None otherwise
+        """
+        current_time = time.time()
+        latest_submission = None
+        latest_timestamp = 0
+        
+        for file in self.storage_dir.glob('*.json'):
+            try:
+                mtime = os.path.getmtime(file)
+                if mtime > latest_timestamp:
+                    latest_timestamp = mtime
+                    
+                    with open(file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        
+                    # Check if result has expired
+                    if current_time - data.get('timestamp', 0) <= self.expiration_seconds:
+                        latest_submission = {
+                            'filename': data['filename'],
+                            'content': data['raw_text'],
+                            'results': data['results'],
+                            'upload_time': datetime.fromtimestamp(data['timestamp']),
+                            'file_size': os.path.getsize(file)
+                        }
+                        
+            except Exception:
+                continue
+                
+        return latest_submission

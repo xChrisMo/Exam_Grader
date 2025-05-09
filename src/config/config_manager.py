@@ -65,17 +65,17 @@ class ConfigManager:
             output_dir=os.getenv('OUTPUT_DIR', 'output'),
             
             # File processing settings
-            max_file_size_mb=int(os.getenv('MAX_FILE_SIZE_MB', '10')),
+            max_file_size_mb=int(os.getenv('MAX_FILE_SIZE_MB', '10').split('#')[0].strip()),
             supported_formats=os.getenv('SUPPORTED_FORMATS', 
                 '.txt,.docx,.pdf,.jpg,.jpeg,.png,.tiff,.bmp,.gif').split(','),
             
             # OCR settings
-            ocr_confidence_threshold=float(os.getenv('OCR_CONFIDENCE_THRESHOLD', '0.7')),
+            ocr_confidence_threshold=float(os.getenv('OCR_CONFIDENCE_THRESHOLD', '0.7').split('#')[0].strip()),
             ocr_language=os.getenv('OCR_LANGUAGE', 'en'),
             
             # API settings
             handwriting_ocr_api_key=os.getenv('HANDWRITING_OCR_API_KEY', ''),
-            handwriting_ocr_delete_after=int(os.getenv('HANDWRITING_OCR_DELETE_AFTER', '86400'))
+            handwriting_ocr_delete_after=int(os.getenv('HANDWRITING_OCR_DELETE_AFTER', '86400').split('#')[0].strip())
         )
         
         # Create necessary directories

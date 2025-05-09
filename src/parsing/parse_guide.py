@@ -14,28 +14,15 @@ class MarkingGuide:
     """Represents a parsed marking guide with raw content."""
     
     def __init__(self):
-        self.total_marks: int = 0
-        self.questions: list = []  # Keep this for compatibility
         self.raw_content: str = ""
         
     def set_raw_content(self, content: str) -> None:
         """Set the raw content of the guide."""
         self.raw_content = content
-        # Set a default question for compatibility with existing code
-        self.questions = [{
-            'question_number': 1,
-            'question_text': content,
-            'max_marks': 0,
-            'model_answer': ' ',
-            'student_answer': ' ',
-            'keywords': [],
-            'required_elements': []
-        }]
-        
 
 def parse_marking_guide(file_path: str) -> Tuple[Optional[MarkingGuide], Optional[str]]:
     """
-    Parse a marking guide document.
+    Parse a marking guide document to extract raw content.
     
     Args:
         file_path: Path to the marking guide document
@@ -61,7 +48,7 @@ def parse_marking_guide(file_path: str) -> Tuple[Optional[MarkingGuide], Optiona
         return None, f"Failed to parse marking guide: {str(e)}"
 
 def _parse_docx_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[MarkingGuide], Optional[str]]:
-    """Parse a .docx marking guide and return the raw content."""
+    """Extract raw content from a .docx marking guide."""
     try:
         doc: Document = docx.Document(file_path)
         
@@ -83,7 +70,7 @@ def _parse_docx_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[Mar
         return None, f"Failed to parse DOCX guide: {str(e)}"
 
 def _parse_txt_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[MarkingGuide], Optional[str]]:
-    """Parse a .txt marking guide and return the raw content."""
+    """Extract raw content from a .txt marking guide."""
     try:
         # Check if file exists
         if not os.path.exists(file_path):

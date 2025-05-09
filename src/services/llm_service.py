@@ -259,59 +259,68 @@ class LLMService:
             response: Raw API response
             
         Returns:
-            Dict: Processed response
+            Dict containing the processed response
             
         Raises:
-            LLMServiceError: If response processing fails
+            LLMServiceError: If the response is invalid
         """
         try:
-            # Extract the content from the response
+            # Extract content from the response
             content = response.choices[0].message.content
             
-            # Parse the JSON content
+            # Attempt to parse as JSON
             try:
                 result = json.loads(content)
             except json.JSONDecodeError:
-                logger.error(f"Failed to parse JSON response: {content}")
-                # Attempt to extract JSON if it's embedded in a larger text
-                import re
-                json_match = re.search(r'(\{.*\})', content, re.DOTALL)
-                if json_match:
-                    try:
-                        result = json.loads(json_match.group(1))
-                    except:
-                        raise LLMServiceError("Invalid JSON response format")
-                else:
-                    raise LLMServiceError("Invalid JSON response format")
+                # If not valid JSON, return as raw text
+                logger.warning("Response is not valid JSON, returning raw text")
+                return {"raw_response": content}
             
-            # Validate the result structure
-            required_keys = ['overall_score', 'max_possible_score', 'detailed_feedback']
-            for key in required_keys:
-                if key not in result:
-                    logger.warning(f"Missing key in response: {key}")
-                    # If missing key, add placeholder to prevent downstream errors
-                    if key == 'overall_score':
-                        result[key] = 0
-                    elif key == 'max_possible_score':
-                        result[key] = 100
-                    elif key == 'detailed_feedback':
-                        result[key] = {
-                            'strengths': ['No strengths identified'],
-                            'weaknesses': ['No weaknesses identified'],
-                            'improvement_suggestions': ['No improvement suggestions provided']
-                        }
-            
-            # Ensure percent_score is present and calculated correctly
-            if 'percent_score' not in result:
-                if result['max_possible_score'] > 0:
-                    result['percent_score'] = round(
-                        (result['overall_score'] / result['max_possible_score']) * 100, 2
-                    )
-                else:
-                    result['percent_score'] = 0
+            # Validate required fields
+            if not all(key in result for key in ["overall_score", "max_possible_score", "percent_score"]):
+                logger.warning("Response missing required fields, returning partial result")
             
             return result
-            
         except Exception as e:
-            logger.error(f"Failed to process response: {str(e)}")
-            raise LLMServiceError(f"Failed to process response: {str(e)}") 
+            logger.error(f"Error processing response: {str(e)}")
+            raise LLMServiceError(f"Failed to process response: {str(e)}")
+            
+    def test_connection(self) -> bool:
+        """
+        Test connection to the DeepSeek API.
+        
+        Returns:
+            bool: True if connection is successful
+            
+        Raises:
+            LLMServiceError: If connection test fails
+        """
+        try:
+            logger.info("Testing connection to DeepSeek API...")
+            
+            # Simple test prompt
+            system_prompt = "You are a helpful assistant."
+            user_prompt = "Please respond with a simple 'Connection successful' if you receive this message."
+            
+            # Make a minimal API call
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.0,
+                max_tokens=20
+            )
+            
+            # Check if we got a response
+            if hasattr(response, 'choices') and len(response.choices) > 0:
+                logger.info("Connection test successful")
+                return True
+            else:
+                logger.error("Connection test failed: No valid response received")
+                raise LLMServiceError("No valid response received from API")
+                
+        except Exception as e:
+            logger.error(f"Connection test failed: {str(e)}")
+            raise LLMServiceError(f"Failed to connect to DeepSeek API: {str(e)}") 

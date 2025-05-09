@@ -4,6 +4,8 @@ python-dotenv==1.0.1
 numpy==1.26.4
 pandas==2.2.0
 openai==1.19.0  # For DeepSeek API integration
+MarkupSafe==3.0.2
+validators==0.22.0
 
 # Document Processing
 PyMuPDF==1.23.8  # For PDF processing
@@ -25,4 +27,4 @@ pytest-cov==4.1.0
 # Type Stubs
 types-requests
 types-python-dateutil
-types-PyYAML 
+types-PyYAML

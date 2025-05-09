@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Grading Results - Exam Grader{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">
+        <i class="bi bi-award text-primary me-2"></i>
+        Grading Results
+    </h1>
+    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+        <i class="bi bi-arrow-left me-1"></i> Back to Home
+    </a>
+</div>
+
+<!-- Score Overview -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Score Overview</h5>
+    </div>
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-4 text-center mb-4 mb-md-0">
+                <div class="score-circle mb-2 
+                    {% if result.percent_score is defined and result.percent_score >= 80 %}bg-success
+                    {% elif result.percent_score is defined and result.percent_score >= 60 %}bg-primary
+                    {% elif result.percent_score is defined and result.percent_score >= 40 %}bg-warning
+                    {% else %}bg-danger{% endif %}">
+                    {{ result.percent_score|default(0)|round|int }}%
+                </div>
+                <h5>Overall Score</h5>
+                <p class="text-muted mb-0">{{ result.overall_score|default(0) }} / {{ result.max_possible_score|default(100) }} points</p>
+            </div>
+            <div class="col-md-8">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="p-3 bg-light rounded">
+                            <div class="d-flex justify-content-between">
+                                <h6 class="mb-0">Assessment Confidence</h6>
+                                <span class="badge 
+                                    {% if result.assessment_confidence is defined and result.assessment_confidence == 'high' %}bg-success
+                                    {% elif result.assessment_confidence is defined and result.assessment_confidence == 'medium' %}bg-warning
+                                    {% else %}bg-danger{% endif %}">
+                                    {{ result.assessment_confidence|default('medium')|title }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="p-3 bg-light rounded">
+                            <div class="d-flex justify-content-between">
+                                <h6 class="mb-0">Submission ID</h6>
+                                <span class="badge bg-secondary">
+                                    {% if result.metadata is defined and result.metadata.submission_id is defined %}
+                                        {{ result.metadata.submission_id }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Feedback -->
+{% if result.detailed_feedback is defined %}
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Detailed Feedback</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-12">
+                {% if result.detailed_feedback.strengths is defined and result.detailed_feedback.strengths %}
+                <h5 class="text-success"><i class="bi bi-check-circle me-2"></i>Strengths</h5>
+                <ul class="list-group mb-4">
+                    {% for strength in result.detailed_feedback.strengths %}
+                    <li class="list-group-item">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        {{ strength }}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                
+                {% if result.detailed_feedback.weaknesses is defined and result.detailed_feedback.weaknesses %}
+                <h5 class="text-warning"><i class="bi bi-exclamation-triangle me-2"></i>Areas to Improve</h5>
+                <ul class="list-group mb-4">
+                    {% for weakness in result.detailed_feedback.weaknesses %}
+                    <li class="list-group-item">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                        {{ weakness }}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                
+                {% if result.detailed_feedback.improvement_suggestions is defined and result.detailed_feedback.improvement_suggestions %}
+                <h5 class="text-info"><i class="bi bi-lightbulb me-2"></i>Suggestions</h5>
+                <ul class="list-group mb-4">
+                    {% for suggestion in result.detailed_feedback.improvement_suggestions %}
+                    <li class="list-group-item">
+                        <i class="bi bi-lightbulb-fill text-info me-2"></i>
+                        {{ suggestion }}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Criteria Scores - Simpler Version -->
+{% if result.criteria_scores is defined and result.criteria_scores %}
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Criteria Scores</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Criteria</th>
+                        <th class="text-center">Score</th>
+                        <th class="text-center">Max</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for criteria in result.criteria_scores %}
+                    <tr>
+                        <td>{{ criteria.criterion|default(criteria.description) }}</td>
+                        <td class="text-center">{{ criteria.score|default(criteria.points_earned)|default(0) }}</td>
+                        <td class="text-center">{{ criteria.max_score|default(criteria.points_possible)|default(0) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% elif result.criterion_scores is defined and result.criterion_scores %}
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Criteria Scores</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Criteria</th>
+                        <th class="text-center">Score</th>
+                        <th class="text-center">Max</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for criteria in result.criterion_scores %}
+                    <tr>
+                        <td>{{ criteria.criterion|default(criteria.description) }}</td>
+                        <td class="text-center">{{ criteria.score|default(criteria.points_earned)|default(0) }}</td>
+                        <td class="text-center">{{ criteria.max_score|default(criteria.points_possible)|default(0) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Raw Result Data (for debugging) -->
+<div class="card mb-4">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0">Debug Information</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted">This section shows the raw data structure to help diagnose any issues.</p>
+        <pre class="bg-light p-3 rounded"><code>{{ result|tojson(indent=2) }}</code></pre>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between mt-4">
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left me-1"></i> Back to Home
+    </a>
+    
+    <div>
+        <a href="{{ url_for('clear_all') }}" class="btn btn-danger" 
+           onclick="return confirm('Are you sure you want to clear all data?');">
+            <i class="bi bi-trash me-1"></i> Clear All
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .score-circle {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+        font-size: 2rem;
+        font-weight: bold;
+        color: white;
+    }
+    
+    pre code {
+        font-family: monospace;
+        white-space: pre-wrap;
+        font-size: 0.85rem;
+    }
+</style>
+{% endblock %}

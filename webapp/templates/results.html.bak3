@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}Grading Results - Exam Grader{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">
+        <i class="bi bi-award text-primary me-2"></i>
+        Grading Results
+    </h1>
+    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+        <i class="bi bi-arrow-left me-1"></i> Back to Home
+    </a>
+</div>
+
+<!-- Score Overview -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Score Overview</h5>
+    </div>
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-4 text-center mb-4 mb-md-0">
+                <div class="score-circle mb-2 
+                    {% if result.percent_score >= 80 %}bg-success
+                    {% elif result.percent_score >= 60 %}bg-primary
+                    {% elif result.percent_score >= 40 %}bg-warning
+                    {% else %}bg-danger{% endif %}">
+                    {{ result.percent_score|round|int }}%
+                </div>
+                <h5>Overall Score</h5>
+                <p class="text-muted mb-0">{{ result.overall_score }} / {{ result.max_possible_score }} points</p>
+            </div>
+            <div class="col-md-8">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="p-3 bg-light rounded">
+                            <div class="d-flex justify-content-between">
+                                <h6 class="mb-0">Assessment Confidence</h6>
+                                <span class="badge 
+                                    {% if result.assessment_confidence == 'high' %}bg-success
+                                    {% elif result.assessment_confidence == 'medium' %}bg-warning
+                                    {% else %}bg-danger{% endif %}">
+                                    {{ result.assessment_confidence|title }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="p-3 bg-light rounded">
+                            <div class="d-flex justify-content-between">
+                                <h6 class="mb-0">Submission ID</h6>
+                                <span class="badge bg-secondary">
+                                    {{ result.metadata.submission_id if result.metadata and hasattr(result.metadata, 'submission_id') else 'N/A' }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="p-3 bg-light rounded">
+                            <div class="d-flex justify-content-between">
+                                <h6 class="mb-0">Strengths</h6>
+                                <span class="badge bg-success">
+                                    {{ result.detailed_feedback.strengths|length if result.detailed_feedback and result.detailed_feedback.strengths is defined else 0 }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="p-3 bg-light rounded">
+                            <div class="d-flex justify-content-between">
+                                <h6 class="mb-0">Areas to Improve</h6>
+                                <span class="badge bg-warning">
+                                    {{ result.detailed_feedback.weaknesses|length if result.detailed_feedback and result.detailed_feedback.weaknesses is defined else 0 }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Feedback -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Detailed Feedback</h5>
+    </div>
+    <div class="card-body">
+        <ul class="nav nav-tabs" id="feedbackTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="strengths-tab" data-bs-toggle="tab" data-bs-target="#strengths" 
+                        type="button" role="tab" aria-controls="strengths" aria-selected="true">
+                    <i class="bi bi-check-circle me-1"></i> Strengths 
+                    <span class="badge bg-success ms-1">{{ result.detailed_feedback.strengths|length if result.detailed_feedback and result.detailed_feedback.strengths is defined else 0 }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="weaknesses-tab" data-bs-toggle="tab" data-bs-target="#weaknesses" 
+                        type="button" role="tab" aria-controls="weaknesses" aria-selected="false">
+                    <i class="bi bi-exclamation-triangle me-1"></i> Areas to Improve 
+                    <span class="badge bg-warning ms-1">{{ result.detailed_feedback.weaknesses|length if result.detailed_feedback and result.detailed_feedback.weaknesses is defined else 0 }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="suggestions-tab" data-bs-toggle="tab" data-bs-target="#suggestions" 
+                        type="button" role="tab" aria-controls="suggestions" aria-selected="false">
+                    <i class="bi bi-lightbulb me-1"></i> Suggestions 
+                    <span class="badge bg-info ms-1">{{ result.detailed_feedback.improvement_suggestions|length if result.detailed_feedback and result.detailed_feedback.improvement_suggestions is defined else 0 }}</span>
+                </button>
+            </li>
+        </ul>
+        <div class="tab-content p-3 border border-top-0 rounded-bottom" id="feedbackTabsContent">
+            <div class="tab-pane fade show active" id="strengths" role="tabpanel" aria-labelledby="strengths-tab">
+                {% if result.detailed_feedback.strengths %}
+                    <ul class="list-group">
+                        {% for strength in result.detailed_feedback.strengths %}
+                        <li class="list-group-item">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            {{ strength }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        No strengths were identified for this submission.
+                    </div>
+                {% endif %}
+            </div>
+            <div class="tab-pane fade" id="weaknesses" role="tabpanel" aria-labelledby="weaknesses-tab">
+                {% if result.detailed_feedback.weaknesses %}
+                    <ul class="list-group">
+                        {% for weakness in result.detailed_feedback.weaknesses %}
+                        <li class="list-group-item">
+                            <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                            {{ weakness }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle me-2"></i>
+                        No areas for improvement were identified for this submission.
+                    </div>
+                {% endif %}
+            </div>
+            <div class="tab-pane fade" id="suggestions" role="tabpanel" aria-labelledby="suggestions-tab">
+                {% if result.detailed_feedback.improvement_suggestions %}
+                    <ul class="list-group">
+                        {% for suggestion in result.detailed_feedback.improvement_suggestions %}
+                        <li class="list-group-item">
+                            <i class="bi bi-lightbulb-fill text-info me-2"></i>
+                            {{ suggestion }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        No specific improvement suggestions were provided for this submission.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Criteria Scores -->
+{% if result.criteria_scores is defined and result.criteria_scores %}
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Criteria Scores</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 5%">#</th>
+                        <th style="width: 45%">Criteria</th>
+                        <th style="width: 15%" class="text-center">Points</th>
+                        <th style="width: 15%" class="text-center">Max</th>
+                        <th style="width: 20%" class="text-center">Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for criteria in result.criteria_scores if result.criteria_scores is defined and result.criteria_scores %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ criteria.criterion if 'criterion' in criteria else criteria.description if 'description' in criteria else 'Unknown criterion' }}</td>
+                        <td class="text-center">{{ criteria.score if 'score' in criteria else criteria.points_earned if 'points_earned' in criteria else 0 }}</td>
+                        <td class="text-center">{{ criteria.max_score if 'max_score' in criteria else criteria.points_possible if 'points_possible' in criteria else 1 }}</td>
+                        <td class="text-center">
+                            {% set earned = criteria.score if 'score' in criteria else criteria.points_earned if 'points_earned' in criteria else 0 %}
+{% set possible = criteria.max_score if 'max_score' in criteria else criteria.points_possible if 'points_possible' in criteria else 1 %}
+{% set percentage = (earned / possible * 100)|round|int %}
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar 
+                                    {% if percentage >= 80 %}bg-success
+                                    {% elif percentage >= 60 %}bg-primary
+                                    {% elif percentage >= 40 %}bg-warning
+                                    {% else %}bg-danger{% endif %}"
+                                    role="progressbar" 
+                                    style="width: {{ percentage }}%;"
+                                    aria-valuenow="{{ percentage }}" 
+                                    aria-valuemin="0" 
+                                    aria-valuemax="100">
+                                    {{ percentage }}%
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Grading Notes -->
+{% if result.grading_notes %}
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">Additional Grading Notes</h5>
+    </div>
+    <div class="card-body">
+        <div class="p-3 bg-light rounded">
+            {{ result.grading_notes|nl2br }}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="d-flex justify-content-between mt-4">
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left me-1"></i> Back to Home
+    </a>
+    
+    <div>
+        <a href="{{ url_for('view_submission') }}" class="btn btn-info text-white">
+            <i class="bi bi-file-text me-1"></i> View Submission
+        </a>
+        
+        <a href="{{ url_for('view_guide') }}" class="btn btn-primary ms-2">
+            <i class="bi bi-journal-text me-1"></i> View Guide
+        </a>
+        
+        {% if result.metadata.submission_id if result.metadata else None %}
+        <a href="{{ url_for('download_results', filename=result.metadata.submission_id if result.metadata else None + '_result.json') }}" 
+           class="btn btn-success ms-2" download>
+            <i class="bi bi-download me-1"></i> Download Results
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} 
