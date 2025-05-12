@@ -468,12 +468,12 @@ class MappingService:
                         message=f"Guide type determined: {guide_type} (confidence: {confidence:.2f}). Preparing for mapping..."
                     )
 
-                    # Use LLM to map submission to guide based on guide type
+                    # Use LLM to map submission to guide based on guide type and perform grading
                     if guide_type == "questions":
                         system_prompt = """
-                        You are an expert at matching exam questions with student answers.
+                        You are an expert at matching and grading exam questions with student answers.
                         Your task is to analyze the raw text of a marking guide containing QUESTIONS and a student submission containing ANSWERS.
-                        You need to identify and match each question in the guide with the corresponding answer in the submission.
+                        You need to identify and match each question in the guide with the corresponding answer in the submission, and then grade each answer.
 
                         Important guidelines:
                         1. First, identify the questions in the marking guide
@@ -484,6 +484,13 @@ class MappingService:
                         6. Provide a high confidence score (0.8-1.0) only for very clear matches
                         7. For partial matches, provide a lower score (0.5-0.7) and explain why
                         8. If a question has no matching answer, do not include it in the mappings
+
+                        Grading guidelines:
+                        1. For each matched question-answer pair, grade the answer based on how well it addresses the question
+                        2. Assign a score as a percentage of the maximum marks available (e.g., 8/10 = 80%)
+                        3. Consider content accuracy, completeness, and relevance when grading
+                        4. Provide brief feedback explaining the grade
+                        5. Identify key strengths and weaknesses in the answer
 
                         Pay special attention to mark allocations:
                         - Look for numbers followed by "marks", "points", "%" or enclosed in brackets/parentheses
@@ -502,16 +509,27 @@ class MappingService:
                                     "submission_id": "a1",
                                     "submission_text": "The capital of France is Paris.",
                                     "match_score": 0.95,
-                                    "match_reason": "This submission answer directly addresses the question in the guide"
+                                    "match_reason": "This submission answer directly addresses the question in the guide",
+                                    "grade_score": 5.0,  # The score awarded out of max_score
+                                    "grade_percentage": 100,  # The percentage score
+                                    "grade_feedback": "The answer is correct and complete.",
+                                    "strengths": ["Accurate identification of Paris as the capital"],
+                                    "weaknesses": []
                                 }
-                            ]
+                            ],
+                            "overall_grade": {
+                                "total_score": 5.0,
+                                "max_possible_score": 5.0,
+                                "percentage": 100,
+                                "letter_grade": "A+"
+                            }
                         }
                         """
                     else:  # guide_type == "answers"
                         system_prompt = """
-                        You are an expert at matching exam answers between a marking guide and a student submission.
+                        You are an expert at matching and grading exam answers between a marking guide and a student submission.
                         Your task is to analyze the raw text of a marking guide containing MODEL ANSWERS and a student submission containing STUDENT ANSWERS.
-                        You need to identify and match answers that address the same questions.
+                        You need to identify and match answers that address the same questions, and then grade each student answer.
 
                         Important guidelines:
                         1. First, identify the model answers in the marking guide
@@ -522,6 +540,13 @@ class MappingService:
                         6. Provide a high confidence score (0.8-1.0) only for very clear matches
                         7. For partial matches, provide a lower score (0.5-0.7) and explain why
                         8. If a student answer has no matching guide answer, do not include it in the mappings
+
+                        Grading guidelines:
+                        1. For each matched answer pair, grade the student answer based on how well it matches the model answer
+                        2. Assign a score as a percentage of the maximum marks available (e.g., 8/10 = 80%)
+                        3. Consider content accuracy, completeness, and relevance when grading
+                        4. Provide brief feedback explaining the grade
+                        5. Identify key strengths and weaknesses in the student answer compared to the model answer
 
                         Pay special attention to mark allocations:
                         - Look for numbers followed by "marks", "points", "%" or enclosed in brackets/parentheses
@@ -539,9 +564,20 @@ class MappingService:
                                     "submission_id": "a1",
                                     "submission_text": "Paris is the capital of France.",
                                     "match_score": 0.95,
-                                    "match_reason": "Both answers address the same question about the capital of France"
+                                    "match_reason": "Both answers address the same question about the capital of France",
+                                    "grade_score": 5.0,  # The score awarded out of max_score
+                                    "grade_percentage": 100,  # The percentage score
+                                    "grade_feedback": "The answer is correct and complete.",
+                                    "strengths": ["Accurate identification of Paris as the capital"],
+                                    "weaknesses": []
                                 }
-                            ]
+                            ],
+                            "overall_grade": {
+                                "total_score": 5.0,
+                                "max_possible_score": 5.0,
+                                "percentage": 100,
+                                "letter_grade": "A+"
+                            }
                         }
                         """
 
@@ -553,7 +589,7 @@ class MappingService:
                         message="Using LLM to map submission to guide..."
                     )
 
-                    # Pass the raw content to the LLM for mapping
+                    # Pass the raw content to the LLM for mapping and grading
                     user_prompt = f"""
                     Marking Guide Content:
                     {marking_guide_content[:5000]}  # Limit to first 5000 chars for efficiency
@@ -568,6 +604,14 @@ class MappingService:
                     - Look for numbers followed by "marks", "points", "%" or enclosed in brackets/parentheses
                     - Examples: "5 marks", "[10]", "(15 points)", "20%", etc.
                     - Include these mark allocations in the max_score field for each mapping
+
+                    After mapping, grade each student answer based on how well it matches the expected answer:
+                    - Assign a score out of the maximum marks available
+                    - Calculate a percentage score
+                    - Provide brief feedback explaining the grade
+                    - Identify strengths and weaknesses in the answer
+
+                    Finally, calculate an overall grade by summing all scores and determining the percentage of total available marks.
                     """
 
                     # Check if the model supports JSON output format
@@ -658,20 +702,68 @@ class MappingService:
                             "match_reason": "Fallback mapping due to JSON parsing error"
                         })
 
-                    # Process LLM mappings
+                    # Process LLM mappings and grading
+                    overall_grade = parsed.get("overall_grade", {})
+                    total_score = 0
+                    max_possible_score = 0
+
                     for mapping in parsed.get("mappings", []):
+                        # Extract grading information
+                        grade_score = mapping.get("grade_score", 0)
+                        grade_percentage = mapping.get("grade_percentage", 0)
+                        grade_feedback = mapping.get("grade_feedback", "")
+                        strengths = mapping.get("strengths", [])
+                        weaknesses = mapping.get("weaknesses", [])
+
+                        # Add to total scores
+                        max_score = mapping.get("max_score")
+                        if max_score is not None:
+                            try:
+                                max_score_float = float(max_score)
+                                max_possible_score += max_score_float
+                                if grade_score:
+                                    total_score += float(grade_score)
+                            except (ValueError, TypeError):
+                                logger.warning(f"Invalid max_score value: {max_score}")
+
+                        # Create mapping with grading information
                         mappings.append({
                             "guide_id": mapping.get("guide_id", f"g{len(mappings)+1}"),
                             "guide_text": mapping.get("guide_text", ""),
                             "guide_answer": mapping.get("guide_answer", ""),
-                            "max_score": mapping.get("max_score"),  # No default value
+                            "max_score": max_score,  # No default value
                             "submission_id": mapping.get("submission_id", f"s{len(mappings)+1}"),
                             "submission_text": mapping.get("submission_text", ""),
                             "submission_answer": mapping.get("submission_answer", ""),
                             "match_score": mapping.get("match_score", 0.5),
                             "match_reason": mapping.get("match_reason", ""),
-                            "guide_type": guide_type
+                            "guide_type": guide_type,
+                            # Grading information
+                            "grade_score": grade_score,
+                            "grade_percentage": grade_percentage,
+                            "grade_feedback": grade_feedback,
+                            "strengths": strengths,
+                            "weaknesses": weaknesses
                         })
+
+                    # If overall grade wasn't provided by the LLM, calculate it
+                    if not overall_grade:
+                        # Calculate percentage
+                        percentage = (total_score / max_possible_score * 100) if max_possible_score > 0 else 0
+
+                        # Normalize the score to be out of 100
+                        normalized_score = percentage  # This is already the percentage out of 100
+
+                        # Determine letter grade
+                        letter_grade = self._get_letter_grade(percentage)
+
+                        overall_grade = {
+                            "total_score": round(total_score, 1),
+                            "max_possible_score": max_possible_score,
+                            "normalized_score": round(normalized_score, 1),
+                            "percentage": round(percentage, 1),
+                            "letter_grade": letter_grade
+                        }
 
                 except Exception as e:
                     logger.warning(f"LLM mapping failed, falling back to text-based extraction: {str(e)}")
@@ -829,7 +921,8 @@ class MappingService:
                     "unmapped_submission_count": len(unmapped_submission_items)
                 },
                 "unmapped_guide_items": unmapped_guide_items,
-                "unmapped_submission_items": unmapped_submission_items
+                "unmapped_submission_items": unmapped_submission_items,
+                "overall_grade": overall_grade
             }
 
             # Update progress - Complete
@@ -837,12 +930,14 @@ class MappingService:
                 progress_tracker.update_progress(
                     tracker_id=tracker_id,
                     status="completed",
-                    message="Mapping completed successfully",
+                    message=f"Mapping and grading completed successfully. Score: {overall_grade.get('percentage', 0)}%",
                     completed=True,
                     success=True,
                     result={
                         "mapping_count": len(mappings),
-                        "guide_type": guide_type
+                        "guide_type": guide_type,
+                        "grade_percentage": overall_grade.get('percentage', 0),
+                        "letter_grade": overall_grade.get('letter_grade', '')
                     }
                 )
 
@@ -1114,3 +1209,40 @@ class MappingService:
                 })
 
         return mappings
+
+    def _get_letter_grade(self, percent_score: float) -> str:
+        """
+        Convert percentage score to letter grade.
+
+        Args:
+            percent_score: Percentage score (0-100)
+
+        Returns:
+            str: Letter grade (A+, A, A-, B+, etc.)
+        """
+        if percent_score >= 97:
+            return "A+"
+        elif percent_score >= 93:
+            return "A"
+        elif percent_score >= 90:
+            return "A-"
+        elif percent_score >= 87:
+            return "B+"
+        elif percent_score >= 83:
+            return "B"
+        elif percent_score >= 80:
+            return "B-"
+        elif percent_score >= 77:
+            return "C+"
+        elif percent_score >= 73:
+            return "C"
+        elif percent_score >= 70:
+            return "C-"
+        elif percent_score >= 67:
+            return "D+"
+        elif percent_score >= 63:
+            return "D"
+        elif percent_score >= 60:
+            return "D-"
+        else:
+            return "F"

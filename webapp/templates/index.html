@@ -8,39 +8,31 @@
     <p class="lead mb-4">AI-powered, fast, and reliable grading for your exams.<br>Upload your marking guide and student submission to get started!</p>
 </div>
 
-<!-- Progress Tracker -->
-<div class="card mb-4">
-    <div class="card-body">
-        <h5 class="card-title mb-3">Progress Tracker</h5>
-        {% set progress_value = 0 %}
-        {% if session.get('guide_uploaded') %}
-            {% if session.get('last_submission') %}
-                {% if session.get('last_grading_result') %}
-                    {% set progress_value = 100 %}
-                {% else %}
-                    {% set progress_value = 67 %}
-                {% endif %}
+<!-- Status Badges -->
+<div class="d-flex justify-content-center mb-4">
+    {% set progress_value = 0 %}
+    {% if session.get('guide_uploaded') %}
+        {% if session.get('last_submission') %}
+            {% if session.get('last_grading_result') %}
+                {% set progress_value = 100 %}
             {% else %}
-                {% set progress_value = 33 %}
+                {% set progress_value = 67 %}
             {% endif %}
+        {% else %}
+            {% set progress_value = 33 %}
         {% endif %}
+    {% endif %}
 
-        <div class="progress" style="height: 20px;">
-            <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress_value }}%;"
-                 aria-valuenow="{{ progress_value }}" aria-valuemin="0" aria-valuemax="100">{{ progress_value }}%</div>
-        </div>
-
-        <div class="d-flex justify-content-between mt-2">
-            <span class="badge {{ 'bg-success' if progress_value >= 33 else 'bg-secondary' }}">
-                <i class="bi bi-1-circle"></i> Guide Uploaded
-            </span>
-            <span class="badge {{ 'bg-success' if progress_value >= 67 else 'bg-secondary' }}">
-                <i class="bi bi-2-circle"></i> Submission Uploaded
-            </span>
-            <span class="badge {{ 'bg-success' if progress_value >= 100 else 'bg-secondary' }}">
-                <i class="bi bi-3-circle"></i> Grading Complete
-            </span>
-        </div>
+    <div class="d-flex gap-3">
+        <span class="badge {{ 'bg-success' if progress_value >= 33 else 'bg-secondary' }} p-2">
+            <i class="bi bi-1-circle"></i> Guide Uploaded
+        </span>
+        <span class="badge {{ 'bg-success' if progress_value >= 67 else 'bg-secondary' }} p-2">
+            <i class="bi bi-2-circle"></i> Submission Uploaded
+        </span>
+        <span class="badge {{ 'bg-success' if progress_value >= 100 else 'bg-secondary' }} p-2">
+            <i class="bi bi-3-circle"></i> Grading Complete
+        </span>
     </div>
 </div>
 
@@ -390,7 +382,7 @@
             });
         });
 
-        // Add progress tracking for mapping and grading
+        // Add loader for mapping
         document.querySelector('form[action*="map_submission"]')?.addEventListener('submit', function(e) {
             e.preventDefault();
 
@@ -398,15 +390,15 @@
             const mapButton = this.querySelector('button[type="submit"]');
             toggleButtonLoader(mapButton, true);
 
-            // Create a loader first (will be replaced by progress tracker)
+            // Create a loader with appropriate messaging
             const loader = new Loader({
                 type: 'dots',
-                text: 'Initializing Mapping...',
-                subText: 'Preparing to analyze submission'
+                text: 'Mapping Submission...',
+                subText: 'This may take a minute or two'
             });
             loader.show();
 
-            // Create a progress tracker for the mapping process
+            // Create a progress tracker just to get a tracker ID (but we won't display it)
             fetch('/api/progress', {
                 method: 'POST',
                 headers: {
@@ -420,28 +412,17 @@
             })
             .then(response => response.json())
             .then(data => {
-                // Hide the simple loader
-                loader.hide();
+                // Update the loader with more specific information
+                loader.updateText('AI Processing Submission...', 'Analyzing content and mapping to guide');
 
-                if (data.id) {
-                    // Start tracking progress
-                    progressTracker.startTracking(data.id, 'llm');
-
-                    // Submit the form
-                    this.submit();
-                } else {
-                    // Submit the form without progress tracking
-                    this.submit();
-                }
+                // Submit the form
+                this.submit();
             })
             .catch(error => {
                 console.error('Error creating progress tracker:', error);
-                // Hide the simple loader
-                loader.hide();
 
-                // Show a generic loader instead
-                globalLoader.updateText('Mapping Submission...', 'Progress tracking unavailable');
-                globalLoader.show();
+                // Update the loader with generic information
+                loader.updateText('Mapping Submission...', 'Processing your request');
 
                 // Submit the form anyway
                 this.submit();
@@ -455,15 +436,15 @@
             const gradeButton = this.querySelector('button[type="submit"]');
             toggleButtonLoader(gradeButton, true);
 
-            // Create a loader first (will be replaced by progress tracker)
+            // Create a loader with appropriate messaging
             const loader = new Loader({
                 type: 'dots',
-                text: 'Initializing Grading...',
-                subText: 'Preparing to evaluate submission'
+                text: 'Grading Submission...',
+                subText: 'This may take a minute or two'
             });
             loader.show();
 
-            // Create a progress tracker for the grading process
+            // Create a progress tracker just to get a tracker ID (but we won't display it)
             fetch('/api/progress', {
                 method: 'POST',
                 headers: {
@@ -477,28 +458,17 @@
             })
             .then(response => response.json())
             .then(data => {
-                // Hide the simple loader
-                loader.hide();
+                // Update the loader with more specific information
+                loader.updateText('AI Evaluating Submission...', 'Analyzing answers and calculating scores');
 
-                if (data.id) {
-                    // Start tracking progress
-                    progressTracker.startTracking(data.id, 'llm');
-
-                    // Submit the form
-                    this.submit();
-                } else {
-                    // Submit the form without progress tracking
-                    this.submit();
-                }
+                // Submit the form
+                this.submit();
             })
             .catch(error => {
                 console.error('Error creating progress tracker:', error);
-                // Hide the simple loader
-                loader.hide();
 
-                // Show a generic loader instead
-                globalLoader.updateText('Grading Submission...', 'Progress tracking unavailable');
-                globalLoader.show();
+                // Update the loader with generic information
+                loader.updateText('Grading Submission...', 'Processing your request');
 
                 // Submit the form anyway
                 this.submit();
@@ -519,12 +489,6 @@
             });
             loader.show();
         });
-
-        // Check for active OCR trackers
-        {% if session.get('last_submission', {}).get('ocr_tracker_id') %}
-            // Start tracking progress for OCR
-            progressTracker.startTracking('{{ session.get("last_submission", {}).get("ocr_tracker_id") }}', 'ocr');
-        {% endif %}
     });
 </script>
 {% endblock %}

@@ -78,6 +78,17 @@ class ProgressTracker {
       this.pollTimer = null;
     }
 
+    // Delete the tracker on the server if we have a tracker ID
+    if (this.trackerId) {
+      this.deleteTracker(this.trackerId)
+        .then(() =>
+          console.log(`Deleted tracker ${this.trackerId} from server`)
+        )
+        .catch((error) =>
+          console.error(`Failed to delete tracker ${this.trackerId}:`, error)
+        );
+    }
+
     this.isActive = false;
     this.trackerId = null;
     this.operationType = null;
@@ -96,6 +107,29 @@ class ProgressTracker {
     localStorage.removeItem("progressTracker_active");
 
     console.log("Stopped progress tracking");
+  }
+
+  /**
+   * Delete a tracker from the server
+   * @param {string} trackerId - ID of the tracker to delete
+   * @returns {Promise} - Promise that resolves when the tracker is deleted
+   */
+  deleteTracker(trackerId) {
+    if (!trackerId) return Promise.resolve();
+
+    return fetch(`/api/progress/${trackerId}`, {
+      method: "DELETE",
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then((data) => {
+        console.log(`Tracker deletion response:`, data);
+        return data;
+      });
   }
 
   /**
@@ -231,12 +265,29 @@ class ProgressTracker {
         this.consecutiveErrors++;
 
         // If we've had multiple consecutive errors, update the UI
-        if (this.consecutiveErrors > 3) {
+        if (this.consecutiveErrors > 2) {
           const container = document.getElementById(this.containerId);
           if (container) {
+            const messageElement = container.querySelector(".progress-message");
+            if (messageElement) {
+              messageElement.textContent = "Connection issues. Retrying...";
+            }
+
             const detailsElement = container.querySelector(".progress-details");
             if (detailsElement) {
-              detailsElement.textContent = "Connection issues. Retrying...";
+              detailsElement.textContent = `Retry attempt ${this.consecutiveErrors}/10. Will continue in background.`;
+            }
+
+            // Update progress bar to show warning
+            const progressBar = container.querySelector(".progress-bar");
+            if (progressBar) {
+              progressBar.classList.remove(
+                "bg-success",
+                "bg-danger",
+                "bg-info",
+                "bg-primary"
+              );
+              progressBar.classList.add("bg-warning");
             }
           }
         }
@@ -245,8 +296,35 @@ class ProgressTracker {
         // But if we've had too many errors, stop tracking
         if (this.consecutiveErrors > 10) {
           console.error("Too many consecutive errors, stopping tracker");
-          this.stopTracking();
-          this.onError({ error: "Connection lost. Please try again." });
+
+          // Update UI to show error before stopping
+          const container = document.getElementById(this.containerId);
+          if (container) {
+            const messageElement = container.querySelector(".progress-message");
+            if (messageElement) {
+              messageElement.textContent =
+                "Operation failed: Connection lost. Please try again.";
+              messageElement.classList.add("text-danger");
+            }
+
+            // Update progress bar to show error
+            const progressBar = container.querySelector(".progress-bar");
+            if (progressBar) {
+              progressBar.classList.remove(
+                "bg-success",
+                "bg-warning",
+                "bg-info",
+                "bg-primary"
+              );
+              progressBar.classList.add("bg-danger");
+            }
+          }
+
+          // Wait a moment before stopping so the user can see the error
+          setTimeout(() => {
+            this.stopTracking();
+            this.onError({ error: "Connection lost. Please try again." });
+          }, 3000);
         }
       });
   }
@@ -270,55 +348,96 @@ class ProgressTracker {
       if (this.operationType === "llm") {
         const elapsedSeconds = Date.now() / 1000 - (data.start_time || 0);
 
-        // If we're still processing after 3 seconds, show animated progress
-        if (!data.completed && elapsedSeconds > 3) {
-          // Calculate a progress that increases over time but never reaches 100%
-          // This creates an illusion of progress for long-running LLM operations
-
+        // If we're still processing after 2 seconds, show animated progress
+        if (!data.completed && elapsedSeconds > 2) {
           // Store the last progress value to prevent oscillation
           if (!this.lastProgress) {
             this.lastProgress = percent;
           }
 
-          // Calculate base progress that increases logarithmically with time
-          let baseProgress;
-
-          if (elapsedSeconds < 10) {
-            // Start slower (0-10 seconds)
-            baseProgress = Math.min(
-              50,
-              Math.max(5, Math.log(elapsedSeconds * 3) * 15)
-            );
-          } else if (elapsedSeconds < 30) {
-            // Medium speed (10-30 seconds)
-            baseProgress = Math.min(75, 50 + ((elapsedSeconds - 10) / 20) * 25);
+          // If the actual progress is >= 90%, use the actual progress
+          if (percent >= 90) {
+            // No need to modify percent, use the actual value
+            console.log(`Using actual progress: ${percent}%`);
           } else {
-            // Slower approach to 95% (after 30 seconds)
-            baseProgress = Math.min(95, 75 + Math.log(elapsedSeconds - 29) * 5);
-          }
+            // Speed up progress until 90%
+            let baseProgress;
 
-          // Ensure progress never goes backward
-          percent = Math.max(this.lastProgress, baseProgress, percent);
+            if (elapsedSeconds < 5) {
+              // Fast initial progress (0-5 seconds): 0-30%
+              baseProgress = Math.min(30, Math.max(5, elapsedSeconds * 6));
+            } else if (elapsedSeconds < 10) {
+              // Accelerate (5-10 seconds): 30-60%
+              baseProgress = Math.min(60, 30 + (elapsedSeconds - 5) * 6);
+            } else if (elapsedSeconds < 20) {
+              // Continue acceleration (10-20 seconds): 60-80%
+              baseProgress = Math.min(80, 60 + (elapsedSeconds - 10) * 2);
+            } else if (elapsedSeconds < 30) {
+              // Slow down as we approach 90% (20-30 seconds): 80-90%
+              baseProgress = Math.min(90, 80 + (elapsedSeconds - 20));
+            } else {
+              // Hold at 90% until actual progress catches up
+              baseProgress = 90;
+            }
+
+            // Ensure progress never goes backward and doesn't exceed 90% unless actual progress is higher
+            percent = Math.max(this.lastProgress, baseProgress, percent);
+          }
 
           // Save the current progress for next time
           this.lastProgress = percent;
         }
       } else {
-        // For non-LLM operations, use simpler progress estimation
-        // For long-running operations, ensure the progress bar shows movement
-        if (
-          percent < 10 &&
-          data.start_time &&
-          Date.now() / 1000 - data.start_time > 5
-        ) {
-          // If more than 5 seconds have passed, show at least 10% progress
-          percent = Math.max(percent, 10);
-        }
+        // For non-LLM operations, use similar progress estimation but with different timing
+        const elapsedSeconds = data.start_time
+          ? Date.now() / 1000 - data.start_time
+          : 0;
 
-        // If we're processing but still at 0%, show at least 5%
-        if (percent === 0 && data.status !== "initializing") {
+        // If the actual progress is >= 90%, use the actual progress
+        if (percent >= 90) {
+          // No need to modify percent, use the actual value
+        } else if (!data.completed && elapsedSeconds > 2) {
+          // Store the last progress value to prevent oscillation
+          if (!this.lastProgress) {
+            this.lastProgress = percent;
+          }
+
+          // Calculate accelerated progress for non-LLM operations
+          let baseProgress;
+
+          if (elapsedSeconds < 3) {
+            // Fast initial progress (0-3 seconds): 0-25%
+            baseProgress = Math.min(25, Math.max(5, elapsedSeconds * 8));
+          } else if (elapsedSeconds < 6) {
+            // Accelerate (3-6 seconds): 25-50%
+            baseProgress = Math.min(50, 25 + (elapsedSeconds - 3) * 8);
+          } else if (elapsedSeconds < 10) {
+            // Continue acceleration (6-10 seconds): 50-75%
+            baseProgress = Math.min(75, 50 + (elapsedSeconds - 6) * 6);
+          } else if (elapsedSeconds < 15) {
+            // Slow down as we approach 90% (10-15 seconds): 75-90%
+            baseProgress = Math.min(90, 75 + (elapsedSeconds - 10) * 3);
+          } else {
+            // Hold at 90% until actual progress catches up
+            baseProgress = 90;
+          }
+
+          // Ensure progress never goes backward and doesn't exceed 90% unless actual progress is higher
+          percent = Math.max(this.lastProgress, baseProgress, percent);
+
+          // Save the current progress for next time
+          this.lastProgress = percent;
+        } else if (percent === 0 && data.status !== "initializing") {
+          // If we're processing but still at 0%, show at least 5%
           percent = 5;
         }
+      }
+
+      // Log progress for debugging
+      if (percent >= 90) {
+        console.log(`Progress: ${Math.round(percent)}% (actual progress used)`);
+      } else {
+        console.log(`Progress: ${Math.round(percent)}% (accelerated progress)`);
       }
 
       progressBar.style.width = `${percent}%`;
@@ -442,7 +561,14 @@ const progressTracker = new ProgressTracker({
   onError: (data) => {
     // Show error message
     const errorMessage = data.error || "An unknown error occurred";
-    alert(`Operation failed: ${errorMessage}`);
+
+    // Don't show alert for connection errors, as they're already handled in the UI
+    if (!errorMessage.includes("Connection lost")) {
+      console.error(`Operation failed: ${errorMessage}`);
+
+      // Only show alert for non-connection errors
+      alert(`Operation failed: ${errorMessage}`);
+    }
   },
 });
 
@@ -455,10 +581,42 @@ document.addEventListener("DOMContentLoaded", () => {
   const operationType = localStorage.getItem("progressTracker_type");
   const isActive = localStorage.getItem("progressTracker_active") === "true";
 
+  // Check if the tracker ID is stale by making a single request
   if (trackerId && operationType && isActive) {
-    console.log(
-      `Resuming progress tracking for ${operationType} operation: ${trackerId}`
-    );
-    progressTracker.startTracking(trackerId, operationType);
+    // First, check if the tracker is still valid
+    fetch(`/api/progress/${trackerId}`)
+      .then((response) => response.json())
+      .then((data) => {
+        // If the tracker is not found or has an error status, clear it
+        if (data.status === "not_found" || data.status === "error") {
+          console.log(`Clearing stale tracker ID: ${trackerId}`);
+          localStorage.removeItem("progressTracker_id");
+          localStorage.removeItem("progressTracker_type");
+          localStorage.removeItem("progressTracker_active");
+          return;
+        }
+
+        // If the tracker is completed, clear it
+        if (data.completed) {
+          console.log(`Clearing completed tracker ID: ${trackerId}`);
+          localStorage.removeItem("progressTracker_id");
+          localStorage.removeItem("progressTracker_type");
+          localStorage.removeItem("progressTracker_active");
+          return;
+        }
+
+        // Otherwise, resume tracking
+        console.log(
+          `Resuming progress tracking for ${operationType} operation: ${trackerId}`
+        );
+        progressTracker.startTracking(trackerId, operationType);
+      })
+      .catch((error) => {
+        // If there's an error checking the tracker, clear it to be safe
+        console.error(`Error checking tracker ${trackerId}:`, error);
+        localStorage.removeItem("progressTracker_id");
+        localStorage.removeItem("progressTracker_type");
+        localStorage.removeItem("progressTracker_active");
+      });
   }
 });

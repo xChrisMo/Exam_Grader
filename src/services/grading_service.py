@@ -304,15 +304,19 @@ class GradingService:
             # Calculate percentage score
             percent_score = (overall_score / max_possible_score * 100) if max_possible_score > 0 else 0
 
+            # Normalize the overall score to be out of 100
+            normalized_score = percent_score  # This is already the percentage out of 100
+
             # Assign letter grade based on percentage
             letter_grade = self._get_letter_grade(percent_score)
 
             # Create result
             result = {
                 "status": "success",
-                "overall_score": round(overall_score, 1),
-                "max_possible_score": max_possible_score,
-                "percent_score": round(percent_score, 1),
+                "overall_score": round(overall_score, 1),  # Original score (sum of all points)
+                "max_possible_score": max_possible_score,  # Original max possible score
+                "normalized_score": round(normalized_score, 1),  # Score normalized to 100
+                "percent_score": round(percent_score, 1),  # Same as normalized_score for backward compatibility
                 "letter_grade": letter_grade,
                 "criteria_scores": criteria_scores,
                 "detailed_feedback": {

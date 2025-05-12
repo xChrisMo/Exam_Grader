@@ -21,12 +21,19 @@ endblock %} {% block content %}
         <div
           class="score-circle mb-2 {% if result.percent_score is defined and result.percent_score >= 80 %}bg-success {% elif result.percent_score is defined and result.percent_score >= 60 %}bg-primary {% elif result.percent_score is defined and result.percent_score >= 40 %}bg-warning {% else %}bg-danger{% endif %}"
         >
-          {{ result.percent_score|default(0)|round|int }}%
+          {{
+          result.normalized_score|default(result.percent_score)|default(0)|round|int
+          }}%
         </div>
         <h5>Overall Score</h5>
         <p class="text-muted mb-0">
-          {{ result.overall_score|default(0) }} / {{
-          result.max_possible_score|default(100) }} marks
+          Score: {{
+          result.normalized_score|default(result.percent_score)|default(0)|round|int
+          }}/100
+        </p>
+        <p class="text-muted small mb-0">
+          ({{ result.overall_score|default(0) }} / {{
+          result.max_possible_score|default(100) }} marks)
         </p>
         {% if result.metadata.total_marks_available is defined and
         result.metadata.total_marks_available != result.max_possible_score %}
@@ -438,7 +445,18 @@ result.metadata.unmapped_guide_count > 0 %}
     <h5 class="mb-0">Actions</h5>
   </div>
   <div class="card-body">
-    <div class="d-flex justify-content-between">
+    <div class="row">
+      <div class="col-md-12 mb-3">
+        <a
+          href="{{ url_for('view_detailed_results') }}"
+          class="btn btn-primary btn-lg w-100"
+        >
+          <i class="bi bi-file-earmark-text me-1"></i> View Detailed Analysis &
+          Suggestions
+        </a>
+      </div>
+    </div>
+    <div class="d-flex justify-content-between mt-2">
       <a href="{{ url_for('view_mapping') }}" class="btn btn-outline-secondary">
         <i class="bi bi-diagram-3 me-1"></i> View Mapping
       </a>
@@ -478,6 +496,12 @@ result.metadata.unmapped_guide_count > 0 %}
   <div>
     <a href="{{ url_for('download_excel') }}" class="btn btn-success me-2">
       <i class="bi bi-file-excel me-1"></i> Download Excel
+    </a>
+    <a
+      href="{{ url_for('view_detailed_results') }}"
+      class="btn btn-primary me-2"
+    >
+      <i class="bi bi-file-earmark-text me-1"></i> Detailed Results
     </a>
     <a
       href="{{ url_for('clear_all') }}"

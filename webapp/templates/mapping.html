@@ -111,12 +111,11 @@ endblock %} {% block content %}
           <thead class="table-light">
             <tr>
               <th style="width: 5%">#</th>
-              <th style="width: 20%">Guide Text</th>
-              <th style="width: 20%">Submission Text</th>
+              <th style="width: 22%">Guide Text</th>
+              <th style="width: 22%">Submission Text</th>
               <th style="width: 10%">Marks</th>
               <th style="width: 15%">Match Score</th>
-              <th style="width: 25%">Match Reason</th>
-              <th style="width: 5%">Links</th>
+              <th style="width: 26%">Match Reason</th>
             </tr>
           </thead>
           <tbody>
@@ -301,22 +300,6 @@ endblock %} {% block content %}
                 </div>
                 {% endif %}
               </td>
-              <td>
-                <a
-                  href="#"
-                  class="btn btn-sm btn-outline-secondary"
-                  onclick="window.open('{{ url_for('view_guide') }}', '_blank'); return false;"
-                >
-                  <i class="bi bi-file-text"></i> View Guide
-                </a>
-                <a
-                  href="#"
-                  class="btn btn-sm btn-outline-secondary mt-1"
-                  onclick="window.open('{{ url_for('view_submission') }}', '_blank'); return false;"
-                >
-                  <i class="bi bi-file-text"></i> View Submission
-                </a>
-              </td>
             </tr>
             {% endfor %}
           </tbody>
@@ -364,31 +347,38 @@ endblock %} {% block content %}
           <div class="list-group">
             {% for item in mapping_result.unmapped_guide_items %}
             <div class="list-group-item">
-              <div class="guide-text">{{ item.text|truncate(150) }}</div>
-              <div class="d-flex gap-2 mt-2 mb-2">
-                {% if item.id %}
-                <span class="badge bg-primary">ID: {{ item.id }}</span>
-                {% endif %} {% if item.type %}
-                <span class="badge bg-secondary">Type: {{ item.type }}</span>
-                {% endif %} {% if item.max_score %}
-                <span class="badge bg-success">{{ item.max_score }} marks</span>
-                {% endif %}
-              </div>
-              {% if item.answer %}
-              <button
-                class="btn btn-sm btn-outline-secondary mt-1"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#unmappedGuideAnswer{{ loop.index }}"
-                aria-expanded="false"
-              >
-                <i class="bi bi-chevron-down"></i> Show Answer
-              </button>
               <div
-                class="collapse mt-2"
-                id="unmappedGuideAnswer{{ loop.index }}"
+                class="d-flex justify-content-between align-items-start mb-2"
               >
-                <div class="card card-body bg-light">
+                <h6 class="mb-0">Unmapped Guide Item #{{ loop.index }}</h6>
+                <div class="d-flex gap-2">
+                  {% if item.id %}
+                  <span class="badge bg-primary">ID: {{ item.id }}</span>
+                  {% endif %} {% if item.type %}
+                  <span class="badge bg-secondary">Type: {{ item.type }}</span>
+                  {% endif %} {% if item.max_score %}
+                  <span class="badge bg-success"
+                    >{{ item.max_score }} marks</span
+                  >
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="card mb-3">
+                <div class="card-header bg-light">
+                  <strong>Guide Text</strong>
+                </div>
+                <div class="card-body">
+                  <div class="guide-text">{{ item.text }}</div>
+                </div>
+              </div>
+
+              {% if item.answer %}
+              <div class="card">
+                <div class="card-header bg-light">
+                  <strong>Expected Answer</strong>
+                </div>
+                <div class="card-body">
                   <div class="guide-answer">{{ item.answer }}</div>
                 </div>
               </div>
@@ -437,29 +427,34 @@ endblock %} {% block content %}
           <div class="list-group">
             {% for item in mapping_result.unmapped_submission_items %}
             <div class="list-group-item">
-              <div class="submission-text">{{ item.text|truncate(150) }}</div>
-              <div class="d-flex gap-2 mt-2 mb-2">
-                {% if item.id %}
-                <span class="badge bg-info">ID: {{ item.id }}</span>
-                {% endif %} {% if item.type %}
-                <span class="badge bg-secondary">Type: {{ item.type }}</span>
-                {% endif %}
-              </div>
-              {% if item.answer %}
-              <button
-                class="btn btn-sm btn-outline-secondary mt-1"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#unmappedSubmissionAnswer{{ loop.index }}"
-                aria-expanded="false"
-              >
-                <i class="bi bi-chevron-down"></i> Show Answer
-              </button>
               <div
-                class="collapse mt-2"
-                id="unmappedSubmissionAnswer{{ loop.index }}"
+                class="d-flex justify-content-between align-items-start mb-2"
               >
-                <div class="card card-body bg-light">
+                <h6 class="mb-0">Unmapped Submission Item #{{ loop.index }}</h6>
+                <div class="d-flex gap-2">
+                  {% if item.id %}
+                  <span class="badge bg-info">ID: {{ item.id }}</span>
+                  {% endif %} {% if item.type %}
+                  <span class="badge bg-secondary">Type: {{ item.type }}</span>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="card mb-3">
+                <div class="card-header bg-light">
+                  <strong>Submission Text</strong>
+                </div>
+                <div class="card-body">
+                  <div class="submission-text">{{ item.text }}</div>
+                </div>
+              </div>
+
+              {% if item.answer %}
+              <div class="card">
+                <div class="card-header bg-light">
+                  <strong>Student Answer</strong>
+                </div>
+                <div class="card-body">
                   <div class="submission-answer">{{ item.answer }}</div>
                 </div>
               </div>
@@ -485,21 +480,33 @@ endblock %} {% block content %}
     <h5 class="mb-0">Actions</h5>
   </div>
   <div class="card-body">
-    <div class="d-flex justify-content-between">
-      <a href="{{ url_for('view_guide') }}" class="btn btn-outline-secondary">
-        <i class="bi bi-file-text me-1"></i> View Marking Guide
-      </a>
-      <a
-        href="{{ url_for('view_submission') }}"
-        class="btn btn-outline-secondary"
-      >
-        <i class="bi bi-file-text me-1"></i> View Submission
-      </a>
-      <form action="{{ url_for('grade_submission') }}" method="post">
-        <button type="submit" class="btn btn-primary">
-          <i class="bi bi-award me-1"></i> Grade Submission
-        </button>
-      </form>
+    <div class="row">
+      <div class="col-md-8 mb-3 mb-md-0">
+        <div class="d-flex gap-2">
+          <a
+            href="{{ url_for('view_guide') }}"
+            class="btn btn-outline-secondary"
+          >
+            <i class="bi bi-file-text me-1"></i> View Marking Guide
+          </a>
+          <a
+            href="{{ url_for('view_submission') }}"
+            class="btn btn-outline-secondary"
+          >
+            <i class="bi bi-file-text me-1"></i> View Submission
+          </a>
+          <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-house me-1"></i> Home
+          </a>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <form action="{{ url_for('grade_submission') }}" method="post">
+          <button type="submit" class="btn btn-primary btn-lg w-100">
+            <i class="bi bi-award me-1"></i> Grade Submission
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 </div>
@@ -553,7 +560,25 @@ endblock %} {% block content %}
       gradeForm.addEventListener("submit", function (e) {
         e.preventDefault();
 
-        // Create a progress tracker for the grading process
+        // Show button loader
+        const gradeButton = this.querySelector('button[type="submit"]');
+        if (gradeButton) {
+          // Disable the button and show loading state
+          gradeButton.disabled = true;
+          gradeButton.innerHTML =
+            '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Grading...';
+        }
+
+        // Create a loader with appropriate messaging
+        const loader = new Loader({
+          type: "dots",
+          text: "Grading Submission...",
+          subText: "This may take a minute or two",
+          statusText: "Analyzing answers and calculating scores",
+        });
+        loader.show();
+
+        // Create a progress tracker just to get a tracker ID (but we won't display it)
         fetch("/api/progress", {
           method: "POST",
           headers: {
@@ -562,20 +587,13 @@ endblock %} {% block content %}
           body: JSON.stringify({
             operation_type: "llm",
             task_name: "Grading Submission",
+            total_steps: 5,
           }),
         })
           .then((response) => response.json())
           .then((data) => {
-            if (data.id) {
-              // Start tracking progress
-              progressTracker.startTracking(data.id, "llm");
-
-              // Submit the form
-              this.submit();
-            } else {
-              // Submit the form without progress tracking
-              this.submit();
-            }
+            // Submit the form
+            this.submit();
           })
           .catch((error) => {
             console.error("Error creating progress tracker:", error);

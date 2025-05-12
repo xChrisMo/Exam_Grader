@@ -108,6 +108,16 @@ def create_app():
     except Exception as e:
         logger.error(f"Failed to initialize OCR service: {str(e)}")
 
+    # Initialize progress tracker with the correct directory
+    try:
+        from src.services.progress_tracker import initialize_progress_tracker
+        app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        progress_dir = os.path.join(app_root, "temp", "progress")
+        initialize_progress_tracker(progress_dir)
+        logger.info(f"Progress tracker initialized with directory: {progress_dir}")
+    except Exception as e:
+        logger.error(f"Error initializing progress tracker: {str(e)}")
+
     # Ensure upload directory exists
     Path(app.config['UPLOAD_FOLDER']).mkdir(parents=True, exist_ok=True)
 
@@ -436,66 +446,85 @@ def create_app():
 
     @app.route('/grade_submission', methods=['POST'])
     def grade_submission():
-        """Grade a student submission against the marking guide."""
+        """Grade a student submission against the marking guide using the mapping result."""
         try:
-            # Check if we have both a guide and submission
-            if not session.get('guide_uploaded'):
-                flash("Please upload a marking guide first", 'warning')
-                return redirect(url_for('index'))
-
-            if not session.get('last_submission'):
-                flash("Please upload a student submission first", 'warning')
-                return redirect(url_for('index'))
-
-            # Grading service should always be available with the patch
-            if not grading_service:
-                flash("Grading service is not available. Something went wrong with the patch.", 'error')
+            # Check if we have a mapping result
+            mapping_result = session.get('last_mapping_result')
+            if not mapping_result:
+                flash("Please map the submission to the guide first", 'warning')
                 return redirect(url_for('index'))
 
             # Set grading in progress
             session['grading_in_progress'] = True
 
-            # Get guide content
-            guide_content = session.get('guide_content', '')
-            if not guide_content:
-                flash("Marking guide content is not available", 'error')
-                session['grading_in_progress'] = False
-                return redirect(url_for('index'))
-
-            # Get submission content
-            submission_content = session.get('last_submission', {}).get('raw_text', '')
-            if not submission_content:
-                flash("Student submission content is not available", 'error')
-                session['grading_in_progress'] = False
-                return redirect(url_for('index'))
-
             # Get submission filename
             submission_id = session.get('last_submission', {}).get('filename', 'unknown_submission')
 
-            # Grade the submission
-            logger.info(f"Grading submission: {submission_id}")
-            grading_result, error = grading_service.grade_submission(
-                marking_guide_content=guide_content,
-                student_submission_content=submission_content
-            )
+            # Extract grading information from the mapping result
+            overall_grade = mapping_result.get('overall_grade', {})
 
-            if error:
-                logger.error(f"Grading error: {error}")
-                flash(f"Error grading submission: {error}", 'error')
+            if not overall_grade:
+                flash("No grading information found in the mapping result", 'error')
                 session['grading_in_progress'] = False
-                return redirect(url_for('index'))
+                return redirect(url_for('view_mapping'))
+
+            # Create a grading result structure similar to what the grading service would produce
+            grading_result = {
+                "status": "success",
+                "overall_score": overall_grade.get('total_score', 0),
+                "max_possible_score": overall_grade.get('max_possible_score', 0),
+                "percent_score": overall_grade.get('percentage', 0),
+                "letter_grade": overall_grade.get('letter_grade', 'F'),
+                "criteria_scores": [],
+                "detailed_feedback": {
+                    "strengths": [],
+                    "weaknesses": [],
+                    "improvement_suggestions": []
+                },
+                "metadata": mapping_result.get('metadata', {})
+            }
+
+            # Process each mapping to create criteria scores
+            all_strengths = []
+            all_weaknesses = []
+
+            for mapping in mapping_result.get('mappings', []):
+                # Extract grading information
+                criteria_score = {
+                    "question_id": mapping.get("guide_id", ""),
+                    "description": mapping.get("guide_text", ""),
+                    "points_earned": mapping.get("grade_score", 0),
+                    "points_possible": mapping.get("max_score", 0),
+                    "similarity": mapping.get("match_score", 0),
+                    "feedback": mapping.get("grade_feedback", ""),
+                    "guide_answer": mapping.get("guide_answer", ""),
+                    "student_answer": mapping.get("submission_text", ""),
+                    "match_reason": mapping.get("match_reason", "")
+                }
+
+                # Add to criteria scores
+                grading_result["criteria_scores"].append(criteria_score)
+
+                # Collect strengths and weaknesses
+                all_strengths.extend(mapping.get("strengths", []))
+                all_weaknesses.extend(mapping.get("weaknesses", []))
+
+            # Add unique strengths and weaknesses to the detailed feedback
+            grading_result["detailed_feedback"]["strengths"] = list(set(all_strengths))
+            grading_result["detailed_feedback"]["weaknesses"] = list(set(all_weaknesses))
 
             # Save to session
             session['last_grading_result'] = grading_result
             session['last_score'] = grading_result.get('percent_score', 0)
 
-            # Save results permanently
-            output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'results')
-            grading_service.save_grading_result(
-                grading_result=grading_result,
-                output_path=output_dir,
-                filename=submission_id
-            )
+            # Save results permanently if grading service is available
+            if grading_service:
+                output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'results')
+                grading_service.save_grading_result(
+                    grading_result=grading_result,
+                    output_path=output_dir,
+                    filename=submission_id
+                )
 
             # Clear grading in progress
             session['grading_in_progress'] = False
@@ -512,13 +541,35 @@ def create_app():
 
     @app.route('/view_results')
     def view_results():
-        """View the grading results."""
+        """View the grading results summary."""
         grading_result = session.get('last_grading_result')
         if not grading_result:
             flash('No grading results available', 'warning')
             return redirect(url_for('index'))
 
         return render_template('results.html', result=grading_result)
+
+    @app.route('/view_detailed_results')
+    def view_detailed_results():
+        """View detailed grading results with comprehensive feedback."""
+        grading_result = session.get('last_grading_result')
+        if not grading_result:
+            flash('No grading results available', 'warning')
+            return redirect(url_for('index'))
+
+        # Calculate performance metrics for visualization
+        if 'detailed_feedback' in grading_result:
+            strengths_count = len(grading_result.get('detailed_feedback', {}).get('strengths', []))
+            weaknesses_count = len(grading_result.get('detailed_feedback', {}).get('weaknesses', []))
+            total_feedback = max(strengths_count + weaknesses_count, 1)  # Avoid division by zero
+
+            # Add performance metrics to the result
+            grading_result['performance_metrics'] = {
+                'strengths_percentage': round((strengths_count / total_feedback) * 100),
+                'weaknesses_percentage': round((weaknesses_count / total_feedback) * 100)
+            }
+
+        return render_template('detailed_results.html', result=grading_result)
 
     @app.route('/clear_guide', methods=['POST'])
     def clear_guide():
@@ -705,53 +756,108 @@ def create_app():
             headers={"Content-Disposition": f"attachment;filename={filename}"}
         )
 
-    @app.route('/api/progress/<tracker_id>', methods=['GET'])
+    @app.route('/api/progress/<tracker_id>', methods=['GET', 'DELETE'])
     def get_progress(tracker_id):
-        """Get progress information for a specific tracker."""
-        from src.services.progress_tracker import progress_tracker
+        """Get progress information for a specific tracker or delete it."""
+        try:
+            from src.services.progress_tracker import progress_tracker, initialize_progress_tracker
 
-        progress_data = progress_tracker.get_progress(tracker_id)
-        if not progress_data:
-            return jsonify({"error": "Progress tracker not found"}), 404
+            # Ensure progress tracker is using the correct directory
+            app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            progress_dir = os.path.join(app_root, "temp", "progress")
+            initialize_progress_tracker(progress_dir)
 
-        return jsonify(progress_data)
+            # Handle DELETE request to clean up a specific tracker
+            if request.method == 'DELETE':
+                logger.info(f"Request to delete progress tracker {tracker_id}")
+                success = progress_tracker.cleanup_specific_tracker(tracker_id)
+                if success:
+                    return jsonify({"status": "success", "message": f"Tracker {tracker_id} deleted successfully"})
+                else:
+                    return jsonify({"status": "warning", "message": f"Tracker {tracker_id} not found or could not be deleted"})
+
+            # For GET requests, proceed with getting progress data
+            # Log the tracker ID and directory for debugging
+            logger.debug(f"Looking for progress tracker {tracker_id} in {progress_dir}")
+
+            # Get progress data - this will now return a default object if tracker not found
+            progress_data = progress_tracker.get_progress(tracker_id)
+
+            # Check if the tracker was not found
+            if progress_data and progress_data.get("status") == "not_found":
+                logger.warning(f"Progress tracker {tracker_id} not found in {progress_dir}")
+                # Return a 200 response with the default data instead of 404
+                # This prevents the client from showing connection errors
+                return jsonify(progress_data)
+
+            return jsonify(progress_data)
+
+        except Exception as e:
+            logger.error(f"Error getting progress for tracker {tracker_id}: {str(e)}")
+            # Return a valid response even on error to prevent client-side errors
+            return jsonify({
+                "id": tracker_id,
+                "status": "error",
+                "message": "Error retrieving progress data",
+                "percent_complete": 0,
+                "completed": True,
+                "success": False,
+                "error": f"Server error: {str(e)}"
+            })
 
     @app.route('/api/progress', methods=['GET', 'POST'])
     def get_all_progress():
         """Get all active progress trackers or create a new one."""
-        from src.services.progress_tracker import progress_tracker
+        try:
+            from src.services.progress_tracker import progress_tracker, initialize_progress_tracker
 
-        # Create a new progress tracker
-        if request.method == 'POST':
-            try:
-                data = request.get_json()
-                if not data:
-                    return jsonify({"error": "Invalid JSON data"}), 400
+            # Ensure progress tracker is using the correct directory
+            app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            progress_dir = os.path.join(app_root, "temp", "progress")
+            initialize_progress_tracker(progress_dir)
 
-                operation_type = data.get('operation_type', 'unknown')
-                task_name = data.get('task_name', 'Task')
-                total_steps = data.get('total_steps', 100)
+            # Log the directory for debugging
+            logger.debug(f"Using progress directory: {progress_dir}")
 
-                tracker_id = progress_tracker.create_tracker(
-                    operation_type=operation_type,
-                    task_name=task_name,
-                    total_steps=total_steps
-                )
+            # Create a new progress tracker
+            if request.method == 'POST':
+                try:
+                    data = request.get_json()
+                    if not data:
+                        return jsonify({"error": "Invalid JSON data"}), 400
 
-                return jsonify({
-                    "id": tracker_id,
-                    "operation_type": operation_type,
-                    "task_name": task_name,
-                    "message": "Progress tracker created successfully"
-                })
-            except Exception as e:
-                return jsonify({"error": str(e)}), 500
+                    operation_type = data.get('operation_type', 'unknown')
+                    task_name = data.get('task_name', 'Task')
+                    total_steps = data.get('total_steps', 100)
 
-        # Get all active progress trackers
-        operation_type = request.args.get('type')
-        progress_data = progress_tracker.get_all_active_progress(operation_type)
+                    tracker_id = progress_tracker.create_tracker(
+                        operation_type=operation_type,
+                        task_name=task_name,
+                        total_steps=total_steps
+                    )
 
-        return jsonify({"trackers": progress_data})
+                    return jsonify({
+                        "id": tracker_id,
+                        "operation_type": operation_type,
+                        "task_name": task_name,
+                        "message": "Progress tracker created successfully"
+                    })
+                except Exception as e:
+                    logger.error(f"Error creating progress tracker: {str(e)}")
+                    return jsonify({"error": str(e)}), 500
+
+            # Get all active progress trackers
+            operation_type = request.args.get('type')
+            progress_data = progress_tracker.get_all_active_progress(operation_type)
+
+            return jsonify({"trackers": progress_data})
+
+        except Exception as e:
+            logger.error(f"Error in progress API: {str(e)}")
+            if request.method == 'POST':
+                return jsonify({"error": f"Server error: {str(e)}"}), 500
+            else:
+                return jsonify({"trackers": []})
 
     @app.errorhandler(404)
     def page_not_found(e):
