@@ -24,32 +24,34 @@ endblock %} {% block content %}
           <h2 class="display-5 fw-bold text-success">
             {{ mapping_result.metadata.mapping_count }}
           </h2>
-          <p class="mb-0">Questions Mapped</p>
+          <p class="mb-0">Sections Mapped</p>
+        </div>
+      </div>
+      <div class="col-md-3 mb-3">
+        <div class="p-3 bg-light rounded">
+          <h2 class="display-5 fw-bold text-info">
+            {{ mapping_result.metadata.guide_type|capitalize if
+            mapping_result.metadata.guide_type else "Unknown" }}
+          </h2>
+          <p class="mb-0">Guide Type</p>
         </div>
       </div>
       <div class="col-md-3 mb-3">
         <div class="p-3 bg-light rounded">
           <h2 class="display-5 fw-bold text-warning">
-            {{ mapping_result.unmapped_guide_items|length }}
+            {{ mapping_result.unmapped_guide_items|length if
+            mapping_result.unmapped_guide_items else 0 }}
           </h2>
           <p class="mb-0">Unmapped Guide Items</p>
         </div>
       </div>
       <div class="col-md-3 mb-3">
         <div class="p-3 bg-light rounded">
-          <h2 class="display-5 fw-bold text-danger">
-            {{ mapping_result.unmapped_submission_items|length }}
-          </h2>
-          <p class="mb-0">Unmapped Submission Items</p>
-        </div>
-      </div>
-      <div class="col-md-3 mb-3">
-        <div class="p-3 bg-light rounded">
           <h2 class="display-5 fw-bold text-primary">
             {% set total_score = 0 %} {% for mapping in mapping_result.mappings
-            %} {% if mapping.max_score is defined %} {% set total_score =
-            total_score + mapping.max_score %} {% endif %} {% endfor %} {{
-            total_score }}
+            %} {% if mapping.max_score is defined and mapping.max_score %} {%
+            set total_score = total_score + mapping.max_score %} {% endif %} {%
+            endfor %} {{ total_score }}
           </h2>
           <p class="mb-0">Total Points Available</p>
         </div>
@@ -58,7 +60,31 @@ endblock %} {% block content %}
   </div>
 </div>
 
-<!-- Mapped Questions and Answers -->
+<!-- Guide Type Information -->
+<div class="card mb-4">
+  <div class="card-header bg-info text-white">
+    <h5 class="mb-0">Guide Type Analysis</h5>
+    <small class="text-white-50"
+      >AI-determined guide type for intelligent mapping</small
+    >
+  </div>
+  <div class="card-body">
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-2"></i>
+      <strong>Guide Type:</strong>
+      {% if mapping_result.metadata.guide_type == "questions" %} This marking
+      guide contains <strong>questions</strong> that students need to answer.
+      The mapping shows how student answers match with guide questions. {% elif
+      mapping_result.metadata.guide_type == "answers" %} This marking guide
+      contains <strong>model answers</strong> to questions. The mapping shows
+      how student answers match with guide answers for the same questions. {%
+      else %} The guide type could not be determined. Basic text matching was
+      used. {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Mapped Text Sections -->
 <div class="card mb-4">
   <div class="card-header bg-primary text-white">
     <h5 class="mb-0">Mapped Text Sections</h5>
@@ -73,11 +99,11 @@ endblock %} {% block content %}
         <thead class="table-light">
           <tr>
             <th style="width: 5%">#</th>
-            <th style="width: 25%">Guide Text</th>
-            <th style="width: 15%">Guide Context</th>
-            <th style="width: 25%">Submission Text</th>
+            <th style="width: 20%">Guide Text</th>
+            <th style="width: 20%">Submission Text</th>
             <th style="width: 10%">Marks</th>
-            <th style="width: 20%">Match Score</th>
+            <th style="width: 15%">Match Score</th>
+            <th style="width: 30%">Match Reason</th>
           </tr>
         </thead>
         <tbody>
@@ -88,20 +114,26 @@ endblock %} {% block content %}
               <div class="guide-text">
                 {{ mapping.guide_text|truncate(150) }}
               </div>
-              {% if mapping.guide_id %}
+              {% if mapping.guide_answer and mapping.guide_answer.strip() %}
+              <div class="guide-answer small text-muted mt-1">
+                <strong>Context:</strong> {{ mapping.guide_answer|truncate(100)
+                }}
+              </div>
+              {% endif %} {% if mapping.guide_id %}
               <span class="badge bg-primary">ID: {{ mapping.guide_id }}</span>
               {% endif %}
             </td>
             <td>
-              <div class="guide-answer small">
-                {{ (mapping.guide_answer or "")|truncate(150) }}
+              <div class="submission-text">
+                {{ mapping.submission_text|truncate(150) }}
               </div>
-            </td>
-            <td>
-              <div class="submission-answer small">
-                {{ mapping.submission_answer|truncate(150) }}
+              {% if mapping.submission_answer and
+              mapping.submission_answer.strip() %}
+              <div class="submission-answer small text-muted mt-1">
+                <strong>Context:</strong> {{
+                mapping.submission_answer|truncate(100) }}
               </div>
-              {% if mapping.submission_id %}
+              {% endif %} {% if mapping.submission_id %}
               <span class="badge bg-info">ID: {{ mapping.submission_id }}</span>
               {% endif %}
             </td>
@@ -143,6 +175,10 @@ endblock %} {% block content %}
                 </div>
                 {% endif %}
               </div>
+              {% elif mapping.max_score %}
+              <span class="badge bg-success"
+                >{{ mapping.max_score }} marks</span
+              >
               {% else %}
               <span class="badge bg-secondary">No marks specified</span>
               {% endif %}
@@ -179,6 +215,19 @@ endblock %} {% block content %}
               <span class="badge bg-secondary">N/A</span>
               {% endif %}
             </td>
+            <td>
+              {% if mapping.match_reason %}
+              <div class="match-reason">{{ mapping.match_reason }}</div>
+              {% else %}
+              <span class="text-muted">No reason provided</span>
+              {% endif %} {% if mapping.guide_type %}
+              <div class="mt-2">
+                <span class="badge bg-info"
+                  >{{ mapping.guide_type|capitalize }} match</span
+                >
+              </div>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -188,6 +237,197 @@ endblock %} {% block content %}
     <div class="alert alert-info">
       <i class="bi bi-info-circle me-2"></i>
       No mappings found between guide text and submission text sections.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Grouped Mappings -->
+<div class="card mb-4">
+  <div class="card-header bg-success text-white">
+    <h5 class="mb-0">Grouped Mappings</h5>
+    <small class="text-white-50">AI-grouped content based on similarity</small>
+  </div>
+  <div class="card-body">
+    {% if mapping_result.mappings %} {% if mapping_result.metadata.guide_type ==
+    "questions" %}
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-2"></i>
+      <strong>Question-Based Grouping:</strong> Each guide question is matched
+      with the best student answer.
+    </div>
+
+    <div class="list-group mb-4">
+      {% for mapping in mapping_result.mappings %}
+      <div class="list-group-item">
+        <div class="row">
+          <div class="col-md-5">
+            <h6 class="mb-2">Guide Question:</h6>
+            <div class="guide-text p-2 bg-light rounded">
+              {{ mapping.guide_text|truncate(200) }}
+            </div>
+          </div>
+          <div class="col-md-5">
+            <h6 class="mb-2">Student Answer:</h6>
+            <div class="submission-text p-2 bg-light rounded">
+              {{ mapping.submission_text|truncate(200) }}
+            </div>
+          </div>
+          <div class="col-md-2">
+            <h6 class="mb-2">Match Details:</h6>
+            {% set score = (mapping.match_score * 100)|int %}
+            <div class="progress mb-2" style="height: 20px">
+              <div
+                class="progress-bar {% if score >= 80 %}bg-success {% elif score >= 60 %}bg-info {% elif score >= 40 %}bg-warning {% else %}bg-danger{% endif %}"
+                role="progressbar"
+                style="width: {{ score }}%;"
+                aria-valuenow="{{ score }}"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                {{ score }}%
+              </div>
+            </div>
+            {% if mapping.max_score %}
+            <div class="marks-badge">
+              <span class="badge bg-success"
+                >{{ mapping.max_score }} marks</span
+              >
+            </div>
+            {% else %}
+            <div class="marks-badge text-muted small">
+              <i class="bi bi-dash-circle"></i> No marks specified
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% if mapping.match_reason %}
+        <div class="mt-3 small text-muted">
+          <strong>Match Reason:</strong> {{ mapping.match_reason }}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    {% elif mapping_result.metadata.guide_type == "answers" %}
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-2"></i>
+      <strong>Answer-Based Grouping:</strong> Each guide answer is matched with
+      the corresponding student answer.
+    </div>
+
+    <div class="list-group mb-4">
+      {% for mapping in mapping_result.mappings %}
+      <div class="list-group-item">
+        <div class="row">
+          <div class="col-md-5">
+            <h6 class="mb-2">Guide Answer:</h6>
+            <div class="guide-text p-2 bg-light rounded">
+              {{ mapping.guide_text|truncate(200) }}
+            </div>
+          </div>
+          <div class="col-md-5">
+            <h6 class="mb-2">Student Answer:</h6>
+            <div class="submission-text p-2 bg-light rounded">
+              {{ mapping.submission_text|truncate(200) }}
+            </div>
+          </div>
+          <div class="col-md-2">
+            <h6 class="mb-2">Match Details:</h6>
+            {% set score = (mapping.match_score * 100)|int %}
+            <div class="progress mb-2" style="height: 20px">
+              <div
+                class="progress-bar {% if score >= 80 %}bg-success {% elif score >= 60 %}bg-info {% elif score >= 40 %}bg-warning {% else %}bg-danger{% endif %}"
+                role="progressbar"
+                style="width: {{ score }}%;"
+                aria-valuenow="{{ score }}"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                {{ score }}%
+              </div>
+            </div>
+            {% if mapping.max_score %}
+            <div class="marks-badge">
+              <span class="badge bg-success"
+                >{{ mapping.max_score }} marks</span
+              >
+            </div>
+            {% else %}
+            <div class="marks-badge text-muted small">
+              <i class="bi bi-dash-circle"></i> No marks specified
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% if mapping.match_reason %}
+        <div class="mt-3 small text-muted">
+          <strong>Match Reason:</strong> {{ mapping.match_reason }}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    {% else %}
+    <div class="alert alert-warning">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      <strong>Basic Grouping:</strong> Guide type could not be determined. Basic
+      text matching was used.
+    </div>
+
+    <div class="list-group mb-4">
+      {% for mapping in mapping_result.mappings %}
+      <div class="list-group-item">
+        <div class="row">
+          <div class="col-md-5">
+            <h6 class="mb-2">Guide Text:</h6>
+            <div class="guide-text p-2 bg-light rounded">
+              {{ mapping.guide_text|truncate(200) }}
+            </div>
+          </div>
+          <div class="col-md-5">
+            <h6 class="mb-2">Submission Text:</h6>
+            <div class="submission-text p-2 bg-light rounded">
+              {{ mapping.submission_text|truncate(200) }}
+            </div>
+          </div>
+          <div class="col-md-2">
+            <h6 class="mb-2">Match Details:</h6>
+            {% set score = (mapping.match_score * 100)|int %}
+            <div class="progress mb-2" style="height: 20px">
+              <div
+                class="progress-bar {% if score >= 80 %}bg-success {% elif score >= 60 %}bg-info {% elif score >= 40 %}bg-warning {% else %}bg-danger{% endif %}"
+                role="progressbar"
+                style="width: {{ score }}%;"
+                aria-valuenow="{{ score }}"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                {{ score }}%
+              </div>
+            </div>
+            {% if mapping.max_score %}
+            <div class="marks-badge">
+              <span class="badge bg-success"
+                >{{ mapping.max_score }} marks</span
+              >
+            </div>
+            {% else %}
+            <div class="marks-badge text-muted small">
+              <i class="bi bi-dash-circle"></i> No marks specified
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %} {% else %}
+    <div class="alert alert-warning">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      No mappings found to display.
     </div>
     {% endif %}
   </div>
@@ -215,7 +455,7 @@ endblock %} {% block content %}
             {% endif %} {% if item.type %}
             <span class="badge bg-secondary">Type: {{ item.type }}</span>
             {% endif %} {% if item.max_score %}
-            <span class="badge bg-success">{{ item.max_score }} points</span>
+            <span class="badge bg-success">{{ item.max_score }} marks</span>
             {% endif %} {% if item.answer %}
             <div class="guide-answer small text-muted mt-2">
               <strong>Answer:</strong> {{ item.answer|truncate(100) }}
@@ -304,6 +544,12 @@ endblock %} {% block content %}
     font-family: var(--font-mono);
     font-size: 0.9rem;
   }
+  .guide-answer,
+  .submission-answer {
+    white-space: pre-wrap;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+  }
   .mark-verification {
     font-size: 0.9rem;
   }
@@ -313,6 +559,20 @@ endblock %} {% block content %}
   .sub-question-mark {
     font-size: 0.8rem;
     padding-left: 1rem;
+  }
+  .match-reason {
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+  .list-group-item {
+    border-left: 4px solid #6c757d;
+  }
+  .list-group-item:hover {
+    background-color: #f8f9fa;
+  }
+  .marks-badge {
+    margin-top: 0.5rem;
+    font-weight: 500;
   }
 </style>
 {% endblock %} {% block extra_js %}
