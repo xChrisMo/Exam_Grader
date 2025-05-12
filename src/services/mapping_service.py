@@ -155,16 +155,28 @@ class MappingService:
             # Default to questions on error
             return "questions", 0.5
 
-    def extract_questions_and_answers(self, content: str) -> List[Dict[str, Any]]:
+    def extract_questions_and_answers(self, content: str, tracker_id: str = None) -> List[Dict[str, Any]]:
         """
         Extract questions and answers from content using LLM if available.
         Otherwise falls back to regex-based extraction.
+
+        Args:
+            content: Text content to extract from
+            tracker_id: Optional progress tracker ID to update progress
         """
         if not content or not content.strip():
             return []
 
         if self.llm_service:
             try:
+                # Update progress if tracker_id is provided
+                if tracker_id:
+                    progress_tracker.update_progress(
+                        tracker_id=tracker_id,
+                        status="processing",
+                        message="Extracting questions and answers from content..."
+                    )
+
                 # Use LLM to extract questions and answers
                 system_prompt = """
                 You are an expert at analyzing exam documents. Your task is to identify questions and their corresponding answers.
@@ -247,6 +259,18 @@ class MappingService:
                     modified_system_prompt = system_prompt + """
                     IMPORTANT: Your response must be valid JSON. Format your entire response as a JSON object.
                     Do not include any text before or after the JSON object.
+
+                    Example of valid JSON format:
+                    {
+                        "items": [
+                            {
+                                "id": "q1",
+                                "text": "question text",
+                                "answer": "answer text",
+                                "max_score": 5
+                            }
+                        ]
+                    }
                     """
                     response = self.llm_service.client.chat.completions.create(
                         model=self.llm_service.model,
@@ -258,8 +282,47 @@ class MappingService:
                     )
 
                 result = response.choices[0].message.content
-                parsed = json.loads(result)
-                return parsed.get("items", [])
+
+                # Update progress if tracker_id is provided
+                if tracker_id:
+                    progress_tracker.update_progress(
+                        tracker_id=tracker_id,
+                        status="processing",
+                        message="Processing LLM response for question extraction..."
+                    )
+
+                # Try to clean up the response for models that don't properly format JSON
+                try:
+                    # Find JSON content between curly braces if there's text before/after
+                    json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                    if json_match:
+                        result = json_match.group(0)
+
+                    parsed = json.loads(result)
+
+                    # Update progress if tracker_id is provided
+                    if tracker_id:
+                        progress_tracker.update_progress(
+                            tracker_id=tracker_id,
+                            status="success",
+                            message=f"Successfully extracted {len(parsed.get('items', []))} items from content"
+                        )
+
+                    return parsed.get("items", [])
+                except json.JSONDecodeError as e:
+                    logger.warning(f"JSON parsing error in extract_questions_and_answers: {str(e)}")
+
+                    # Update progress if tracker_id is provided
+                    if tracker_id:
+                        progress_tracker.update_progress(
+                            tracker_id=tracker_id,
+                            status="warning",
+                            message=f"JSON parsing error: {str(e)}. Falling back to regex extraction.",
+                            error=str(e)
+                        )
+
+                    # Return an empty list to trigger the fallback extraction
+                    return []
 
             except Exception as e:
                 logger.warning(f"LLM extraction failed, falling back to regex: {str(e)}")
@@ -381,6 +444,8 @@ class MappingService:
                 }, "Empty student submission"
 
             mappings = []
+            guide_items = []
+            submission_items = []
 
             if self.llm_service:
                 try:
@@ -523,6 +588,22 @@ class MappingService:
                         modified_system_prompt = system_prompt + """
                         IMPORTANT: Your response must be valid JSON. Format your entire response as a JSON object.
                         Do not include any text before or after the JSON object.
+
+                        Example of valid JSON format:
+                        {
+                            "mappings": [
+                                {
+                                    "guide_id": "q1",
+                                    "guide_text": "What is the capital of France?",
+                                    "guide_answer": "",
+                                    "max_score": 5,
+                                    "submission_id": "a1",
+                                    "submission_text": "The capital of France is Paris.",
+                                    "match_score": 0.95,
+                                    "match_reason": "This submission answer directly addresses the question in the guide"
+                                }
+                            ]
+                        }
                         """
                         response = self.llm_service.client.chat.completions.create(
                             model=self.llm_service.model,
@@ -534,7 +615,48 @@ class MappingService:
                         )
 
                     result = response.choices[0].message.content
-                    parsed = json.loads(result)
+
+                    # Update progress - Step 4.5: Processing LLM response
+                    progress_tracker.update_progress(
+                        tracker_id=tracker_id,
+                        current_step=4.5,
+                        status="processing",
+                        message="Processing LLM response..."
+                    )
+
+                    # Try to clean up the response for models that don't properly format JSON
+                    try:
+                        # Find JSON content between curly braces if there's text before/after
+                        json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                        if json_match:
+                            result = json_match.group(0)
+
+                        parsed = json.loads(result)
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"JSON parsing error: {str(e)}")
+                        # Update progress - JSON parsing error
+                        progress_tracker.update_progress(
+                            tracker_id=tracker_id,
+                            status="warning",
+                            message=f"JSON parsing error: {str(e)}. Using fallback mapping.",
+                            error=str(e)
+                        )
+
+                        # Create a default mapping structure
+                        parsed = {"mappings": []}
+
+                        # Add a simple mapping with the raw content
+                        parsed["mappings"].append({
+                            "guide_id": "g1",
+                            "guide_text": marking_guide_content[:500],
+                            "guide_answer": "",
+                            "max_score": None,
+                            "submission_id": "s1",
+                            "submission_text": student_submission_content[:500],
+                            "submission_answer": "",
+                            "match_score": 0.5,
+                            "match_reason": "Fallback mapping due to JSON parsing error"
+                        })
 
                     # Process LLM mappings
                     for mapping in parsed.get("mappings", []):
@@ -561,9 +683,34 @@ class MappingService:
                         error=str(e)
                     )
 
+                    # Update progress - Extracting items
+                    progress_tracker.update_progress(
+                        tracker_id=tracker_id,
+                        current_step=3.5,
+                        status="extracting",
+                        message="Extracting questions and answers from guide..."
+                    )
+
                     # Extract items and use text-based mapping as fallback
-                    guide_items = self.extract_questions_and_answers(marking_guide_content)
-                    submission_items = self.extract_questions_and_answers(student_submission_content)
+                    guide_items = self.extract_questions_and_answers(marking_guide_content, tracker_id)
+
+                    # Update progress - Extracting submission items
+                    progress_tracker.update_progress(
+                        tracker_id=tracker_id,
+                        current_step=3.7,
+                        status="extracting",
+                        message="Extracting questions and answers from submission..."
+                    )
+
+                    submission_items = self.extract_questions_and_answers(student_submission_content, tracker_id)
+
+                    # Update progress - Text-based mapping
+                    progress_tracker.update_progress(
+                        tracker_id=tracker_id,
+                        current_step=3.9,
+                        status="mapping",
+                        message="Performing text-based mapping..."
+                    )
 
                     if guide_items and submission_items:
                         mappings = self._text_based_mapping(guide_items, submission_items)
@@ -590,9 +737,34 @@ class MappingService:
                     message="No LLM service available, using text-based extraction..."
                 )
 
+                # Update progress - Extracting items
+                progress_tracker.update_progress(
+                    tracker_id=tracker_id,
+                    current_step=3.5,
+                    status="extracting",
+                    message="Extracting questions and answers from guide..."
+                )
+
                 # Extract items and use text-based mapping
-                guide_items = self.extract_questions_and_answers(marking_guide_content)
-                submission_items = self.extract_questions_and_answers(student_submission_content)
+                guide_items = self.extract_questions_and_answers(marking_guide_content, tracker_id)
+
+                # Update progress - Extracting submission items
+                progress_tracker.update_progress(
+                    tracker_id=tracker_id,
+                    current_step=3.7,
+                    status="extracting",
+                    message="Extracting questions and answers from submission..."
+                )
+
+                submission_items = self.extract_questions_and_answers(student_submission_content, tracker_id)
+
+                # Update progress - Text-based mapping
+                progress_tracker.update_progress(
+                    tracker_id=tracker_id,
+                    current_step=3.9,
+                    status="mapping",
+                    message="Performing text-based mapping..."
+                )
 
                 if guide_items and submission_items:
                     mappings = self._text_based_mapping(guide_items, submission_items)
@@ -614,6 +786,33 @@ class MappingService:
             # Get guide type if available (from first mapping)
             guide_type = mappings[0].get("guide_type", "unknown") if mappings else "unknown"
 
+            # Identify unmapped guide items and submission items
+            mapped_guide_ids = [mapping.get("guide_id") for mapping in mappings]
+            mapped_submission_ids = [mapping.get("submission_id") for mapping in mappings]
+
+            # Find unmapped guide items
+            unmapped_guide_items = []
+            if guide_items:
+                for item in guide_items:
+                    if item.get("id") not in mapped_guide_ids:
+                        unmapped_guide_items.append(item)
+
+            # Find unmapped submission items
+            unmapped_submission_items = []
+            if submission_items:
+                for item in submission_items:
+                    if item.get("id") not in mapped_submission_ids:
+                        unmapped_submission_items.append(item)
+
+            # Update progress - Identifying unmapped items
+            if 'tracker_id' in locals() and tracker_id:
+                progress_tracker.update_progress(
+                    tracker_id=tracker_id,
+                    current_step=3.95,
+                    status="processing",
+                    message=f"Identified {len(unmapped_guide_items)} unmapped guide items and {len(unmapped_submission_items)} unmapped submission items"
+                )
+
             # Create result
             result = {
                 "status": "success",
@@ -623,14 +822,18 @@ class MappingService:
                     "mapping_count": len(mappings),
                     "guide_type": guide_type,
                     "mapping_method": "LLM" if self.llm_service else "Text-based",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
+                    "guide_item_count": len(guide_items) if guide_items else 0,
+                    "submission_item_count": len(submission_items) if submission_items else 0,
+                    "unmapped_guide_count": len(unmapped_guide_items),
+                    "unmapped_submission_count": len(unmapped_submission_items)
                 },
-                "unmapped_guide_items": [],
-                "unmapped_submission_items": []
+                "unmapped_guide_items": unmapped_guide_items,
+                "unmapped_submission_items": unmapped_submission_items
             }
 
             # Update progress - Complete
-            if 'tracker_id' in locals():
+            if 'tracker_id' in locals() and tracker_id:
                 progress_tracker.update_progress(
                     tracker_id=tracker_id,
                     status="completed",
@@ -649,7 +852,7 @@ class MappingService:
             error_message = f"Error in mapping service: {str(e)}"
 
             # Update progress - Error
-            if 'tracker_id' in locals():
+            if 'tracker_id' in locals() and tracker_id:
                 progress_tracker.update_progress(
                     tracker_id=tracker_id,
                     status="failed",
@@ -660,6 +863,62 @@ class MappingService:
                 )
 
             return {"status": "error", "message": error_message}, error_message
+
+    def _extract_keywords(self, text: str) -> List[str]:
+        """
+        Extract important keywords from text.
+
+        Args:
+            text: Text to extract keywords from
+
+        Returns:
+            List[str]: List of keywords
+        """
+        if not text:
+            return []
+
+        # Split text into words
+        words = re.findall(r'\b\w+\b', text.lower())
+
+        # Remove common stop words
+        stop_words = {
+            'a', 'an', 'the', 'and', 'or', 'but', 'if', 'because', 'as', 'what', 'when',
+            'where', 'how', 'why', 'which', 'who', 'whom', 'this', 'that', 'these', 'those',
+            'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'having',
+            'do', 'does', 'did', 'doing', 'to', 'from', 'in', 'out', 'on', 'off', 'over', 'under',
+            'again', 'further', 'then', 'once', 'here', 'there', 'all', 'any', 'both', 'each',
+            'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own',
+            'same', 'so', 'than', 'too', 'very', 'can', 'will', 'just', 'should', 'now'
+        }
+
+        # Filter out stop words and short words
+        filtered_words = [word for word in words if word not in stop_words and len(word) > 3]
+
+        # Count word frequencies
+        word_counts = {}
+        for word in filtered_words:
+            word_counts[word] = word_counts.get(word, 0) + 1
+
+        # Extract phrases (2-3 word combinations)
+        phrases = []
+        words = text.lower().split()
+        for i in range(len(words) - 1):
+            if words[i] not in stop_words and words[i+1] not in stop_words:
+                phrases.append(f"{words[i]} {words[i+1]}")
+
+        # Get top keywords by frequency
+        sorted_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)
+        keywords = [word for word, _ in sorted_words[:10]]
+
+        # Add important phrases
+        keywords.extend(phrases[:5])
+
+        # Add any numerical values as they're often important
+        numbers = re.findall(r'\b\d+(?:\.\d+)?\b', text)
+        keywords.extend(numbers)
+
+        # Remove duplicates and return
+        return list(set(keywords))
 
     def _text_based_mapping(self, guide_items: List[Dict], submission_items: List[Dict]) -> List[Dict]:
         """Fallback method for text-based question matching with improved accuracy."""
@@ -787,10 +1046,31 @@ class MappingService:
                     answer_jaccard = jaccard_similarity(guide_answer_tokens, submission_answer_tokens)
                     answer_cosine = cosine_similarity_tokens(guide_answer_tokens, submission_answer_tokens)
 
+                    # Calculate a more detailed answer similarity score
                     answer_score = (0.3 * answer_jaccard) + (0.7 * answer_cosine)
 
-                    # Consider answer similarity in overall score
-                    combined_score = (0.7 * combined_score) + (0.3 * answer_score)
+                    # Calculate keyword match score
+                    guide_keywords = self._extract_keywords(guide_item.get('answer', ''))
+                    submission_keywords = self._extract_keywords(submission_item.get('answer', ''))
+
+                    # Calculate keyword match percentage
+                    keyword_matches = [kw for kw in guide_keywords if any(kw.lower() in sub_kw.lower() for sub_kw in submission_keywords)]
+                    keyword_score = len(keyword_matches) / max(len(guide_keywords), 1) if guide_keywords else 0
+
+                    # Generate reason for match based on keywords
+                    match_reason = f"Matched {len(keyword_matches)} of {len(guide_keywords)} key concepts"
+                    if keyword_matches:
+                        match_reason += f": {', '.join(keyword_matches[:3])}"
+                        if len(keyword_matches) > 3:
+                            match_reason += f" and {len(keyword_matches) - 3} more"
+
+                    # Store the answer score for later use in grading
+                    submission_item['answer_score'] = answer_score
+                    submission_item['keyword_score'] = keyword_score
+                    submission_item['match_reason'] = match_reason
+
+                    # Consider answer similarity in overall score with higher weight
+                    combined_score = (0.5 * combined_score) + (0.3 * answer_score) + (0.2 * keyword_score)
 
                 if combined_score > best_score:
                     best_score = combined_score
@@ -798,6 +1078,26 @@ class MappingService:
 
             if best_match and best_score > 0.2:  # Only map if similarity exceeds threshold
                 submission_item, match_score = best_match
+
+                # Get the match reason if available
+                match_reason = submission_item.get('match_reason', "")
+                if not match_reason:
+                    match_reason = f"Similarity score: {match_score:.2f}"
+
+                # Get the answer score if available
+                answer_score = submission_item.get('answer_score', 0)
+                keyword_score = submission_item.get('keyword_score', 0)
+
+                # Calculate a grade based on similarity
+                grade_score = 0
+                if guide_item.get('max_score'):
+                    # Use answer_score with higher weight if available
+                    if answer_score > 0:
+                        grade_score = (0.6 * answer_score + 0.4 * keyword_score) * float(guide_item.get('max_score'))
+                    else:
+                        grade_score = match_score * float(guide_item.get('max_score'))
+                    grade_score = round(grade_score, 1)
+
                 mappings.append({
                     "guide_id": guide_item.get('id'),
                     "guide_text": guide_item.get('text'),
@@ -806,7 +1106,11 @@ class MappingService:
                     "submission_id": submission_item.get('id'),
                     "submission_text": submission_item.get('text'),
                     "submission_answer": submission_item.get('answer', ''),
-                    "match_score": match_score
+                    "match_score": match_score,
+                    "answer_score": answer_score,
+                    "keyword_score": keyword_score,
+                    "grade_score": grade_score,
+                    "match_reason": match_reason
                 })
 
         return mappings

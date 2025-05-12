@@ -24,12 +24,15 @@ from flask import (
     session,
     jsonify,
     send_from_directory,
-    current_app
+    current_app,
+    Response
 )
+import pandas as pd
+import io
 from werkzeug.utils import secure_filename
 from markupsafe import Markup
 
-from config.config import config
+from src.config.config_manager import ConfigManager
 from src.parsing.parse_guide import parse_marking_guide
 from src.parsing.parse_submission import parse_student_submission
 from src.services.ocr_service import OCRServiceError
@@ -40,9 +43,13 @@ from src.storage.guide_storage import GuideStorage
 from src.storage.submission_storage import SubmissionStorage
 from utils.logger import Logger
 
+# Initialize configuration
+config_manager = ConfigManager()
+config = config_manager.config
+
 # Initialize logger
 logger = Logger().get_logger()
-logger.setLevel(config.LOG_LEVEL)
+logger.setLevel(config.log_level)
 
 def create_app():
     """
@@ -57,12 +64,12 @@ def create_app():
 
     # Configure Flask app
     app.config.from_mapping(
-        SECRET_KEY=config.SECRET_KEY or os.urandom(24),
-        MAX_CONTENT_LENGTH=config.MAX_FILE_SIZE_MB * 1024 * 1024,
-        UPLOAD_FOLDER=os.path.join(config.TEMP_DIR, 'uploads'),
-        DEBUG=config.DEBUG,
-        HOST=config.HOST,
-        PORT=config.PORT
+        SECRET_KEY=config.secret_key,
+        MAX_CONTENT_LENGTH=config.max_file_size_mb * 1024 * 1024,
+        UPLOAD_FOLDER=os.path.join(config.temp_dir, 'uploads'),
+        DEBUG=config.debug,
+        HOST=config.host,
+        PORT=config.port
     )
 
     # Initialize storages
@@ -133,7 +140,7 @@ def create_app():
             'current_year': datetime.now().year
         }
 
-    def allowed_file(filename, allowed_extensions=config.SUPPORTED_FORMATS):
+    def allowed_file(filename, allowed_extensions=config.supported_formats):
         """Check if a filename has an allowed extension."""
         if not filename or '.' not in filename:
             return False
@@ -247,7 +254,7 @@ def create_app():
 
             # Validate file extension
             if not allowed_file(file.filename):
-                flash(f'Invalid file format. Supported formats: {", ".join(config.SUPPORTED_FORMATS)}', 'error')
+                flash(f'Invalid file format. Supported formats: {", ".join(config.supported_formats)}', 'error')
                 return redirect(url_for('index'))
 
             # Save file temporarily
@@ -544,12 +551,21 @@ def create_app():
             # Clear guide storage cache
             from src.storage.guide_storage import GuideStorage
             guide_storage = GuideStorage()
-            guide_storage.clear_storage()
+            guide_storage.clear()
 
             # Clear submission storage cache
             from src.storage.submission_storage import SubmissionStorage
             submission_storage = SubmissionStorage()
-            submission_storage.clear_storage()
+            submission_storage.clear()
+
+            # Clear mapping storage cache
+            try:
+                from src.storage.mapping_storage import MappingStorage
+                mapping_storage = MappingStorage()
+                mapping_storage.clear()
+                logger.debug("Cleared mapping storage cache")
+            except Exception as e:
+                logger.error(f"Error clearing mapping storage: {str(e)}")
 
             # Clear general cache
             from utils.cache import Cache
@@ -587,7 +603,20 @@ def create_app():
                     except Exception as e:
                         logger.error(f"Error deleting file {file_path}: {str(e)}")
 
-            flash('All data and cache files cleared', 'info')
+            # Clear cache directory
+            cache_dir = os.path.join(temp_dir, 'cache')
+            if os.path.exists(cache_dir):
+                for file in os.listdir(cache_dir):
+                    file_path = os.path.join(cache_dir, file)
+                    try:
+                        if os.path.isfile(file_path):
+                            os.unlink(file_path)
+                            logger.debug(f"Removed cache file: {file}")
+                    except Exception as e:
+                        logger.error(f"Error deleting cache file {file_path}: {str(e)}")
+
+            # Clear client-side progress tracking
+            flash('All data and cache files cleared. Please refresh the page to clear any active progress trackers.', 'info')
         except Exception as e:
             logger.error(f"Error clearing cache: {str(e)}")
             flash('Session data cleared, but there was an error clearing some cache files', 'warning')
@@ -599,6 +628,82 @@ def create_app():
         """Download results file."""
         results_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'results')
         return send_from_directory(results_dir, filename)
+
+    @app.route('/download_excel')
+    def download_excel():
+        """Download grading results as Excel file."""
+        grading_result = session.get('last_grading_result')
+        if not grading_result:
+            flash('No grading results available', 'warning')
+            return redirect(url_for('index'))
+
+        # Create a pandas DataFrame for the criteria scores
+        criteria_data = []
+        for criteria in grading_result.get('criteria_scores', []):
+            criteria_data.append({
+                'Question': criteria.get('description', ''),
+                'Score': criteria.get('points_earned', 0),
+                'Max Score': criteria.get('points_possible', 0),
+                'Match %': f"{(criteria.get('similarity', 0) * 100):.1f}%",
+                'Answer Score': f"{(criteria.get('answer_score', 0) * 100):.1f}%",
+                'Keyword Score': f"{(criteria.get('keyword_score', 0) * 100):.1f}%",
+                'Match Reason': criteria.get('match_reason', ''),
+                'Feedback': criteria.get('feedback', ''),
+                'Guide Answer': criteria.get('guide_answer', ''),
+                'Student Answer': criteria.get('student_answer', '')
+            })
+
+        df = pd.DataFrame(criteria_data)
+
+        # Create a summary DataFrame
+        summary_data = [{
+            'Overall Score': f"{grading_result.get('percent_score', 0):.1f}%",
+            'Points Earned': grading_result.get('overall_score', 0),
+            'Max Possible': grading_result.get('max_possible_score', 0),
+            'Letter Grade': grading_result.get('letter_grade', 'N/A'),
+            'Graded At': grading_result.get('metadata', {}).get('graded_at', ''),
+            'Grading Method': grading_result.get('metadata', {}).get('grading_method', 'Similarity'),
+            'Guide Type': grading_result.get('metadata', {}).get('guide_type', 'Unknown')
+        }]
+        summary_df = pd.DataFrame(summary_data)
+
+        # Create an Excel file in memory
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            summary_df.to_excel(writer, sheet_name='Summary', index=False)
+            df.to_excel(writer, sheet_name='Detailed Scores', index=False)
+
+            # Get the workbook and the worksheet
+            workbook = writer.book
+
+            # Auto-adjust column width for both sheets
+            for sheet_name in writer.sheets:
+                worksheet = writer.sheets[sheet_name]
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = (max_length + 2)
+                    worksheet.column_dimensions[column_letter].width = min(adjusted_width, 50)
+
+        # Seek to the beginning of the stream
+        output.seek(0)
+
+        # Generate a filename based on timestamp
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        filename = f"grading_results_{timestamp}.xlsx"
+
+        # Return the Excel file as a response
+        return Response(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={"Content-Disposition": f"attachment;filename={filename}"}
+        )
 
     @app.route('/api/progress/<tracker_id>', methods=['GET'])
     def get_progress(tracker_id):
@@ -658,7 +763,7 @@ def create_app():
 
     @app.errorhandler(413)
     def request_entity_too_large(e):
-        flash(f'File too large. Maximum size is {config.MAX_FILE_SIZE_MB}MB', 'error')
+        flash(f'File too large. Maximum size is {config.max_file_size_mb}MB', 'error')
         return redirect(url_for('index'))
 
     return app

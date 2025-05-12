@@ -275,6 +275,15 @@ class GradingService:
                 overall_score += score
                 max_possible_score += max_score
 
+                # Check if we have a grade_score from the mapping service
+                if "grade_score" in mapping and mapping["grade_score"] > 0:
+                    # Use the grade_score from the mapping service
+                    score = mapping["grade_score"]
+
+                    # Add match reason to feedback if available
+                    if "match_reason" in mapping and mapping["match_reason"]:
+                        feedback = f"{feedback}\n\nMatch details: {mapping['match_reason']}"
+
                 # Add to criteria scores
                 criteria_scores.append({
                     "question_id": mapping.get("guide_id", ""),
@@ -282,10 +291,14 @@ class GradingService:
                     "points_earned": score,
                     "points_possible": max_score,
                     "similarity": score / max_score if max_score > 0 else 0,
+                    "answer_score": mapping.get("answer_score", score / max_score if max_score > 0 else 0),
+                    "keyword_score": mapping.get("keyword_score", 0),
+                    "match_score": mapping.get("match_score", 0),
                     "feedback": feedback,
                     "detailed_feedback": detailed_feedback,
                     "guide_answer": guide_answer,
-                    "student_answer": submission_answer
+                    "student_answer": submission_answer,
+                    "match_reason": mapping.get("match_reason", "")
                 })
 
             # Calculate percentage score

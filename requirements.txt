@@ -3,6 +3,7 @@ requests==2.31.0
 python-dotenv==1.0.1
 numpy==1.26.4
 pandas==2.2.0
+openpyxl==3.1.2  # For Excel export
 openai==1.19.0  # For DeepSeek API integration
 MarkupSafe==3.0.2
 validators==0.22.0

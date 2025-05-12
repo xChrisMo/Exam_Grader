@@ -58,6 +58,7 @@ def main():
 
     print(f"Server starting at http://{host}:{port}")
     print("Press Ctrl+C to stop the server")
+    print("Application initialized successfully")
 
     app.run(host=host, port=port, debug=debug)
 
