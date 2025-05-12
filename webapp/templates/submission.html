@@ -114,21 +114,15 @@ endblock %} {% block content %}
 </style>
 {% endblock %} {% block extra_js %}
 <script>
-  document.addEventListener('DOMContentLoaded', function() {
-      // Check if we have an OCR tracker ID
-      {% if submission.ocr_tracker_id %}
-          // Start tracking progress
-          progressTracker.startTracking('{{ submission.ocr_tracker_id }}', 'ocr');
-      {% endif %}
-
-      // Add confirmation for buttons
-      document.querySelectorAll('[data-confirm]').forEach(button => {
-          button.addEventListener('click', function(e) {
-              if (!confirm(this.getAttribute('data-confirm'))) {
-                  e.preventDefault();
-              }
-          });
+  document.addEventListener("DOMContentLoaded", function () {
+    // Add confirmation for buttons
+    document.querySelectorAll("[data-confirm]").forEach((button) => {
+      button.addEventListener("click", function (e) {
+        if (!confirm(this.getAttribute("data-confirm"))) {
+          e.preventDefault();
+        }
       });
+    });
   });
 </script>
 {% endblock %}

@@ -77,24 +77,11 @@ class OCRService:
             )
 
         try:
-            # Update progress - Step 1: Starting
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                current_step=1,
-                status="uploading",
-                message="Uploading document for OCR processing..."
-            )
-
             # Step 1: Upload the document to process
             document_id = self._upload_document(file)
 
-            # Update progress - Step 2: Waiting for processing
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                current_step=2,
-                status="processing",
-                message="Waiting for OCR processing to complete..."
-            )
+            # Log progress instead of updating tracker
+            logger.info("Uploading document for OCR processing...")
 
             # Step 2: Wait for processing to complete
             max_retries = 10
@@ -106,59 +93,26 @@ class OCRService:
                 if status == "processed":
                     break
                 elif status == "failed":
-                    # Update progress - Failed
-                    progress_tracker.update_progress(
-                        tracker_id=tracker_id,
-                        status="failed",
-                        message="OCR processing failed on the server",
-                        completed=True,
-                        success=False,
-                        error="OCR processing failed on the server"
-                    )
+                    # Log error instead of updating tracker
+                    logger.error("OCR processing failed on the server")
                     raise OCRServiceError("OCR processing failed")
 
-                # Update progress with current attempt
-                progress_tracker.update_progress(
-                    tracker_id=tracker_id,
-                    status="processing",
-                    message=f"OCR processing in progress (attempt {attempt+1}/{max_retries})..."
-                )
-
-                logger.info(f"Waiting for document processing (attempt {attempt+1}/{max_retries})")
+                # Log progress instead of updating tracker
+                logger.info(f"OCR processing in progress (attempt {attempt+1}/{max_retries})...")
                 time.sleep(retry_delay)
             else:
-                # Update progress - Timeout
-                progress_tracker.update_progress(
-                    tracker_id=tracker_id,
-                    status="failed",
-                    message="OCR processing timed out",
-                    completed=True,
-                    success=False,
-                    error="OCR processing timed out after multiple attempts"
-                )
+                # Log error instead of updating tracker
+                logger.error("OCR processing timed out after multiple attempts")
                 raise OCRServiceError("OCR processing timed out")
 
-            # Update progress - Step 3: Retrieving results
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                current_step=3,
-                status="retrieving",
-                message="Retrieving OCR results..."
-            )
+            # Log progress instead of updating tracker
+            logger.info("Retrieving OCR results...")
 
             # Step 3: Get the results
             text = self._get_document_result(document_id)
 
-            # Update progress - Step 4: Complete
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                current_step=4,
-                status="completed",
-                message=f"OCR processing completed successfully. Extracted {len(text)} characters.",
-                completed=True,
-                success=True,
-                result={"text_length": len(text), "document_id": document_id}
-            )
+            # Log completion instead of updating tracker
+            logger.info(f"OCR processing completed successfully. Extracted {len(text)} characters.")
 
             return text, tracker_id
 

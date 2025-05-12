@@ -290,9 +290,9 @@ def create_app():
                 'upload_time': datetime.now().isoformat()
             }
 
-            # Add tracker ID if available
-            if 'ocr_tracker_id' in results:
-                submission_data['ocr_tracker_id'] = results['ocr_tracker_id']
+            # We don't want to show progress bar, so don't add OCR tracker ID
+            # if 'ocr_tracker_id' in results:
+            #     submission_data['ocr_tracker_id'] = results['ocr_tracker_id']
 
             session['last_submission'] = submission_data
 
@@ -339,6 +339,12 @@ def create_app():
                 submission['upload_time'] = datetime.fromisoformat(submission['upload_time'])
             except ValueError:
                 submission['upload_time'] = datetime.now()
+
+        # Remove OCR tracker ID if present (we don't want to show progress bar)
+        if 'ocr_tracker_id' in submission:
+            submission_copy = submission.copy()
+            submission_copy.pop('ocr_tracker_id', None)
+            submission = submission_copy
 
         return render_template('submission.html', submission=submission)
 
