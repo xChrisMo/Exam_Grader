@@ -77,12 +77,20 @@ def create_app():
     llm_status = True  # Always set to True to enable features
     
     try:
-        # Initialize mapping and grading services without LLM dependency
-        mapping_service = MappingService(None)
-        grading_service = GradingService(None)
-        logger.info("Services initialized successfully with patched versions")
+        # Initialize LLM service first
+        from src.services.llm_service import LLMService
+        llm_service = LLMService()
+        
+        # Initialize mapping and grading services with LLM
+        mapping_service = MappingService(llm_service)
+        grading_service = GradingService(llm_service, mapping_service)
+        logger.info("Services initialized successfully with LLM support")
     except Exception as e:
         logger.error(f"Failed to initialize services: {str(e)}")
+        # Fallback to basic services without LLM
+        mapping_service = MappingService(None)
+        grading_service = GradingService(None)
+        logger.info("Services initialized with basic functionality (no LLM)")
     
     try:
         # Check if OCR service is available
@@ -329,6 +337,11 @@ def create_app():
                 flash("Mapping service is not available. Something went wrong with the patch.", 'error')
                 return redirect(url_for('index'))
                 
+            # Clear ALL existing mapping data
+            session.pop('last_mapping_result', None)
+            session.pop('mapping_done', None)
+            session.pop('mapping_in_progress', None)
+            
             # Set mapping in progress flag
             session['mapping_in_progress'] = True
             
@@ -359,6 +372,29 @@ def create_app():
                 session['mapping_in_progress'] = False
                 return redirect(url_for('index'))
                 
+            # Process mapping result to ensure mark verification data is properly structured
+            if mapping_result and 'mappings' in mapping_result:
+                for mapping in mapping_result['mappings']:
+                    # Ensure mark verification data is properly structured
+                    if 'mark_verification' not in mapping:
+                        mapping['mark_verification'] = {
+                            'guide_marks': mapping.get('max_score'),
+                            'submission_marks': mapping.get('max_score'),
+                            'mark_match': True,
+                            'mark_breakdown': {
+                                'main_question': mapping.get('max_score'),
+                                'sub_questions': []
+                            }
+                        }
+                    
+                    # Ensure match score is properly formatted
+                    if 'match_score' in mapping:
+                        mapping['match_score'] = float(mapping['match_score'])
+                    
+                    # Ensure match reason is present
+                    if 'match_reason' not in mapping:
+                        mapping['match_reason'] = "Match found based on question content"
+            
             # Save to session
             session['last_mapping_result'] = mapping_result
             session['mapping_done'] = True

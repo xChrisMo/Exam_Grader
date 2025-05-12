@@ -19,12 +19,16 @@ def main():
     sys.path.insert(0, project_root)
     
     # Create required directories if they don't exist
-    required_dirs = ["temp", "temp/uploads", "output", "logs", "results"]
+    required_dirs = ["temp", "temp/uploads", "output", "logs", "results", "data/nltk_data"]
     for directory in required_dirs:
         dir_path = Path(os.path.join(project_root, directory))
         if not dir_path.exists():
             dir_path.mkdir(parents=True, exist_ok=True)
             print(f"Created directory: {directory}")
+    
+    # Initialize system resources
+    from utils.setup import setup_system
+    setup_system()
     
     print("Starting Exam Grader web application...")
     

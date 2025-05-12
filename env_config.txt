@@ -32,14 +32,12 @@ ALLOWED_ORIGINS=http://localhost:8501,http://127.0.0.1:8501
 # =============================================
 # API Configuration
 # =============================================
-# Handwriting OCR API - replace with your actual API key if you need OCR
-HANDWRITING_OCR_API_KEY=your_ocr_api_key_here
-HANDWRITING_OCR_API_URL=https://www.handwritingocr.com/api/v3
-HANDWRITING_OCR_DELETE_AFTER=86400  # Optional, defaults to 24 hours
+# Handwriting OCR API
+HANDWRITING_OCR_API_KEY=459|Be4kvwW3zLKGl0SmR8U0xAeF72b2ZY3QnUEac1M6704cdf10
+HANDWRITING_OCR_API_URL=https://api.handwritingocr.com/v1
 
-# DeepSeek API Key - required for LLM mapping and grading services
-# You need to replace this with your actual DeepSeek API key
-DEEPSEEK_API_KEY=your_deepseek_api_key_here
+# DeepSeek API Key
+DEEPSEEK_API_KEY=sk-8388ca8c6f3c461e89054bfb334c413c
 DEEPSEEK_API_URL=https://api.deepseek.com/v1/chat/completions
 
 # =============================================

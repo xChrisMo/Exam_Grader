@@ -1,27 +1,18 @@
 {
+  "status": "success",
   "overall_score": 0,
   "max_possible_score": 0,
   "percent_score": 0,
+  "letter_grade": "F",
+  "criteria_scores": [],
   "detailed_feedback": {
     "strengths": [],
-    "weaknesses": [
-      "Overall understanding of key concepts needs improvement"
-    ],
-    "improvement_suggestions": [
-      "Review areas where scores were low",
-      "Focus on improving accuracy and completeness in your answers"
-    ],
-    "question_feedback": []
+    "weaknesses": [],
+    "improvement_suggestions": []
   },
-  "criterion_scores": [],
-  "criteria_scores": [],
-  "assessment_confidence": "medium",
-  "grading_notes": "Graded based on answer similarity. Overall score: 0/0 (0%)",
   "metadata": {
-    "submission_id": "sub_20250509172159",
-    "timestamp": "2025-05-09T17:21:59.946157",
-    "grader": "Text Similarity Comparison",
-    "question_count": 0,
-    "used_llm": false
+    "total_questions": 0,
+    "graded_at": "2025-05-10T18:28:25.168439",
+    "grading_method": "LLM"
   }
 }

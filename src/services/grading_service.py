@@ -8,6 +8,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
+from utils.logger import logger
 
 class GradingService:
     """
@@ -19,50 +20,6 @@ class GradingService:
         """Initialize with optional LLM and mapping services."""
         self.llm_service = llm_service
         self.mapping_service = mapping_service
-        
-    def _similarity_score(self, guide_answer: str, submission_answer: str) -> float:
-        """
-        Calculate a similarity score between the guide answer and submission answer.
-        
-        This is a simplified version used when LLM is not available.
-        
-        Returns:
-            float: Similarity score between 0.0 and 1.0
-        """
-        if not guide_answer or not submission_answer:
-            return 0.0
-            
-        # Remove punctuation and convert to lowercase for comparison
-        guide_clean = re.sub(r'[^\w\s]', '', guide_answer.lower())
-        submission_clean = re.sub(r'[^\w\s]', '', submission_answer.lower())
-        
-        # Split into words
-        guide_words = set(guide_clean.split())
-        submission_words = set(submission_clean.split())
-        
-        if not guide_words:
-            return 0.0
-            
-        # Calculate Jaccard similarity
-        intersection = len(guide_words.intersection(submission_words))
-        union = len(guide_words.union(submission_words))
-        
-        if union == 0:
-            return 0.0
-            
-        basic_similarity = intersection / union
-        
-        # Bonus for exact matches on key phrases (3+ words in sequence)
-        guide_phrases = [w for w in guide_clean.split() if len(w) > 3]
-        submission_phrases = [w for w in submission_clean.split() if len(w) > 3]
-        
-        phrase_matches = sum(1 for word in guide_phrases if word in submission_phrases)
-        phrase_bonus = 0.2 * (phrase_matches / len(guide_phrases)) if guide_phrases else 0
-        
-        # Apply bonuses and penalties
-        final_similarity = min(1.0, basic_similarity + phrase_bonus)
-        
-        return final_similarity
         
     def grade_submission(self, marking_guide_content: str, student_submission_content: str) -> Tuple[Dict, Optional[str]]:
         """
@@ -105,7 +62,9 @@ class GradingService:
             overall_score = 0
             max_possible_score = 0
             criteria_scores = []
-            detailed_feedback = []
+            strengths = []
+            weaknesses = []
+            improvement_suggestions = []
             
             for mapping in mappings:
                 guide_text = mapping.get("guide_text", "")
@@ -114,97 +73,195 @@ class GradingService:
                 submission_answer = mapping.get("submission_answer", "")
                 max_score = mapping.get("max_score", 10)
                 
+                # Skip if no guide answer or submission answer
+                if not guide_answer or not submission_answer:
+                    logger.warning(f"Skipping question due to missing answer: {guide_text[:50]}...")
+                    continue
+                
                 # Use LLM for comparison if available
-                if self.llm_service and hasattr(self.llm_service, 'compare_answers'):
+                if self.llm_service:
                     try:
-                        # Use LLM to compare answers
-                        score, feedback = self.llm_service.compare_answers(
-                            question=guide_text,
-                            guide_answer=guide_answer,
-                            submission_answer=submission_answer,
-                            max_score=max_score
+                        # Use LLM to compare answers with improved system prompt
+                        system_prompt = """
+                        You are an expert educational grader with years of experience in assessing student work. 
+                        Your task is to evaluate a student's answer against a model answer from a marking guide.
+                        
+                        Evaluate the student's answer based on the following criteria:
+                        1. Content Accuracy (40%): Correctness of facts, concepts, or procedures
+                        2. Completeness (30%): Inclusion of all required information or steps
+                        3. Understanding (20%): Demonstrated comprehension of underlying principles
+                        4. Clarity (10%): Clear and coherent expression of ideas
+                        
+                        IMPORTANT GUIDELINES:
+                        - Be fair and objective in your assessment
+                        - Consider partial credit for partially correct answers
+                        - Identify specific points where the student's answer matches or differs from the model answer
+                        - Provide constructive feedback that helps the student understand what they did well and what they missed
+                        - Your feedback should be specific and directly reference the student's response
+                        - Look for semantic similarity, not just exact word matches
+                        - Consider alternative correct approaches that might differ from the model answer
+                        - Be lenient on minor formatting differences or slight wording variations
+                        - Focus on how closely the student's answer matches the model answer in terms of content and understanding
+                        - Evaluate the quality and correctness of the student's response, not just the presence of keywords
+                        
+                        Output in JSON format:
+                        {
+                            "score": <numeric_score>,
+                            "percentage": <percent_of_max_score>,
+                            "feedback": "<detailed_feedback_with_specifics>",
+                            "strengths": ["<specific_strength1>", "<specific_strength2>", ...],
+                            "weaknesses": ["<specific_weakness1>", "<specific_weakness2>", ...],
+                            "improvement_suggestions": ["<specific_suggestion1>", "<specific_suggestion2>", ...],
+                            "key_points": {
+                                "matched": ["<specific_point1>", "<specific_point2>", ...],
+                                "missed": ["<specific_point1>", "<specific_point2>", ...],
+                                "partially_matched": ["<specific_point1>", "<specific_point2>", ...]
+                            },
+                            "grading_breakdown": {
+                                "content_accuracy": {
+                                    "score": <0-10>,
+                                    "comments": "<specific_comments>"
+                                },
+                                "completeness": {
+                                    "score": <0-10>,
+                                    "comments": "<specific_comments>"
+                                },
+                                "understanding": {
+                                    "score": <0-10>,
+                                    "comments": "<specific_comments>"
+                                },
+                                "clarity": {
+                                    "score": <0-10>,
+                                    "comments": "<specific_comments>"
+                                }
+                            }
+                        }
+                        """
+                        
+                        user_prompt = f"""
+                        Question: {guide_text}
+                        
+                        Model Answer from Marking Guide: 
+                        {guide_answer}
+                        
+                        Student's Answer: 
+                        {submission_answer}
+                        
+                        Maximum Score: {max_score}
+                        
+                        Please evaluate how closely the student's answer matches the model answer and assign a score out of {max_score}.
+                        Focus on semantic similarity and conceptual understanding rather than exact wording.
+                        Consider both the content accuracy and the demonstrated understanding. 
+                        Provide detailed feedback explaining your scoring.
+                        """
+                        
+                        logger.info(f"Sending grading request to LLM for question: {guide_text[:50]}...")
+                        
+                        response = self.llm_service.client.chat.completions.create(
+                            model=self.llm_service.model,
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt}
+                            ],
+                            temperature=0.1,  # Slightly more variability for nuanced judgments
+                            response_format={"type": "json_object"}
                         )
-                        similarity = score / max_score if max_score > 0 else 0
+                        
+                        result = response.choices[0].message.content
+                        parsed = json.loads(result)
+                        
+                        # Extract detailed grading information
+                        score = float(parsed.get("score", 0))
+                        
+                        # Ensure score doesn't exceed max_score
+                        score = min(score, max_score)
+                        
+                        feedback = parsed.get("feedback", "")
+                        question_strengths = parsed.get("strengths", [])
+                        question_weaknesses = parsed.get("weaknesses", [])
+                        question_suggestions = parsed.get("improvement_suggestions", [])
+                        
+                        # Get key points information
+                        key_points = parsed.get("key_points", {})
+                        matched_points = key_points.get("matched", [])
+                        missed_points = key_points.get("missed", [])
+                        partial_points = key_points.get("partially_matched", [])
+                        
+                        # Get detailed breakdown
+                        grading_breakdown = parsed.get("grading_breakdown", {})
+                        
+                        # Add to overall strengths and weaknesses
+                        strengths.extend(question_strengths)
+                        weaknesses.extend(question_weaknesses)
+                        improvement_suggestions.extend(question_suggestions)
+                        
+                        # Create detailed feedback incorporating the breakdown
+                        detailed_feedback = {
+                            "general": feedback,
+                            "key_points": {
+                                "matched": matched_points,
+                                "missed": missed_points,
+                                "partially_matched": partial_points
+                            },
+                            "breakdown": grading_breakdown
+                        }
+                        
+                        logger.info(f"LLM grading complete. Score: {score}/{max_score}")
+                        
                     except Exception as e:
-                        # Fall back to basic similarity if LLM fails
-                        similarity = self._similarity_score(guide_answer, submission_answer)
+                        logger.warning(f"LLM grading failed, falling back to similarity: {str(e)}")
+                        # Fall back to similarity scoring
+                        similarity = self._enhanced_similarity_score(guide_answer, submission_answer)
                         score = round(similarity * max_score, 1)
                         feedback = f"Graded based on text similarity (LLM error: {str(e)})"
+                        detailed_feedback = {"general": feedback}
                 else:
-                    # Use basic similarity function
-                    similarity = self._similarity_score(guide_answer, submission_answer)
+                    # Use enhanced similarity scoring
+                    similarity = self._enhanced_similarity_score(guide_answer, submission_answer)
                     score = round(similarity * max_score, 1)
                     feedback = "Graded based on text similarity"
+                    detailed_feedback = {"general": feedback}
                 
                 # Add to overall score
                 overall_score += score
                 max_possible_score += max_score
                 
-                # Add to detailed feedback
-                detailed_feedback.append({
-                    "question": guide_text.split("\n")[0] if guide_text else f"Question {len(detailed_feedback)+1}",
-                    "score": score,
-                    "max_score": max_score,
-                    "feedback": feedback
-                })
-                
                 # Add to criteria scores
                 criteria_scores.append({
-                    "description": guide_text.split("\n")[0] if guide_text else f"Question {len(criteria_scores)+1}",
+                    "question_id": mapping.get("guide_id", ""),
+                    "description": guide_text,
                     "points_earned": score,
                     "points_possible": max_score,
-                    "similarity": similarity,
-                    "guide_id": mapping.get("guide_id"),
-                    "submission_id": mapping.get("submission_id"),
-                    "feedback": feedback
+                    "similarity": score / max_score if max_score > 0 else 0,
+                    "feedback": feedback,
+                    "detailed_feedback": detailed_feedback,
+                    "guide_answer": guide_answer,
+                    "student_answer": submission_answer
                 })
             
             # Calculate percentage score
             percent_score = (overall_score / max_possible_score * 100) if max_possible_score > 0 else 0
-            percent_score = round(percent_score, 1)
             
-            # Generate summary feedback
-            strengths = []
-            weaknesses = []
+            # Assign letter grade based on percentage
+            letter_grade = self._get_letter_grade(percent_score)
             
-            for score in criteria_scores:
-                if score["similarity"] >= 0.8:
-                    strengths.append(f"Strong understanding demonstrated in {score['description']}")
-                elif score["similarity"] <= 0.3:
-                    weaknesses.append(f"Significant improvement needed in {score['description']}")
-            
-            # Add general feedback
-            if percent_score >= 80:
-                strengths.append("Overall excellent understanding of the material")
-            elif percent_score <= 50:
-                weaknesses.append("Overall understanding of key concepts needs improvement")
-            
-            # Create result with both naming formats for compatibility
-            submission_id = f"sub_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            
+            # Create result
             result = {
-                "overall_score": overall_score,
+                "status": "success",
+                "overall_score": round(overall_score, 1),
                 "max_possible_score": max_possible_score,
-                "percent_score": percent_score,
+                "percent_score": round(percent_score, 1),
+                "letter_grade": letter_grade,
+                "criteria_scores": criteria_scores,
                 "detailed_feedback": {
-                    "strengths": strengths,
-                    "weaknesses": weaknesses,
-                    "improvement_suggestions": [
-                        "Review areas where scores were low",
-                        "Focus on improving accuracy and completeness in your answers"
-                    ],
-                    "question_feedback": detailed_feedback
+                    "strengths": list(set(strengths)),  # Remove duplicates
+                    "weaknesses": list(set(weaknesses)),  # Remove duplicates
+                    "improvement_suggestions": list(set(improvement_suggestions))  # Remove duplicates
                 },
-                "criterion_scores": criteria_scores,  # For newer templates
-                "criteria_scores": criteria_scores,   # For older templates
-                "assessment_confidence": "high" if self.llm_service else "medium",
-                "grading_notes": f"Graded based on answer similarity. Overall score: {overall_score}/{max_possible_score} ({percent_score}%)",
                 "metadata": {
-                    "submission_id": submission_id,
-                    "timestamp": datetime.now().isoformat(),
-                    "grader": "LLM Answer Comparison" if self.llm_service else "Text Similarity Comparison",
-                    "question_count": len(criteria_scores),
-                    "used_llm": self.llm_service is not None
+                    "total_questions": len(criteria_scores),
+                    "graded_at": datetime.now().isoformat(),
+                    "grading_method": "LLM" if self.llm_service else "Similarity"
                 }
             }
             
@@ -212,7 +269,119 @@ class GradingService:
             
         except Exception as e:
             error_message = f"Error in grading service: {str(e)}"
+            logger.error(error_message)
             return {"status": "error", "message": error_message}, error_message
+        
+    def _enhanced_similarity_score(self, guide_answer: str, submission_answer: str) -> float:
+        """
+        Calculate an enhanced similarity score between the guide answer and submission answer.
+        This method uses multiple metrics to get a more accurate similarity.
+        
+        Returns:
+            float: Similarity score between 0.0 and 1.0
+        """
+        if not guide_answer or not submission_answer:
+            return 0.0
+            
+        # Remove punctuation and convert to lowercase for comparison
+        guide_clean = re.sub(r'[^\w\s]', '', guide_answer.lower())
+        submission_clean = re.sub(r'[^\w\s]', '', submission_answer.lower())
+        
+        # Split into words
+        guide_words = guide_clean.split()
+        submission_words = submission_clean.split()
+        
+        if not guide_words:
+            return 0.0
+            
+        # Calculate word overlap (Jaccard similarity)
+        guide_set = set(guide_words)
+        submission_set = set(submission_words)
+        
+        intersection = len(guide_set.intersection(submission_set))
+        union = len(guide_set.union(submission_set))
+        
+        jaccard_score = intersection / union if union > 0 else 0.0
+        
+        # Calculate word order similarity (simple approach)
+        # Count sequences of words that appear in the same order
+        sequence_matches = 0
+        max_sequence_length = min(len(guide_words), len(submission_words))
+        
+        for i in range(1, 4):  # Check sequences of length 1, 2, and 3
+            if i > max_sequence_length:
+                break
+                
+            guide_sequences = set()
+            for j in range(len(guide_words) - i + 1):
+                guide_sequences.add(' '.join(guide_words[j:j+i]))
+                
+            submission_sequences = set()
+            for j in range(len(submission_words) - i + 1):
+                submission_sequences.add(' '.join(submission_words[j:j+i]))
+                
+            sequence_matches += len(guide_sequences.intersection(submission_sequences)) / (i * 2)
+        
+        sequence_score = sequence_matches / max(len(guide_words), 1)
+        
+        # Calculate length ratio as a penalty for answers that are too short
+        length_ratio = min(len(submission_words) / max(len(guide_words), 1), 1.0)
+        
+        # Keyword importance - check if important words are present
+        # This is a simple approach; in a real-world scenario, you might extract keywords using NLP
+        important_words = set()
+        for word in guide_words:
+            if len(word) > 5 or word.lower() not in {'and', 'the', 'is', 'are', 'that', 'this', 'with', 'for', 'from'}:
+                important_words.add(word)
+        
+        important_word_match = len(important_words.intersection(submission_set)) / max(len(important_words), 1)
+        
+        # Combine the scores with appropriate weights
+        combined_score = (
+            (0.4 * jaccard_score) +  # Word overlap
+            (0.3 * sequence_score) +  # Word order
+            (0.2 * important_word_match) +  # Important words
+            (0.1 * length_ratio)  # Length penalty
+        )
+        
+        return min(max(combined_score, 0.0), 1.0)  # Ensure score is between 0 and 1
+        
+    def _get_letter_grade(self, percent_score: float) -> str:
+        """
+        Convert percentage score to letter grade.
+        
+        Args:
+            percent_score: Percentage score (0-100)
+            
+        Returns:
+            str: Letter grade (A+, A, A-, B+, etc.)
+        """
+        if percent_score >= 97:
+            return "A+"
+        elif percent_score >= 93:
+            return "A"
+        elif percent_score >= 90:
+            return "A-"
+        elif percent_score >= 87:
+            return "B+"
+        elif percent_score >= 83:
+            return "B"
+        elif percent_score >= 80:
+            return "B-"
+        elif percent_score >= 77:
+            return "C+"
+        elif percent_score >= 73:
+            return "C"
+        elif percent_score >= 70:
+            return "C-"
+        elif percent_score >= 67:
+            return "D+"
+        elif percent_score >= 63:
+            return "D"
+        elif percent_score >= 60:
+            return "D-"
+        else:
+            return "F"
         
     def save_grading_result(self, grading_result: Dict, output_path: str, filename: str = None) -> str:
         """

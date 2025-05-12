@@ -19,22 +19,36 @@
     </div>
     <div class="card-body">
         <div class="row text-center">
-            <div class="col-md-4 mb-3">
+            <div class="col-md-3 mb-3">
                 <div class="p-3 bg-light rounded">
                     <h2 class="display-5 fw-bold text-success">{{ mapping_result.metadata.mapping_count }}</h2>
-                    <p class="mb-0">Questions/Answers Mapped</p>
+                    <p class="mb-0">Questions Mapped</p>
                 </div>
             </div>
-            <div class="col-md-4 mb-3">
+            <div class="col-md-3 mb-3">
                 <div class="p-3 bg-light rounded">
                     <h2 class="display-5 fw-bold text-warning">{{ mapping_result.unmapped_guide_items|length }}</h2>
                     <p class="mb-0">Unmapped Guide Items</p>
                 </div>
             </div>
-            <div class="col-md-4 mb-3">
+            <div class="col-md-3 mb-3">
                 <div class="p-3 bg-light rounded">
                     <h2 class="display-5 fw-bold text-danger">{{ mapping_result.unmapped_submission_items|length }}</h2>
                     <p class="mb-0">Unmapped Submission Items</p>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="p-3 bg-light rounded">
+                    <h2 class="display-5 fw-bold text-primary">
+                        {% set total_score = 0 %}
+                        {% for mapping in mapping_result.mappings %}
+                            {% if mapping.max_score is defined %}
+                                {% set total_score = total_score + mapping.max_score %}
+                            {% endif %}
+                        {% endfor %}
+                        {{ total_score }}
+                    </h2>
+                    <p class="mb-0">Total Points Available</p>
                 </div>
             </div>
         </div>
@@ -53,10 +67,11 @@
                     <thead class="table-light">
                         <tr>
                             <th style="width: 5%">#</th>
-                            <th style="width: 30%">Guide Question</th>
-                            <th style="width: 25%">Guide Answer</th>
-                            <th style="width: 30%">Student Answer</th>
-                            <th style="width: 10%">Match</th>
+                            <th style="width: 20%">Guide Question</th>
+                            <th style="width: 20%">Guide Answer</th>
+                            <th style="width: 20%">Student Answer</th>
+                            <th style="width: 15%">Marks</th>
+                            <th style="width: 20%">Match Score</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -68,12 +83,9 @@
                                 {% if mapping.guide_id %}
                                 <span class="badge bg-primary">ID: {{ mapping.guide_id }}</span>
                                 {% endif %}
-                                {% if mapping.max_score %}
-                                <span class="badge bg-success">{{ mapping.max_score }} points</span>
-                                {% endif %}
                             </td>
                             <td>
-                                <div class="guide-answer small">{{ mapping.guide_answer|truncate(150) }}</div>
+                                <div class="guide-answer small">{{ (mapping.guide_answer or "")|truncate(150) }}</div>
                             </td>
                             <td>
                                 <div class="submission-answer small">{{ mapping.submission_answer|truncate(150) }}</div>
@@ -81,20 +93,67 @@
                                 <span class="badge bg-info">ID: {{ mapping.submission_id }}</span>
                                 {% endif %}
                             </td>
-                            <td class="text-center">
+                            <td>
+                                {% if mapping.mark_verification %}
+                                <div class="mark-verification">
+                                    <div class="d-flex align-items-center mb-1">
+                                        <span class="badge {% if mapping.mark_verification.mark_match %}bg-success{% else %}bg-danger{% endif %}">
+                                            {{ mapping.mark_verification.guide_marks }} marks
+                                        </span>
+                                        {% if mapping.mark_verification.mark_match %}
+                                        <i class="bi bi-check-circle-fill text-success ms-1"></i>
+                                        {% else %}
+                                        <i class="bi bi-x-circle-fill text-danger ms-1"></i>
+                                        {% endif %}
+                                    </div>
+                                    {% if mapping.mark_verification.mark_breakdown %}
+                                    <div class="mark-breakdown small">
+                                        {% if mapping.mark_verification.mark_breakdown.main_question %}
+                                        <div>Main: {{ mapping.mark_verification.mark_breakdown.main_question }} marks</div>
+                                        {% endif %}
+                                        {% if mapping.mark_verification.mark_breakdown.sub_questions %}
+                                        <div class="mt-1">
+                                            {% for sub_q in mapping.mark_verification.mark_breakdown.sub_questions %}
+                                            <div class="sub-question-mark">
+                                                <small>{{ sub_q.marks }} marks</small>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                <span class="badge bg-secondary">No marks specified</span>
+                                {% endif %}
+                            </td>
+                            <td>
                                 {% if mapping.match_score is defined %}
-                                <div class="progress" style="height: 20px;">
-                                    {% set score = (mapping.match_score * 100)|int %}
-                                    <div class="progress-bar 
-                                        {% if score >= 80 %}bg-success
-                                        {% elif score >= 60 %}bg-info
-                                        {% elif score >= 40 %}bg-warning
-                                        {% else %}bg-danger{% endif %}" 
-                                        role="progressbar" 
-                                        style="width: {{ score }}%;" 
-                                        aria-valuenow="{{ score }}" 
-                                        aria-valuemin="0" 
-                                        aria-valuemax="100">{{ score }}%</div>
+                                <div class="d-flex flex-column">
+                                    <div class="progress mb-2" style="height: 20px;">
+                                        {% set score = (mapping.match_score * 100)|int %}
+                                        <div class="progress-bar 
+                                            {% if score >= 80 %}bg-success
+                                            {% elif score >= 60 %}bg-info
+                                            {% elif score >= 40 %}bg-warning
+                                            {% else %}bg-danger{% endif %}" 
+                                            role="progressbar" 
+                                            style="width: {{ score }}%;" 
+                                            aria-valuenow="{{ score }}" 
+                                            aria-valuemin="0" 
+                                            aria-valuemax="100">{{ score }}%</div>
+                                    </div>
+                                    <small class="text-muted">
+                                        {% if score >= 80 %}
+                                            <i class="bi bi-check-circle-fill text-success"></i> Excellent match
+                                        {% elif score >= 60 %}
+                                            <i class="bi bi-info-circle-fill text-info"></i> Good match
+                                        {% elif score >= 40 %}
+                                            <i class="bi bi-exclamation-triangle-fill text-warning"></i> Partial match
+                                        {% else %}
+                                            <i class="bi bi-x-circle-fill text-danger"></i> Poor match
+                                        {% endif %}
+                                    </small>
                                 </div>
                                 {% else %}
                                 <span class="badge bg-secondary">N/A</span>
@@ -133,6 +192,9 @@
                             {% endif %}
                             {% if item.type %}
                             <span class="badge bg-secondary">Type: {{ item.type }}</span>
+                            {% endif %}
+                            {% if item.max_score %}
+                            <span class="badge bg-success">{{ item.max_score }} points</span>
                             {% endif %}
                             {% if item.answer %}
                             <div class="guide-answer small text-muted mt-2">
@@ -218,17 +280,16 @@
         white-space: pre-wrap;
         font-family: var(--font-mono);
         font-size: 0.9rem;
-        margin-bottom: 0.5rem;
     }
-    
-    .guide-text {
-        border-left: 3px solid var(--primary);
-        padding-left: 0.5rem;
+    .mark-verification {
+        font-size: 0.9rem;
     }
-    
-    .submission-text {
-        border-left: 3px solid var(--info);
-        padding-left: 0.5rem;
+    .mark-breakdown {
+        color: #6c757d;
+    }
+    .sub-question-mark {
+        font-size: 0.8rem;
+        padding-left: 1rem;
     }
 </style>
 {% endblock %} 

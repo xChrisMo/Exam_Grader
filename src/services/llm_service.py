@@ -40,7 +40,7 @@ class LLMService:
         self, 
         api_key: Optional[str] = None,
         base_url: str = "https://api.deepseek.com",
-        model: str = "deepseek-reasoner",
+        model: str = "deepseek-chat",
         temperature: float = 0.0,
         max_retries: int = 3,
         retry_delay: float = 2.0
@@ -61,7 +61,7 @@ class LLMService:
         """
         self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
         if not self.api_key:
-            raise LLMServiceError("DeepSeek API key not configured. Set DEEPSEEK_API_KEY in .env")
+            raise LLMServiceError("DeepSeek API key not configured")
         
         self.base_url = base_url
         self.model = model
@@ -300,7 +300,7 @@ class LLMService:
             
             # Simple test prompt
             system_prompt = "You are a helpful assistant."
-            user_prompt = "Please respond with a simple 'Connection successful' if you receive this message."
+            user_prompt = "Test connection"
             
             # Make a minimal API call
             response = self.client.chat.completions.create(
@@ -310,7 +310,7 @@ class LLMService:
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.0,
-                max_tokens=20
+                max_tokens=10
             )
             
             # Check if we got a response
