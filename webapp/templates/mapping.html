@@ -344,45 +344,89 @@ endblock %} {% block content %}
       <div class="collapse show" id="unmappedGuideSections">
         <div class="card-body">
           {% if mapping_result.unmapped_guide_items %}
-          <div class="list-group">
+          <div class="alert alert-warning mb-3">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong
+              >{{ mapping_result.unmapped_guide_items|length }} guide
+              items</strong
+            >
+            couldn't be matched to the submission. These items may represent
+            questions that weren't answered or content that wasn't addressed in
+            the submission.
+          </div>
+
+          <div class="accordion" id="unmappedGuideAccordion">
             {% for item in mapping_result.unmapped_guide_items %}
-            <div class="list-group-item">
-              <div
-                class="d-flex justify-content-between align-items-start mb-2"
+            <div class="accordion-item mb-3 border-warning">
+              <h2
+                class="accordion-header"
+                id="unmappedGuideHeading{{ loop.index }}"
               >
-                <h6 class="mb-0">Unmapped Guide Item #{{ loop.index }}</h6>
-                <div class="d-flex gap-2">
-                  {% if item.id %}
-                  <span class="badge bg-primary">ID: {{ item.id }}</span>
-                  {% endif %} {% if item.type %}
-                  <span class="badge bg-secondary">Type: {{ item.type }}</span>
-                  {% endif %} {% if item.max_score %}
-                  <span class="badge bg-success"
-                    >{{ item.max_score }} marks</span
+                <button
+                  class="accordion-button {% if loop.index > 1 %}collapsed{% endif %}"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#unmappedGuideCollapse{{ loop.index }}"
+                  aria-expanded="{{ 'true' if loop.index == 1 else 'false' }}"
+                  aria-controls="unmappedGuideCollapse{{ loop.index }}"
+                >
+                  <div
+                    class="d-flex justify-content-between align-items-center w-100 me-3"
                   >
+                    <div>
+                      <span class="fw-bold"
+                        >Unmapped Guide Item #{{ loop.index }}</span
+                      >
+                      {% if item.text %}
+                      <span class="text-muted ms-2"
+                        >{{ item.text|truncate(50) }}</span
+                      >
+                      {% endif %}
+                    </div>
+                    <div class="d-flex gap-2">
+                      {% if item.id %}
+                      <span class="badge bg-primary">ID: {{ item.id }}</span>
+                      {% endif %} {% if item.type %}
+                      <span class="badge bg-secondary"
+                        >Type: {{ item.type }}</span
+                      >
+                      {% endif %} {% if item.max_score %}
+                      <span class="badge bg-success"
+                        >{{ item.max_score }} marks</span
+                      >
+                      {% endif %}
+                    </div>
+                  </div>
+                </button>
+              </h2>
+              <div
+                id="unmappedGuideCollapse{{ loop.index }}"
+                class="accordion-collapse collapse {% if loop.index == 1 %}show{% endif %}"
+                aria-labelledby="unmappedGuideHeading{{ loop.index }}"
+                data-bs-parent="#unmappedGuideAccordion"
+              >
+                <div class="accordion-body">
+                  <div class="card mb-3">
+                    <div class="card-header bg-light">
+                      <strong>Guide Text</strong>
+                    </div>
+                    <div class="card-body">
+                      <div class="guide-text">{{ item.text }}</div>
+                    </div>
+                  </div>
+
+                  {% if item.answer %}
+                  <div class="card">
+                    <div class="card-header bg-light">
+                      <strong>Expected Answer</strong>
+                    </div>
+                    <div class="card-body">
+                      <div class="guide-answer">{{ item.answer }}</div>
+                    </div>
+                  </div>
                   {% endif %}
                 </div>
               </div>
-
-              <div class="card mb-3">
-                <div class="card-header bg-light">
-                  <strong>Guide Text</strong>
-                </div>
-                <div class="card-body">
-                  <div class="guide-text">{{ item.text }}</div>
-                </div>
-              </div>
-
-              {% if item.answer %}
-              <div class="card">
-                <div class="card-header bg-light">
-                  <strong>Expected Answer</strong>
-                </div>
-                <div class="card-body">
-                  <div class="guide-answer">{{ item.answer }}</div>
-                </div>
-              </div>
-              {% endif %}
             </div>
             {% endfor %}
           </div>
@@ -424,41 +468,85 @@ endblock %} {% block content %}
       <div class="collapse show" id="unmappedSubmissionSections">
         <div class="card-body">
           {% if mapping_result.unmapped_submission_items %}
-          <div class="list-group">
+          <div class="alert alert-danger mb-3">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong
+              >{{ mapping_result.unmapped_submission_items|length }} submission
+              items</strong
+            >
+            couldn't be matched to the guide. These items may represent
+            additional content provided by the student that wasn't requested in
+            the guide.
+          </div>
+
+          <div class="accordion" id="unmappedSubmissionAccordion">
             {% for item in mapping_result.unmapped_submission_items %}
-            <div class="list-group-item">
-              <div
-                class="d-flex justify-content-between align-items-start mb-2"
+            <div class="accordion-item mb-3 border-danger">
+              <h2
+                class="accordion-header"
+                id="unmappedSubmissionHeading{{ loop.index }}"
               >
-                <h6 class="mb-0">Unmapped Submission Item #{{ loop.index }}</h6>
-                <div class="d-flex gap-2">
-                  {% if item.id %}
-                  <span class="badge bg-info">ID: {{ item.id }}</span>
-                  {% endif %} {% if item.type %}
-                  <span class="badge bg-secondary">Type: {{ item.type }}</span>
+                <button
+                  class="accordion-button {% if loop.index > 1 %}collapsed{% endif %}"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#unmappedSubmissionCollapse{{ loop.index }}"
+                  aria-expanded="{{ 'true' if loop.index == 1 else 'false' }}"
+                  aria-controls="unmappedSubmissionCollapse{{ loop.index }}"
+                >
+                  <div
+                    class="d-flex justify-content-between align-items-center w-100 me-3"
+                  >
+                    <div>
+                      <span class="fw-bold"
+                        >Unmapped Submission Item #{{ loop.index }}</span
+                      >
+                      {% if item.text %}
+                      <span class="text-muted ms-2"
+                        >{{ item.text|truncate(50) }}</span
+                      >
+                      {% endif %}
+                    </div>
+                    <div class="d-flex gap-2">
+                      {% if item.id %}
+                      <span class="badge bg-info">ID: {{ item.id }}</span>
+                      {% endif %} {% if item.type %}
+                      <span class="badge bg-secondary"
+                        >Type: {{ item.type }}</span
+                      >
+                      {% endif %}
+                    </div>
+                  </div>
+                </button>
+              </h2>
+              <div
+                id="unmappedSubmissionCollapse{{ loop.index }}"
+                class="accordion-collapse collapse {% if loop.index == 1 %}show{% endif %}"
+                aria-labelledby="unmappedSubmissionHeading{{ loop.index }}"
+                data-bs-parent="#unmappedSubmissionAccordion"
+              >
+                <div class="accordion-body">
+                  <div class="card mb-3">
+                    <div class="card-header bg-light">
+                      <strong>Submission Text</strong>
+                    </div>
+                    <div class="card-body">
+                      <div class="submission-text">{{ item.text }}</div>
+                    </div>
+                  </div>
+
+                  {% if item.answer %}
+                  <div class="card">
+                    <div class="card-header bg-light">
+                      <strong>Student Answer</strong>
+                    </div>
+                    <div class="card-body">
+                      <div class="submission-answer">{{ item.answer }}</div>
+                    </div>
+                  </div>
                   {% endif %}
                 </div>
               </div>
-
-              <div class="card mb-3">
-                <div class="card-header bg-light">
-                  <strong>Submission Text</strong>
-                </div>
-                <div class="card-body">
-                  <div class="submission-text">{{ item.text }}</div>
-                </div>
-              </div>
-
-              {% if item.answer %}
-              <div class="card">
-                <div class="card-header bg-light">
-                  <strong>Student Answer</strong>
-                </div>
-                <div class="card-body">
-                  <div class="submission-answer">{{ item.answer }}</div>
-                </div>
-              </div>
-              {% endif %}
             </div>
             {% endfor %}
           </div>
@@ -547,6 +635,25 @@ endblock %} {% block content %}
   .marks-badge {
     margin-top: 0.5rem;
     font-weight: 500;
+  }
+
+  /* Accordion styles for unmapped items */
+  .accordion-item.border-warning {
+    border-left: 4px solid var(--bs-warning);
+  }
+
+  .accordion-item.border-danger {
+    border-left: 4px solid var(--bs-danger);
+  }
+
+  .accordion-button:not(.collapsed) {
+    background-color: rgba(13, 110, 253, 0.05);
+    color: var(--bs-primary);
+  }
+
+  .accordion-button:focus {
+    box-shadow: none;
+    border-color: rgba(13, 110, 253, 0.25);
   }
 </style>
 {% endblock %} {% block extra_js %}
