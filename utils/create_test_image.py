@@ -6,8 +6,16 @@ Create a test image with handwritten-like text for OCR testing.
 from PIL import Image, ImageDraw, ImageFont
 import os
 
-def create_test_image():
-    """Create a test image with handwritten-like text."""
+def create_test_image(output_file="test.jpg"):
+    """
+    Create a test image with handwritten-like text.
+    
+    Args:
+        output_file: Path to save the output image
+        
+    Returns:
+        str: Path to the created image file
+    """
     # Create a white background image
     width = 800
     height = 600
@@ -36,10 +44,9 @@ Answer: Jupiter"""
     draw.text((50, 50), text, fill='black', font=font)
     
     # Save the image
-    output_file = "test.jpg"
     image.save(output_file)
     print(f"Test image created: {output_file}")
     return output_file
 
 if __name__ == "__main__":
-    create_test_image() 
+    create_test_image()

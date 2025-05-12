@@ -24,12 +24,12 @@
                 {% set progress_value = 33 %}
             {% endif %}
         {% endif %}
-        
+
         <div class="progress" style="height: 20px;">
-            <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress_value }}%;" 
+            <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress_value }}%;"
                  aria-valuenow="{{ progress_value }}" aria-valuemin="0" aria-valuemax="100">{{ progress_value }}%</div>
         </div>
-        
+
         <div class="d-flex justify-content-between mt-2">
             <span class="badge {{ 'bg-success' if progress_value >= 33 else 'bg-secondary' }}">
                 <i class="bi bi-1-circle"></i> Guide Uploaded
@@ -62,12 +62,12 @@
                         <p class="text-muted">or click to browse files</p>
                         <p class="text-muted small">Supported formats: .docx, .txt</p>
                     </div>
-                    
+
                     <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-primary" id="guideButton">
+                        <button type="submit" class="btn btn-primary" id="guideButton" data-loading-text="Uploading Guide...">
                             <i class="bi bi-upload me-1"></i> Upload Guide
                         </button>
-                        
+
                         {% if session.get('guide_uploaded') %}
                         <a href="{{ url_for('view_guide') }}" class="btn btn-outline-primary">
                             <i class="bi bi-eye me-1"></i> View Guide
@@ -80,8 +80,8 @@
                         {% endif %}
                     </div>
                 </form>
-                
-                {% if session.get('guide_data') %}
+
+                {% if session.get('guide_uploaded') %}
                 <div class="alert alert-success mt-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
@@ -89,8 +89,8 @@
                             <strong>Guide loaded!</strong>
                         </div>
                         <div class="text-end">
-                            <div>{{ session.get('guide_data', {}).get('total_marks', 0) }} marks</div>
-                            <small>{{ session.get('guide_data', {}).get('questions', [])|length }} questions</small>
+                            <div>Raw text extracted</div>
+                            <small>{{ session.get('guide_content', '')|length }} characters</small>
                         </div>
                     </div>
                 </div>
@@ -98,7 +98,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Student Submission Upload -->
     <div class="col-md-6">
         <div class="card h-100">
@@ -116,20 +116,21 @@
                         <p class="text-muted">or click to browse files</p>
                         <p class="text-muted small">Supported formats: .docx, .txt, .pdf, images</p>
                     </div>
-                    
+
                     <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-info text-white" id="submissionButton" 
-                                {{ 'disabled' if not session.get('guide_uploaded') }}>
+                        <button type="submit" class="btn btn-info text-white" id="submissionButton"
+                                {{ 'disabled' if not session.get('guide_uploaded') }}
+                                data-loading-text="Uploading Submission...">
                             <i class="bi bi-upload me-1"></i> Upload Submission
                         </button>
-                        
+
                         {% if not session.get('guide_uploaded') %}
                         <div class="alert alert-warning mb-0">
                             <i class="bi bi-exclamation-triangle me-2"></i>
                             Please upload a marking guide first
                         </div>
                         {% endif %}
-                        
+
                         {% if session.get('last_submission') %}
                         <a href="{{ url_for('view_submission') }}" class="btn btn-outline-info">
                             <i class="bi bi-eye me-1"></i> View Submission
@@ -142,7 +143,7 @@
                         {% endif %}
                     </div>
                 </form>
-                
+
                 {% if session.get('last_submission') %}
                 <div class="alert alert-success mt-3">
                     <div class="d-flex justify-content-between align-items-center">
@@ -171,20 +172,21 @@
             <div class="card-body">
                 <p>Map student submission sections to marking guide criteria using AI.</p>
                 <p class="text-muted small">This helps visualize how each part of the submission relates to specific criteria in the guide.</p>
-                
+
                 <form action="{{ url_for('map_submission') }}" method="post" class="d-grid gap-2">
-                    <button type="submit" class="btn btn-success" 
-                            {{ 'disabled' if not session.get('guide_uploaded') or not session.get('last_submission') }}>
+                    <button type="submit" class="btn btn-success"
+                            {{ 'disabled' if not session.get('guide_uploaded') or not session.get('last_submission') }}
+                            data-loading-text="Mapping Submission...">
                         <i class="bi bi-diagram-3 me-1"></i> Map Submission
                     </button>
-                    
+
                     {% if session.get('last_mapping_result') %}
                     <a href="{{ url_for('view_mapping') }}" class="btn btn-outline-success">
                         <i class="bi bi-eye me-1"></i> View Mapping
                     </a>
                     {% endif %}
                 </form>
-                
+
                 {% if not session.get('guide_uploaded') or not session.get('last_submission') %}
                 <div class="alert alert-warning mt-3">
                     <i class="bi bi-exclamation-triangle me-2"></i>
@@ -194,7 +196,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-6">
         <div class="card h-100">
             <div class="card-header bg-primary text-white">
@@ -203,27 +205,28 @@
             <div class="card-body">
                 <p>Grade the student submission against the marking guide using AI.</p>
                 <p class="text-muted small">The AI will evaluate the submission, provide scores, and give detailed feedback.</p>
-                
+
                 <form action="{{ url_for('grade_submission') }}" method="post" class="d-grid gap-2">
-                    <button type="submit" class="btn btn-primary" 
-                            {{ 'disabled' if not session.get('guide_uploaded') or not session.get('last_submission') }}>
+                    <button type="submit" class="btn btn-primary"
+                            {{ 'disabled' if not session.get('guide_uploaded') or not session.get('last_submission') }}
+                            data-loading-text="Grading Submission...">
                         <i class="bi bi-award me-1"></i> Grade Submission
                     </button>
-                    
+
                     {% if session.get('last_grading_result') %}
                     <a href="{{ url_for('view_results') }}" class="btn btn-outline-primary">
                         <i class="bi bi-eye me-1"></i> View Results
                     </a>
                     {% endif %}
                 </form>
-                
+
                 {% if not session.get('guide_uploaded') or not session.get('last_submission') %}
                 <div class="alert alert-warning mt-3">
                     <i class="bi bi-exclamation-triangle me-2"></i>
                     Please upload both a marking guide and a student submission first
                 </div>
                 {% endif %}
-                
+
                 {% if session.get('last_grading_result') %}
                 <div class="alert alert-success mt-3">
                     <div class="d-flex justify-content-between align-items-center">
@@ -299,42 +302,229 @@
 </div>
 
 <!-- Clear All Data -->
-<div class="text-center mt-4">
-    <form action="{{ url_for('clear_all') }}" method="post">
-        <button type="submit" class="btn btn-outline-danger btn-sm" data-confirm="Are you sure you want to clear all data?">
-            <i class="bi bi-trash me-1"></i> Clear All Data
-        </button>
-    </form>
-</div>
-
-<!-- Loading Overlay -->
-<div id="loadingOverlay" class="position-fixed top-0 start-0 w-100 h-100 d-none align-items-center justify-content-center" 
-     style="background-color: rgba(0,0,0,0.5); z-index: 1050;">
-    <div class="card p-4 text-center">
-        <div class="spinner-border text-primary mb-3" role="status">
-            <span class="visually-hidden">Loading...</span>
+<div class="card mt-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0"><i class="bi bi-trash me-2"></i>Data Management</h5>
+    </div>
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <p class="mb-0">Clear all session data, uploaded files, and cache files to free up space and start fresh.</p>
+                <p class="text-muted small">This will remove all uploaded guides, submissions, results, and temporary files.</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <form action="{{ url_for('clear_all') }}" method="post" id="clearAllForm">
+                    <button type="submit" class="btn btn-danger" id="clearAllButton"
+                            data-confirm="Are you sure you want to clear all data and cache files? This action cannot be undone."
+                            data-loading-text="Clearing Data...">
+                        <i class="bi bi-trash me-1"></i> Clear All Data & Cache
+                    </button>
+                </form>
+            </div>
         </div>
-        <h5>Processing...</h5>
-        <p class="text-muted">This may take a few moments.</p>
     </div>
 </div>
+
+<!-- Loaders are now handled by the loader.js component -->
 {% endblock %}
 
 {% block extra_js %}
 <script>
     // Make file upload areas work
     document.addEventListener('DOMContentLoaded', function() {
+        // File upload handlers
         document.getElementById('guideFile').addEventListener('change', function() {
             if (this.files.length > 0) {
+                // Show loader for guide upload
+                const guideButton = document.getElementById('guideButton');
+                toggleButtonLoader(guideButton, true);
+
+                // Create a simple loader
+                const loader = new Loader({
+                    type: 'spinner',
+                    text: 'Uploading Marking Guide...',
+                    subText: 'Please wait while we process your file'
+                });
+                loader.show();
+
+                // Submit the form
                 document.getElementById('guideForm').submit();
             }
         });
-        
+
         document.getElementById('submissionFile').addEventListener('change', function() {
             if (this.files.length > 0) {
+                // Show loader for submission upload
+                const submissionButton = document.getElementById('submissionButton');
+                toggleButtonLoader(submissionButton, true);
+
+                // Create a simple loader
+                const loader = new Loader({
+                    type: 'pulse',
+                    text: 'Uploading Submission...',
+                    subText: 'This may take a moment if OCR is needed'
+                });
+                loader.show();
+
+                // Submit the form
                 document.getElementById('submissionForm').submit();
             }
         });
+
+        // Make file upload areas clickable
+        document.querySelectorAll('.file-upload-area').forEach(area => {
+            area.addEventListener('click', function() {
+                const fileInput = this.querySelector('input[type="file"]');
+                if (fileInput) {
+                    fileInput.click();
+                }
+            });
+        });
+
+        // Add confirmation for buttons
+        document.querySelectorAll('[data-confirm]').forEach(button => {
+            button.addEventListener('click', function(e) {
+                if (!confirm(this.getAttribute('data-confirm'))) {
+                    e.preventDefault();
+                }
+            });
+        });
+
+        // Add progress tracking for mapping and grading
+        document.querySelector('form[action*="map_submission"]')?.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Show button loader
+            const mapButton = this.querySelector('button[type="submit"]');
+            toggleButtonLoader(mapButton, true);
+
+            // Create a loader first (will be replaced by progress tracker)
+            const loader = new Loader({
+                type: 'dots',
+                text: 'Initializing Mapping...',
+                subText: 'Preparing to analyze submission'
+            });
+            loader.show();
+
+            // Create a progress tracker for the mapping process
+            fetch('/api/progress', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    operation_type: 'llm',
+                    task_name: 'Mapping Submission',
+                    total_steps: 3
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Hide the simple loader
+                loader.hide();
+
+                if (data.id) {
+                    // Start tracking progress
+                    progressTracker.startTracking(data.id, 'llm');
+
+                    // Submit the form
+                    this.submit();
+                } else {
+                    // Submit the form without progress tracking
+                    this.submit();
+                }
+            })
+            .catch(error => {
+                console.error('Error creating progress tracker:', error);
+                // Hide the simple loader
+                loader.hide();
+
+                // Show a generic loader instead
+                globalLoader.updateText('Mapping Submission...', 'Progress tracking unavailable');
+                globalLoader.show();
+
+                // Submit the form anyway
+                this.submit();
+            });
+        });
+
+        document.querySelector('form[action*="grade_submission"]')?.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Show button loader
+            const gradeButton = this.querySelector('button[type="submit"]');
+            toggleButtonLoader(gradeButton, true);
+
+            // Create a loader first (will be replaced by progress tracker)
+            const loader = new Loader({
+                type: 'dots',
+                text: 'Initializing Grading...',
+                subText: 'Preparing to evaluate submission'
+            });
+            loader.show();
+
+            // Create a progress tracker for the grading process
+            fetch('/api/progress', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    operation_type: 'llm',
+                    task_name: 'Grading Submission',
+                    total_steps: 5
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Hide the simple loader
+                loader.hide();
+
+                if (data.id) {
+                    // Start tracking progress
+                    progressTracker.startTracking(data.id, 'llm');
+
+                    // Submit the form
+                    this.submit();
+                } else {
+                    // Submit the form without progress tracking
+                    this.submit();
+                }
+            })
+            .catch(error => {
+                console.error('Error creating progress tracker:', error);
+                // Hide the simple loader
+                loader.hide();
+
+                // Show a generic loader instead
+                globalLoader.updateText('Grading Submission...', 'Progress tracking unavailable');
+                globalLoader.show();
+
+                // Submit the form anyway
+                this.submit();
+            });
+        });
+
+        // Add loader for clear all button
+        document.getElementById('clearAllForm')?.addEventListener('submit', function(e) {
+            // This will only run after the user has confirmed
+            const clearButton = document.getElementById('clearAllButton');
+            toggleButtonLoader(clearButton, true);
+
+            // Show a loader
+            const loader = new Loader({
+                type: 'spinner',
+                text: 'Clearing All Data...',
+                subText: 'Removing all files and cache'
+            });
+            loader.show();
+        });
+
+        // Check for active OCR trackers
+        {% if session.get('last_submission', {}).get('ocr_tracker_id') %}
+            // Start tracking progress for OCR
+            progressTracker.startTracking('{{ session.get("last_submission", {}).get("ocr_tracker_id") }}', 'ocr');
+        {% endif %}
     });
 </script>
-{% endblock %} 
+{% endblock %}

@@ -1,97 +1,134 @@
-{% extends "base.html" %}
-
-{% block title %}Student Submission - Exam Grader{% endblock %}
-
-{% block content %}
+{% extends "base.html" %} {% block title %}Student Submission - Exam Grader{%
+endblock %} {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="mb-0">
-        <i class="bi bi-file-text text-info me-2"></i>
-        Student Submission
-    </h1>
-    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
-        <i class="bi bi-arrow-left me-1"></i> Back to Home
-    </a>
+  <h1 class="mb-0">
+    <i class="bi bi-file-text text-info me-2"></i>
+    Student Submission
+  </h1>
+  <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+    <i class="bi bi-arrow-left me-1"></i> Back to Home
+  </a>
 </div>
 
 <div class="card mb-4">
-    <div class="card-header bg-info text-white">
-        <h5 class="mb-0">Submission Details</h5>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-4 mb-3">
-                <div class="p-3 bg-light rounded">
-                    <h6 class="mb-1">Filename</h6>
-                    <div class="text-break">{{ submission.filename }}</div>
-                </div>
-            </div>
-            <div class="col-md-4 mb-3">
-                <div class="p-3 bg-light rounded">
-                    <h6 class="mb-1">Upload Time</h6>
-                    <div>{{ submission.upload_time|format_date }}</div>
-                </div>
-            </div>
-            <div class="col-md-4 mb-3">
-                <div class="p-3 bg-light rounded">
-                    <h6 class="mb-1">Size</h6>
-                    <div>{{ "%.2f"|format(submission.file_size / 1024) }} KB</div>
-                </div>
-            </div>
+  <div class="card-header bg-info text-white">
+    <h5 class="mb-0">Submission Details</h5>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-4 mb-3">
+        <div class="p-3 bg-light rounded">
+          <h6 class="mb-1">Filename</h6>
+          <div class="text-break">{{ submission.filename }}</div>
         </div>
+      </div>
+      <div class="col-md-4 mb-3">
+        <div class="p-3 bg-light rounded">
+          <h6 class="mb-1">Upload Time</h6>
+          <div>{{ submission.upload_time|format_date }}</div>
+        </div>
+      </div>
+      <div class="col-md-4 mb-3">
+        <div class="p-3 bg-light rounded">
+          <h6 class="mb-1">Size</h6>
+          <div>{{ "%.2f"|format(submission.file_size / 1024) }} KB</div>
+        </div>
+      </div>
     </div>
+  </div>
 </div>
 
 <div class="card">
-    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Content</h5>
-        <form action="{{ url_for('clear_submission') }}" method="post" class="d-inline">
-            <button type="submit" class="btn btn-sm btn-outline-light" data-confirm="Are you sure you want to clear this submission?">
-                <i class="bi bi-trash me-1"></i> Clear Submission
-            </button>
-        </form>
+  <div
+    class="card-header bg-info text-white d-flex justify-content-between align-items-center"
+  >
+    <div>
+      <h5 class="mb-0">Raw Submission Content</h5>
+      <small class="text-white-50"
+        >{{ submission.raw_text|length }} characters extracted</small
+      >
     </div>
-    <div class="card-body">
-        <div class="bg-light p-3 rounded submission-content">
-            {{ submission.raw_text|nl2br }}
-        </div>
+    <form
+      action="{{ url_for('clear_submission') }}"
+      method="post"
+      class="d-inline"
+    >
+      <button
+        type="submit"
+        class="btn btn-sm btn-outline-light"
+        data-confirm="Are you sure you want to clear this submission?"
+      >
+        <i class="bi bi-trash me-1"></i> Clear Submission
+      </button>
+    </form>
+  </div>
+  <div class="card-body">
+    <div class="bg-light p-3 rounded submission-content">
+      {{ submission.raw_text|nl2br }}
     </div>
+  </div>
 </div>
 
 <div class="d-flex justify-content-between mt-4">
-    <a href="{{ url_for('index') }}" class="btn btn-secondary">
-        <i class="bi bi-arrow-left me-1"></i> Back to Home
+  <a href="{{ url_for('index') }}" class="btn btn-secondary">
+    <i class="bi bi-arrow-left me-1"></i> Back to Home
+  </a>
+
+  <div>
+    {% if session.get('guide_uploaded') %}
+    <a href="{{ url_for('view_guide') }}" class="btn btn-primary">
+      <i class="bi bi-journal-text me-1"></i> View Guide
     </a>
-    
-    <div>
-        {% if session.get('guide_uploaded') %}
-        <a href="{{ url_for('view_guide') }}" class="btn btn-primary">
-            <i class="bi bi-journal-text me-1"></i> View Guide
-        </a>
-        
-        <form action="{{ url_for('map_submission') }}" method="post" class="d-inline">
-            <button type="submit" class="btn btn-success ms-2">
-                <i class="bi bi-diagram-3 me-1"></i> Map Submission
-            </button>
-        </form>
-        
-        <form action="{{ url_for('grade_submission') }}" method="post" class="d-inline">
-            <button type="submit" class="btn btn-primary ms-2">
-                <i class="bi bi-award me-1"></i> Grade Submission
-            </button>
-        </form>
-        {% endif %}
-    </div>
+
+    <form
+      action="{{ url_for('map_submission') }}"
+      method="post"
+      class="d-inline"
+    >
+      <button type="submit" class="btn btn-success ms-2">
+        <i class="bi bi-diagram-3 me-1"></i> Map Submission
+      </button>
+    </form>
+
+    <form
+      action="{{ url_for('grade_submission') }}"
+      method="post"
+      class="d-inline"
+    >
+      <button type="submit" class="btn btn-primary ms-2">
+        <i class="bi bi-award me-1"></i> Grade Submission
+      </button>
+    </form>
+    {% endif %}
+  </div>
 </div>
 
-{% endblock %}
-
-{% block extra_css %}
+{% endblock %} {% block extra_css %}
 <style>
-    .submission-content {
-        max-height: 60vh;
-        overflow-y: auto;
-        font-family: var(--font-mono);
-        line-height: 1.6;
-    }
+  .submission-content {
+    max-height: 60vh;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    line-height: 1.6;
+  }
 </style>
-{% endblock %} 
+{% endblock %} {% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+      // Check if we have an OCR tracker ID
+      {% if submission.ocr_tracker_id %}
+          // Start tracking progress
+          progressTracker.startTracking('{{ submission.ocr_tracker_id }}', 'ocr');
+      {% endif %}
+
+      // Add confirmation for buttons
+      document.querySelectorAll('[data-confirm]').forEach(button => {
+          button.addEventListener('click', function(e) {
+              if (!confirm(this.getAttribute('data-confirm'))) {
+                  e.preventDefault();
+              }
+          });
+      });
+  });
+</script>
+{% endblock %}

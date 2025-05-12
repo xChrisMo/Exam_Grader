@@ -1,295 +1,362 @@
-{% extends "base.html" %}
-
-{% block title %}Mapping Results - Exam Grader{% endblock %}
-
-{% block content %}
+{% extends "base.html" %} {% block title %}Mapping Results - Exam Grader{%
+endblock %} {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="mb-0">
-        <i class="bi bi-diagram-3 text-success me-2"></i>
-        Mapping Results
-    </h1>
-    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
-        <i class="bi bi-arrow-left me-1"></i> Back to Home
-    </a>
+  <h1 class="mb-0">
+    <i class="bi bi-diagram-3 text-success me-2"></i>
+    Mapping Results
+  </h1>
+  <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+    <i class="bi bi-arrow-left me-1"></i> Back to Home
+  </a>
 </div>
 
 <div class="card mb-4">
-    <div class="card-header bg-success text-white">
-        <h5 class="mb-0">Mapping Summary</h5>
-    </div>
-    <div class="card-body">
-        <div class="row text-center">
-            <div class="col-md-3 mb-3">
-                <div class="p-3 bg-light rounded">
-                    <h2 class="display-5 fw-bold text-success">{{ mapping_result.metadata.mapping_count }}</h2>
-                    <p class="mb-0">Questions Mapped</p>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="p-3 bg-light rounded">
-                    <h2 class="display-5 fw-bold text-warning">{{ mapping_result.unmapped_guide_items|length }}</h2>
-                    <p class="mb-0">Unmapped Guide Items</p>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="p-3 bg-light rounded">
-                    <h2 class="display-5 fw-bold text-danger">{{ mapping_result.unmapped_submission_items|length }}</h2>
-                    <p class="mb-0">Unmapped Submission Items</p>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="p-3 bg-light rounded">
-                    <h2 class="display-5 fw-bold text-primary">
-                        {% set total_score = 0 %}
-                        {% for mapping in mapping_result.mappings %}
-                            {% if mapping.max_score is defined %}
-                                {% set total_score = total_score + mapping.max_score %}
-                            {% endif %}
-                        {% endfor %}
-                        {{ total_score }}
-                    </h2>
-                    <p class="mb-0">Total Points Available</p>
-                </div>
-            </div>
+  <div class="card-header bg-success text-white">
+    <h5 class="mb-0">Raw Text Mapping Summary</h5>
+    <small class="text-white-50"
+      >AI-generated mapping between raw guide and submission text</small
+    >
+  </div>
+  <div class="card-body">
+    <div class="row text-center">
+      <div class="col-md-3 mb-3">
+        <div class="p-3 bg-light rounded">
+          <h2 class="display-5 fw-bold text-success">
+            {{ mapping_result.metadata.mapping_count }}
+          </h2>
+          <p class="mb-0">Questions Mapped</p>
         </div>
+      </div>
+      <div class="col-md-3 mb-3">
+        <div class="p-3 bg-light rounded">
+          <h2 class="display-5 fw-bold text-warning">
+            {{ mapping_result.unmapped_guide_items|length }}
+          </h2>
+          <p class="mb-0">Unmapped Guide Items</p>
+        </div>
+      </div>
+      <div class="col-md-3 mb-3">
+        <div class="p-3 bg-light rounded">
+          <h2 class="display-5 fw-bold text-danger">
+            {{ mapping_result.unmapped_submission_items|length }}
+          </h2>
+          <p class="mb-0">Unmapped Submission Items</p>
+        </div>
+      </div>
+      <div class="col-md-3 mb-3">
+        <div class="p-3 bg-light rounded">
+          <h2 class="display-5 fw-bold text-primary">
+            {% set total_score = 0 %} {% for mapping in mapping_result.mappings
+            %} {% if mapping.max_score is defined %} {% set total_score =
+            total_score + mapping.max_score %} {% endif %} {% endfor %} {{
+            total_score }}
+          </h2>
+          <p class="mb-0">Total Points Available</p>
+        </div>
+      </div>
     </div>
+  </div>
 </div>
 
 <!-- Mapped Questions and Answers -->
 <div class="card mb-4">
-    <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">Mapped Questions and Answers</h5>
+  <div class="card-header bg-primary text-white">
+    <h5 class="mb-0">Mapped Text Sections</h5>
+    <small class="text-white-50"
+      >AI-identified matching sections between guide and submission</small
+    >
+  </div>
+  <div class="card-body">
+    {% if mapping_result.mappings %}
+    <div class="table-responsive">
+      <table class="table table-striped table-hover">
+        <thead class="table-light">
+          <tr>
+            <th style="width: 5%">#</th>
+            <th style="width: 25%">Guide Text</th>
+            <th style="width: 15%">Guide Context</th>
+            <th style="width: 25%">Submission Text</th>
+            <th style="width: 10%">Marks</th>
+            <th style="width: 20%">Match Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for mapping in mapping_result.mappings %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>
+              <div class="guide-text">
+                {{ mapping.guide_text|truncate(150) }}
+              </div>
+              {% if mapping.guide_id %}
+              <span class="badge bg-primary">ID: {{ mapping.guide_id }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="guide-answer small">
+                {{ (mapping.guide_answer or "")|truncate(150) }}
+              </div>
+            </td>
+            <td>
+              <div class="submission-answer small">
+                {{ mapping.submission_answer|truncate(150) }}
+              </div>
+              {% if mapping.submission_id %}
+              <span class="badge bg-info">ID: {{ mapping.submission_id }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if mapping.mark_verification %}
+              <div class="mark-verification">
+                <div class="d-flex align-items-center mb-1">
+                  <span
+                    class="badge {% if mapping.mark_verification.mark_match %}bg-success{% else %}bg-danger{% endif %}"
+                  >
+                    {{ mapping.mark_verification.guide_marks }} marks
+                  </span>
+                  {% if mapping.mark_verification.mark_match %}
+                  <i class="bi bi-check-circle-fill text-success ms-1"></i>
+                  {% else %}
+                  <i class="bi bi-x-circle-fill text-danger ms-1"></i>
+                  {% endif %}
+                </div>
+                {% if mapping.mark_verification.mark_breakdown %}
+                <div class="mark-breakdown small">
+                  {% if mapping.mark_verification.mark_breakdown.main_question
+                  %}
+                  <div>
+                    Main: {{
+                    mapping.mark_verification.mark_breakdown.main_question }}
+                    marks
+                  </div>
+                  {% endif %} {% if
+                  mapping.mark_verification.mark_breakdown.sub_questions %}
+                  <div class="mt-1">
+                    {% for sub_q in
+                    mapping.mark_verification.mark_breakdown.sub_questions %}
+                    <div class="sub-question-mark">
+                      <small>{{ sub_q.marks }} marks</small>
+                    </div>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
+                </div>
+                {% endif %}
+              </div>
+              {% else %}
+              <span class="badge bg-secondary">No marks specified</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if mapping.match_score is defined %}
+              <div class="d-flex flex-column">
+                <div class="progress mb-2" style="height: 20px">
+                  {% set score = (mapping.match_score * 100)|int %}
+                  <div
+                    class="progress-bar {% if score >= 80 %}bg-success {% elif score >= 60 %}bg-info {% elif score >= 40 %}bg-warning {% else %}bg-danger{% endif %}"
+                    role="progressbar"
+                    style="width: {{ score }}%;"
+                    aria-valuenow="{{ score }}"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                  >
+                    {{ score }}%
+                  </div>
+                </div>
+                <small class="text-muted">
+                  {% if score >= 80 %}
+                  <i class="bi bi-check-circle-fill text-success"></i> Excellent
+                  match {% elif score >= 60 %}
+                  <i class="bi bi-info-circle-fill text-info"></i> Good match {%
+                  elif score >= 40 %}
+                  <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+                  Partial match {% else %}
+                  <i class="bi bi-x-circle-fill text-danger"></i> Poor match {%
+                  endif %}
+                </small>
+              </div>
+              {% else %}
+              <span class="badge bg-secondary">N/A</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-    <div class="card-body">
-        {% if mapping_result.mappings %}
-            <div class="table-responsive">
-                <table class="table table-striped table-hover">
-                    <thead class="table-light">
-                        <tr>
-                            <th style="width: 5%">#</th>
-                            <th style="width: 20%">Guide Question</th>
-                            <th style="width: 20%">Guide Answer</th>
-                            <th style="width: 20%">Student Answer</th>
-                            <th style="width: 15%">Marks</th>
-                            <th style="width: 20%">Match Score</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for mapping in mapping_result.mappings %}
-                        <tr>
-                            <td>{{ loop.index }}</td>
-                            <td>
-                                <div class="guide-text">{{ mapping.guide_text|truncate(150) }}</div>
-                                {% if mapping.guide_id %}
-                                <span class="badge bg-primary">ID: {{ mapping.guide_id }}</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <div class="guide-answer small">{{ (mapping.guide_answer or "")|truncate(150) }}</div>
-                            </td>
-                            <td>
-                                <div class="submission-answer small">{{ mapping.submission_answer|truncate(150) }}</div>
-                                {% if mapping.submission_id %}
-                                <span class="badge bg-info">ID: {{ mapping.submission_id }}</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if mapping.mark_verification %}
-                                <div class="mark-verification">
-                                    <div class="d-flex align-items-center mb-1">
-                                        <span class="badge {% if mapping.mark_verification.mark_match %}bg-success{% else %}bg-danger{% endif %}">
-                                            {{ mapping.mark_verification.guide_marks }} marks
-                                        </span>
-                                        {% if mapping.mark_verification.mark_match %}
-                                        <i class="bi bi-check-circle-fill text-success ms-1"></i>
-                                        {% else %}
-                                        <i class="bi bi-x-circle-fill text-danger ms-1"></i>
-                                        {% endif %}
-                                    </div>
-                                    {% if mapping.mark_verification.mark_breakdown %}
-                                    <div class="mark-breakdown small">
-                                        {% if mapping.mark_verification.mark_breakdown.main_question %}
-                                        <div>Main: {{ mapping.mark_verification.mark_breakdown.main_question }} marks</div>
-                                        {% endif %}
-                                        {% if mapping.mark_verification.mark_breakdown.sub_questions %}
-                                        <div class="mt-1">
-                                            {% for sub_q in mapping.mark_verification.mark_breakdown.sub_questions %}
-                                            <div class="sub-question-mark">
-                                                <small>{{ sub_q.marks }} marks</small>
-                                            </div>
-                                            {% endfor %}
-                                        </div>
-                                        {% endif %}
-                                    </div>
-                                    {% endif %}
-                                </div>
-                                {% else %}
-                                <span class="badge bg-secondary">No marks specified</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if mapping.match_score is defined %}
-                                <div class="d-flex flex-column">
-                                    <div class="progress mb-2" style="height: 20px;">
-                                        {% set score = (mapping.match_score * 100)|int %}
-                                        <div class="progress-bar 
-                                            {% if score >= 80 %}bg-success
-                                            {% elif score >= 60 %}bg-info
-                                            {% elif score >= 40 %}bg-warning
-                                            {% else %}bg-danger{% endif %}" 
-                                            role="progressbar" 
-                                            style="width: {{ score }}%;" 
-                                            aria-valuenow="{{ score }}" 
-                                            aria-valuemin="0" 
-                                            aria-valuemax="100">{{ score }}%</div>
-                                    </div>
-                                    <small class="text-muted">
-                                        {% if score >= 80 %}
-                                            <i class="bi bi-check-circle-fill text-success"></i> Excellent match
-                                        {% elif score >= 60 %}
-                                            <i class="bi bi-info-circle-fill text-info"></i> Good match
-                                        {% elif score >= 40 %}
-                                            <i class="bi bi-exclamation-triangle-fill text-warning"></i> Partial match
-                                        {% else %}
-                                            <i class="bi bi-x-circle-fill text-danger"></i> Poor match
-                                        {% endif %}
-                                    </small>
-                                </div>
-                                {% else %}
-                                <span class="badge bg-secondary">N/A</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="alert alert-info">
-                <i class="bi bi-info-circle me-2"></i>
-                No mappings found between guide questions and submission answers.
-            </div>
-        {% endif %}
+    {% else %}
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-2"></i>
+      No mappings found between guide text and submission text sections.
     </div>
+    {% endif %}
+  </div>
 </div>
 
 <!-- Unmapped Sections -->
 <div class="row">
-    <!-- Unmapped Guide Items -->
-    <div class="col-md-6">
-        <div class="card mb-4">
-            <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0">Unmapped Guide Questions</h5>
+  <!-- Unmapped Guide Items -->
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">Unmapped Guide Sections</h5>
+        <small class="text-dark-50"
+          >Guide text sections without matching submission content</small
+        >
+      </div>
+      <div class="card-body">
+        {% if mapping_result.unmapped_guide_items %}
+        <div class="list-group">
+          {% for item in mapping_result.unmapped_guide_items %}
+          <div class="list-group-item">
+            <div class="guide-text">{{ item.text|truncate(150) }}</div>
+            {% if item.id %}
+            <span class="badge bg-primary">ID: {{ item.id }}</span>
+            {% endif %} {% if item.type %}
+            <span class="badge bg-secondary">Type: {{ item.type }}</span>
+            {% endif %} {% if item.max_score %}
+            <span class="badge bg-success">{{ item.max_score }} points</span>
+            {% endif %} {% if item.answer %}
+            <div class="guide-answer small text-muted mt-2">
+              <strong>Answer:</strong> {{ item.answer|truncate(100) }}
             </div>
-            <div class="card-body">
-                {% if mapping_result.unmapped_guide_items %}
-                    <div class="list-group">
-                        {% for item in mapping_result.unmapped_guide_items %}
-                        <div class="list-group-item">
-                            <div class="guide-text">{{ item.text|truncate(150) }}</div>
-                            {% if item.id %}
-                            <span class="badge bg-primary">ID: {{ item.id }}</span>
-                            {% endif %}
-                            {% if item.type %}
-                            <span class="badge bg-secondary">Type: {{ item.type }}</span>
-                            {% endif %}
-                            {% if item.max_score %}
-                            <span class="badge bg-success">{{ item.max_score }} points</span>
-                            {% endif %}
-                            {% if item.answer %}
-                            <div class="guide-answer small text-muted mt-2">
-                                <strong>Answer:</strong> {{ item.answer|truncate(100) }}
-                            </div>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <div class="alert alert-success">
-                        <i class="bi bi-check-circle me-2"></i>
-                        All guide questions have been mapped to submission answers!
-                    </div>
-                {% endif %}
-            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
         </div>
-    </div>
-    
-    <!-- Unmapped Submission Items -->
-    <div class="col-md-6">
-        <div class="card mb-4">
-            <div class="card-header bg-danger text-white">
-                <h5 class="mb-0">Unmapped Submission Answers</h5>
-            </div>
-            <div class="card-body">
-                {% if mapping_result.unmapped_submission_items %}
-                    <div class="list-group">
-                        {% for item in mapping_result.unmapped_submission_items %}
-                        <div class="list-group-item">
-                            <div class="submission-text">{{ item.text|truncate(150) }}</div>
-                            {% if item.id %}
-                            <span class="badge bg-info">ID: {{ item.id }}</span>
-                            {% endif %}
-                            {% if item.type %}
-                            <span class="badge bg-secondary">Type: {{ item.type }}</span>
-                            {% endif %}
-                            {% if item.answer %}
-                            <div class="submission-answer small text-muted mt-2">
-                                <strong>Answer:</strong> {{ item.answer|truncate(100) }}
-                            </div>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <div class="alert alert-success">
-                        <i class="bi bi-check-circle me-2"></i>
-                        All submission answers have been mapped to guide questions!
-                    </div>
-                {% endif %}
-            </div>
+        {% else %}
+        <div class="alert alert-success">
+          <i class="bi bi-check-circle me-2"></i>
+          All guide text sections have been mapped to submission content!
         </div>
+        {% endif %}
+      </div>
     </div>
+  </div>
+
+  <!-- Unmapped Submission Items -->
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header bg-danger text-white">
+        <h5 class="mb-0">Unmapped Submission Sections</h5>
+        <small class="text-white-50"
+          >Submission text sections without matching guide content</small
+        >
+      </div>
+      <div class="card-body">
+        {% if mapping_result.unmapped_submission_items %}
+        <div class="list-group">
+          {% for item in mapping_result.unmapped_submission_items %}
+          <div class="list-group-item">
+            <div class="submission-text">{{ item.text|truncate(150) }}</div>
+            {% if item.id %}
+            <span class="badge bg-info">ID: {{ item.id }}</span>
+            {% endif %} {% if item.type %}
+            <span class="badge bg-secondary">Type: {{ item.type }}</span>
+            {% endif %} {% if item.answer %}
+            <div class="submission-answer small text-muted mt-2">
+              <strong>Answer:</strong> {{ item.answer|truncate(100) }}
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-success">
+          <i class="bi bi-check-circle me-2"></i>
+          All submission text sections have been mapped to guide content!
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Actions -->
 <div class="card mb-4">
-    <div class="card-header bg-secondary text-white">
-        <h5 class="mb-0">Actions</h5>
+  <div class="card-header bg-secondary text-white">
+    <h5 class="mb-0">Actions</h5>
+  </div>
+  <div class="card-body">
+    <div class="d-flex justify-content-between">
+      <a href="{{ url_for('view_guide') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-file-text me-1"></i> View Marking Guide
+      </a>
+      <a
+        href="{{ url_for('view_submission') }}"
+        class="btn btn-outline-secondary"
+      >
+        <i class="bi bi-file-text me-1"></i> View Submission
+      </a>
+      <form action="{{ url_for('grade_submission') }}" method="post">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-award me-1"></i> Grade Submission
+        </button>
+      </form>
     </div>
-    <div class="card-body">
-        <div class="d-flex justify-content-between">
-            <a href="{{ url_for('view_guide') }}" class="btn btn-outline-secondary">
-                <i class="bi bi-file-text me-1"></i> View Marking Guide
-            </a>
-            <a href="{{ url_for('view_submission') }}" class="btn btn-outline-secondary">
-                <i class="bi bi-file-text me-1"></i> View Submission
-            </a>
-            <form action="{{ url_for('grade_submission') }}" method="post">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-award me-1"></i> Grade Submission
-                </button>
-            </form>
-        </div>
-    </div>
+  </div>
 </div>
-{% endblock %}
-
-{% block extra_css %}
+{% endblock %} {% block extra_css %}
 <style>
-    .guide-text, .submission-text {
-        white-space: pre-wrap;
-        font-family: var(--font-mono);
-        font-size: 0.9rem;
-    }
-    .mark-verification {
-        font-size: 0.9rem;
-    }
-    .mark-breakdown {
-        color: #6c757d;
-    }
-    .sub-question-mark {
-        font-size: 0.8rem;
-        padding-left: 1rem;
-    }
+  .guide-text,
+  .submission-text {
+    white-space: pre-wrap;
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+  }
+  .mark-verification {
+    font-size: 0.9rem;
+  }
+  .mark-breakdown {
+    color: #6c757d;
+  }
+  .sub-question-mark {
+    font-size: 0.8rem;
+    padding-left: 1rem;
+  }
 </style>
-{% endblock %} 
+{% endblock %} {% block extra_js %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Add event listener for the grade submission button
+    const gradeForm = document.querySelector(
+      'form[action*="grade_submission"]'
+    );
+    if (gradeForm) {
+      gradeForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        // Create a progress tracker for the grading process
+        fetch("/api/progress", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            operation_type: "llm",
+            task_name: "Grading Submission",
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.id) {
+              // Start tracking progress
+              progressTracker.startTracking(data.id, "llm");
+
+              // Submit the form
+              this.submit();
+            } else {
+              // Submit the form without progress tracking
+              this.submit();
+            }
+          })
+          .catch((error) => {
+            console.error("Error creating progress tracker:", error);
+            // Submit the form anyway
+            this.submit();
+          });
+      });
+    }
+  });
+</script>
+{% endblock %}

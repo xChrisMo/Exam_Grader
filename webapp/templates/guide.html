@@ -1,62 +1,75 @@
-{% extends "base.html" %}
-
-{% block title %}Marking Guide - Exam Grader{% endblock %}
-
-{% block content %}
+{% extends "base.html" %} {% block title %}Marking Guide - Exam Grader{%
+endblock %} {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="mb-0">
-        <i class="bi bi-journal-text text-primary me-2"></i>
-        Marking Guide
-    </h1>
-    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
-        <i class="bi bi-arrow-left me-1"></i> Back to Home
-    </a>
+  <h1 class="mb-0">
+    <i class="bi bi-journal-text text-primary me-2"></i>
+    Marking Guide
+  </h1>
+  <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+    <i class="bi bi-arrow-left me-1"></i> Back to Home
+  </a>
 </div>
 
 <div class="card">
-    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Guide Content</h5>
-        <form action="{{ url_for('clear_guide') }}" method="post" class="d-inline">
-            <button type="submit" class="btn btn-sm btn-outline-light" data-confirm="Are you sure you want to clear this guide?">
-                <i class="bi bi-trash me-1"></i> Clear Guide
-            </button>
-        </form>
+  <div
+    class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+  >
+    <div>
+      <h5 class="mb-0">Raw Guide Content</h5>
+      <small class="text-white-50"
+        >{{ guide_content|length }} characters extracted</small
+      >
     </div>
-    <div class="card-body">
-        <div class="bg-light p-3 rounded guide-content" style="white-space: pre-wrap;">
-            {{ guide_content }}
-        </div>
+    <form action="{{ url_for('clear_guide') }}" method="post" class="d-inline">
+      <button
+        type="submit"
+        class="btn btn-sm btn-outline-light"
+        data-confirm="Are you sure you want to clear this guide?"
+      >
+        <i class="bi bi-trash me-1"></i> Clear Guide
+      </button>
+    </form>
+  </div>
+  <div class="card-body">
+    <div
+      class="bg-light p-3 rounded guide-content"
+      style="white-space: pre-wrap"
+    >
+      {{ guide_content }}
     </div>
+  </div>
 </div>
 
 <div class="d-flex justify-content-between mt-4">
-    <a href="{{ url_for('index') }}" class="btn btn-secondary">
-        <i class="bi bi-arrow-left me-1"></i> Back to Home
-    </a>
-    
-    {% if session.get('last_submission') %}
-    <div>
-        <a href="{{ url_for('view_submission') }}" class="btn btn-info text-white">
-            <i class="bi bi-file-text me-1"></i> View Submission
-        </a>
-        
-        <form action="{{ url_for('grade_submission') }}" method="post" class="d-inline">
-            <button type="submit" class="btn btn-success ms-2">
-                <i class="bi bi-award me-1"></i> Grade Submission
-            </button>
-        </form>
-    </div>
-    {% endif %}
-</div>
-{% endblock %}
+  <a href="{{ url_for('index') }}" class="btn btn-secondary">
+    <i class="bi bi-arrow-left me-1"></i> Back to Home
+  </a>
 
-{% block extra_css %}
+  {% if session.get('last_submission') %}
+  <div>
+    <a href="{{ url_for('view_submission') }}" class="btn btn-info text-white">
+      <i class="bi bi-file-text me-1"></i> View Submission
+    </a>
+
+    <form
+      action="{{ url_for('grade_submission') }}"
+      method="post"
+      class="d-inline"
+    >
+      <button type="submit" class="btn btn-success ms-2">
+        <i class="bi bi-award me-1"></i> Grade Submission
+      </button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %} {% block extra_css %}
 <style>
-    .guide-content {
-        max-height: 70vh;
-        overflow-y: auto;
-        font-family: var(--font-mono);
-        line-height: 1.6;
-    }
+  .guide-content {
+    max-height: 70vh;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    line-height: 1.6;
+  }
 </style>
-{% endblock %} 
+{% endblock %}
