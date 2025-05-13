@@ -388,11 +388,24 @@ def create_app():
                 session['mapping_in_progress'] = False
                 return redirect(url_for('index'))
 
+            # Get the number of questions parameter
+            num_questions = request.form.get('num_questions', '1')
+            try:
+                num_questions = int(num_questions)
+                if num_questions < 1:
+                    num_questions = 1
+            except ValueError:
+                num_questions = 1
+
+            # Store in session for future reference
+            session['num_questions'] = num_questions
+
             # Map the submission to the guide
-            logger.info("Mapping submission to marking guide criteria...")
+            logger.info(f"Mapping submission to marking guide criteria with {num_questions} questions to answer...")
             mapping_result, error = mapping_service.map_submission_to_guide(
                 marking_guide_content=guide_content,
-                student_submission_content=submission_content
+                student_submission_content=submission_content,
+                num_questions=num_questions
             )
 
             if error:

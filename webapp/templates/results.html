@@ -35,6 +35,10 @@ endblock %} {% block content %}
           ({{ result.overall_score|default(0) }} / {{
           result.max_possible_score|default(100) }} marks)
         </p>
+        <div class="mt-2 small text-info">
+          <i class="bi bi-info-circle"></i> Based on the best {{
+          session.get('num_questions', 1) }} answers
+        </div>
         {% if result.metadata.total_marks_available is defined and
         result.metadata.total_marks_available != result.max_possible_score %}
         <div class="mt-2 small text-warning">
@@ -57,6 +61,16 @@ endblock %} {% block content %}
                 <h6 class="mb-0">Questions Graded</h6>
                 <span class="badge bg-primary">
                   {{ result.metadata.total_questions|default(0) }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6 mb-3">
+            <div class="p-3 bg-light rounded">
+              <div class="d-flex justify-content-between">
+                <h6 class="mb-0">Questions to Answer</h6>
+                <span class="badge bg-primary">
+                  {{ session.get('num_questions', 1) }}
                 </span>
               </div>
             </div>

@@ -166,6 +166,12 @@
                 <p class="text-muted small">This helps visualize how each part of the submission relates to specific criteria in the guide.</p>
 
                 <form action="{{ url_for('map_submission') }}" method="post" class="d-grid gap-2">
+                    <div class="mb-3">
+                        <label for="num_questions" class="form-label">Number of questions to answer:</label>
+                        <input type="number" class="form-control" id="num_questions" name="num_questions" min="1" value="1">
+                        <div class="form-text">Specify how many questions the student should answer from the marking guide.</div>
+                    </div>
+
                     <button type="submit" class="btn btn-success"
                             {{ 'disabled' if not session.get('guide_uploaded') or not session.get('last_submission') }}
                             data-loading-text="Mapping Submission...">

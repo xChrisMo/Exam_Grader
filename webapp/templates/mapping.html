@@ -38,11 +38,10 @@ endblock %} {% block content %}
       </div>
       <div class="col-md-3 mb-3">
         <div class="p-3 bg-light rounded">
-          <h2 class="display-5 fw-bold text-warning">
-            {{ mapping_result.unmapped_guide_items|length if
-            mapping_result.unmapped_guide_items else 0 }}
+          <h2 class="display-5 fw-bold text-primary">
+            {{ session.get('num_questions', 1) }}
           </h2>
-          <p class="mb-0">Unmapped Guide Items</p>
+          <p class="mb-0">Questions to Answer</p>
         </div>
       </div>
       <div class="col-md-3 mb-3">
@@ -74,11 +73,29 @@ endblock %} {% block content %}
       <strong>Guide Type:</strong>
       {% if mapping_result.metadata.guide_type == "questions" %} This marking
       guide contains <strong>questions</strong> that students need to answer.
-      The mapping shows how student answers match with guide questions. {% elif
-      mapping_result.metadata.guide_type == "answers" %} This marking guide
-      contains <strong>model answers</strong> to questions. The mapping shows
-      how student answers match with guide answers for the same questions. {%
-      else %} The guide type could not be determined. Basic text matching was
+      The mapping shows how student answers match with guide questions.
+      <div class="mt-2">
+        <strong>Number of Questions to Answer:</strong> {{
+        session.get('num_questions', 1) }}
+        <p class="small text-muted mt-1">
+          The AI has identified the best {{ session.get('num_questions', 1) }}
+          answers in the student submission and mapped them to the corresponding
+          questions in the marking guide.
+        </p>
+      </div>
+      {% elif mapping_result.metadata.guide_type == "answers" %} This marking
+      guide contains <strong>model answers</strong> to questions. The mapping
+      shows how student answers match with guide answers for the same questions.
+      <div class="mt-2">
+        <strong>Number of Questions to Answer:</strong> {{
+        session.get('num_questions', 1) }}
+        <p class="small text-muted mt-1">
+          The AI has identified the best {{ session.get('num_questions', 1) }}
+          answers in the student submission and mapped them to the corresponding
+          model answers in the marking guide.
+        </p>
+      </div>
+      {% else %} The guide type could not be determined. Basic text matching was
       used. {% endif %}
     </div>
   </div>
@@ -123,6 +140,13 @@ endblock %} {% block content %}
             <tr>
               <td>{{ loop.index }}</td>
               <td>
+                {% if mapping.parent_question %}
+                <div class="parent-question mb-2">
+                  <span class="badge bg-info"
+                    >Part of Question {{ mapping.parent_question }}</span
+                  >
+                </div>
+                {% endif %}
                 <div class="guide-text">
                   {{ mapping.guide_text|truncate(150) }}
                 </div>
@@ -621,6 +645,9 @@ endblock %} {% block content %}
   .sub-question-mark {
     font-size: 0.8rem;
     padding-left: 1rem;
+  }
+  .parent-question {
+    margin-bottom: 0.5rem;
   }
   .match-reason {
     font-size: 0.9rem;
