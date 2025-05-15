@@ -5,115 +5,137 @@ endblock %} {% block content %}
     <i class="bi bi-award text-primary me-2"></i>
     Grading Results
   </h1>
-  <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
-    <i class="bi bi-arrow-left me-1"></i> Back to Home
-  </a>
+  <div>
+    <a href="{{ url_for('download_excel') }}" class="btn btn-success me-2">
+      <i class="bi bi-file-excel me-1"></i> Download Excel
+    </a>
+    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+      <i class="bi bi-arrow-left me-1"></i> Back to Home
+    </a>
+  </div>
 </div>
 
 <!-- Score Overview -->
-<div class="card mb-4">
-  <div class="card-header bg-primary text-white">
-    <h5 class="mb-0">Score Overview</h5>
+<div class="card mb-4 border-0 shadow-sm">
+  <div class="card-header bg-gradient-primary text-white">
+    <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Score Overview</h5>
   </div>
   <div class="card-body">
     <div class="row align-items-center">
       <div class="col-md-4 text-center mb-4 mb-md-0">
-        <div
-          class="score-circle mb-2 {% if result.percent_score is defined and result.percent_score >= 80 %}bg-success {% elif result.percent_score is defined and result.percent_score >= 60 %}bg-primary {% elif result.percent_score is defined and result.percent_score >= 40 %}bg-warning {% else %}bg-danger{% endif %}"
-        >
-          {{
-          result.normalized_score|default(result.percent_score)|default(0)|round|int
-          }}%
-        </div>
-        <h5>Overall Score</h5>
-        <p class="text-muted mb-0">
-          Score: {{
-          result.normalized_score|default(result.percent_score)|default(0)|round|int
-          }}/100
-        </p>
-        <p class="text-muted small mb-0">
-          ({{ result.overall_score|default(0) }} / {{
-          result.max_possible_score|default(100) }} marks)
-        </p>
-        <div class="mt-2 small text-info">
-          <i class="bi bi-info-circle"></i> Based on the best {{
-          session.get('num_questions', 1) }} answers
-        </div>
-        {% if result.metadata.total_marks_available is defined and
-        result.metadata.total_marks_available != result.max_possible_score %}
-        <div class="mt-2 small text-warning">
-          <i class="bi bi-info-circle"></i> Total marks available in guide: {{
-          result.metadata.total_marks_available }}
-        </div>
-        {% endif %} {% if result.letter_grade is defined %}
-        <div class="mt-2">
-          <span class="badge bg-primary fs-5"
-            >Grade: {{ result.letter_grade }}</span
+        <div class="score-container">
+          <div
+            class="score-circle mb-3 {% if result.percent_score is defined and result.percent_score >= 80 %}bg-gradient-success {% elif result.percent_score is defined and result.percent_score >= 60 %}bg-gradient-primary {% elif result.percent_score is defined and result.percent_score >= 40 %}bg-gradient-warning {% else %}bg-gradient-danger{% endif %}"
           >
+            {% set display_score = result.percent_score|default(0)|round|int %}
+            {{ display_score }}%
+          </div>
+          <h4 class="mb-2">Overall Score</h4>
+          <div class="score-details">
+            <div class="d-flex justify-content-center align-items-center mb-2">
+              <span class="badge bg-primary fs-5 px-3 py-2"
+                >{{ result.letter_grade|default('N/A') }}</span
+              >
+            </div>
+            <p class="text-muted mb-1">
+              <strong>{{ result.overall_score|default(0) }}</strong> out of
+              <strong>{{ result.max_possible_score|default(100) }}</strong>
+              marks
+            </p>
+            <div class="mt-2 small text-info">
+              <i class="bi bi-info-circle"></i> Based on the best {{
+              session.get('num_questions', 1) }} answers
+            </div>
+            {% if result.metadata.total_marks_available is defined and
+            result.metadata.total_marks_available != result.max_possible_score
+            %}
+            <div class="mt-2 small text-warning">
+              <i class="bi bi-info-circle"></i> Total marks available in guide:
+              {{ result.metadata.total_marks_available }}
+            </div>
+            {% endif %}
+          </div>
         </div>
-        {% endif %}
       </div>
       <div class="col-md-8">
         <div class="row">
           <div class="col-md-6 mb-3">
-            <div class="p-3 bg-light rounded">
-              <div class="d-flex justify-content-between">
-                <h6 class="mb-0">Questions Graded</h6>
-                <span class="badge bg-primary">
+            <div class="stat-card">
+              <div class="stat-icon bg-primary-light">
+                <i class="bi bi-list-check text-primary"></i>
+              </div>
+              <div class="stat-content">
+                <h6 class="stat-title">Questions Graded</h6>
+                <div class="stat-value">
                   {{ result.metadata.total_questions|default(0) }}
-                </span>
+                </div>
               </div>
             </div>
           </div>
           <div class="col-md-6 mb-3">
-            <div class="p-3 bg-light rounded">
-              <div class="d-flex justify-content-between">
-                <h6 class="mb-0">Questions to Answer</h6>
-                <span class="badge bg-primary">
+            <div class="stat-card">
+              <div class="stat-icon bg-success-light">
+                <i class="bi bi-check2-square text-success"></i>
+              </div>
+              <div class="stat-content">
+                <h6 class="stat-title">Questions to Answer</h6>
+                <div class="stat-value">
                   {{ session.get('num_questions', 1) }}
-                </span>
+                </div>
               </div>
             </div>
           </div>
           <div class="col-md-6 mb-3">
-            <div class="p-3 bg-light rounded">
-              <div class="d-flex justify-content-between">
-                <h6 class="mb-0">Graded At</h6>
-                <span class="badge bg-secondary">
+            <div class="stat-card">
+              <div class="stat-icon bg-info-light">
+                <i class="bi bi-calendar-check text-info"></i>
+              </div>
+              <div class="stat-content">
+                <h6 class="stat-title">Graded At</h6>
+                <div class="stat-value small">
                   {{ result.metadata.graded_at|format_date }}
-                </span>
+                </div>
               </div>
             </div>
           </div>
           <div class="col-md-6 mb-3">
-            <div class="p-3 bg-light rounded">
-              <div class="d-flex justify-content-between">
-                <h6 class="mb-0">Grading Method</h6>
-                <span class="badge bg-info">
+            <div class="stat-card">
+              <div class="stat-icon bg-secondary-light">
+                <i class="bi bi-gear text-secondary"></i>
+              </div>
+              <div class="stat-content">
+                <h6 class="stat-title">Grading Method</h6>
+                <div class="stat-value">
                   {{ result.metadata.grading_method|default('Similarity') }}
-                </span>
+                </div>
               </div>
             </div>
           </div>
           <div class="col-md-6 mb-3">
-            <div class="p-3 bg-light rounded">
-              <div class="d-flex justify-content-between">
-                <h6 class="mb-0">Total Marks Available</h6>
-                <span class="badge bg-success">
+            <div class="stat-card">
+              <div class="stat-icon bg-success-light">
+                <i class="bi bi-trophy text-success"></i>
+              </div>
+              <div class="stat-content">
+                <h6 class="stat-title">Total Marks Available</h6>
+                <div class="stat-value">
                   {{
                   result.metadata.total_marks_available|default(result.max_possible_score)
                   }}
-                </span>
+                </div>
               </div>
             </div>
           </div>
           <div class="col-md-6 mb-3">
-            <div class="p-3 bg-light rounded">
-              <div class="d-flex justify-content-between">
-                <h6 class="mb-0">Guide Type</h6>
-                <span class="badge bg-secondary">
+            <div class="stat-card">
+              <div class="stat-icon bg-warning-light">
+                <i class="bi bi-journal-text text-warning"></i>
+              </div>
+              <div class="stat-content">
+                <h6 class="stat-title">Guide Type</h6>
+                <div class="stat-value">
                   {{ result.metadata.guide_type|default('Unknown')|title }}
-                </span>
+                </div>
               </div>
             </div>
           </div>
@@ -124,296 +146,428 @@ endblock %} {% block content %}
 </div>
 
 <!-- Detailed Feedback -->
-{% if result.detailed_feedback is defined %}
-<div class="card mb-4">
-  <div class="card-header bg-primary text-white">
-    <h5 class="mb-0">Detailed Feedback</h5>
+{% if result.detailed_feedback is defined or result.strengths is defined or
+result.weaknesses is defined %}
+<div class="card mb-4 border-0 shadow-sm">
+  <div class="card-header bg-gradient-primary text-white">
+    <h5 class="mb-0">
+      <i class="bi bi-chat-square-text me-2"></i>Detailed Feedback
+    </h5>
   </div>
-  <div class="card-body">
-    <div class="row">
-      <div class="col-md-12">
-        {% if result.detailed_feedback.strengths %}
-        <h5 class="text-success">
-          <i class="bi bi-check-circle me-2"></i>Strengths
-        </h5>
-        <ul class="list-group mb-4">
-          {% for strength in result.detailed_feedback.strengths %}
-          <li class="list-group-item">
-            <i class="bi bi-check-circle-fill text-success me-2"></i>
-            {{ strength }}
-          </li>
-          {% endfor %}
-        </ul>
-        {% endif %} {% if result.detailed_feedback.weaknesses %}
-        <h5 class="text-warning">
-          <i class="bi bi-exclamation-triangle me-2"></i>Areas to Improve
-        </h5>
-        <ul class="list-group mb-4">
-          {% for weakness in result.detailed_feedback.weaknesses %}
-          <li class="list-group-item">
-            <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
-            {{ weakness }}
-          </li>
-          {% endfor %}
-        </ul>
-        {% endif %} {% if result.detailed_feedback.improvement_suggestions %}
-        <h5 class="text-info">
+  <div class="card-body p-0">
+    <div class="row g-0">
+      <!-- Strengths Column -->
+      <div class="col-md-6 border-end">
+        <div class="p-4">
+          <h5 class="text-success d-flex align-items-center">
+            <i class="bi bi-check-circle me-2"></i>Strengths
+          </h5>
+          {% if result.detailed_feedback.strengths|default(result.strengths,
+          [])|length > 0 %}
+          <div class="feedback-list strengths-list">
+            {% for strength in
+            result.detailed_feedback.strengths|default(result.strengths, []) %}
+            <div class="feedback-item strength-item">
+              <div class="feedback-icon">
+                <i class="bi bi-check-circle-fill"></i>
+              </div>
+              <div class="feedback-text">{{ strength }}</div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="alert alert-light border">
+            <i class="bi bi-info-circle me-2"></i>No specific strengths were
+            identified.
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Weaknesses Column -->
+      <div class="col-md-6">
+        <div class="p-4">
+          <h5 class="text-warning d-flex align-items-center">
+            <i class="bi bi-exclamation-triangle me-2"></i>Areas to Improve
+          </h5>
+          {% if result.detailed_feedback.weaknesses|default(result.weaknesses,
+          [])|length > 0 %}
+          <div class="feedback-list weaknesses-list">
+            {% for weakness in
+            result.detailed_feedback.weaknesses|default(result.weaknesses, [])
+            %}
+            <div class="feedback-item weakness-item">
+              <div class="feedback-icon">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+              </div>
+              <div class="feedback-text">{{ weakness }}</div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="alert alert-light border">
+            <i class="bi bi-info-circle me-2"></i>No specific areas for
+            improvement were identified.
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Improvement Suggestions -->
+    {% if result.detailed_feedback.improvement_suggestions|default([])|length >
+    0 %}
+    <div class="border-top">
+      <div class="p-4">
+        <h5 class="text-info d-flex align-items-center">
           <i class="bi bi-lightbulb me-2"></i>Suggestions for Improvement
         </h5>
-        <ul class="list-group mb-4">
+        <div class="feedback-list suggestions-list">
           {% for suggestion in result.detailed_feedback.improvement_suggestions
           %}
-          <li class="list-group-item">
-            <i class="bi bi-lightbulb-fill text-info me-2"></i>
-            {{ suggestion }}
-          </li>
+          <div class="feedback-item suggestion-item">
+            <div class="feedback-icon">
+              <i class="bi bi-lightbulb-fill"></i>
+            </div>
+            <div class="feedback-text">{{ suggestion }}</div>
+          </div>
           {% endfor %}
-        </ul>
-        {% endif %}
+        </div>
       </div>
     </div>
-  </div>
-</div>
-{% elif result.strengths is defined or result.weaknesses is defined %}
-<div class="card mb-4">
-  <div class="card-header bg-primary text-white">
-    <h5 class="mb-0">Detailed Feedback</h5>
-  </div>
-  <div class="card-body">
-    <div class="row">
-      <div class="col-md-12">
-        {% if result.strengths %}
-        <h5 class="text-success">
-          <i class="bi bi-check-circle me-2"></i>Strengths
-        </h5>
-        <ul class="list-group mb-4">
-          {% for strength in result.strengths %}
-          <li class="list-group-item">
-            <i class="bi bi-check-circle-fill text-success me-2"></i>
-            {{ strength }}
-          </li>
-          {% endfor %}
-        </ul>
-        {% endif %} {% if result.weaknesses %}
-        <h5 class="text-warning">
-          <i class="bi bi-exclamation-triangle me-2"></i>Areas to Improve
-        </h5>
-        <ul class="list-group mb-4">
-          {% for weakness in result.weaknesses %}
-          <li class="list-group-item">
-            <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
-            {{ weakness }}
-          </li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-      </div>
-    </div>
+    {% endif %}
   </div>
 </div>
 {% endif %}
 
 <!-- Question Scores -->
 {% if result.criteria_scores is defined and result.criteria_scores %}
-<div class="card mb-4">
-  <div class="card-header bg-primary text-white">
-    <h5 class="mb-0">Question Scores</h5>
+<div class="card mb-4 border-0 shadow-sm">
+  <div class="card-header bg-gradient-primary text-white">
+    <h5 class="mb-0"><i class="bi bi-list-check me-2"></i>Question Scores</h5>
   </div>
   <div class="card-body">
     <div class="table-responsive">
-      <table class="table table-striped">
-        <thead>
+      <table class="table table-hover">
+        <thead class="table-light">
           <tr>
-            <th>Question</th>
-            <th class="text-center">Score</th>
-            <th class="text-center">Max</th>
-            <th class="text-center">Match %</th>
-            <th class="text-center">Details</th>
+            <th style="width: 50%">Question</th>
+            <th class="text-center" style="width: 12%">Score</th>
+            <th class="text-center" style="width: 12%">Max</th>
+            <th class="text-center" style="width: 15%">Match %</th>
+            <th class="text-center" style="width: 11%">Details</th>
           </tr>
         </thead>
         <tbody>
           {% for criteria in result.criteria_scores %}
-          <tr>
+          <tr class="align-middle">
             <td>
-              {{ criteria.description }} {% if criteria.feedback %}
-              <small class="d-block text-muted mt-1"
-                >{{ criteria.feedback }}</small
-              >
+              <div class="question-text">{{ criteria.description }}</div>
+              {% if criteria.feedback %}
+              <div class="feedback-preview text-muted small mt-1">
+                <i class="bi bi-chat-quote me-1"></i>{{
+                criteria.feedback|truncate(80) }}
+              </div>
               {% endif %}
             </td>
-            <td class="text-center">{{ criteria.points_earned|default(0) }}</td>
             <td class="text-center">
-              {{ criteria.points_possible|default(0) }}
+              <span
+                class="badge {% if (criteria.points_earned / criteria.points_possible) >= 0.8 %}bg-success{% elif (criteria.points_earned / criteria.points_possible) >= 0.6 %}bg-primary{% elif (criteria.points_earned / criteria.points_possible) >= 0.4 %}bg-warning{% else %}bg-danger{% endif %} fs-6 px-2 py-1"
+              >
+                {{ criteria.points_earned|default(0) }}
+              </span>
+            </td>
+            <td class="text-center">
+              <span class="badge bg-secondary fs-6 px-2 py-1">
+                {{ criteria.points_possible|default(0) }}
+              </span>
             </td>
             <td>
               {% if criteria.similarity is defined %}
-              <div class="progress" style="height: 20px">
+              <div class="progress" style="height: 10px">
                 {% set score = (criteria.similarity * 100)|int %}
                 <div
-                  class="progress-bar {% if score >= 80 %}bg-success {% elif score >= 60 %}bg-info {% elif score >= 40 %}bg-warning {% else %}bg-danger{% endif %}"
+                  class="progress-bar {% if score >= 80 %}bg-success {% elif score >= 60 %}bg-primary {% elif score >= 40 %}bg-warning {% else %}bg-danger{% endif %}"
                   role="progressbar"
                   style="width: {{ score }}%;"
                   aria-valuenow="{{ score }}"
                   aria-valuemin="0"
                   aria-valuemax="100"
-                >
-                  {{ score }}%
-                </div>
+                ></div>
               </div>
+              <div class="text-center mt-1 small">{{ score }}%</div>
               {% else %}
               <span class="badge bg-secondary">N/A</span>
               {% endif %}
             </td>
             <td class="text-center">
               <button
-                class="btn btn-sm btn-outline-primary"
+                class="btn btn-sm btn-outline-primary rounded-pill"
                 type="button"
                 data-bs-toggle="collapse"
                 data-bs-target="#details-{{ loop.index }}"
                 aria-expanded="false"
               >
-                <i class="bi bi-info-circle"></i> Details
+                <i class="bi bi-info-circle me-1"></i> View
               </button>
             </td>
           </tr>
-          <tr class="collapse" id="details-{{ loop.index }}">
-            <td colspan="5" class="bg-light">
-              <div class="row">
-                <div class="col-md-6">
-                  <h6>Model Answer:</h6>
-                  <div class="p-2 bg-white border rounded mb-3">
-                    {{ criteria.guide_answer|nl2br }}
-                  </div>
-
-                  {% if criteria.detailed_feedback and
-                  criteria.detailed_feedback.key_points %}
-                  <div class="mb-3">
-                    <h6>Key Points:</h6>
-                    {% if criteria.detailed_feedback.key_points.matched %}
-                    <div class="mb-2">
-                      <strong class="text-success">Matched:</strong>
-                      <ul class="mb-0 ps-3">
-                        {% for point in
-                        criteria.detailed_feedback.key_points.matched %}
-                        <li>{{ point }}</li>
-                        {% endfor %}
-                      </ul>
+          <tr class="collapse bg-light" id="details-{{ loop.index }}">
+            <td colspan="5" class="p-0">
+              <div class="p-3">
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="card border-0 shadow-sm mb-3">
+                      <div class="card-header bg-success-light">
+                        <h6 class="mb-0 text-success">
+                          <i class="bi bi-check-circle me-2"></i>Model Answer
+                        </h6>
+                      </div>
+                      <div class="card-body">
+                        <div class="model-answer">
+                          {{ criteria.guide_answer|nl2br }}
+                        </div>
+                      </div>
                     </div>
-                    {% endif %} {% if
-                    criteria.detailed_feedback.key_points.partially_matched %}
-                    <div class="mb-2">
-                      <strong class="text-warning">Partially Matched:</strong>
-                      <ul class="mb-0 ps-3">
-                        {% for point in
+
+                    {% if criteria.detailed_feedback and
+                    criteria.detailed_feedback.key_points %}
+                    <div class="card border-0 shadow-sm">
+                      <div class="card-header bg-info-light">
+                        <h6 class="mb-0 text-info">
+                          <i class="bi bi-key me-2"></i>Key Points
+                        </h6>
+                      </div>
+                      <div class="card-body">
+                        {% if criteria.detailed_feedback.key_points.matched %}
+                        <div class="mb-2">
+                          <div class="d-flex align-items-center mb-1">
+                            <span class="badge bg-success me-2"
+                              ><i class="bi bi-check"></i
+                            ></span>
+                            <strong>Matched Points</strong>
+                          </div>
+                          <ul class="key-points-list matched-points">
+                            {% for point in
+                            criteria.detailed_feedback.key_points.matched %}
+                            <li>{{ point }}</li>
+                            {% endfor %}
+                          </ul>
+                        </div>
+                        {% endif %} {% if
                         criteria.detailed_feedback.key_points.partially_matched
                         %}
-                        <li>{{ point }}</li>
-                        {% endfor %}
-                      </ul>
-                    </div>
-                    {% endif %} {% if
-                    criteria.detailed_feedback.key_points.missed %}
-                    <div>
-                      <strong class="text-danger">Missed:</strong>
-                      <ul class="mb-0 ps-3">
-                        {% for point in
+                        <div class="mb-2">
+                          <div class="d-flex align-items-center mb-1">
+                            <span class="badge bg-warning me-2"
+                              ><i class="bi bi-dash"></i
+                            ></span>
+                            <strong>Partially Matched</strong>
+                          </div>
+                          <ul class="key-points-list partial-points">
+                            {% for point in
+                            criteria.detailed_feedback.key_points.partially_matched
+                            %}
+                            <li>{{ point }}</li>
+                            {% endfor %}
+                          </ul>
+                        </div>
+                        {% endif %} {% if
                         criteria.detailed_feedback.key_points.missed %}
-                        <li>{{ point }}</li>
-                        {% endfor %}
-                      </ul>
+                        <div>
+                          <div class="d-flex align-items-center mb-1">
+                            <span class="badge bg-danger me-2"
+                              ><i class="bi bi-x"></i
+                            ></span>
+                            <strong>Missed Points</strong>
+                          </div>
+                          <ul class="key-points-list missed-points">
+                            {% for point in
+                            criteria.detailed_feedback.key_points.missed %}
+                            <li>{{ point }}</li>
+                            {% endfor %}
+                          </ul>
+                        </div>
+                        {% endif %}
+                      </div>
                     </div>
                     {% endif %}
                   </div>
-                  {% endif %}
-                </div>
-                <div class="col-md-6">
-                  <h6>Student Answer:</h6>
-                  <div class="p-2 bg-white border rounded">
-                    {{ criteria.student_answer|nl2br }}
-                  </div>
 
-                  <div class="mt-3">
-                    <h6>Grading Breakdown:</h6>
-                    <table class="table table-sm">
-                      <thead>
-                        <tr>
-                          <th>Criteria</th>
-                          <th>Score</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {% if criteria.match_score is defined %}
-                        <tr>
-                          <td>Text Match Score</td>
-                          <td>{{ (criteria.match_score * 100)|round|int }}%</td>
-                        </tr>
-                        {% endif %} {% if criteria.answer_score is defined %}
-                        <tr>
-                          <td>Answer Similarity</td>
-                          <td>
-                            {{ (criteria.answer_score * 100)|round|int }}%
-                          </td>
-                        </tr>
-                        {% endif %} {% if criteria.keyword_score is defined %}
-                        <tr>
-                          <td>Keyword Match</td>
-                          <td>
-                            {{ (criteria.keyword_score * 100)|round|int }}%
-                          </td>
-                        </tr>
-                        {% endif %} {% if criteria.match_reason %}
-                        <tr>
-                          <td colspan="2" class="text-muted small">
-                            <strong>Match details:</strong> {{
-                            criteria.match_reason }}
-                          </td>
-                        </tr>
-                        {% endif %} {% if criteria.detailed_feedback and
-                        criteria.detailed_feedback.breakdown %} {% if
-                        criteria.detailed_feedback.breakdown.content_accuracy %}
-                        <tr>
-                          <td>Content Accuracy (40%)</td>
-                          <td>
-                            {{
-                            criteria.detailed_feedback.breakdown.content_accuracy.score
-                            }}/10
-                          </td>
-                        </tr>
-                        {% endif %} {% if
-                        criteria.detailed_feedback.breakdown.completeness %}
-                        <tr>
-                          <td>Completeness (30%)</td>
-                          <td>
-                            {{
-                            criteria.detailed_feedback.breakdown.completeness.score
-                            }}/10
-                          </td>
-                        </tr>
-                        {% endif %} {% if
-                        criteria.detailed_feedback.breakdown.understanding %}
-                        <tr>
-                          <td>Understanding (20%)</td>
-                          <td>
-                            {{
-                            criteria.detailed_feedback.breakdown.understanding.score
-                            }}/10
-                          </td>
-                        </tr>
-                        {% endif %} {% if
-                        criteria.detailed_feedback.breakdown.clarity %}
-                        <tr>
-                          <td>Clarity (10%)</td>
-                          <td>
-                            {{
-                            criteria.detailed_feedback.breakdown.clarity.score
-                            }}/10
-                          </td>
-                        </tr>
-                        {% endif %} {% endif %}
-                      </tbody>
-                    </table>
+                  <div class="col-md-6">
+                    <div class="card border-0 shadow-sm mb-3">
+                      <div class="card-header bg-primary-light">
+                        <h6 class="mb-0 text-primary">
+                          <i class="bi bi-pencil me-2"></i>Student Answer
+                        </h6>
+                      </div>
+                      <div class="card-body">
+                        <div class="student-answer">
+                          {{ criteria.student_answer|nl2br }}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="card border-0 shadow-sm">
+                      <div class="card-header bg-secondary-light">
+                        <h6 class="mb-0 text-secondary">
+                          <i class="bi bi-bar-chart me-2"></i>Grading Breakdown
+                        </h6>
+                      </div>
+                      <div class="card-body p-0">
+                        <div class="table-responsive">
+                          <table class="table table-sm mb-0">
+                            <tbody>
+                              {% if criteria.match_score is defined %}
+                              <tr>
+                                <td class="ps-3">Text Match Score</td>
+                                <td class="text-end pe-3">
+                                  <div
+                                    class="d-flex align-items-center justify-content-end"
+                                  >
+                                    <div
+                                      class="progress me-2"
+                                      style="width: 60px; height: 8px"
+                                    >
+                                      <div
+                                        class="progress-bar bg-primary"
+                                        style="width: {{ (criteria.match_score * 100)|round|int }}%"
+                                      ></div>
+                                    </div>
+                                    <span
+                                      >{{ (criteria.match_score * 100)|round|int
+                                      }}%</span
+                                    >
+                                  </div>
+                                </td>
+                              </tr>
+                              {% endif %} {% if criteria.answer_score is defined
+                              %}
+                              <tr>
+                                <td class="ps-3">Answer Similarity</td>
+                                <td class="text-end pe-3">
+                                  <div
+                                    class="d-flex align-items-center justify-content-end"
+                                  >
+                                    <div
+                                      class="progress me-2"
+                                      style="width: 60px; height: 8px"
+                                    >
+                                      <div
+                                        class="progress-bar bg-success"
+                                        style="width: {{ (criteria.answer_score * 100)|round|int }}%"
+                                      ></div>
+                                    </div>
+                                    <span
+                                      >{{ (criteria.answer_score *
+                                      100)|round|int }}%</span
+                                    >
+                                  </div>
+                                </td>
+                              </tr>
+                              {% endif %} {% if criteria.keyword_score is
+                              defined %}
+                              <tr>
+                                <td class="ps-3">Keyword Match</td>
+                                <td class="text-end pe-3">
+                                  <div
+                                    class="d-flex align-items-center justify-content-end"
+                                  >
+                                    <div
+                                      class="progress me-2"
+                                      style="width: 60px; height: 8px"
+                                    >
+                                      <div
+                                        class="progress-bar bg-info"
+                                        style="width: {{ (criteria.keyword_score * 100)|round|int }}%"
+                                      ></div>
+                                    </div>
+                                    <span
+                                      >{{ (criteria.keyword_score *
+                                      100)|round|int }}%</span
+                                    >
+                                  </div>
+                                </td>
+                              </tr>
+                              {% endif %} {% if criteria.match_reason %}
+                              <tr>
+                                <td
+                                  colspan="2"
+                                  class="text-muted small ps-3 pe-3"
+                                >
+                                  <div
+                                    class="alert alert-light border py-2 px-3 mb-0 mt-2"
+                                  >
+                                    <i class="bi bi-info-circle me-1"></i>{{
+                                    criteria.match_reason }}
+                                  </div>
+                                </td>
+                              </tr>
+                              {% endif %} {% if criteria.detailed_feedback and
+                              criteria.detailed_feedback.breakdown %} {% if
+                              criteria.detailed_feedback.breakdown.content_accuracy
+                              %}
+                              <tr>
+                                <td class="ps-3">Content Accuracy (40%)</td>
+                                <td class="text-end pe-3">
+                                  {{
+                                  criteria.detailed_feedback.breakdown.content_accuracy.score
+                                  }}/10
+                                </td>
+                              </tr>
+                              {% endif %} {% if
+                              criteria.detailed_feedback.breakdown.completeness
+                              %}
+                              <tr>
+                                <td class="ps-3">Completeness (30%)</td>
+                                <td class="text-end pe-3">
+                                  {{
+                                  criteria.detailed_feedback.breakdown.completeness.score
+                                  }}/10
+                                </td>
+                              </tr>
+                              {% endif %} {% if
+                              criteria.detailed_feedback.breakdown.understanding
+                              %}
+                              <tr>
+                                <td class="ps-3">Understanding (20%)</td>
+                                <td class="text-end pe-3">
+                                  {{
+                                  criteria.detailed_feedback.breakdown.understanding.score
+                                  }}/10
+                                </td>
+                              </tr>
+                              {% endif %} {% if
+                              criteria.detailed_feedback.breakdown.clarity %}
+                              <tr>
+                                <td class="ps-3">Clarity (10%)</td>
+                                <td class="text-end pe-3">
+                                  {{
+                                  criteria.detailed_feedback.breakdown.clarity.score
+                                  }}/10
+                                </td>
+                              </tr>
+                              {% endif %} {% endif %}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
+
+                {% if criteria.feedback %}
+                <div class="mt-3">
+                  <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-warning-light">
+                      <h6 class="mb-0 text-warning">
+                        <i class="bi bi-chat-left-text me-2"></i>Feedback
+                      </h6>
+                    </div>
+                    <div class="card-body">{{ criteria.feedback }}</div>
+                  </div>
+                </div>
+                {% endif %}
               </div>
             </td>
           </tr>
@@ -428,25 +582,30 @@ endblock %} {% block content %}
 <!-- Unmapped Guide Items Summary -->
 {% if result.metadata.unmapped_guide_count is defined and
 result.metadata.unmapped_guide_count > 0 %}
-<div class="card mb-4">
-  <div class="card-header bg-warning text-dark">
-    <h5 class="mb-0">Unmapped Guide Items</h5>
-    <small class="text-dark-50"
-      >Guide items that couldn't be matched to the submission</small
-    >
+<div class="card mb-4 border-0 shadow-sm">
+  <div class="card-header bg-gradient-warning text-dark">
+    <h5 class="mb-0">
+      <i class="bi bi-exclamation-triangle me-2"></i>Unmapped Guide Items
+    </h5>
   </div>
   <div class="card-body">
-    <div class="alert alert-warning">
-      <i class="bi bi-exclamation-triangle me-2"></i>
-      <strong>{{ result.metadata.unmapped_guide_count }} guide items</strong>
-      couldn't be matched to the submission.
-      <div class="mt-2">
-        <a
-          href="{{ url_for('view_mapping') }}"
-          class="btn btn-sm btn-outline-warning"
-        >
-          <i class="bi bi-diagram-3 me-1"></i> View Mapping Details
-        </a>
+    <div class="alert alert-warning border-warning">
+      <div class="d-flex align-items-center">
+        <div class="alert-icon me-3">
+          <i class="bi bi-exclamation-triangle-fill fs-3"></i>
+        </div>
+        <div class="alert-content">
+          <h5 class="alert-heading mb-1">Unmapped Content Detected</h5>
+          <p class="mb-2">
+            <strong
+              >{{ result.metadata.unmapped_guide_count }} guide items</strong
+            >
+            couldn't be matched to the submission.
+          </p>
+          <a href="{{ url_for('view_mapping') }}" class="btn btn-warning">
+            <i class="bi bi-diagram-3 me-1"></i> View Mapping Details
+          </a>
+        </div>
       </div>
     </div>
   </div>
@@ -454,73 +613,93 @@ result.metadata.unmapped_guide_count > 0 %}
 {% endif %}
 
 <!-- Actions -->
-<div class="card mb-4">
-  <div class="card-header bg-secondary text-white">
-    <h5 class="mb-0">Actions</h5>
+<div class="card mb-4 border-0 shadow-sm">
+  <div class="card-header bg-gradient-secondary text-white">
+    <h5 class="mb-0"><i class="bi bi-tools me-2"></i>Actions</h5>
   </div>
   <div class="card-body">
-    <div class="row">
-      <div class="col-md-12 mb-3">
+    <div class="row g-3">
+      <div class="col-md-12">
         <a
           href="{{ url_for('view_detailed_results') }}"
-          class="btn btn-primary btn-lg w-100"
+          class="btn btn-primary btn-lg w-100 shadow-sm"
         >
-          <i class="bi bi-file-earmark-text me-1"></i> View Detailed Analysis &
+          <i class="bi bi-file-earmark-text me-2"></i> View Detailed Analysis &
           Suggestions
         </a>
       </div>
+      <div class="col-md-4">
+        <a
+          href="{{ url_for('view_mapping') }}"
+          class="btn btn-outline-secondary w-100"
+        >
+          <i class="bi bi-diagram-3 me-2"></i> View Mapping
+        </a>
+      </div>
+      <div class="col-md-4">
+        <a
+          href="{{ url_for('view_guide') }}"
+          class="btn btn-outline-secondary w-100"
+        >
+          <i class="bi bi-file-text me-2"></i> View Marking Guide
+        </a>
+      </div>
+      <div class="col-md-4">
+        <a
+          href="{{ url_for('view_submission') }}"
+          class="btn btn-outline-secondary w-100"
+        >
+          <i class="bi bi-file-text me-2"></i> View Submission
+        </a>
+      </div>
     </div>
-    <div class="d-flex justify-content-between mt-2">
-      <a href="{{ url_for('view_mapping') }}" class="btn btn-outline-secondary">
-        <i class="bi bi-diagram-3 me-1"></i> View Mapping
-      </a>
-      <a href="{{ url_for('view_guide') }}" class="btn btn-outline-secondary">
-        <i class="bi bi-file-text me-1"></i> View Marking Guide
-      </a>
-      <a
-        href="{{ url_for('view_submission') }}"
-        class="btn btn-outline-secondary"
+  </div>
+</div>
+
+<!-- Debug Information (Collapsible) -->
+<div class="card mb-4 border-0 shadow-sm">
+  <div class="card-header bg-gradient-secondary text-white">
+    <div class="d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="bi bi-bug me-2"></i>Debug Information</h5>
+      <button
+        class="btn btn-sm btn-light"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#debugInfo"
+        aria-expanded="false"
       >
-        <i class="bi bi-file-text me-1"></i> View Submission
-      </a>
+        <i class="bi bi-code-slash me-1"></i> Toggle Debug Data
+      </button>
+    </div>
+  </div>
+  <div class="collapse" id="debugInfo">
+    <div class="card-body">
+      <p class="text-muted">
+        This section shows the raw data structure to help diagnose any issues.
+      </p>
+      <pre
+        class="bg-light p-3 rounded"
+      ><code>{{ result|tojson(indent=2) }}</code></pre>
     </div>
   </div>
 </div>
 
-<!-- Debug Information -->
-<div class="card mb-4">
-  <div class="card-header bg-secondary text-white">
-    <h5 class="mb-0">Debug Information</h5>
-  </div>
-  <div class="card-body">
-    <p class="text-muted">
-      This section shows the raw data structure to help diagnose any issues.
-    </p>
-    <pre
-      class="bg-light p-3 rounded"
-    ><code>{{ result|tojson(indent=2) }}</code></pre>
-  </div>
-</div>
-
-<div class="d-flex justify-content-between mt-4">
-  <a href="{{ url_for('index') }}" class="btn btn-secondary">
+<div class="d-flex justify-content-between mt-4 mb-4">
+  <a href="{{ url_for('index') }}" class="btn btn-secondary shadow-sm">
     <i class="bi bi-arrow-left me-1"></i> Back to Home
   </a>
 
-  <div>
-    <a href="{{ url_for('download_excel') }}" class="btn btn-success me-2">
+  <div class="btn-group shadow-sm">
+    <a href="{{ url_for('download_excel') }}" class="btn btn-success">
       <i class="bi bi-file-excel me-1"></i> Download Excel
     </a>
-    <a
-      href="{{ url_for('view_detailed_results') }}"
-      class="btn btn-primary me-2"
-    >
+    <a href="{{ url_for('view_detailed_results') }}" class="btn btn-primary">
       <i class="bi bi-file-earmark-text me-1"></i> Detailed Results
     </a>
     <a
       href="{{ url_for('clear_all') }}"
       class="btn btn-danger"
-      onclick="return confirm('Are you sure you want to clear all data?');"
+      onclick="return confirm('Are you sure you want to clear all data? This action cannot be undone.');"
     >
       <i class="bi bi-trash me-1"></i> Clear All
     </a>
@@ -528,60 +707,228 @@ result.metadata.unmapped_guide_count > 0 %}
 </div>
 {% endblock %} {% block extra_css %}
 <style>
+  /* Score Circle */
   .score-circle {
-    width: 120px;
-    height: 120px;
+    width: 150px;
+    height: 150px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     margin: 0 auto;
-    font-size: 2rem;
+    font-size: 2.5rem;
     font-weight: bold;
     color: white;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
   }
 
+  .score-container {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background-color: rgba(248, 249, 250, 0.5);
+  }
+
+  .score-details {
+    max-width: 250px;
+    margin: 0 auto;
+  }
+
+  /* Stat Cards */
+  .stat-card {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background-color: #fff;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    height: 100%;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-right: 1rem;
+  }
+
+  .stat-content {
+    flex: 1;
+  }
+
+  .stat-title {
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
+    color: #6c757d;
+  }
+
+  .stat-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+
+  /* Feedback Items */
+  .feedback-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .feedback-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    background-color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s;
+  }
+
+  .feedback-item:hover {
+    transform: translateX(3px);
+  }
+
+  .strength-item {
+    border-left: 4px solid var(--bs-success);
+  }
+
+  .weakness-item {
+    border-left: 4px solid var(--bs-warning);
+  }
+
+  .suggestion-item {
+    border-left: 4px solid var(--bs-info);
+  }
+
+  .feedback-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin-right: 0.75rem;
+    font-size: 1rem;
+  }
+
+  .strength-item .feedback-icon {
+    color: var(--bs-success);
+  }
+
+  .weakness-item .feedback-icon {
+    color: var(--bs-warning);
+  }
+
+  .suggestion-item .feedback-icon {
+    color: var(--bs-info);
+  }
+
+  .feedback-text {
+    flex: 1;
+  }
+
+  /* Question Scores */
+  .question-text {
+    font-weight: 500;
+  }
+
+  .model-answer,
+  .student-answer {
+    white-space: pre-wrap;
+    font-size: 0.9rem;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .key-points-list {
+    padding-left: 1.5rem;
+    margin-bottom: 0;
+  }
+
+  .key-points-list li {
+    margin-bottom: 0.25rem;
+  }
+
+  .matched-points li {
+    color: var(--bs-success);
+  }
+
+  .partial-points li {
+    color: var(--bs-warning);
+  }
+
+  .missed-points li {
+    color: var(--bs-danger);
+  }
+
+  /* Alert Styling */
+  .alert-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+  }
+
+  /* Background Colors */
+  .bg-primary-light {
+    background-color: rgba(13, 110, 253, 0.1);
+  }
+
+  .bg-success-light {
+    background-color: rgba(25, 135, 84, 0.1);
+  }
+
+  .bg-warning-light {
+    background-color: rgba(255, 193, 7, 0.1);
+  }
+
+  .bg-danger-light {
+    background-color: rgba(220, 53, 69, 0.1);
+  }
+
+  .bg-info-light {
+    background-color: rgba(13, 202, 240, 0.1);
+  }
+
+  .bg-secondary-light {
+    background-color: rgba(108, 117, 125, 0.1);
+  }
+
+  /* Gradient Backgrounds */
+  .bg-gradient-primary {
+    background: linear-gradient(135deg, #0d6efd, #0a58ca);
+  }
+
+  .bg-gradient-success {
+    background: linear-gradient(135deg, #198754, #157347);
+  }
+
+  .bg-gradient-warning {
+    background: linear-gradient(135deg, #ffc107, #e0a800);
+  }
+
+  .bg-gradient-danger {
+    background: linear-gradient(135deg, #dc3545, #b02a37);
+  }
+
+  .bg-gradient-secondary {
+    background: linear-gradient(135deg, #6c757d, #5c636a);
+  }
+
+  /* Debug Section */
   pre code {
     font-family: monospace;
     white-space: pre-wrap;
     font-size: 0.85rem;
-  }
-
-  .progress {
-    background-color: #e9ecef;
-    border-radius: 0.25rem;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
-  }
-
-  .progress-bar {
-    transition: width 0.6s ease;
-  }
-
-  .guide-text,
-  .submission-text {
-    white-space: pre-wrap;
-    font-family: var(--font-mono);
-    font-size: 0.9rem;
-  }
-
-  .guide-answer,
-  .submission-answer {
-    white-space: pre-wrap;
-    font-family: var(--font-mono);
-    font-size: 0.85rem;
-  }
-
-  .marks-badge {
-    margin-top: 0.5rem;
-    font-weight: 500;
-  }
-
-  .list-group-item {
-    border-left: 4px solid #6c757d;
-  }
-
-  .list-group-item:hover {
-    background-color: #f8f9fa;
   }
 </style>
 {% endblock %}

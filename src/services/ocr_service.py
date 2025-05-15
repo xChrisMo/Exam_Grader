@@ -10,7 +10,6 @@ from pathlib import Path
 import mimetypes
 from datetime import datetime
 from utils.logger import logger
-from src.services.progress_tracker import progress_tracker
 
 class OCRServiceError(Exception):
     """Exception raised for errors in the OCR service."""
@@ -54,27 +53,21 @@ class OCRService:
         if ext not in supported_formats:
             raise OCRServiceError(f"Unsupported file format: {ext}")
 
-    def extract_text_from_image(self, file: Union[str, Path, BinaryIO], tracker_id: Optional[str] = None) -> Tuple[str, str]:
+    def extract_text_from_image(self, file: Union[str, Path, BinaryIO]) -> str:
         """
         Extract text from an image using OCR.
 
         Args:
             file: Path to the image file or file object
-            tracker_id: Optional progress tracker ID for monitoring progress
 
         Returns:
-            Tuple[str, str]: (Extracted text, Tracker ID)
+            str: Extracted text
 
         Raises:
             OCRServiceError: If OCR processing fails
         """
-        # Create a progress tracker if not provided
-        if not tracker_id:
-            tracker_id = progress_tracker.create_tracker(
-                operation_type="ocr",
-                task_name="Image Text Extraction",
-                total_steps=4
-            )
+        # Log the start of OCR processing
+        logger.info("Starting OCR text extraction...")
 
         try:
             # Step 1: Upload the document to process
@@ -111,32 +104,18 @@ class OCRService:
             # Step 3: Get the results
             text = self._get_document_result(document_id)
 
-            # Log completion instead of updating tracker
+            # Log completion
             logger.info(f"OCR processing completed successfully. Extracted {len(text)} characters.")
 
-            return text, tracker_id
+            return text
 
         except requests.exceptions.RequestException as e:
-            # Update progress - Network error
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                status="failed",
-                message=f"Network error during OCR request: {str(e)}",
-                completed=True,
-                success=False,
-                error=f"Network error: {str(e)}"
-            )
+            # Log network error
+            logger.error(f"Network error during OCR request: {str(e)}")
             raise OCRServiceError(f"Network error during OCR request: {str(e)}")
         except Exception as e:
-            # Update progress - General error
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                status="failed",
-                message=f"OCR processing failed: {str(e)}",
-                completed=True,
-                success=False,
-                error=str(e)
-            )
+            # Log general error
+            logger.error(f"OCR processing failed: {str(e)}")
             raise OCRServiceError(f"OCR processing failed: {str(e)}")
 
     def _upload_document(self, file: Union[str, Path, BinaryIO]) -> str:

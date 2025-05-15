@@ -1,0 +1,686 @@
+{% extends "base.html" %} {% block title %}Batch Grading Results - Exam Grader{%
+endblock %} {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1 class="mb-0">
+    <i class="bi bi-people text-primary me-2"></i>
+    Batch Grading Results
+  </h1>
+  <div>
+    <a
+      href="{{ url_for('download_batch_excel') }}"
+      class="btn btn-success me-2"
+    >
+      <i class="bi bi-file-excel me-1"></i> Download Excel
+    </a>
+    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+      <i class="bi bi-arrow-left me-1"></i> Back to Home
+    </a>
+  </div>
+</div>
+
+<!-- Summary Statistics -->
+<div class="card mb-4 border-0 shadow-sm">
+  <div class="card-header bg-gradient-primary text-white">
+    <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Summary Statistics</h5>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-4 text-center mb-4 mb-md-0">
+        <div class="score-container">
+          <div
+            class="score-circle mb-3 {% if summary.average_score >= 80 %}bg-gradient-success {% elif summary.average_score >= 60 %}bg-gradient-primary {% elif summary.average_score >= 40 %}bg-gradient-warning {% else %}bg-gradient-danger{% endif %}"
+          >
+            {{ summary.average_score|round|int }}%
+          </div>
+          <h4 class="mb-2">Average Score</h4>
+          <div class="score-details">
+            <p class="text-muted mb-1">
+              <strong>{{ summary.total_submissions }}</strong> submissions
+              graded
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-8">
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <div class="stat-card">
+              <div class="stat-icon bg-success-light">
+                <i class="bi bi-arrow-up-circle text-success"></i>
+              </div>
+              <div class="stat-content">
+                <h6 class="stat-title">Highest Score</h6>
+                <div class="stat-value">
+                  {{ summary.highest_score|round|int }}%
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6 mb-3">
+            <div class="stat-card">
+              <div class="stat-icon bg-danger-light">
+                <i class="bi bi-arrow-down-circle text-danger"></i>
+              </div>
+              <div class="stat-content">
+                <h6 class="stat-title">Lowest Score</h6>
+                <div class="stat-value">
+                  {{ summary.lowest_score|round|int }}%
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grade Distribution -->
+        <h5 class="mt-3 mb-2">Grade Distribution</h5>
+        <div class="grade-distribution mb-3">
+          <div class="progress" style="height: 30px">
+            {% set total = summary.total_submissions %} {% if total > 0 %} {%
+            set a_plus_percent = (summary.grade_distribution['A+'] / total *
+            100)|round|int %} {% set a_percent =
+            (summary.grade_distribution['A'] / total * 100)|round|int %} {% set
+            b_percent = (summary.grade_distribution['B'] / total *
+            100)|round|int %} {% set c_percent =
+            (summary.grade_distribution['C'] / total * 100)|round|int %} {% set
+            d_percent = (summary.grade_distribution['D'] / total *
+            100)|round|int %} {% set f_percent =
+            (summary.grade_distribution['F'] / total * 100)|round|int %}
+
+            <div
+              class="progress-bar bg-success"
+              style="width: {{ a_plus_percent }}%"
+              role="progressbar"
+            >
+              A+ ({{ summary.grade_distribution['A+'] }})
+            </div>
+            <div
+              class="progress-bar bg-success-light"
+              style="width: {{ a_percent }}%"
+              role="progressbar"
+            >
+              A ({{ summary.grade_distribution['A'] }})
+            </div>
+            <div
+              class="progress-bar bg-primary"
+              style="width: {{ b_percent }}%"
+              role="progressbar"
+            >
+              B ({{ summary.grade_distribution['B'] }})
+            </div>
+            <div
+              class="progress-bar bg-info"
+              style="width: {{ c_percent }}%"
+              role="progressbar"
+            >
+              C ({{ summary.grade_distribution['C'] }})
+            </div>
+            <div
+              class="progress-bar bg-warning"
+              style="width: {{ d_percent }}%"
+              role="progressbar"
+            >
+              D ({{ summary.grade_distribution['D'] }})
+            </div>
+            <div
+              class="progress-bar bg-danger"
+              style="width: {{ f_percent }}%"
+              role="progressbar"
+            >
+              F ({{ summary.grade_distribution['F'] }})
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="grade-legend d-flex flex-wrap justify-content-between">
+          <div class="grade-item">
+            <span class="badge bg-success">A+</span>
+            <span class="ms-1">{{ summary.grade_distribution['A+'] }}</span>
+          </div>
+          <div class="grade-item">
+            <span class="badge bg-success-light text-success">A</span>
+            <span class="ms-1">{{ summary.grade_distribution['A'] }}</span>
+          </div>
+          <div class="grade-item">
+            <span class="badge bg-primary">B</span>
+            <span class="ms-1">{{ summary.grade_distribution['B'] }}</span>
+          </div>
+          <div class="grade-item">
+            <span class="badge bg-info">C</span>
+            <span class="ms-1">{{ summary.grade_distribution['C'] }}</span>
+          </div>
+          <div class="grade-item">
+            <span class="badge bg-warning">D</span>
+            <span class="ms-1">{{ summary.grade_distribution['D'] }}</span>
+          </div>
+          <div class="grade-item">
+            <span class="badge bg-danger">F</span>
+            <span class="ms-1">{{ summary.grade_distribution['F'] }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Individual Results Table -->
+<div class="card mb-4 border-0 shadow-sm">
+  <div
+    class="card-header bg-gradient-primary text-white d-flex justify-content-between align-items-center"
+  >
+    <h5 class="mb-0"><i class="bi bi-table me-2"></i>Individual Results</h5>
+    <div class="d-flex align-items-center">
+      <span class="text-white me-2">Page:</span>
+      <div
+        class="btn-group pagination-controls"
+        role="group"
+        id="pagination-buttons"
+      >
+        <!-- Pagination buttons will be generated by JavaScript -->
+      </div>
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Student ID</th>
+            <th class="text-center">Score</th>
+            <th class="text-center">Grade</th>
+            <th class="text-center">Points</th>
+            <th class="text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="results-table-body">
+          <!-- Table rows will be populated by JavaScript -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer bg-light">
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <span class="text-muted"
+          >Showing <span id="page-start">1</span>-<span id="page-end">10</span>
+          of <span id="total-results">{{ results|length }}</span> results</span
+        >
+      </div>
+      <nav aria-label="Results pagination">
+        <ul class="pagination pagination-sm mb-0">
+          <li class="page-item" id="prev-page">
+            <a class="page-link" href="#" aria-label="Previous">
+              <span aria-hidden="true">&laquo;</span>
+            </a>
+          </li>
+          <li class="page-item" id="next-page">
+            <a class="page-link" href="#" aria-label="Next">
+              <span aria-hidden="true">&raquo;</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </div>
+</div>
+
+<!-- Result Detail Modal -->
+<div
+  class="modal fade"
+  id="resultDetailModal"
+  tabindex="-1"
+  aria-labelledby="resultDetailModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="resultDetailModalLabel">
+          Submission Details
+        </h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="mb-0" id="modal-submission-id"></h6>
+          <div>
+            <span class="badge bg-primary" id="modal-score"></span>
+            <span class="badge bg-secondary" id="modal-grade"></span>
+          </div>
+        </div>
+
+        <h6 class="mb-2">Question Scores</h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-3">
+            <thead class="table-secondary">
+              <tr>
+                <th style="width: 60%">Question</th>
+                <th class="text-center" style="width: 15%">Score</th>
+                <th class="text-center" style="width: 15%">Max</th>
+                <th class="text-center" style="width: 10%">Match %</th>
+              </tr>
+            </thead>
+            <tbody id="modal-criteria-scores">
+              <!-- Criteria scores will be populated by JavaScript -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6">
+            <h6 class="text-success">Strengths</h6>
+            <ul class="mb-3" id="modal-strengths">
+              <!-- Strengths will be populated by JavaScript -->
+            </ul>
+          </div>
+          <div class="col-md-6">
+            <h6 class="text-warning">Areas to Improve</h6>
+            <ul id="modal-weaknesses">
+              <!-- Weaknesses will be populated by JavaScript -->
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Close
+        </button>
+        <button type="button" class="btn btn-primary" id="view-full-report-btn">
+          <i class="bi bi-file-earmark-text me-1"></i> View Full Report
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_css %}
+<style>
+  .score-pill {
+    display: inline-block;
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-weight: bold;
+  }
+
+  .grade-item {
+    margin-right: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .score-circle {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    color: white;
+    font-size: 2rem;
+    font-weight: bold;
+  }
+
+  .bg-gradient-success {
+    background: linear-gradient(135deg, #28a745, #20c997);
+  }
+
+  .bg-gradient-primary {
+    background: linear-gradient(135deg, #007bff, #6610f2);
+  }
+
+  .bg-gradient-warning {
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+  }
+
+  .bg-gradient-danger {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+  }
+
+  .stat-card {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background-color: #f8f9fa;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  }
+
+  .stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+    font-size: 1.5rem;
+  }
+
+  .bg-success-light {
+    background-color: rgba(25, 135, 84, 0.15);
+  }
+
+  .bg-danger-light {
+    background-color: rgba(220, 53, 69, 0.15);
+  }
+
+  .stat-title {
+    color: #6c757d;
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
+  }
+
+  .stat-value {
+    font-size: 1.25rem;
+    font-weight: bold;
+  }
+
+  /* Pagination styles */
+  .pagination-controls .btn {
+    margin: 0 2px;
+    min-width: 32px;
+  }
+
+  .pagination-controls .btn.active {
+    background-color: #0d6efd;
+    color: white;
+    font-weight: bold;
+  }
+</style>
+{% endblock %} {% block extra_js %}
+<script>
+  // Store all results data
+  const allResults = {{ results|tojson }};
+
+  // Pagination settings
+  const resultsPerPage = 10;
+  let currentPage = 1;
+  const totalPages = Math.ceil(allResults.length / resultsPerPage);
+
+  // Initialize pagination
+  document.addEventListener('DOMContentLoaded', function() {
+    // Generate pagination buttons
+    generatePaginationButtons();
+
+    // Display first page
+    displayResultsPage(1);
+
+    // Add event listeners for pagination controls
+    document.getElementById('prev-page').addEventListener('click', function(e) {
+      e.preventDefault();
+      if (currentPage > 1) {
+        displayResultsPage(currentPage - 1);
+      }
+    });
+
+    document.getElementById('next-page').addEventListener('click', function(e) {
+      e.preventDefault();
+      if (currentPage < totalPages) {
+        displayResultsPage(currentPage + 1);
+      }
+    });
+  });
+
+  // Generate pagination buttons
+  function generatePaginationButtons() {
+    const paginationContainer = document.getElementById('pagination-buttons');
+    paginationContainer.innerHTML = '';
+
+    // Only show page buttons if we have more than one page
+    if (totalPages > 1) {
+      // Determine which pages to show
+      let pagesToShow = [];
+
+      if (totalPages <= 5) {
+        // Show all pages if 5 or fewer
+        for (let i = 1; i <= totalPages; i++) {
+          pagesToShow.push(i);
+        }
+      } else {
+        // Always show first page
+        pagesToShow.push(1);
+
+        // Show current page and neighbors
+        if (currentPage > 2) {
+          pagesToShow.push('...');
+        }
+
+        // Show current page and neighbors
+        if (currentPage > 1 && currentPage < totalPages) {
+          if (currentPage > 2) {
+            pagesToShow.push(currentPage - 1);
+          }
+          pagesToShow.push(currentPage);
+          if (currentPage < totalPages - 1) {
+            pagesToShow.push(currentPage + 1);
+          }
+        }
+
+        // Add ellipsis if needed
+        if (currentPage < totalPages - 1) {
+          pagesToShow.push('...');
+        }
+
+        // Always show last page
+        pagesToShow.push(totalPages);
+      }
+
+      // Create buttons
+      pagesToShow.forEach(page => {
+        const button = document.createElement('button');
+        button.type = 'button';
+
+        if (page === '...') {
+          button.className = 'btn btn-sm btn-light disabled';
+          button.textContent = '...';
+        } else {
+          button.className = page === currentPage ? 'btn btn-sm btn-light active' : 'btn btn-sm btn-light';
+          button.textContent = page;
+          button.addEventListener('click', function() {
+            displayResultsPage(page);
+          });
+        }
+
+        paginationContainer.appendChild(button);
+      });
+    }
+
+    // Update prev/next buttons state
+    document.getElementById('prev-page').classList.toggle('disabled', currentPage === 1);
+    document.getElementById('next-page').classList.toggle('disabled', currentPage === totalPages);
+  }
+
+  // Display results for a specific page
+  function displayResultsPage(page) {
+    currentPage = page;
+
+    // Calculate start and end indices
+    const startIndex = (page - 1) * resultsPerPage;
+    const endIndex = Math.min(startIndex + resultsPerPage, allResults.length);
+
+    // Get results for this page
+    const pageResults = allResults.slice(startIndex, endIndex);
+
+    // Update the table body
+    const tableBody = document.querySelector('tbody');
+    tableBody.innerHTML = '';
+
+    // Add rows for each result
+    pageResults.forEach((result, index) => {
+      const actualIndex = startIndex + index;
+
+      // Create the main row
+      const row = document.createElement('tr');
+
+      // Student ID cell
+      const idCell = document.createElement('td');
+      idCell.innerHTML = `
+        <div class="d-flex align-items-center">
+          <i class="bi bi-person-badge me-2 text-secondary"></i>
+          <div>
+            <div class="fw-bold">${result.submission_id}</div>
+            <div class="small text-muted">Graded: ${result.metadata?.graded_at || 'N/A'}</div>
+          </div>
+        </div>
+      `;
+
+      // Score cell
+      const scoreCell = document.createElement('td');
+      scoreCell.className = 'text-center';
+      const scoreClass = result.percent_score >= 80 ? 'bg-success' :
+                         result.percent_score >= 60 ? 'bg-primary' :
+                         result.percent_score >= 40 ? 'bg-warning' : 'bg-danger';
+      scoreCell.innerHTML = `
+        <div class="score-pill ${scoreClass}">
+          ${Math.round(result.percent_score)}%
+        </div>
+      `;
+
+      // Grade cell
+      const gradeCell = document.createElement('td');
+      gradeCell.className = 'text-center';
+      gradeCell.innerHTML = `
+        <span class="badge bg-secondary fs-6 px-3 py-2">${result.letter_grade}</span>
+      `;
+
+      // Points cell
+      const pointsCell = document.createElement('td');
+      pointsCell.className = 'text-center';
+      pointsCell.innerHTML = `
+        <span class="fw-bold">${result.overall_score}</span>
+        <span class="text-muted">/</span>
+        <span>${result.max_possible_score}</span>
+      `;
+
+      // Actions cell
+      const actionsCell = document.createElement('td');
+      actionsCell.className = 'text-center';
+      actionsCell.innerHTML = `
+        <button class="btn btn-sm btn-outline-primary view-details-btn" data-index="${actualIndex}">
+          <i class="bi bi-eye me-1"></i> View Details
+        </button>
+      `;
+
+      // Add cells to row
+      row.appendChild(idCell);
+      row.appendChild(scoreCell);
+      row.appendChild(gradeCell);
+      row.appendChild(pointsCell);
+      row.appendChild(actionsCell);
+
+      // Add row to table
+      tableBody.appendChild(row);
+    });
+
+    // Add event listeners to view details buttons
+    document.querySelectorAll('.view-details-btn').forEach(button => {
+      button.addEventListener('click', function() {
+        const index = parseInt(this.getAttribute('data-index'));
+        showResultDetails(index);
+      });
+    });
+
+    // Update pagination info
+    document.getElementById('page-start').textContent = startIndex + 1;
+    document.getElementById('page-end').textContent = endIndex;
+    document.getElementById('total-results').textContent = allResults.length;
+
+    // Update pagination buttons
+    generatePaginationButtons();
+  }
+
+  // Show result details in a modal
+  function showResultDetails(index) {
+    const result = allResults[index];
+
+    // Set modal title and content
+    document.getElementById('modal-submission-id').textContent = result.submission_id;
+    document.getElementById('modal-score').textContent = `${Math.round(result.percent_score)}%`;
+    document.getElementById('modal-grade').textContent = result.letter_grade;
+
+    // Populate criteria scores
+    const criteriaTable = document.getElementById('modal-criteria-scores');
+    criteriaTable.innerHTML = '';
+
+    if (result.criteria_scores && result.criteria_scores.length > 0) {
+      result.criteria_scores.forEach(criteria => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${criteria.description ? criteria.description.substring(0, 100) : 'N/A'}</td>
+          <td class="text-center">${criteria.points_earned}</td>
+          <td class="text-center">${criteria.points_possible}</td>
+          <td class="text-center">${Math.round(criteria.similarity * 100)}%</td>
+        `;
+        criteriaTable.appendChild(row);
+      });
+    } else {
+      criteriaTable.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No criteria scores available</td></tr>';
+    }
+
+    // Populate strengths
+    const strengthsList = document.getElementById('modal-strengths');
+    strengthsList.innerHTML = '';
+
+    if (result.detailed_feedback && result.detailed_feedback.strengths && result.detailed_feedback.strengths.length > 0) {
+      result.detailed_feedback.strengths.forEach(strength => {
+        const li = document.createElement('li');
+        li.textContent = strength;
+        strengthsList.appendChild(li);
+      });
+    } else {
+      const li = document.createElement('li');
+      li.className = 'text-muted';
+      li.textContent = 'No specific strengths identified';
+      strengthsList.appendChild(li);
+    }
+
+    // Populate weaknesses
+    const weaknessesList = document.getElementById('modal-weaknesses');
+    weaknessesList.innerHTML = '';
+
+    if (result.detailed_feedback && result.detailed_feedback.weaknesses && result.detailed_feedback.weaknesses.length > 0) {
+      result.detailed_feedback.weaknesses.forEach(weakness => {
+        const li = document.createElement('li');
+        li.textContent = weakness;
+        weaknessesList.appendChild(li);
+      });
+    } else {
+      const li = document.createElement('li');
+      li.className = 'text-muted';
+      li.textContent = 'No specific areas for improvement identified';
+      weaknessesList.appendChild(li);
+    }
+
+    // Set up view full report button
+    document.getElementById('view-full-report-btn').onclick = function() {
+      viewFullResults(index);
+    };
+
+    // Show the modal
+    const modal = new bootstrap.Modal(document.getElementById('resultDetailModal'));
+    modal.show();
+  }
+
+  function viewFullResults(index) {
+    // Store the selected result in session and redirect to individual result page
+    fetch("/set_selected_result", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ index: index }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          window.location.href = "/view_results";
+        }
+      });
+  }
+</script>
+{% endblock %}

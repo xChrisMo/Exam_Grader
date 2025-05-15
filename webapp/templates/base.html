@@ -33,10 +33,6 @@
     />
     <link
       rel="stylesheet"
-      href="{{ url_for('static', filename='css/progress-tracker.css') }}"
-    />
-    <link
-      rel="stylesheet"
       href="{{ url_for('static', filename='css/loader.css') }}"
     />
 
@@ -135,7 +131,6 @@
 
     <!-- Custom JS -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/progress-tracker.js') }}"></script>
     <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
 
     {% block extra_js %}{% endblock %}

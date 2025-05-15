@@ -233,7 +233,36 @@ const globalLoader = new Loader({
   statusText: "Please wait while we process your request",
 });
 
+/**
+ * Hide all active loaders
+ * This is useful when navigating between pages to ensure no loaders are left visible
+ */
+function hideAllLoaders() {
+  // Find all loader overlays in the DOM
+  const loaderOverlays = document.querySelectorAll('[id^="loader-overlay-"]');
+
+  // Hide each one
+  loaderOverlays.forEach((overlay) => {
+    overlay.classList.remove("active");
+  });
+
+  // Also hide the global loader
+  if (globalLoader && globalLoader.isActive) {
+    globalLoader.hide();
+  }
+
+  console.log(`Cleaned up ${loaderOverlays.length} active loaders`);
+}
+
 // Export for global use
 window.Loader = Loader;
 window.globalLoader = globalLoader;
 window.toggleButtonLoader = toggleButtonLoader;
+window.hideAllLoaders = hideAllLoaders;
+
+// Automatically hide all loaders when the page loads
+// This prevents loaders from persisting across page navigations
+document.addEventListener("DOMContentLoaded", function () {
+  // Small delay to ensure the DOM is fully loaded
+  setTimeout(hideAllLoaders, 100);
+});

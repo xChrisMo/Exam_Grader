@@ -164,7 +164,7 @@ class DocumentParser:
             raise
 
     @staticmethod
-    def extract_text_from_image(file_path: str) -> Tuple[str, Optional[str]]:
+    def extract_text_from_image(file_path: str) -> str:
         """Extract text from an image using OCR.
 
         This method can be used for both image files and as a fallback for PDFs.
@@ -174,7 +174,7 @@ class DocumentParser:
             file_path: Path to the image file or PDF
 
         Returns:
-            Tuple[str, Optional[str]]: (Extracted text, Progress tracker ID if available)
+            str: Extracted text
 
         Raises:
             OCRServiceError: If OCR processing fails
@@ -203,9 +203,9 @@ class DocumentParser:
 
                         logger.log_debug(f"Processing page {page_num} with OCR")
                         # Process image with OCR
-                        page_text, tracker_id = ocr_service_instance.extract_text_from_image(temp_img_path)
+                        page_text = ocr_service_instance.extract_text_from_image(temp_img_path)
                         text += page_text + "\n"
-                        logger.log_debug(f"OCR progress tracker ID: {tracker_id}")
+                        logger.log_debug("OCR processing completed")
 
                         # Clean up temporary image
                         try:
@@ -224,15 +224,13 @@ class DocumentParser:
                     raise OCRServiceError("No text content could be extracted from PDF using OCR")
 
                 logger.log_info(f"Successfully extracted {len(text)} characters from PDF using OCR")
-                # Return the last tracker ID from the page processing
-                return text, tracker_id if 'tracker_id' in locals() else None
+                return text
             else:
                 # Process a regular image file
                 logger.log_debug(f"Starting OCR processing for image: {file_path}")
-                text, tracker_id = ocr_service_instance.extract_text_from_image(file_path)
+                text = ocr_service_instance.extract_text_from_image(file_path)
                 logger.log_info(f"Successfully extracted {len(text)} characters from image")
-                logger.log_debug(f"OCR progress tracker ID: {tracker_id}")
-                return text, tracker_id
+                return text
 
         except OCRServiceError as e:
             logger.log_error("OCR Error", f"OCR processing failed: {str(e)}")
@@ -316,10 +314,9 @@ def parse_student_submission(file_path: str) -> Tuple[Dict[str, str], Optional[s
             elif file_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
                 raw_text = DocumentParser.extract_text_from_docx(file_path)
             elif file_type.startswith('image/'):
-                raw_text, tracker_id = DocumentParser.extract_text_from_image(file_path)
+                raw_text = DocumentParser.extract_text_from_image(file_path)
                 ocr_used = True
-                # Store tracker ID in session for progress monitoring
-                session_data = {'ocr_tracker_id': tracker_id}
+                logger.log_info("OCR processing completed")
             elif file_type == 'text/plain':
                 raw_text = DocumentParser.extract_text_from_txt(file_path)
             else:
@@ -332,10 +329,8 @@ def parse_student_submission(file_path: str) -> Tuple[Dict[str, str], Optional[s
         if (not raw_text or not raw_text.strip()) and not ocr_used and file_type != 'text/plain':
             try:
                 logger.log_info("Attempting OCR as fallback for text extraction")
-                raw_text, tracker_id = DocumentParser.extract_text_from_image(file_path)
+                raw_text = DocumentParser.extract_text_from_image(file_path)
                 logger.log_info(f"OCR fallback successful, extracted {len(raw_text)} characters")
-                # Store tracker ID in session for progress monitoring
-                session_data = {'ocr_tracker_id': tracker_id}
             except Exception as ocr_error:
                 logger.log_error(f"OCR fallback also failed: {str(ocr_error)}")
                 return {}, None, f"Text extraction failed and OCR fallback also failed: {str(ocr_error)}"
@@ -347,10 +342,8 @@ def parse_student_submission(file_path: str) -> Tuple[Dict[str, str], Optional[s
         # Return the raw text without any further processing
         logger.log_info(f"Successfully extracted {len(raw_text)} characters of raw text")
 
-        # Include tracker ID in the result if OCR was used
+        # Create result dictionary
         result = {'raw': raw_text}
-        if 'tracker_id' in locals():
-            result['ocr_tracker_id'] = tracker_id
 
         return result, raw_text, None
 

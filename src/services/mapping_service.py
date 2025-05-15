@@ -9,7 +9,6 @@ from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Any
 
 from utils.logger import logger
-from src.services.progress_tracker import progress_tracker
 
 class MappingService:
     """Mapping service that groups questions and answers between marking guides and submissions."""
@@ -35,20 +34,8 @@ class MappingService:
             return "questions", 0.5
 
         try:
-            # Create a tracker for the operation
-            tracker_id = progress_tracker.create_tracker(
-                operation_type="llm",
-                task_name="Determining Guide Type",
-                total_steps=3
-            )
-
-            # Update progress - Step 1: Analyzing content
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                current_step=1,
-                status="analyzing",
-                message="Analyzing marking guide content..."
-            )
+            # Log the operation
+            logger.info("Determining guide type from marking guide content...")
 
             # Use LLM to determine guide type
             system_prompt = """
@@ -82,50 +69,53 @@ class MappingService:
             {marking_guide_content[:2000]}  # Limit to first 2000 chars for efficiency
             """
 
-            # Update progress - Step 2: Sending request
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                current_step=2,
-                status="processing",
-                message="Sending request to LLM service..."
-            )
+            # Log the request
+            logger.info("Sending request to LLM service...")
 
             # Check if the model supports JSON output format
             supports_json = "deepseek-reasoner" not in self.llm_service.model.lower()
 
             if supports_json:
                 # Make the API call with JSON response format
-                response = self.llm_service.client.chat.completions.create(
-                    model=self.llm_service.model,
-                    messages=[
+                params = {
+                    "model": self.llm_service.model,
+                    "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    temperature=0.0,
-                    response_format={"type": "json_object"}
-                )
+                    "temperature": 0.0,
+                    "response_format": {"type": "json_object"}
+                }
+
+                # Add seed parameter if in deterministic mode
+                if hasattr(self.llm_service, 'deterministic') and self.llm_service.deterministic and hasattr(self.llm_service, 'seed') and self.llm_service.seed is not None:
+                    params["seed"] = self.llm_service.seed
+
+                response = self.llm_service.client.chat.completions.create(**params)
             else:
                 # For models that don't support JSON response format
                 modified_system_prompt = system_prompt + """
                 IMPORTANT: Your response must be valid JSON. Format your entire response as a JSON object.
                 Do not include any text before or after the JSON object.
                 """
-                response = self.llm_service.client.chat.completions.create(
-                    model=self.llm_service.model,
-                    messages=[
+
+                params = {
+                    "model": self.llm_service.model,
+                    "messages": [
                         {"role": "system", "content": modified_system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    temperature=0.0
-                )
+                    "temperature": 0.0
+                }
 
-            # Update progress - Step 3: Processing response
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                current_step=3,
-                status="analyzing",
-                message="Processing LLM response..."
-            )
+                # Add seed parameter if in deterministic mode
+                if hasattr(self.llm_service, 'deterministic') and self.llm_service.deterministic and hasattr(self.llm_service, 'seed') and self.llm_service.seed is not None:
+                    params["seed"] = self.llm_service.seed
+
+                response = self.llm_service.client.chat.completions.create(**params)
+
+            # Log the response processing
+            logger.info("Processing LLM response...")
 
             # Parse the response
             result = response.choices[0].message.content
@@ -135,15 +125,8 @@ class MappingService:
             confidence = parsed.get("confidence", 0.5)
             reasoning = parsed.get("reasoning", "No reasoning provided")
 
-            # Update progress - Complete
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                status="completed",
-                message=f"Guide type determined: {guide_type}",
-                completed=True,
-                success=True,
-                result={"guide_type": guide_type, "confidence": confidence, "reasoning": reasoning}
-            )
+            # Log completion
+            logger.info(f"Guide type determined: {guide_type}")
 
             logger.info(f"Determined guide type: {guide_type} (confidence: {confidence})")
             logger.info(f"Reasoning: {reasoning}")
@@ -155,7 +138,7 @@ class MappingService:
             # Default to questions on error
             return "questions", 0.5
 
-    def extract_questions_and_answers(self, content: str, tracker_id: str = None) -> List[Dict[str, Any]]:
+    def extract_questions_and_answers(self, content: str) -> List[Dict[str, Any]]:
         """
         Extract questions and answers from content using LLM if available.
         Otherwise falls back to regex-based extraction.
@@ -169,13 +152,8 @@ class MappingService:
 
         if self.llm_service:
             try:
-                # Update progress if tracker_id is provided
-                if tracker_id:
-                    progress_tracker.update_progress(
-                        tracker_id=tracker_id,
-                        status="processing",
-                        message="Extracting questions and answers from content..."
-                    )
+                # Log the extraction process
+                logger.info("Extracting questions and answers from content...")
 
                 # Use LLM to extract questions and answers
                 system_prompt = """
@@ -272,24 +250,26 @@ class MappingService:
                         ]
                     }
                     """
-                    response = self.llm_service.client.chat.completions.create(
-                        model=self.llm_service.model,
-                        messages=[
+
+                    params = {
+                        "model": self.llm_service.model,
+                        "messages": [
                             {"role": "system", "content": modified_system_prompt},
                             {"role": "user", "content": user_prompt}
                         ],
-                        temperature=0.0
-                    )
+                        "temperature": 0.0
+                    }
+
+                    # Add seed parameter if in deterministic mode
+                    if hasattr(self.llm_service, 'deterministic') and self.llm_service.deterministic and hasattr(self.llm_service, 'seed') and self.llm_service.seed is not None:
+                        params["seed"] = self.llm_service.seed
+
+                    response = self.llm_service.client.chat.completions.create(**params)
 
                 result = response.choices[0].message.content
 
-                # Update progress if tracker_id is provided
-                if tracker_id:
-                    progress_tracker.update_progress(
-                        tracker_id=tracker_id,
-                        status="processing",
-                        message="Processing LLM response for question extraction..."
-                    )
+                # Log the LLM response processing
+                logger.info("Processing LLM response for question extraction...")
 
                 # Try to clean up the response for models that don't properly format JSON
                 try:
@@ -300,26 +280,15 @@ class MappingService:
 
                     parsed = json.loads(result)
 
-                    # Update progress if tracker_id is provided
-                    if tracker_id:
-                        progress_tracker.update_progress(
-                            tracker_id=tracker_id,
-                            status="success",
-                            message=f"Successfully extracted {len(parsed.get('items', []))} items from content"
-                        )
+                    # Log successful extraction
+                    logger.info(f"Successfully extracted {len(parsed.get('items', []))} items from content")
 
                     return parsed.get("items", [])
                 except json.JSONDecodeError as e:
                     logger.warning(f"JSON parsing error in extract_questions_and_answers: {str(e)}")
 
-                    # Update progress if tracker_id is provided
-                    if tracker_id:
-                        progress_tracker.update_progress(
-                            tracker_id=tracker_id,
-                            status="warning",
-                            message=f"JSON parsing error: {str(e)}. Falling back to regex extraction.",
-                            error=str(e)
-                        )
+                    # Log JSON parsing error
+                    logger.warning(f"JSON parsing error: {str(e)}. Falling back to regex extraction.")
 
                     # Return an empty list to trigger the fallback extraction
                     return []
@@ -384,13 +353,14 @@ class MappingService:
 
     def map_submission_to_guide(self, marking_guide_content: str, student_submission_content: str, num_questions: int = 1) -> Tuple[Dict, Optional[str]]:
         """
-        Map a student submission to a marking guide using LLM for intelligent grouping.
+        Map a student submission to a marking guide using LLM for intelligent grouping and grading.
 
         This method:
         1. Determines if the marking guide contains questions or answers
         2. Uses the LLM to group guide and submission content based on the guide type
-        3. Falls back to text-based mapping if LLM is not available
+        3. Grades each mapped answer in a single LLM call
         4. Identifies the best N answers based on the num_questions parameter
+        5. Calculates overall grade and provides detailed feedback
 
         Args:
             marking_guide_content: Raw text content of the marking guide
@@ -398,77 +368,40 @@ class MappingService:
             num_questions: Number of questions the student should answer (default: 1)
 
         Returns:
-            Tuple[Dict, Optional[str]]: (Mapping result, Error message if any)
+            Tuple[Dict, Optional[str]]: (Mapping and grading result, Error message if any)
         """
         try:
-            # Create a tracker for the mapping operation
-            tracker_id = progress_tracker.create_tracker(
-                operation_type="llm",
-                task_name="Mapping Submission to Guide",
-                total_steps=4
-            )
-
-            # Update progress - Step 1: Validating content
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                current_step=1,
-                status="validating",
-                message="Validating document content..."
-            )
+            # Log the operation
+            logger.info("Starting mapping submission to guide...")
 
             # Check if we have content to work with
             if not marking_guide_content or not marking_guide_content.strip():
-                progress_tracker.update_progress(
-                    tracker_id=tracker_id,
-                    status="failed",
-                    message="Marking guide content is empty",
-                    completed=True,
-                    success=False,
-                    error="Empty marking guide"
-                )
+                logger.error("Marking guide content is empty")
                 return {
                     "status": "error",
                     "message": "Marking guide content is empty"
                 }, "Empty marking guide"
 
             if not student_submission_content or not student_submission_content.strip():
-                progress_tracker.update_progress(
-                    tracker_id=tracker_id,
-                    status="failed",
-                    message="Student submission content is empty",
-                    completed=True,
-                    success=False,
-                    error="Empty student submission"
-                )
+                logger.error("Student submission content is empty")
                 return {
                     "status": "error",
                     "message": "Student submission content is empty"
                 }, "Empty student submission"
 
+            # Initialize empty mappings list
             mappings = []
-            guide_items = []
-            submission_items = []
 
             if self.llm_service:
                 try:
-                    # Update progress - Step 2: Determining guide type
-                    progress_tracker.update_progress(
-                        tracker_id=tracker_id,
-                        current_step=2,
-                        status="analyzing",
-                        message="Determining if marking guide contains questions or answers..."
-                    )
+                    # Log the guide type determination
+                    logger.info("Determining if marking guide contains questions or answers...")
 
                     # Determine if the marking guide contains questions or answers
                     guide_type, confidence = self.determine_guide_type(marking_guide_content)
 
-                    # Update progress - Step 3: Preparing for mapping
-                    progress_tracker.update_progress(
-                        tracker_id=tracker_id,
-                        current_step=3,
-                        status="preparing",
-                        message=f"Guide type determined: {guide_type} (confidence: {confidence:.2f}). Preparing for mapping..."
-                    )
+                    # Log the guide type determination result
+                    logger.info(f"Guide type determined: {guide_type} (confidence: {confidence:.2f}). Preparing for mapping...")
 
                     # Use LLM to map submission to guide based on guide type and perform grading
                     if guide_type == "questions":
@@ -542,13 +475,8 @@ class MappingService:
                         Output in JSON format with no comments.
                         """
 
-                    # Update progress - Step 4: Mapping content
-                    progress_tracker.update_progress(
-                        tracker_id=tracker_id,
-                        current_step=4,
-                        status="mapping",
-                        message=f"Using LLM to map submission to guide (finding best {num_questions} answers)..."
-                    )
+                    # Log the mapping process
+                    logger.info(f"Using LLM to map submission to guide (finding best {num_questions} answers)...")
 
                     # Pass the raw content to the LLM for mapping and grading
                     user_prompt = f"""
@@ -662,24 +590,26 @@ class MappingService:
                     """
 
                     # Use a simpler prompt for the deepseek-reasoner model
-                    response = self.llm_service.client.chat.completions.create(
-                        model=self.llm_service.model,
-                        messages=[
+                    params = {
+                        "model": self.llm_service.model,
+                        "messages": [
                             {"role": "system", "content": modified_system_prompt},
                             {"role": "user", "content": user_prompt}
                         ],
-                        temperature=0.0
-                    )
+                        "temperature": 0.0
+                    }
+
+                    # Add seed parameter if in deterministic mode
+                    if hasattr(self.llm_service, 'deterministic') and self.llm_service.deterministic and hasattr(self.llm_service, 'seed') and self.llm_service.seed is not None:
+                        params["seed"] = self.llm_service.seed
+                        logger.info(f"Using deterministic mode with seed: {self.llm_service.seed} for mapping")
+
+                    response = self.llm_service.client.chat.completions.create(**params)
 
                     result = response.choices[0].message.content
 
-                    # Update progress - Step 4.5: Processing LLM response
-                    progress_tracker.update_progress(
-                        tracker_id=tracker_id,
-                        current_step=4.5,
-                        status="processing",
-                        message="Processing LLM response..."
-                    )
+                    # Log the LLM response processing
+                    logger.info("Processing LLM response...")
 
                     # Try to clean up the response for models that don't properly format JSON
                     try:
@@ -785,38 +715,19 @@ class MappingService:
                                 # If regex extraction fails, create a minimal valid structure
                                 logger.warning("Regex extraction failed, using minimal valid structure")
 
-                                # Update progress - JSON parsing error with fallback
-                                progress_tracker.update_progress(
-                                    tracker_id=tracker_id,
-                                    status="warning",
-                                    message=f"JSON parsing error: {str(e)}. Using fallback mapping.",
-                                    error=str(e)
-                                )
+                                # Log the JSON parsing error with fallback
+                                logger.warning(f"JSON parsing error: {str(e)}. Using fallback mapping.")
 
-                                # Update progress - Extraction failed, raising error
-                                progress_tracker.update_progress(
-                                    tracker_id=tracker_id,
-                                    status="failed",
-                                    message=f"JSON parsing error: {str(e)}. Unable to extract mappings.",
-                                    completed=True,
-                                    success=False,
-                                    error=str(e)
-                                )
+                                # Log the extraction failure
+                                logger.error(f"JSON parsing error: {str(e)}. Unable to extract mappings.")
 
                                 # Raise the exception to stop processing
                                 raise Exception(f"JSON parsing error: {str(e)}. Unable to extract mappings from LLM response.")
                         except Exception as fallback_error:
                             logger.error(f"Fallback extraction also failed: {str(fallback_error)}")
 
-                            # Update progress - JSON parsing error
-                            progress_tracker.update_progress(
-                                tracker_id=tracker_id,
-                                status="failed",
-                                message=f"JSON parsing error: {str(e)}",
-                                completed=True,
-                                success=False,
-                                error=str(e)
-                            )
+                            # Log the fallback extraction failure
+                            logger.error(f"JSON parsing error: {str(e)}")
 
                             # Raise the exception to stop processing
                             raise Exception(f"JSON parsing error: {str(e)}")
@@ -892,52 +803,13 @@ class MappingService:
 
                 except Exception as e:
                     logger.error(f"LLM mapping failed: {str(e)}")
-                    # Update progress - Error in LLM mapping
-                    progress_tracker.update_progress(
-                        tracker_id=tracker_id,
-                        status="failed",
-                        message=f"LLM mapping failed: {str(e)}",
-                        completed=True,
-                        success=False,
-                        error=str(e)
-                    )
+                    # Log the LLM mapping error
+                    logger.error(f"LLM mapping failed: {str(e)}")
 
-                    # Create basic items from the raw content for unmapped sections
-                    guide_items = []
-                    submission_items = []
-                    unmapped_guide_items = []
-                    unmapped_submission_items = []
+                    # No need to create items for unmapped sections anymore
+                    # We'll just use the raw content
 
-                    # Split the content into paragraphs
-                    guide_paragraphs = [p.strip() for p in marking_guide_content.split('\n\n') if p.strip()]
-                    if len(guide_paragraphs) < 3:
-                        guide_paragraphs = [p.strip() for p in marking_guide_content.split('\n') if p.strip()]
-
-                    submission_paragraphs = [p.strip() for p in student_submission_content.split('\n\n') if p.strip()]
-                    if len(submission_paragraphs) < 3:
-                        submission_paragraphs = [p.strip() for p in student_submission_content.split('\n') if p.strip()]
-
-                    # Create guide items and add them to unmapped
-                    for i, paragraph in enumerate(guide_paragraphs):
-                        item = {
-                            "id": f"g{i+1}",
-                            "text": paragraph,
-                            "type": "text"
-                        }
-                        guide_items.append(item)
-                        unmapped_guide_items.append(item)
-
-                    # Create submission items and add them to unmapped
-                    for i, paragraph in enumerate(submission_paragraphs):
-                        item = {
-                            "id": f"s{i+1}",
-                            "text": paragraph,
-                            "type": "text"
-                        }
-                        submission_items.append(item)
-                        unmapped_submission_items.append(item)
-
-                    # Create a basic result with unmapped items
+                    # Create a basic result with raw content
                     result = {
                         "status": "error",
                         "message": f"LLM mapping failed: {str(e)}",
@@ -947,13 +819,10 @@ class MappingService:
                             "guide_type": "unknown",
                             "mapping_method": "Failed LLM",
                             "timestamp": datetime.now().isoformat(),
-                            "guide_item_count": len(guide_items),
-                            "submission_item_count": len(submission_items),
-                            "unmapped_guide_count": len(unmapped_guide_items),
-                            "unmapped_submission_count": len(unmapped_submission_items)
+                            "num_questions": num_questions
                         },
-                        "unmapped_guide_items": unmapped_guide_items,
-                        "unmapped_submission_items": unmapped_submission_items,
+                        "raw_guide_content": marking_guide_content,
+                        "raw_submission_content": student_submission_content,
                         "overall_grade": {
                             "total_score": 0,
                             "max_possible_score": 0,
@@ -964,15 +833,8 @@ class MappingService:
 
                     return result, f"LLM mapping failed: {str(e)}"
             else:
-                # Update progress - No LLM service
-                progress_tracker.update_progress(
-                    tracker_id=tracker_id,
-                    status="failed",
-                    message="No LLM service available. LLM service is required for mapping.",
-                    completed=True,
-                    success=False,
-                    error="LLM service not available"
-                )
+                # Log the no LLM service error
+                logger.error("No LLM service available. LLM service is required for mapping.")
 
                 # Raise an error since LLM service is required
                 raise Exception("LLM service is required for mapping. No fallback available.")
@@ -980,85 +842,11 @@ class MappingService:
             # Get guide type if available (from first mapping)
             guide_type = mappings[0].get("guide_type", "unknown") if mappings else "unknown"
 
-            # Initialize empty lists for unmapped items
-            unmapped_guide_items = []
-            unmapped_submission_items = []
+            # We're no longer generating unmapped items
+            # Just store the raw content for display
 
-            # Process unmapped items
-            # If we don't have guide_items and submission_items from extraction, create them from the raw content
-            if not ('guide_items' in locals() and guide_items and 'submission_items' in locals() and submission_items):
-                # Create basic items from the raw content
-                guide_items = []
-                submission_items = []
-
-                # Split the content into paragraphs or sections
-                # First try to split by double newlines, then by single newlines if we don't get enough sections
-                guide_paragraphs = [p.strip() for p in marking_guide_content.split('\n\n') if p.strip()]
-                if len(guide_paragraphs) < 3:  # If we don't have enough paragraphs, try single newlines
-                    guide_paragraphs = [p.strip() for p in marking_guide_content.split('\n') if p.strip()]
-
-                submission_paragraphs = [p.strip() for p in student_submission_content.split('\n\n') if p.strip()]
-                if len(submission_paragraphs) < 3:  # If we don't have enough paragraphs, try single newlines
-                    submission_paragraphs = [p.strip() for p in student_submission_content.split('\n') if p.strip()]
-
-                # Create guide items - try to identify questions
-                for i, paragraph in enumerate(guide_paragraphs):
-                    item_type = "text"
-                    # Check if this looks like a question
-                    if re.search(r'\?|question|explain|describe|discuss|analyze|compare|contrast|evaluate|examine|outline', paragraph.lower()):
-                        item_type = "question"
-
-                    # Try to extract mark allocation
-                    max_score = None
-                    mark_match = re.search(r'(\d+)\s*(mark|point|score|%|/\d+)', paragraph.lower())
-                    if mark_match:
-                        try:
-                            max_score = int(mark_match.group(1))
-                        except (ValueError, TypeError):
-                            pass
-
-                    guide_items.append({
-                        "id": f"g{i+1}",
-                        "text": paragraph,
-                        "type": item_type,
-                        "max_score": max_score
-                    })
-
-                # Create submission items - try to identify answers
-                for i, paragraph in enumerate(submission_paragraphs):
-                    item_type = "text"
-                    # Check if this looks like an answer (has some substance)
-                    if len(paragraph.split()) > 10:  # More than 10 words suggests it might be an answer
-                        item_type = "answer"
-
-                    submission_items.append({
-                        "id": f"s{i+1}",
-                        "text": paragraph,
-                        "type": item_type
-                    })
-
-            # Identify unmapped guide items and submission items
-            mapped_guide_ids = [mapping.get("guide_id") for mapping in mappings]
-            mapped_submission_ids = [mapping.get("submission_id") for mapping in mappings]
-
-            # Find unmapped guide items
-            for item in guide_items:
-                if item.get("id") not in mapped_guide_ids:
-                    unmapped_guide_items.append(item)
-
-            # Find unmapped submission items
-            for item in submission_items:
-                if item.get("id") not in mapped_submission_ids:
-                    unmapped_submission_items.append(item)
-
-            # Update progress - Identifying unmapped items
-            if 'tracker_id' in locals() and tracker_id:
-                progress_tracker.update_progress(
-                    tracker_id=tracker_id,
-                    current_step=3.95,
-                    status="processing",
-                    message=f"Identified {len(unmapped_guide_items)} unmapped guide items and {len(unmapped_submission_items)} unmapped submission items"
-                )
+            # Log finalizing mapping
+            logger.info("Finalizing mapping results")
 
             # Initialize overall_grade if it doesn't exist
             if 'overall_grade' not in locals():
@@ -1066,11 +854,16 @@ class MappingService:
                 total_score = 0
                 max_possible_score = 0
 
+                # Calculate the total points from all mappings
                 for mapping in mappings:
                     if mapping.get('grade_score') is not None:
                         total_score += mapping.get('grade_score', 0)
                     if mapping.get('max_score') is not None:
                         max_possible_score += mapping.get('max_score', 0)
+
+                # Ensure max_possible_score is not zero to avoid division by zero
+                if max_possible_score == 0:
+                    max_possible_score = 100  # Default to 100 if no max score is found
 
                 # Calculate percentage
                 percentage = (total_score / max_possible_score * 100) if max_possible_score > 0 else 0
@@ -1095,53 +888,35 @@ class MappingService:
                 "message": "Content mapped successfully",
                 "mappings": mappings,
                 "metadata": {
+                    "num_questions": num_questions,
                     "mapping_count": len(mappings),
                     "guide_type": guide_type,
                     "mapping_method": "LLM" if self.llm_service else "Text-based",
-                    "timestamp": datetime.now().isoformat(),
-                    "guide_item_count": len(guide_items) if 'guide_items' in locals() and guide_items else 0,
-                    "submission_item_count": len(submission_items) if 'submission_items' in locals() and submission_items else 0,
-                    "unmapped_guide_count": len(unmapped_guide_items),
-                    "unmapped_submission_count": len(unmapped_submission_items)
+                    "timestamp": datetime.now().isoformat()
                 },
-                "unmapped_guide_items": unmapped_guide_items,
-                "unmapped_submission_items": unmapped_submission_items,
+                "raw_guide_content": marking_guide_content,
+                "raw_submission_content": student_submission_content,
                 "overall_grade": overall_grade
             }
 
-            # Update progress - Complete
-            if 'tracker_id' in locals() and tracker_id:
-                progress_tracker.update_progress(
-                    tracker_id=tracker_id,
-                    status="completed",
-                    message=f"Mapping and grading completed successfully. Score: {overall_grade.get('percentage', 0)}%",
-                    completed=True,
-                    success=True,
-                    result={
-                        "mapping_count": len(mappings),
-                        "guide_type": guide_type,
-                        "grade_percentage": overall_grade.get('percentage', 0),
-                        "letter_grade": overall_grade.get('letter_grade', '')
-                    }
-                )
+            # Log completion
+            logger.info(f"Mapping and grading completed successfully. Score: {overall_grade.get('percentage', 0)}%")
 
             return result, None
 
         except Exception as e:
             error_message = f"Error in mapping service: {str(e)}"
 
-            # Update progress - Error
-            if 'tracker_id' in locals() and tracker_id:
-                progress_tracker.update_progress(
-                    tracker_id=tracker_id,
-                    status="failed",
-                    message=f"Mapping failed: {str(e)}",
-                    completed=True,
-                    success=False,
-                    error=str(e)
-                )
+            # Log error
+            logger.error(f"Mapping failed: {str(e)}")
 
-            return {"status": "error", "message": error_message}, error_message
+            # Return error with raw content included
+            return {
+                "status": "error",
+                "message": error_message,
+                "raw_guide_content": marking_guide_content,
+                "raw_submission_content": student_submission_content
+            }, error_message
 
     def _extract_keywords(self, text: str) -> List[str]:
         """

@@ -100,13 +100,14 @@
             <div class="card-body">
                 <form action="{{ url_for('upload_submission') }}" method="post" enctype="multipart/form-data" id="submissionForm">
                     <div class="file-upload-area mb-3">
-                        <input type="file" class="d-none" id="submissionFile" name="file" accept=".docx,.txt,.pdf,.jpg,.jpeg,.png,.tiff,.bmp,.gif">
+                        <input type="file" class="d-none" id="submissionFile" name="file" accept=".docx,.txt,.pdf,.jpg,.jpeg,.png,.tiff,.bmp,.gif" multiple>
                         <div class="file-upload-icon">
                             <i class="bi bi-cloud-arrow-up"></i>
                         </div>
-                        <h5>Drop your student submission here</h5>
+                        <h5>Drop your student submissions here</h5>
                         <p class="text-muted">or click to browse files</p>
                         <p class="text-muted small">Supported formats: .docx, .txt, .pdf, images</p>
+                        <p class="text-primary small"><i class="bi bi-info-circle"></i> You can select multiple files</p>
                     </div>
 
                     <div class="d-grid gap-2">
@@ -136,7 +137,44 @@
                     </div>
                 </form>
 
-                {% if session.get('last_submission') %}
+                {% if session.get('submissions') %}
+                <div class="alert alert-success mt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                            <strong>{{ session.get('submissions')|length }} Submission(s) loaded!</strong>
+                        </div>
+                        <div class="text-end">
+                            <a href="{{ url_for('view_submission') }}" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-eye me-1"></i> View All
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="submission-list mt-3">
+                    {% for submission in session.get('submissions', []) %}
+                    <div class="submission-item p-2 border-bottom">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-file-earmark-text me-2"></i>
+                                <span class="submission-filename">{{ submission.filename }}</span>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <small class="text-muted me-2">{{ "%.1f"|format(submission.raw_text|length / 1024) }} KB</small>
+                                <form action="{{ url_for('remove_submission', filename=submission.filename) }}" method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                                            data-confirm="Are you sure you want to remove this submission?">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if session.get('last_submission') and not session.get('submissions') %}
                 <div class="alert alert-success mt-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
@@ -172,8 +210,23 @@
                         <div class="form-text">Specify how many questions the student should answer from the marking guide.</div>
                     </div>
 
+                    {% if session.get('submissions') and session.get('submissions')|length > 1 %}
+                    <div class="mb-3">
+                        <label for="submission_id" class="form-label">Select Submission to Map</label>
+                        <select class="form-select" id="submission_id" name="submission_id">
+                            {% for sub in session.get('submissions', []) %}
+                            <option value="{{ sub.filename }}">{{ sub.filename }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Select which submission to map. You can map multiple submissions separately.
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <button type="submit" class="btn btn-success"
-                            {{ 'disabled' if not session.get('guide_uploaded') or not session.get('last_submission') }}
+                            {{ 'disabled' if not session.get('guide_uploaded') or (not session.get('last_submission') and not session.get('submissions')) }}
                             data-loading-text="Mapping Submission...">
                         <i class="bi bi-diagram-3 me-1"></i> Map Submission
                     </button>
@@ -183,12 +236,37 @@
                         <i class="bi bi-eye me-1"></i> View Mapping
                     </a>
                     {% endif %}
+
+                    <!-- Map All Submissions Button -->
+                    <div class="d-grid gap-2 mt-3">
+                      <form action="{{ url_for('map_all_submissions') }}" method="post" class="d-grid">
+                        <input type="hidden" name="num_questions" value="{{ session.get('num_questions', 1) }}">
+                        <button type="submit" class="btn btn-success"
+                                {{ 'disabled' if not session.get('guide_uploaded') or not session.get('submissions') or session.get('submissions')|length < 2 }}
+                                data-loading-text="Mapping All Submissions...">
+                          <i class="bi bi-diagram-3 me-1"></i> Map All Submissions
+                        </button>
+                      </form>
+
+                      {% if not session.get('guide_uploaded') or not session.get('submissions') or session.get('submissions')|length < 2 %}
+                      <div class="alert alert-info small mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Upload a marking guide and at least 2 submissions to enable batch mapping
+                      </div>
+                      {% endif %}
+
+                      {% if session.get('batch_mapping_results') %}
+                      <a href="{{ url_for('view_batch_mappings') }}" class="btn btn-outline-success">
+                        <i class="bi bi-eye me-1"></i> View All Mappings
+                      </a>
+                      {% endif %}
+                    </div>
                 </form>
 
-                {% if not session.get('guide_uploaded') or not session.get('last_submission') %}
+                {% if not session.get('guide_uploaded') or (not session.get('last_submission') and not session.get('submissions')) %}
                 <div class="alert alert-warning mt-3">
                     <i class="bi bi-exclamation-triangle me-2"></i>
-                    Please upload both a marking guide and a student submission first
+                    Please upload both a marking guide and at least one student submission first
                 </div>
                 {% endif %}
             </div>
@@ -205,8 +283,23 @@
                 <p class="text-muted small">The AI will evaluate the submission, provide scores, and give detailed feedback.</p>
 
                 <form action="{{ url_for('grade_submission') }}" method="post" class="d-grid gap-2">
+                    {% if session.get('submissions') and session.get('submissions')|length > 1 %}
+                    <div class="mb-3">
+                        <label for="submission_id" class="form-label">Select Submission to Grade</label>
+                        <select class="form-select" id="submission_id" name="submission_id">
+                            {% for sub in session.get('submissions', []) %}
+                            <option value="{{ sub.filename }}">{{ sub.filename }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Select which submission to grade. You can grade multiple submissions separately.
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <button type="submit" class="btn btn-primary"
-                            {{ 'disabled' if not session.get('guide_uploaded') or not session.get('last_submission') }}
+                            {{ 'disabled' if not session.get('guide_uploaded') or (not session.get('last_submission') and not session.get('submissions')) }}
                             data-loading-text="Grading Submission...">
                         <i class="bi bi-award me-1"></i> Grade Submission
                     </button>
@@ -216,12 +309,37 @@
                         <i class="bi bi-eye me-1"></i> View Results
                     </a>
                     {% endif %}
+
+                    <!-- Batch Grading Button -->
+                    <div class="d-grid gap-2 mt-3">
+                      <form action="{{ url_for('batch_grade') }}" method="post" class="d-grid">
+                        <input type="hidden" name="num_questions" value="{{ session.get('num_questions', 1) }}">
+                        <button type="submit" class="btn btn-primary"
+                                {{ 'disabled' if not session.get('guide_uploaded') or not session.get('submissions') or session.get('submissions')|length < 2 }}
+                                data-loading-text="Batch Grading in Progress...">
+                          <i class="bi bi-people me-1"></i> Grade All Submissions
+                        </button>
+                      </form>
+
+                      {% if not session.get('guide_uploaded') or not session.get('submissions') or session.get('submissions')|length < 2 %}
+                      <div class="alert alert-info small mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Upload a marking guide and at least 2 submissions to enable batch grading
+                      </div>
+                      {% endif %}
+
+                      {% if session.get('batch_results') %}
+                      <a href="{{ url_for('view_batch_results') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-eye me-1"></i> View Batch Results
+                      </a>
+                      {% endif %}
+                    </div>
                 </form>
 
-                {% if not session.get('guide_uploaded') or not session.get('last_submission') %}
+                {% if not session.get('guide_uploaded') or (not session.get('last_submission') and not session.get('submissions')) %}
                 <div class="alert alert-warning mt-3">
                     <i class="bi bi-exclamation-triangle me-2"></i>
-                    Please upload both a marking guide and a student submission first
+                    Please upload both a marking guide and at least one student submission first
                 </div>
                 {% endif %}
 
@@ -326,6 +444,33 @@
 <!-- Loaders are now handled by the loader.js component -->
 {% endblock %}
 
+{% block extra_css %}
+<style>
+    .submission-list {
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+    }
+
+    .submission-item {
+        transition: background-color 0.2s;
+    }
+
+    .submission-item:hover {
+        background-color: rgba(13, 202, 240, 0.1);
+    }
+
+    .submission-item:last-child {
+        border-bottom: none !important;
+    }
+
+    .submission-filename {
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
 {% block extra_js %}
 <script>
     // Make file upload areas work
@@ -413,6 +558,150 @@
                 body: JSON.stringify({
                     operation_type: 'llm',
                     task_name: 'Mapping Submission',
+                    total_steps: 100
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.id) {
+                    // Start tracking progress
+                    progressTracker.startTracking(data.id, 'llm');
+
+                    // Submit the form
+                    this.submit();
+                } else {
+                    // Submit the form even if we couldn't create a tracker
+                    this.submit();
+                }
+            })
+            .catch(error => {
+                console.error('Error creating progress tracker:', error);
+                // Submit the form even if there was an error
+                this.submit();
+            });
+        });
+
+        // Add loader for batch grading
+        document.querySelector('form[action*="batch_grade"]')?.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Show button loader
+            const batchButton = this.querySelector('button[type="submit"]');
+            toggleButtonLoader(batchButton, true);
+
+            // Create a loader with appropriate messaging
+            const loader = new Loader({
+                type: 'dots',
+                text: 'Batch Grading in Progress...',
+                subText: 'This may take several minutes for multiple submissions'
+            });
+            loader.show();
+
+            // Create a progress tracker
+            fetch('/api/progress', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    operation_type: 'batch_grading',
+                    task_name: 'Batch Grading',
+                    total_steps: 100
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.id) {
+                    // Start tracking progress
+                    progressTracker.startTracking(data.id, 'batch_grading');
+
+                    // Submit the form
+                    this.submit();
+                } else {
+                    // If we couldn't create a tracker, still submit the form
+                    this.submit();
+                }
+            })
+            .catch(error => {
+                console.error('Error creating progress tracker:', error);
+                // Still submit the form even if tracker creation fails
+                this.submit();
+            });
+        });
+
+        // Add loader for map all submissions
+        document.querySelector('form[action*="map_all_submissions"]')?.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Show button loader
+            const mapAllButton = this.querySelector('button[type="submit"]');
+            toggleButtonLoader(mapAllButton, true);
+
+            // Create a loader with appropriate messaging
+            const loader = new Loader({
+                type: 'dots',
+                text: 'Mapping All Submissions...',
+                subText: 'This may take several minutes for multiple submissions'
+            });
+            loader.show();
+
+            // Create a progress tracker
+            fetch('/api/progress', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    operation_type: 'batch_mapping',
+                    task_name: 'Mapping All Submissions',
+                    total_steps: 100
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.id) {
+                    // Start tracking progress
+                    progressTracker.startTracking(data.id, 'batch_mapping');
+
+                    // Submit the form
+                    this.submit();
+                } else {
+                    // If we couldn't create a tracker, still submit the form
+                    this.submit();
+                }
+            })
+            .catch(error => {
+                console.error('Error creating progress tracker:', error);
+                // Still submit the form even if tracker creation fails
+                this.submit();
+            });
+        });
+
+        // Add loader for grading
+        document.querySelector('form[action*="grade_submission"]')?.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Show button loader
+            const gradeButton = this.querySelector('button[type="submit"]');
+            toggleButtonLoader(gradeButton, true);
+
+            // Create a loader with appropriate messaging
+            const loader = new Loader({
+                type: 'dots',
+                text: 'Grading Submission...',
+                subText: 'This may take a minute or two'
+            });
+            loader.show();
+
+            // Create a progress tracker
+            fetch('/api/progress', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    operation_type: 'llm',
+                    task_name: 'Grading Submission',
                     total_steps: 3
                 })
             })

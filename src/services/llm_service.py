@@ -16,7 +16,6 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 from utils.logger import logger
-from src.services.progress_tracker import progress_tracker
 
 # Load environment variables
 load_dotenv()
@@ -46,7 +45,9 @@ class LLMService:
         model: str = "deepseek-reasoner",
         temperature: float = 0.0,
         max_retries: int = 3,
-        retry_delay: float = 2.0
+        retry_delay: float = 2.0,
+        seed: Optional[int] = 42,
+        deterministic: bool = True
     ):
         """
         Initialize the LLM service.
@@ -58,6 +59,8 @@ class LLMService:
             temperature: Sampling temperature (0.0 for most deterministic output)
             max_retries: Maximum number of retry attempts for API calls
             retry_delay: Delay between retry attempts in seconds
+            seed: Random seed for deterministic outputs (default: 42)
+            deterministic: Whether to use deterministic mode (default: True)
 
         Raises:
             LLMServiceError: If API key is not available
@@ -71,6 +74,14 @@ class LLMService:
         self.temperature = temperature
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        self.seed = seed
+        self.deterministic = deterministic
+
+        # Log the deterministic mode setting
+        if self.deterministic:
+            logger.info(f"LLM service initialized in deterministic mode with seed: {self.seed}")
+        else:
+            logger.info("LLM service initialized in non-deterministic mode")
 
         try:
             # Initialize OpenAI client with DeepSeek configuration - simplified initialization
@@ -101,15 +112,21 @@ class LLMService:
             user_prompt = "Please respond with a simple 'Connection successful' if you receive this message."
 
             # Make a minimal API call
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
+            params = {
+                "model": self.model,
+                "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.0,
-                max_tokens=20
-            )
+                "temperature": 0.0,
+                "max_tokens": 20
+            }
+
+            # Add seed parameter if in deterministic mode
+            if self.deterministic and self.seed is not None:
+                params["seed"] = self.seed
+
+            response = self.client.chat.completions.create(**params)
 
             # Check if we got a response
             if hasattr(response, 'choices') and len(response.choices) > 0:
@@ -128,9 +145,8 @@ class LLMService:
         question: str,
         guide_answer: str,
         submission_answer: str,
-        max_score: int = 10,
-        tracker_id: Optional[str] = None
-    ) -> Tuple[float, str, str]:
+        max_score: int = 10
+    ) -> Tuple[float, str]:
         """
         Compare a student's submission answer with the model answer from the marking guide.
 
@@ -139,30 +155,16 @@ class LLMService:
             guide_answer: The model answer from the marking guide
             submission_answer: The student's submission answer
             max_score: The maximum possible score for this question
-            tracker_id: Optional progress tracker ID for monitoring progress
 
         Returns:
-            Tuple[float, str, str]: (Score, Feedback, Tracker ID)
+            Tuple[float, str]: (Score, Feedback)
 
         Raises:
             LLMServiceError: If the API call fails
         """
-        # Create a progress tracker if not provided
-        if not tracker_id:
-            tracker_id = progress_tracker.create_tracker(
-                operation_type="llm",
-                task_name="Answer Comparison",
-                total_steps=5
-            )
-
         try:
-            # Update progress - Step 1: Starting
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                current_step=1,
-                status="preparing",
-                message="Preparing to compare answers..."
-            )
+            # Log the start of answer comparison
+            logger.info("Preparing to compare answers...")
 
             # Construct a prompt for the LLM to compare the answers
             system_prompt = """
@@ -198,44 +200,35 @@ class LLMService:
             Please evaluate the student's answer and provide a score and feedback.
             """
 
-            # Update progress - Step 2: Sending request
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                current_step=2,
-                status="processing",
-                message="Sending request to LLM service..."
-            )
+            # Log sending request
+            logger.info("Sending request to LLM service...")
 
             # Make the API call
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
+            params = {
+                "model": self.model,
+                "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.0,
-                max_tokens=500
-            )
+                "temperature": 0.0,
+                "max_tokens": 500
+            }
 
-            # Update progress - Step 3: Processing response
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                current_step=3,
-                status="analyzing",
-                message="Processing LLM response..."
-            )
+            # Add seed parameter if in deterministic mode
+            if self.deterministic and self.seed is not None:
+                params["seed"] = self.seed
+
+            response = self.client.chat.completions.create(**params)
+
+            # Log processing response
+            logger.info("Processing LLM response...")
 
             # Parse the response
             if hasattr(response, 'choices') and len(response.choices) > 0:
                 response_text = response.choices[0].message.content.strip()
 
-                # Update progress - Step 4: Extracting results
-                progress_tracker.update_progress(
-                    tracker_id=tracker_id,
-                    current_step=4,
-                    status="extracting",
-                    message="Extracting score and feedback..."
-                )
+                # Log extracting results
+                logger.info("Extracting score and feedback...")
 
                 try:
                     # Attempt to parse as JSON
@@ -248,18 +241,10 @@ class LLMService:
                     # Ensure score is within bounds
                     score = max(0, min(score, max_score))
 
-                    # Update progress - Step 5: Complete
-                    progress_tracker.update_progress(
-                        tracker_id=tracker_id,
-                        current_step=5,
-                        status="completed",
-                        message="Answer comparison completed successfully",
-                        completed=True,
-                        success=True,
-                        result={"score": score, "feedback": feedback}
-                    )
+                    # Log completion
+                    logger.info("Answer comparison completed successfully")
 
-                    return score, feedback, tracker_id
+                    return score, feedback
 
                 except json.JSONDecodeError:
                     # If not valid JSON, extract score and feedback manually
@@ -272,46 +257,20 @@ class LLMService:
                     # Ensure score is within bounds
                     score = max(0, min(score, max_score))
 
-                    # Update progress - Step 5: Complete (with manual extraction)
-                    progress_tracker.update_progress(
-                        tracker_id=tracker_id,
-                        current_step=5,
-                        status="completed",
-                        message="Answer comparison completed with manual extraction",
-                        completed=True,
-                        success=True,
-                        result={"score": score, "feedback": response_text}
-                    )
+                    # Log completion with manual extraction
+                    logger.info("Answer comparison completed with manual extraction")
 
-                    return score, response_text, tracker_id
+                    return score, response_text
             else:
-                # Update progress - Error
-                progress_tracker.update_progress(
-                    tracker_id=tracker_id,
-                    status="failed",
-                    message="No valid response received from API",
-                    completed=True,
-                    success=False,
-                    error="No valid response received from API"
-                )
-
+                # Log error
+                logger.error("No valid response received from API")
                 raise LLMServiceError("No valid response received from API")
 
         except Exception as e:
             logger.error(f"Answer comparison failed: {str(e)}")
 
-            # Update progress - Error
-            progress_tracker.update_progress(
-                tracker_id=tracker_id,
-                status="failed",
-                message=f"Answer comparison failed: {str(e)}",
-                completed=True,
-                success=False,
-                error=str(e)
-            )
-
-            # Return a default score, error message, and tracker ID
-            return 0, f"Error: {str(e)}", tracker_id
+            # Return a default score and error message
+            return 0, f"Error: {str(e)}"
 
     def grade_submission(
         self,

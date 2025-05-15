@@ -47,10 +47,7 @@ endblock %} {% block content %}
       <div class="col-md-3 mb-3">
         <div class="p-3 bg-light rounded">
           <h2 class="display-5 fw-bold text-primary">
-            {% set total_score = 0 %} {% for mapping in mapping_result.mappings
-            %} {% if mapping.max_score is defined and mapping.max_score %} {%
-            set total_score = total_score + mapping.max_score %} {% endif %} {%
-            endfor %} {{ total_score }}
+            {{ mapping_result.overall_grade.max_possible_score }}
           </h2>
           <p class="mb-0">Total Points Available</p>
         </div>
@@ -59,44 +56,103 @@ endblock %} {% block content %}
   </div>
 </div>
 
-<!-- Guide Type Information -->
-<div class="card mb-4">
-  <div class="card-header bg-info text-white">
-    <h5 class="mb-0">Guide Type Analysis</h5>
-    <small class="text-white-50"
-      >AI-determined guide type for intelligent mapping</small
-    >
+<!-- Score and Guide Type Information -->
+<div class="row">
+  <!-- Score Information -->
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header bg-success text-white">
+        <h5 class="mb-0">Score Information</h5>
+        <small class="text-white-50">Overall score and points breakdown</small>
+      </div>
+      <div class="card-body">
+        <div class="row align-items-center">
+          <div class="col-md-6 text-center mb-3">
+            <div
+              class="score-circle mb-2 {% if mapping_result.overall_grade.percentage >= 80 %}bg-success {% elif mapping_result.overall_grade.percentage >= 60 %}bg-primary {% elif mapping_result.overall_grade.percentage >= 40 %}bg-warning {% else %}bg-danger{% endif %}"
+            >
+              {{ mapping_result.overall_grade.percentage|round|int }}%
+            </div>
+            <h5>Overall Score</h5>
+          </div>
+          <div class="col-md-6">
+            <ul class="list-group">
+              <li
+                class="list-group-item d-flex justify-content-between align-items-center"
+              >
+                Points Earned
+                <span class="badge bg-primary rounded-pill"
+                  >{{ mapping_result.overall_grade.total_score }}</span
+                >
+              </li>
+              <li
+                class="list-group-item d-flex justify-content-between align-items-center"
+              >
+                Total Available
+                <span class="badge bg-success rounded-pill"
+                  >{{ mapping_result.overall_grade.max_possible_score }}</span
+                >
+              </li>
+              <li
+                class="list-group-item d-flex justify-content-between align-items-center"
+              >
+                Letter Grade
+                <span class="badge bg-info rounded-pill"
+                  >{{ mapping_result.overall_grade.letter_grade }}</span
+                >
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
-  <div class="card-body">
-    <div class="alert alert-info">
-      <i class="bi bi-info-circle me-2"></i>
-      <strong>Guide Type:</strong>
-      {% if mapping_result.metadata.guide_type == "questions" %} This marking
-      guide contains <strong>questions</strong> that students need to answer.
-      The mapping shows how student answers match with guide questions.
-      <div class="mt-2">
-        <strong>Number of Questions to Answer:</strong> {{
-        session.get('num_questions', 1) }}
-        <p class="small text-muted mt-1">
-          The AI has identified the best {{ session.get('num_questions', 1) }}
-          answers in the student submission and mapped them to the corresponding
-          questions in the marking guide.
-        </p>
+
+  <!-- Guide Type Information -->
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header bg-info text-white">
+        <h5 class="mb-0">Guide Type Analysis</h5>
+        <small class="text-white-50"
+          >AI-determined guide type for intelligent mapping</small
+        >
       </div>
-      {% elif mapping_result.metadata.guide_type == "answers" %} This marking
-      guide contains <strong>model answers</strong> to questions. The mapping
-      shows how student answers match with guide answers for the same questions.
-      <div class="mt-2">
-        <strong>Number of Questions to Answer:</strong> {{
-        session.get('num_questions', 1) }}
-        <p class="small text-muted mt-1">
-          The AI has identified the best {{ session.get('num_questions', 1) }}
-          answers in the student submission and mapped them to the corresponding
-          model answers in the marking guide.
-        </p>
+      <div class="card-body">
+        <div class="alert alert-info">
+          <i class="bi bi-info-circle me-2"></i>
+          <strong>Guide Type:</strong>
+          {% if mapping_result.metadata.guide_type == "questions" %} This
+          marking guide contains <strong>questions</strong> that students need
+          to answer. The mapping shows how student answers match with guide
+          questions.
+          <div class="mt-2">
+            <strong>Number of Questions to Answer:</strong> {{
+            mapping_result.metadata.num_questions|default(1) }}
+            <p class="small text-muted mt-1">
+              The AI has identified the best {{
+              mapping_result.metadata.num_questions|default(1) }} answers in the
+              student submission and mapped them to the corresponding questions
+              in the marking guide.
+            </p>
+          </div>
+          {% elif mapping_result.metadata.guide_type == "answers" %} This
+          marking guide contains <strong>model answers</strong> to questions.
+          The mapping shows how student answers match with guide answers for the
+          same questions.
+          <div class="mt-2">
+            <strong>Number of Questions to Answer:</strong> {{
+            mapping_result.metadata.num_questions|default(1) }}
+            <p class="small text-muted mt-1">
+              The AI has identified the best {{
+              mapping_result.metadata.num_questions|default(1) }} answers in the
+              student submission and mapped them to the corresponding model
+              answers in the marking guide.
+            </p>
+          </div>
+          {% else %} The guide type could not be determined. Basic text matching
+          was used. {% endif %}
+        </div>
       </div>
-      {% else %} The guide type could not be determined. Basic text matching was
-      used. {% endif %}
     </div>
   </div>
 </div>
@@ -339,247 +395,72 @@ endblock %} {% block content %}
   </div>
 </div>
 
-<!-- Unmapped Sections -->
+<!-- Raw Content Sections -->
 <div class="row">
-  <!-- Unmapped Guide Items -->
+  <!-- Raw Guide Content -->
   <div class="col-md-6">
     <div class="card mb-4">
-      <div class="card-header bg-warning text-dark">
-        <h5 class="mb-0">
-          <button
-            class="btn btn-link text-dark text-decoration-none p-0"
-            type="button"
-            data-bs-toggle="collapse"
-            data-bs-target="#unmappedGuideSections"
-            aria-expanded="true"
-            aria-controls="unmappedGuideSections"
-          >
-            <i class="bi bi-chevron-down me-1"></i> Unmapped Guide Sections
-            <span class="badge bg-dark ms-2"
-              >{{ mapping_result.unmapped_guide_items|length if
-              mapping_result.unmapped_guide_items else 0 }}</span
-            >
-          </button>
-        </h5>
-        <small class="text-dark-50"
-          >Guide text sections without matching submission content</small
-        >
-      </div>
-      <div class="collapse show" id="unmappedGuideSections">
-        <div class="card-body">
-          {% if mapping_result.unmapped_guide_items %}
-          <div class="alert alert-warning mb-3">
-            <i class="bi bi-info-circle me-2"></i>
-            <strong
-              >{{ mapping_result.unmapped_guide_items|length }} guide
-              items</strong
-            >
-            couldn't be matched to the submission. These items may represent
-            questions that weren't answered or content that wasn't addressed in
-            the submission.
-          </div>
-
-          <div class="accordion" id="unmappedGuideAccordion">
-            {% for item in mapping_result.unmapped_guide_items %}
-            <div class="accordion-item mb-3 border-warning">
-              <h2
-                class="accordion-header"
-                id="unmappedGuideHeading{{ loop.index }}"
-              >
-                <button
-                  class="accordion-button {% if loop.index > 1 %}collapsed{% endif %}"
-                  type="button"
-                  data-bs-toggle="collapse"
-                  data-bs-target="#unmappedGuideCollapse{{ loop.index }}"
-                  aria-expanded="{{ 'true' if loop.index == 1 else 'false' }}"
-                  aria-controls="unmappedGuideCollapse{{ loop.index }}"
-                >
-                  <div
-                    class="d-flex justify-content-between align-items-center w-100 me-3"
-                  >
-                    <div>
-                      <span class="fw-bold"
-                        >Unmapped Guide Item #{{ loop.index }}</span
-                      >
-                      {% if item.text %}
-                      <span class="text-muted ms-2"
-                        >{{ item.text|truncate(50) }}</span
-                      >
-                      {% endif %}
-                    </div>
-                    <div class="d-flex gap-2">
-                      {% if item.id %}
-                      <span class="badge bg-primary">ID: {{ item.id }}</span>
-                      {% endif %} {% if item.type %}
-                      <span class="badge bg-secondary"
-                        >Type: {{ item.type }}</span
-                      >
-                      {% endif %} {% if item.max_score %}
-                      <span class="badge bg-success"
-                        >{{ item.max_score }} marks</span
-                      >
-                      {% endif %}
-                    </div>
-                  </div>
-                </button>
-              </h2>
-              <div
-                id="unmappedGuideCollapse{{ loop.index }}"
-                class="accordion-collapse collapse {% if loop.index == 1 %}show{% endif %}"
-                aria-labelledby="unmappedGuideHeading{{ loop.index }}"
-                data-bs-parent="#unmappedGuideAccordion"
-              >
-                <div class="accordion-body">
-                  <div class="card mb-3">
-                    <div class="card-header bg-light">
-                      <strong>Guide Text</strong>
-                    </div>
-                    <div class="card-body">
-                      <div class="guide-text">{{ item.text }}</div>
-                    </div>
-                  </div>
-
-                  {% if item.answer %}
-                  <div class="card">
-                    <div class="card-header bg-light">
-                      <strong>Expected Answer</strong>
-                    </div>
-                    <div class="card-body">
-                      <div class="guide-answer">{{ item.answer }}</div>
-                    </div>
-                  </div>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-            {% endfor %}
-          </div>
-          {% else %}
-          <div class="alert alert-success">
-            <i class="bi bi-check-circle me-2"></i>
-            All guide text sections have been mapped to submission content!
-          </div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Unmapped Submission Items -->
-  <div class="col-md-6">
-    <div class="card mb-4">
-      <div class="card-header bg-danger text-white">
+      <div class="card-header bg-primary text-white">
         <h5 class="mb-0">
           <button
             class="btn btn-link text-white text-decoration-none p-0"
             type="button"
             data-bs-toggle="collapse"
-            data-bs-target="#unmappedSubmissionSections"
+            data-bs-target="#rawGuideContent"
             aria-expanded="true"
-            aria-controls="unmappedSubmissionSections"
+            aria-controls="rawGuideContent"
           >
-            <i class="bi bi-chevron-down me-1"></i> Unmapped Submission Sections
-            <span class="badge bg-light text-danger ms-2"
-              >{{ mapping_result.unmapped_submission_items|length if
-              mapping_result.unmapped_submission_items else 0 }}</span
-            >
+            <i class="bi bi-chevron-down me-1"></i> Marking Guide Content
           </button>
         </h5>
-        <small class="text-white-50"
-          >Submission text sections without matching guide content</small
-        >
+        <small class="text-white-50">Complete marking guide content</small>
       </div>
-      <div class="collapse show" id="unmappedSubmissionSections">
+      <div class="collapse show" id="rawGuideContent">
         <div class="card-body">
-          {% if mapping_result.unmapped_submission_items %}
-          <div class="alert alert-danger mb-3">
-            <i class="bi bi-info-circle me-2"></i>
-            <strong
-              >{{ mapping_result.unmapped_submission_items|length }} submission
-              items</strong
-            >
-            couldn't be matched to the guide. These items may represent
-            additional content provided by the student that wasn't requested in
-            the guide.
-          </div>
-
-          <div class="accordion" id="unmappedSubmissionAccordion">
-            {% for item in mapping_result.unmapped_submission_items %}
-            <div class="accordion-item mb-3 border-danger">
-              <h2
-                class="accordion-header"
-                id="unmappedSubmissionHeading{{ loop.index }}"
-              >
-                <button
-                  class="accordion-button {% if loop.index > 1 %}collapsed{% endif %}"
-                  type="button"
-                  data-bs-toggle="collapse"
-                  data-bs-target="#unmappedSubmissionCollapse{{ loop.index }}"
-                  aria-expanded="{{ 'true' if loop.index == 1 else 'false' }}"
-                  aria-controls="unmappedSubmissionCollapse{{ loop.index }}"
-                >
-                  <div
-                    class="d-flex justify-content-between align-items-center w-100 me-3"
-                  >
-                    <div>
-                      <span class="fw-bold"
-                        >Unmapped Submission Item #{{ loop.index }}</span
-                      >
-                      {% if item.text %}
-                      <span class="text-muted ms-2"
-                        >{{ item.text|truncate(50) }}</span
-                      >
-                      {% endif %}
-                    </div>
-                    <div class="d-flex gap-2">
-                      {% if item.id %}
-                      <span class="badge bg-info">ID: {{ item.id }}</span>
-                      {% endif %} {% if item.type %}
-                      <span class="badge bg-secondary"
-                        >Type: {{ item.type }}</span
-                      >
-                      {% endif %}
-                    </div>
-                  </div>
-                </button>
-              </h2>
-              <div
-                id="unmappedSubmissionCollapse{{ loop.index }}"
-                class="accordion-collapse collapse {% if loop.index == 1 %}show{% endif %}"
-                aria-labelledby="unmappedSubmissionHeading{{ loop.index }}"
-                data-bs-parent="#unmappedSubmissionAccordion"
-              >
-                <div class="accordion-body">
-                  <div class="card mb-3">
-                    <div class="card-header bg-light">
-                      <strong>Submission Text</strong>
-                    </div>
-                    <div class="card-body">
-                      <div class="submission-text">{{ item.text }}</div>
-                    </div>
-                  </div>
-
-                  {% if item.answer %}
-                  <div class="card">
-                    <div class="card-header bg-light">
-                      <strong>Student Answer</strong>
-                    </div>
-                    <div class="card-body">
-                      <div class="submission-answer">{{ item.answer }}</div>
-                    </div>
-                  </div>
-                  {% endif %}
-                </div>
-              </div>
+          <div class="bg-light p-3 rounded guide-content">
+            {% if mapping_result.raw_guide_content %} {{
+            mapping_result.raw_guide_content }} {% else %}
+            <div class="alert alert-warning">
+              <i class="bi bi-exclamation-triangle me-2"></i>
+              No guide content available. Please try uploading the guide again.
             </div>
-            {% endfor %}
+            {% endif %}
           </div>
-          {% else %}
-          <div class="alert alert-success">
-            <i class="bi bi-check-circle me-2"></i>
-            All submission text sections have been mapped to guide content!
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Raw Submission Content -->
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header bg-info text-white">
+        <h5 class="mb-0">
+          <button
+            class="btn btn-link text-white text-decoration-none p-0"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#rawSubmissionContent"
+            aria-expanded="true"
+            aria-controls="rawSubmissionContent"
+          >
+            <i class="bi bi-chevron-down me-1"></i> Student Submission Content
+          </button>
+        </h5>
+        <small class="text-white-50">Complete student submission content</small>
+      </div>
+      <div class="collapse show" id="rawSubmissionContent">
+        <div class="card-body">
+          <div class="bg-light p-3 rounded submission-content">
+            {% if mapping_result.raw_submission_content %} {{
+            mapping_result.raw_submission_content }} {% else %}
+            <div class="alert alert-warning">
+              <i class="bi bi-exclamation-triangle me-2"></i>
+              No submission content available. Please try uploading the
+              submission again.
+            </div>
+            {% endif %}
           </div>
-          {% endif %}
         </div>
       </div>
     </div>
@@ -615,7 +496,7 @@ endblock %} {% block content %}
       <div class="col-md-4">
         <form action="{{ url_for('grade_submission') }}" method="post">
           <button type="submit" class="btn btn-primary btn-lg w-100">
-            <i class="bi bi-award me-1"></i> Grade Submission
+            <i class="bi bi-award me-1"></i> View Grading Results
           </button>
         </form>
       </div>
@@ -625,10 +506,14 @@ endblock %} {% block content %}
 {% endblock %} {% block extra_css %}
 <style>
   .guide-text,
-  .submission-text {
+  .submission-text,
+  .guide-content,
+  .submission-content {
     white-space: pre-wrap;
     font-family: var(--font-mono);
     font-size: 0.9rem;
+    max-height: 400px;
+    overflow-y: auto;
   }
   .guide-answer,
   .submission-answer {
@@ -648,6 +533,18 @@ endblock %} {% block content %}
   }
   .parent-question {
     margin-bottom: 0.5rem;
+  }
+  .score-circle {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.8rem;
+    font-weight: bold;
+    margin: 0 auto;
   }
   .match-reason {
     font-size: 0.9rem;
@@ -700,40 +597,22 @@ endblock %} {% block content %}
           // Disable the button and show loading state
           gradeButton.disabled = true;
           gradeButton.innerHTML =
-            '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Grading...';
+            '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Loading Results...';
         }
 
         // Create a loader with appropriate messaging
         const loader = new Loader({
           type: "dots",
-          text: "Grading Submission...",
-          subText: "This may take a minute or two",
-          statusText: "Analyzing answers and calculating scores",
+          text: "Loading Grading Results...",
+          subText: "Just a moment",
+          statusText: "Preparing results view",
         });
         loader.show();
 
-        // Create a progress tracker just to get a tracker ID (but we won't display it)
-        fetch("/api/progress", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            operation_type: "llm",
-            task_name: "Grading Submission",
-            total_steps: 5,
-          }),
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            // Submit the form
-            this.submit();
-          })
-          .catch((error) => {
-            console.error("Error creating progress tracker:", error);
-            // Submit the form anyway
-            this.submit();
-          });
+        // Submit the form after a short delay
+        setTimeout(() => {
+          this.submit();
+        }, 500);
       });
     }
   });
