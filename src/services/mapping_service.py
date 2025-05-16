@@ -492,6 +492,12 @@ class MappingService:
                     Do not attempt to extract questions and answers - work directly with the raw text.
                     Create mappings between related parts of the guide and submission.
 
+                    IMPORTANT SCORING INSTRUCTIONS:
+                    1. When calculating the total available points, ONLY include the marks from the {num_questions} best-matched questions
+                    2. Sort all potential answers by quality and completeness
+                    3. Select only the best {num_questions} answers for grading
+                    4. Calculate the total available points as the sum of maximum marks for only those {num_questions} mapped questions
+
                     IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide.
                     Find the best {num_questions} answers in the student submission and map them to the corresponding questions in the marking guide.
                     If there are more potential answers, select only the best {num_questions} based on quality and completeness.
@@ -519,7 +525,7 @@ class MappingService:
                     - Identify strengths and weaknesses in the answer
 
                     Finally, calculate an overall grade by summing all scores and determining the percentage of total available marks.
-                    The total possible score should be the sum of the maximum marks for the {num_questions} questions that were mapped.
+                    IMPORTANT: The total possible score should be the sum of the maximum marks for ONLY the {num_questions} questions that were mapped, not all questions in the guide.
 
                     CRITICAL INSTRUCTIONS:
                     1. DO NOT include any comments in the JSON response
@@ -784,6 +790,30 @@ class MappingService:
 
                     # If overall grade wasn't provided by the LLM, calculate it
                     if not overall_grade:
+                        # If num_questions is specified and there are more mappings than needed,
+                        # we need to select only the best N mappings for the total score calculation
+                        if num_questions and len(parsed.get("mappings", [])) > num_questions:
+                            # Sort mappings by grade_score in descending order
+                            sorted_mappings = sorted(
+                                parsed.get("mappings", []),
+                                key=lambda m: float(m.get("grade_score", 0)),
+                                reverse=True
+                            )
+
+                            # Take only the top N mappings
+                            best_mappings = sorted_mappings[:num_questions]
+
+                            # Recalculate total_score and max_possible_score based on best N mappings
+                            total_score = sum(float(m.get("grade_score", 0)) for m in best_mappings)
+                            max_possible_score = sum(float(m.get("max_score", 0)) for m in best_mappings)
+
+                            # Store the total marks available in the guide for reference
+                            total_marks_available = sum(float(m.get("max_score", 0)) for m in parsed.get("mappings", []))
+                        else:
+                            # If num_questions is not specified or there are fewer mappings than num_questions,
+                            # use all mappings
+                            total_marks_available = max_possible_score
+
                         # Calculate percentage
                         percentage = (total_score / max_possible_score * 100) if max_possible_score > 0 else 0
 
@@ -800,6 +830,11 @@ class MappingService:
                             "percentage": round(percentage, 1),
                             "letter_grade": letter_grade
                         }
+
+                        # Add total marks available to metadata
+                        if 'metadata' not in parsed:
+                            parsed['metadata'] = {}
+                        parsed['metadata']['total_marks_available'] = total_marks_available
 
                 except Exception as e:
                     logger.error(f"LLM mapping failed: {str(e)}")
@@ -819,7 +854,10 @@ class MappingService:
                             "guide_type": "unknown",
                             "mapping_method": "Failed LLM",
                             "timestamp": datetime.now().isoformat(),
-                            "num_questions": num_questions
+                            "num_questions": num_questions,
+                            "total_marks_available": 0,
+                            "total_questions": 0,
+                            "questions_to_answer": num_questions
                         },
                         "raw_guide_content": marking_guide_content,
                         "raw_submission_content": student_submission_content,
@@ -853,17 +891,47 @@ class MappingService:
                 # Calculate total score and max possible score
                 total_score = 0
                 max_possible_score = 0
+                total_marks_available = 0
 
-                # Calculate the total points from all mappings
-                for mapping in mappings:
-                    if mapping.get('grade_score') is not None:
-                        total_score += mapping.get('grade_score', 0)
-                    if mapping.get('max_score') is not None:
-                        max_possible_score += mapping.get('max_score', 0)
+                # If num_questions is specified and there are more mappings than needed,
+                # we need to select only the best N mappings for the total score calculation
+                if num_questions and len(mappings) > num_questions:
+                    # Sort mappings by grade_score in descending order
+                    sorted_mappings = sorted(
+                        mappings,
+                        key=lambda m: float(m.get("grade_score", 0)),
+                        reverse=True
+                    )
+
+                    # Take only the top N mappings
+                    best_mappings = sorted_mappings[:num_questions]
+
+                    # Calculate the total points from the best N mappings
+                    for mapping in best_mappings:
+                        if mapping.get('grade_score') is not None:
+                            total_score += mapping.get('grade_score', 0)
+                        if mapping.get('max_score') is not None:
+                            max_possible_score += mapping.get('max_score', 0)
+
+                    # Calculate total marks available from all mappings
+                    for mapping in mappings:
+                        if mapping.get('max_score') is not None:
+                            total_marks_available += mapping.get('max_score', 0)
+                else:
+                    # Calculate the total points from all mappings
+                    for mapping in mappings:
+                        if mapping.get('grade_score') is not None:
+                            total_score += mapping.get('grade_score', 0)
+                        if mapping.get('max_score') is not None:
+                            max_possible_score += mapping.get('max_score', 0)
+
+                    # If all mappings are used, total marks available is the same as max_possible_score
+                    total_marks_available = max_possible_score
 
                 # Ensure max_possible_score is not zero to avoid division by zero
                 if max_possible_score == 0:
                     max_possible_score = 100  # Default to 100 if no max score is found
+                    total_marks_available = 100
 
                 # Calculate percentage
                 percentage = (total_score / max_possible_score * 100) if max_possible_score > 0 else 0
@@ -892,7 +960,10 @@ class MappingService:
                     "mapping_count": len(mappings),
                     "guide_type": guide_type,
                     "mapping_method": "LLM" if self.llm_service else "Text-based",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
+                    "total_marks_available": total_marks_available if 'total_marks_available' in locals() else overall_grade.get("max_possible_score", 0),
+                    "total_questions": len(mappings),
+                    "questions_to_answer": num_questions
                 },
                 "raw_guide_content": marking_guide_content,
                 "raw_submission_content": student_submission_content,
