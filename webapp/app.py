@@ -37,7 +37,7 @@ from src.config.config_manager import ConfigManager
 from src.parsing.parse_guide import parse_marking_guide
 from src.parsing.parse_submission import parse_student_submission
 from src.services.ocr_service import OCRServiceError
-from src.services.llm_service import LLMService
+from src.services.llm_service_patched import LLMService
 from src.services.grading_service import GradingService
 from src.services.mapping_service import MappingService
 from src.storage.guide_storage import GuideStorage
@@ -88,7 +88,7 @@ def create_app():
 
     try:
         # Initialize LLM service first with deterministic mode for consistent results
-        from src.services.llm_service import LLMService
+        from src.services.llm_service_patched import LLMService
         llm_service = LLMService(
             temperature=0.0,
             seed=42,  # Fixed seed for consistent results

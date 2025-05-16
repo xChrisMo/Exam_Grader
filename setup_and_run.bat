@@ -16,7 +16,7 @@ if %ERRORLEVEL% NEQ 0 (
 REM Create and activate virtual environment
 echo Creating virtual environment...
 python -m venv venv
-call venv\Scripts\activate.bat
+call venv\Scriptsctivate.bat
 
 REM Install dependencies
 echo Installing required packages...
