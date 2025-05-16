@@ -85,10 +85,14 @@ class LLMService:
 
         try:
             # Initialize OpenAI client with DeepSeek configuration - simplified initialization
-            self.client = OpenAI(
-                api_key=self.api_key,
-                base_url=self.base_url
-            )
+            # Only pass the essential parameters to ensure compatibility across different OpenAI package versions
+            client_params = {
+                "api_key": self.api_key,
+                "base_url": self.base_url
+            }
+
+            # Create the client with only the essential parameters
+            self.client = OpenAI(**client_params)
             logger.info(f"LLM service initialized with model: {self.model}")
         except Exception as e:
             logger.error(f"Failed to initialize LLM service: {str(e)}")
