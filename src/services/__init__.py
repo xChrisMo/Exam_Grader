@@ -12,7 +12,7 @@ load_dotenv()
 
 # Import services
 from src.services.ocr_service import OCRService, OCRServiceError
-from src.services.llm_service_patched import LLMService, LLMServiceError
+from src.services.llm_service_latest import LLMService, LLMServiceError
 from src.services.mapping_service import MappingService
 from src.services.grading_service import GradingService
 

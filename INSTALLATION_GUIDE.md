@@ -41,6 +41,15 @@ This guide will help you install and run the Exam Grader application on a new PC
 
 ## Troubleshooting
 
+## Latest Libraries
+
+This application now uses the latest versions of all libraries, including:
+
+- OpenAI API client (1.12.0+)
+- Flask (3.0.2+)
+- Pandas (2.2.0+)
+- PyMuPDF (1.23.8+)
+
 ### "Client._init_() got an unexpected keyword argument 'proxies'" Error
 
 If you encounter this error, it means there's an issue with the OpenAI library version. The application has been patched to use a compatible version (0.28.1), but if you still encounter this error:

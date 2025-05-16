@@ -4,7 +4,7 @@ LLM Service for grading exam submissions using DeepSeek Reasoner API.
 This module provides a service for integrating with the DeepSeek API to grade
 student exam submissions against marking guides.
 
-This is a patched version that handles different versions of the OpenAI library.
+This is an updated version that works with the latest OpenAI library.
 """
 
 import os
@@ -14,6 +14,7 @@ import time
 import re
 import threading
 import importlib.metadata
+from packaging import version
 
 from dotenv import load_dotenv
 
@@ -87,20 +88,20 @@ class LLMService:
 
             # Get the OpenAI version
             try:
-                openai_version = importlib.metadata.version("openai")
-                logger.info(f"Using OpenAI library version: {openai_version}")
-            except importlib.metadata.PackageNotFoundError:
-                openai_version = "unknown"
+                openai_version_str = importlib.metadata.version("openai")
+                openai_version = version.parse(openai_version_str)
+                logger.info(f"Using OpenAI library version: {openai_version_str}")
+            except (importlib.metadata.PackageNotFoundError, version.InvalidVersion):
+                openai_version = version.parse("0.0.0")
                 logger.warning("Could not determine OpenAI library version")
 
-            # Initialize OpenAI client with only the essential parameters
-            # This approach works across different versions of the OpenAI library
+            # Initialize OpenAI client with parameters based on version
             client_params = {
                 "api_key": self.api_key,
                 "base_url": self.base_url
             }
 
-            # Create the client with only the essential parameters
+            # Create the client with appropriate parameters
             self.client = OpenAI(**client_params)
             logger.info(f"LLM service initialized with model: {self.model}")
         except Exception as e:
@@ -338,7 +339,8 @@ class LLMService:
     def map_submission_to_guide(
         self,
         marking_guide_content: str,
-        student_submission_content: str
+        student_submission_content: str,
+        num_questions: int = None
     ) -> Tuple[Dict, Optional[str]]:
         """
         Map a student submission to a marking guide.
@@ -347,6 +349,7 @@ class LLMService:
         Args:
             marking_guide_content: Full text of the marking guide
             student_submission_content: Full text of the student submission
+            num_questions: Optional number of questions to map (for best N answers)
 
         Returns:
             Tuple[Dict, Optional[str]]: (Mapping result, Error message if any)
@@ -358,7 +361,14 @@ class LLMService:
         mapping_service = MappingService(llm_service=self)
 
         # Map the submission to the guide
-        return mapping_service.map_submission_to_guide(
-            marking_guide_content,
-            student_submission_content
-        )
+        if num_questions is not None:
+            return mapping_service.map_submission_to_guide(
+                marking_guide_content,
+                student_submission_content,
+                num_questions=num_questions
+            )
+        else:
+            return mapping_service.map_submission_to_guide(
+                marking_guide_content,
+                student_submission_content
+            )

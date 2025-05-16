@@ -20,6 +20,7 @@ call venv\Scriptsctivate.bat
 
 REM Install dependencies
 echo Installing required packages...
+pip install packaging
 pip install -r requirements.txt
 
 if %ERRORLEVEL% NEQ 0 (

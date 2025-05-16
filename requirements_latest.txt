@@ -1,0 +1,37 @@
+# Python Version Requirement
+# Requires Python 3.8 or higher
+# python>=3.8.0
+
+# Core Dependencies
+requests>=2.31.0  # HTTP library for API requests and web services
+python-dotenv>=1.0.1  # Environment variable management from .env files
+numpy>=1.26.4  # Numerical computing library for data processing
+pandas>=2.2.0  # Data analysis and manipulation library
+openpyxl>=3.1.2  # Excel file handling for report generation
+openai>=1.12.0  # OpenAI API client for LLM integration
+MarkupSafe>=3.0.2  # String handling for HTML/XML content
+validators>=0.22.0  # Input validation utilities
+packaging>=23.2  # Version parsing and comparison utilities
+
+# Document Processing
+PyMuPDF>=1.23.8  # PDF processing and text extraction
+python-docx>=1.1.0  # Microsoft Word document processing
+Pillow>=10.2.0  # Image processing for OCR and file handling
+
+# Web Framework
+Flask>=3.0.2  # Web application framework
+Werkzeug>=3.0.1  # WSGI utility library for Flask
+Jinja2>=3.1.2  # Template engine for Flask
+
+# Development Dependencies
+pytest>=8.0.0  # Testing framework
+black>=24.2.0  # Code formatter
+isort>=5.13.2  # Import sorter
+flake8>=7.0.0  # Linter for style guide enforcement
+mypy>=1.8.0  # Static type checker
+pytest-cov>=4.1.0  # Test coverage plugin for pytest
+
+# Type Stubs
+types-requests>=2.31.0.2  # Type stubs for requests
+types-python-dateutil>=2.8.19.14  # Type stubs for dateutil
+types-PyYAML>=6.0.12.12  # Type stubs for PyYAML
