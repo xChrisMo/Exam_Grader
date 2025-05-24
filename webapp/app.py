@@ -1,14 +1,14 @@
 """
 Exam Grader web application.
-This module contains the Flask application factory and registers all blueprints.
+Flask application factory with all routes and functionality.
 """
 
 import os
 import sys
+import io
 import re
 from pathlib import Path
 from datetime import datetime
-from functools import wraps
 
 # Add parent directory to path to resolve imports
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -16,28 +16,19 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 from flask import (
-    Flask,
-    render_template,
-    request,
-    redirect,
-    url_for,
-    flash,
-    session,
-    jsonify,
-    send_from_directory,
-    current_app,
-    Response
+    Flask, render_template, request, redirect, url_for, flash,
+    session, jsonify, send_from_directory, Response
 )
+from flask_session import Session
 import pandas as pd
-import io
 from werkzeug.utils import secure_filename
 from markupsafe import Markup
 
+# Import application modules
 from src.config.config_manager import ConfigManager
 from src.parsing.parse_guide import parse_marking_guide
 from src.parsing.parse_submission import parse_student_submission
-from src.services.ocr_service import OCRServiceError
-from src.services.llm_service_latest import LLMService
+from src.services.llm_service import LLMService
 from src.services.grading_service import GradingService
 from src.services.mapping_service import MappingService
 from src.storage.guide_storage import GuideStorage
@@ -53,6 +44,40 @@ config = config_manager.config
 logger = Logger().get_logger()
 logger.setLevel(config.log_level)
 
+def process_submission(file_path, file_content, submission_storage):
+    """
+    Process a submission file and return results.
+
+    Args:
+        file_path: Path to the submission file
+        file_content: Raw bytes of the file
+        submission_storage: Storage instance for submissions
+
+    Returns:
+        Tuple of (results_dict, raw_text, error_message)
+    """
+    try:
+        # Parse the submission to extract raw text
+        results, raw_text, error = parse_student_submission(file_path)
+
+        if error:
+            logger.error(f"Failed to parse submission: {error}")
+            return None, None, error
+
+        if not raw_text:
+            logger.error("No text content extracted from submission")
+            return None, None, "No text content could be extracted from the file"
+
+        # Store the results in cache
+        file_hash = submission_storage.store_results(file_content, os.path.basename(file_path), results, raw_text)
+        logger.info(f"Stored submission results in cache with hash: {file_hash}")
+
+        return results, raw_text, None
+
+    except Exception as e:
+        logger.error(f"Error processing submission: {str(e)}")
+        return None, None, f"Error processing submission: {str(e)}"
+
 def create_app():
     """
     Flask application factory.
@@ -65,21 +90,31 @@ def create_app():
                 template_folder='templates')
 
     # Configure Flask app
+    upload_folder = os.path.join(config.temp_dir, 'uploads')
     app.config.from_mapping(
         SECRET_KEY=config.secret_key,
         MAX_CONTENT_LENGTH=config.max_file_size_mb * 1024 * 1024,
-        UPLOAD_FOLDER=os.path.join(config.temp_dir, 'uploads'),
+        UPLOAD_FOLDER=upload_folder,
         DEBUG=config.debug,
         HOST=config.host,
         PORT=config.port
     )
+
+    # Configure session
+    app.config['SESSION_TYPE'] = 'filesystem'
+    app.config['SESSION_FILE_DIR'] = os.path.join(config.temp_dir, 'flask_session')
+    Session(app)
+
+    # Ensure required directories exist
+    Path(upload_folder).mkdir(parents=True, exist_ok=True)
+    Path(app.config['SESSION_FILE_DIR']).mkdir(parents=True, exist_ok=True)
 
     # Initialize storages
     guide_storage = GuideStorage()
     submission_storage = SubmissionStorage()
     results_storage = ResultsStorage()
 
-    # Initialize services (always available with patched versions)
+    # Initialize services
     llm_service = None
     grading_service = None
     mapping_service = None
@@ -87,15 +122,8 @@ def create_app():
     llm_status = True  # Always set to True to enable features
 
     try:
-        # Initialize LLM service first with deterministic mode for consistent results
-        from src.services.llm_service_latest import LLMService
-        llm_service = LLMService(
-            temperature=0.0,
-            seed=42,  # Fixed seed for consistent results
-            deterministic=True
-        )
-
-        # Initialize mapping and grading services with LLM
+        # Initialize LLM service with deterministic mode for consistent results
+        llm_service = LLMService(temperature=0.0, seed=42, deterministic=True)
         mapping_service = MappingService(llm_service)
         grading_service = GradingService(llm_service, mapping_service)
         logger.info("Services initialized successfully with LLM support")
@@ -114,11 +142,6 @@ def create_app():
         logger.info("OCR service initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize OCR service: {str(e)}")
-
-
-
-    # Ensure upload directory exists
-    Path(app.config['UPLOAD_FOLDER']).mkdir(parents=True, exist_ok=True)
 
     @app.template_filter('nl2br')
     def nl2br(value):
@@ -187,9 +210,17 @@ def create_app():
     @app.route('/upload_guide', methods=['POST'])
     def upload_guide():
         """Handle marking guide upload."""
+        logger.info("🔥 GUIDE UPLOAD REQUEST RECEIVED")
+        logger.info(f"Request method: {request.method}")
+        logger.info(f"Request files: {list(request.files.keys())}")
+        logger.info(f"Request form: {dict(request.form)}")
+
+        file_path = None  # Initialize file_path to avoid UnboundLocalError
+
         try:
             # Check for file in request
             if 'file' not in request.files:
+                logger.error("❌ No file part in request")
                 flash('No file part', 'error')
                 return redirect(url_for('index'))
 
@@ -201,7 +232,7 @@ def create_app():
 
             # Validate file extension
             if not allowed_file(file.filename, {'.docx', '.txt'}):
-                flash('Invalid file format. Supported formats: .docx, .txt', 'error')
+                flash('Invalid file format. Supported formats: txt, docx', 'error')
                 return redirect(url_for('index'))
 
             # Save file temporarily
@@ -227,8 +258,10 @@ def create_app():
                 'questions': []    # Empty list since we're not parsing questions anymore
             }
 
-            # Store in cache
-            guide_storage.store_guide(file.read(), filename, {'raw_content': guide.raw_content})
+            # Store in cache (read file content separately since file was already saved)
+            with open(file_path, 'rb') as f:
+                file_content = f.read()
+            guide_storage.store_guide(file_content, filename, {'raw_content': guide.raw_content})
             logger.info(f"Stored marking guide in cache: {filename}")
 
             flash('Marking guide uploaded successfully', 'success')
@@ -249,9 +282,15 @@ def create_app():
     @app.route('/upload_submission', methods=['POST'])
     def upload_submission():
         """Handle student submission upload (supports multiple files)."""
+        logger.info("🔥 SUBMISSION UPLOAD REQUEST RECEIVED")
+        logger.info(f"Request method: {request.method}")
+        logger.info(f"Request files: {list(request.files.keys())}")
+        logger.info(f"Request form: {dict(request.form)}")
+
         try:
             # Check for file in request
             if 'file' not in request.files:
+                logger.error("❌ No file part in request")
                 flash('No file part', 'error')
                 return redirect(url_for('index'))
 
@@ -1699,86 +1738,26 @@ def create_app():
         flash(f'File too large. Maximum size is {config.max_file_size_mb}MB', 'error')
         return redirect(url_for('index'))
 
+    @app.route('/settings')
+    def settings():
+        """Settings page for application configuration."""
+        return render_template('settings.html')
+
+    @app.route('/help')
+    def help_page():
+        """Help page with user documentation."""
+        return render_template('help.html')
+
+
+
     return app
 
-def process_submission(file_path, file_content, submission_storage):
-    """
-    Process a submission file and return results.
 
-    Args:
-        file_path: Path to the submission file
-        file_content: Raw bytes of the file
-        submission_storage: Storage instance for submissions
-
-    Returns:
-        Tuple containing:
-        - Dict of question numbers to answers
-        - Raw extracted text
-        - Error message if any
-    """
-    try:
-        # Check if we have stored results
-        stored_results = submission_storage.get_results(file_content)
-        if stored_results:
-            logger.info(f"Using cached results for {Path(file_path).name}")
-            results, raw_text, _ = stored_results
-            return results, raw_text, None
-
-        # Process submission
-        results, raw_text, error = parse_student_submission(file_path)
-
-        # Log processing results
-        logger.info(f"Text extraction results:")
-        logger.info(f"- Raw text extracted: {bool(raw_text)}")
-        logger.info(f"- Raw text length: {len(raw_text) if raw_text else 0}")
-        logger.info(f"- Questions found: {len(results) if results else 0}")
-
-        if error:
-            logger.error(f"Processing Error: {error}")
-            return {}, raw_text or "", error
-
-        if not results and raw_text:
-            # If we have raw text but no questions found, return it as a single result
-            results = {'raw': raw_text}
-
-        if not results:
-            return {}, raw_text or "", "No text could be extracted from the document"
-
-        # Store successful results
-        if results and raw_text:
-            submission_storage.store_results(
-                file_content,
-                Path(file_path).name,
-                results,
-                raw_text
-            )
-
-        return results, raw_text or "", None
-
-    except OCRServiceError as e:
-        error_msg = str(e)
-
-        # Provide more user-friendly messages for common OCR errors
-        if "API key" in error_msg.lower():
-            error_msg = "OCR service configuration error. Please contact the administrator."
-        elif "timeout" in error_msg.lower():
-            error_msg = "OCR processing timed out. The document may be too complex or the service is busy. Please try again later."
-        elif "unsupported file format" in error_msg.lower():
-            error_msg = "The file format is not supported by the OCR service. Please try a different format."
-
-        logger.error(f"OCR service error: {str(e)}")
-        return {}, "", f"OCR processing failed: {error_msg}"
-
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-
-        # Provide better error messages for common exceptions
-        error_msg = str(e)
-        if isinstance(e, OSError):
-            error_msg = "File system error. The file may be corrupted or inaccessible."
-        elif isinstance(e, MemoryError):
-            error_msg = "Not enough memory to process this file. Please try a smaller file."
-        elif isinstance(e, TimeoutError):
-            error_msg = "Operation timed out. Please try again later."
-
-        return {}, "", f"Processing failed: {error_msg}"
+if __name__ == '__main__':
+    app = create_app()
+    print("🚀 Starting Exam Grader Application...")
+    print("📱 Dashboard: http://localhost:5000")
+    print("⚙️  Settings: http://localhost:5000/settings")
+    print("❓ Help: http://localhost:5000/help")
+    print("🛑 Press Ctrl+C to stop the server")
+    app.run(debug=True, host='0.0.0.0', port=5000)

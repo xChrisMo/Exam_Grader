@@ -1,0 +1,896 @@
+{% extends "base.html" %} {% block title %}Help - Exam Grader{% endblock %} {%
+block content %}
+<div class="page-header">
+  <h1><i class="bi bi-question-circle-fill"></i> Help & Documentation</h1>
+  <p class="page-subtitle">
+    Learn how to use the Exam Grader application effectively
+  </p>
+</div>
+
+<div class="dashboard-grid">
+  <!-- Help Navigation & Search -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="help-navigation">
+        <div class="help-search">
+          <div class="search-box">
+            <i class="bi bi-search"></i>
+            <input
+              type="text"
+              id="helpSearch"
+              placeholder="Search help topics..."
+              class="search-input"
+            />
+          </div>
+        </div>
+        <div class="help-tabs">
+          <button class="help-tab active" data-section="quick-start">
+            <i class="bi bi-play-circle"></i> Quick Start
+          </button>
+          <button class="help-tab" data-section="features">
+            <i class="bi bi-star"></i> Features
+          </button>
+          <button class="help-tab" data-section="faq">
+            <i class="bi bi-question-circle"></i> FAQ
+          </button>
+          <button class="help-tab" data-section="tips">
+            <i class="bi bi-lightbulb"></i> Tips
+          </button>
+          <button class="help-tab" data-section="troubleshooting">
+            <i class="bi bi-tools"></i> Troubleshooting
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Quick Start Section -->
+  <div class="help-section" id="quick-start-section">
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="main-card compact-card">
+          <div class="card-header">
+            <h4><i class="bi bi-play-circle"></i> Quick Start Guide</h4>
+            <p class="card-subtitle">
+              Get started with exam grading in 4 simple steps
+            </p>
+          </div>
+          <div class="card-content">
+            <div class="row">
+              <div class="col-md-6">
+                <div class="help-step">
+                  <div class="step-number">1</div>
+                  <div class="step-content">
+                    <h5>Upload Marking Guide</h5>
+                    <p>
+                      Upload your marking guide in .docx or .txt format. This
+                      contains the questions and expected answers or grading
+                      criteria.
+                    </p>
+                    <small class="text-muted"
+                      >Supported formats: .docx, .txt</small
+                    >
+                  </div>
+                </div>
+
+                <div class="help-step">
+                  <div class="step-number">2</div>
+                  <div class="step-content">
+                    <h5>Upload Student Submissions</h5>
+                    <p>
+                      Upload one or more student submissions. The system
+                      supports multiple file formats including handwritten
+                      documents.
+                    </p>
+                    <small class="text-muted"
+                      >Supported formats: .pdf, .docx, .txt, .jpg, .png</small
+                    >
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="help-step">
+                  <div class="step-number">3</div>
+                  <div class="step-content">
+                    <h5>Map & Grade</h5>
+                    <p>
+                      Use AI to automatically map student answers to marking
+                      guide questions and generate grades with detailed
+                      feedback.
+                    </p>
+                    <small class="text-muted"
+                      >Powered by advanced AI technology</small
+                    >
+                  </div>
+                </div>
+
+                <div class="help-step">
+                  <div class="step-number">4</div>
+                  <div class="step-content">
+                    <h5>Review Results</h5>
+                    <p>
+                      Review the grading results, download detailed reports, and
+                      export grades to Excel for further analysis.
+                    </p>
+                    <small class="text-muted"
+                      >Export options: Excel, detailed reports</small
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Features Section -->
+  <div class="help-section" id="features-section" style="display: none">
+    <div class="row g-3 mb-4">
+      <div class="col-lg-6">
+        <div class="main-card compact-card">
+          <div class="card-header">
+            <h4><i class="bi bi-star"></i> Key Features</h4>
+            <p class="card-subtitle">What makes Exam Grader powerful</p>
+          </div>
+          <div class="card-content">
+            <div class="feature-list">
+              <div class="feature-item">
+                <i class="bi bi-robot text-primary"></i>
+                <div>
+                  <h6>AI-Powered Grading</h6>
+                  <p>
+                    Advanced AI analyzes student responses and provides accurate
+                    grades with detailed feedback.
+                  </p>
+                </div>
+              </div>
+
+              <div class="feature-item">
+                <i class="bi bi-eye text-success"></i>
+                <div>
+                  <h6>Handwriting Recognition</h6>
+                  <p>
+                    OCR technology extracts text from handwritten submissions
+                    and scanned documents.
+                  </p>
+                </div>
+              </div>
+
+              <div class="feature-item">
+                <i class="bi bi-layers text-info"></i>
+                <div>
+                  <h6>Batch Processing</h6>
+                  <p>
+                    Grade multiple student submissions simultaneously for
+                    efficient workflow.
+                  </p>
+                </div>
+              </div>
+
+              <div class="feature-item">
+                <i class="bi bi-file-earmark-excel text-warning"></i>
+                <div>
+                  <h6>Excel Export</h6>
+                  <p>
+                    Export detailed grading results to Excel for gradebook
+                    integration and analysis.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="main-card compact-card">
+          <div class="card-header">
+            <h4><i class="bi bi-file-text"></i> Supported File Formats</h4>
+            <p class="card-subtitle">Compatible file types for uploads</p>
+          </div>
+          <div class="card-content">
+            <div class="format-category">
+              <h6>
+                <i class="bi bi-journal-text text-primary"></i> Marking Guides
+              </h6>
+              <ul class="format-list">
+                <li><strong>.docx</strong> - Microsoft Word documents</li>
+                <li><strong>.txt</strong> - Plain text files</li>
+              </ul>
+            </div>
+
+            <div class="format-category">
+              <h6>
+                <i class="bi bi-file-earmark text-success"></i> Student
+                Submissions
+              </h6>
+              <ul class="format-list">
+                <li><strong>.pdf</strong> - PDF documents (text or scanned)</li>
+                <li><strong>.docx</strong> - Microsoft Word documents</li>
+                <li><strong>.txt</strong> - Plain text files</li>
+                <li><strong>.jpg, .jpeg</strong> - JPEG images</li>
+                <li><strong>.png</strong> - PNG images</li>
+                <li><strong>.tiff</strong> - TIFF images</li>
+                <li><strong>.bmp</strong> - Bitmap images</li>
+                <li><strong>.gif</strong> - GIF images</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAQ Section -->
+  <div class="help-section" id="faq-section" style="display: none">
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="main-card compact-card">
+          <div class="card-header">
+            <h4>
+              <i class="bi bi-question-circle"></i> Frequently Asked Questions
+            </h4>
+            <p class="card-subtitle">Common questions and answers</p>
+          </div>
+          <div class="card-content">
+            <div class="accordion" id="faqAccordion">
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button
+                    class="accordion-button"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#faq1"
+                  >
+                    How accurate is the AI grading?
+                  </button>
+                </h2>
+                <div
+                  id="faq1"
+                  class="accordion-collapse collapse show"
+                  data-bs-parent="#faqAccordion"
+                >
+                  <div class="accordion-body">
+                    The AI grading system uses advanced language models to
+                    analyze student responses. While highly accurate for most
+                    content, we recommend reviewing AI-generated grades,
+                    especially for complex or subjective questions. The system
+                    provides detailed feedback to help you understand the
+                    grading rationale.
+                  </div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#faq2"
+                  >
+                    What if the OCR can't read handwriting?
+                  </button>
+                </h2>
+                <div
+                  id="faq2"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#faqAccordion"
+                >
+                  <div class="accordion-body">
+                    The OCR system is optimized for handwriting recognition, but
+                    very poor handwriting may not be readable. In such cases,
+                    you can manually review the extracted text and make
+                    corrections. For best results, ensure good image quality and
+                    clear handwriting.
+                  </div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#faq3"
+                  >
+                    Can I grade multiple students at once?
+                  </button>
+                </h2>
+                <div
+                  id="faq3"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#faqAccordion"
+                >
+                  <div class="accordion-body">
+                    Yes! The batch grading feature allows you to upload multiple
+                    student submissions and grade them all simultaneously. This
+                    is perfect for large classes and saves significant time
+                    compared to individual grading.
+                  </div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#faq4"
+                  >
+                    How do I export grades to my gradebook?
+                  </button>
+                </h2>
+                <div
+                  id="faq4"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#faqAccordion"
+                >
+                  <div class="accordion-body">
+                    After grading, use the "Download Excel" button to export
+                    results in Excel format. The exported file includes student
+                    names, scores, percentages, letter grades, and detailed
+                    feedback that can be imported into most gradebook systems.
+                  </div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#faq5"
+                  >
+                    What's the maximum file size I can upload?
+                  </button>
+                </h2>
+                <div
+                  id="faq5"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#faqAccordion"
+                >
+                  <div class="accordion-body">
+                    The default maximum file size is 20MB per file. This can be
+                    adjusted in the Settings page. For very large files,
+                    consider splitting them into smaller parts or reducing image
+                    resolution while maintaining readability.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tips Section -->
+  <div class="help-section" id="tips-section" style="display: none">
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="main-card compact-card">
+          <div class="card-header">
+            <h4><i class="bi bi-lightbulb"></i> Tips & Best Practices</h4>
+            <p class="card-subtitle">Get the most out of Exam Grader</p>
+          </div>
+          <div class="card-content">
+            <div class="row">
+              <div class="col-md-6">
+                <h6>📝 Marking Guide Tips</h6>
+                <ul class="tips-list">
+                  <li>Include clear question numbers and point values</li>
+                  <li>Provide detailed expected answers or rubrics</li>
+                  <li>Use consistent formatting throughout</li>
+                  <li>Include partial credit guidelines when applicable</li>
+                </ul>
+
+                <h6>📄 Submission Tips</h6>
+                <ul class="tips-list">
+                  <li>Ensure good image quality for scanned documents</li>
+                  <li>Use high contrast (dark text on light background)</li>
+                  <li>Avoid shadows and glare in photos</li>
+                  <li>Keep file sizes reasonable for faster processing</li>
+                </ul>
+              </div>
+              <div class="col-md-6">
+                <h6>⚡ Performance Tips</h6>
+                <ul class="tips-list">
+                  <li>
+                    Use "Fast" model for quick grading of simple questions
+                  </li>
+                  <li>
+                    Use "Accurate" model for complex or subjective content
+                  </li>
+                  <li>Process smaller batches for faster results</li>
+                  <li>Clear cache regularly to free up storage space</li>
+                </ul>
+
+                <h6>✅ Quality Assurance</h6>
+                <ul class="tips-list">
+                  <li>Always review AI-generated grades before finalizing</li>
+                  <li>Check OCR-extracted text for accuracy</li>
+                  <li>Use the detailed feedback to understand grading logic</li>
+                  <li>Keep backup copies of original submissions</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Troubleshooting Section -->
+  <div class="help-section" id="troubleshooting-section" style="display: none">
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="main-card compact-card">
+          <div class="card-header">
+            <h4><i class="bi bi-tools"></i> Troubleshooting</h4>
+            <p class="card-subtitle">Common issues and solutions</p>
+          </div>
+          <div class="card-content">
+            <div class="troubleshooting-grid">
+              <div class="trouble-item">
+                <div class="trouble-icon">
+                  <i class="bi bi-exclamation-triangle text-warning"></i>
+                </div>
+                <div class="trouble-content">
+                  <h6>Upload Failed</h6>
+                  <p><strong>Problem:</strong> File upload returns an error</p>
+                  <p><strong>Solutions:</strong></p>
+                  <ul>
+                    <li>Check file size (max 20MB)</li>
+                    <li>Verify file format is supported</li>
+                    <li>Try refreshing the page</li>
+                    <li>Clear browser cache</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="trouble-item">
+                <div class="trouble-icon">
+                  <i class="bi bi-eye-slash text-danger"></i>
+                </div>
+                <div class="trouble-content">
+                  <h6>OCR Not Working</h6>
+                  <p>
+                    <strong>Problem:</strong> Text extraction from images fails
+                  </p>
+                  <p><strong>Solutions:</strong></p>
+                  <ul>
+                    <li>Ensure good image quality</li>
+                    <li>Check for proper lighting</li>
+                    <li>Try different image format</li>
+                    <li>Manually type text if needed</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="trouble-item">
+                <div class="trouble-icon">
+                  <i class="bi bi-clock text-info"></i>
+                </div>
+                <div class="trouble-content">
+                  <h6>Slow Processing</h6>
+                  <p><strong>Problem:</strong> AI grading takes too long</p>
+                  <p><strong>Solutions:</strong></p>
+                  <ul>
+                    <li>Switch to "Fast" model in Settings</li>
+                    <li>Process smaller batches</li>
+                    <li>Clear cache to free memory</li>
+                    <li>Check internet connection</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="trouble-item">
+                <div class="trouble-icon">
+                  <i class="bi bi-x-circle text-danger"></i>
+                </div>
+                <div class="trouble-content">
+                  <h6>Grading Errors</h6>
+                  <p><strong>Problem:</strong> AI produces incorrect grades</p>
+                  <p><strong>Solutions:</strong></p>
+                  <ul>
+                    <li>Review marking guide clarity</li>
+                    <li>Use "Accurate" model for complex questions</li>
+                    <li>Manually review and adjust grades</li>
+                    <li>Provide more detailed rubrics</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="contact-support">
+              <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Still need help?</strong> If you're experiencing
+                persistent issues, check the system status in Settings or
+                contact your system administrator.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Help Navigation Styles */
+  .help-navigation {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 2rem;
+  }
+
+  .help-search {
+    margin-bottom: 1.5rem;
+  }
+
+  .search-box {
+    position: relative;
+    max-width: 400px;
+  }
+
+  .search-box i {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--gray-500);
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 0.75rem 1rem 0.75rem 2.5rem;
+    border: 2px solid var(--gray-200);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 0 3px var(--primary-blue-50);
+  }
+
+  .help-tabs {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .help-tab {
+    background: var(--gray-100);
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    color: var(--gray-700);
+    font-weight: 500;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .help-tab:hover {
+    background: var(--primary-blue-50);
+    color: var(--primary-blue);
+  }
+
+  .help-tab.active {
+    background: var(--primary-blue);
+    color: white;
+  }
+
+  .help-section {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Troubleshooting Styles */
+  .troubleshooting-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .trouble-item {
+    display: flex;
+    gap: 1rem;
+    padding: 1.5rem;
+    background: var(--gray-50);
+    border-radius: 8px;
+    border-left: 4px solid var(--primary-blue);
+  }
+
+  .trouble-icon i {
+    font-size: 1.5rem;
+  }
+
+  .trouble-content h6 {
+    margin-bottom: 0.5rem;
+    color: var(--gray-800);
+  }
+
+  .trouble-content p {
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .trouble-content ul {
+    margin-bottom: 0;
+    padding-left: 1.2rem;
+  }
+
+  .trouble-content li {
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .contact-support {
+    margin-top: 2rem;
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .help-tabs {
+      justify-content: center;
+    }
+
+    .help-tab {
+      flex: 1;
+      min-width: 120px;
+      justify-content: center;
+    }
+
+    .troubleshooting-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  <style > .help-step {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+  }
+
+  .step-number {
+    background: var(--primary-blue);
+    color: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-right: 1rem;
+    flex-shrink: 0;
+  }
+
+  .step-content h5 {
+    margin-bottom: 0.5rem;
+    color: var(--primary-blue);
+  }
+
+  .feature-item {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+  }
+
+  .feature-item i {
+    font-size: 1.5rem;
+    margin-right: 1rem;
+    margin-top: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .feature-item h6 {
+    margin-bottom: 0.25rem;
+  }
+
+  .feature-item p {
+    margin-bottom: 0;
+    font-size: 0.9rem;
+    color: #6c757d;
+  }
+
+  .format-category {
+    margin-bottom: 1.5rem;
+  }
+
+  .format-category h6 {
+    margin-bottom: 0.5rem;
+    color: var(--primary-blue);
+  }
+
+  .format-list {
+    list-style: none;
+    padding-left: 0;
+  }
+
+  .format-list li {
+    padding: 0.25rem 0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .format-list li:last-child {
+    border-bottom: none;
+  }
+
+  .tips-list {
+    list-style: none;
+    padding-left: 0;
+  }
+
+  .tips-list li {
+    padding: 0.25rem 0;
+    position: relative;
+    padding-left: 1.5rem;
+  }
+
+  .tips-list li:before {
+    content: "✓";
+    color: var(--primary-blue);
+    font-weight: bold;
+    position: absolute;
+    left: 0;
+  }
+
+  .accordion-button {
+    background-color: var(--primary-blue-50);
+    color: var(--primary-blue);
+  }
+
+  .accordion-button:not(.collapsed) {
+    background-color: var(--primary-blue);
+    color: white;
+  }
+</style>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Tab functionality
+    const tabs = document.querySelectorAll(".help-tab");
+    const sections = document.querySelectorAll(".help-section");
+
+    function showSection(sectionId) {
+      // Hide all sections
+      sections.forEach((section) => {
+        section.style.display = "none";
+      });
+
+      // Remove active class from all tabs
+      tabs.forEach((tab) => {
+        tab.classList.remove("active");
+      });
+
+      // Show target section
+      const targetSection = document.getElementById(sectionId + "-section");
+      if (targetSection) {
+        targetSection.style.display = "block";
+      }
+
+      // Add active class to clicked tab
+      const activeTab = document.querySelector(`[data-section="${sectionId}"]`);
+      if (activeTab) {
+        activeTab.classList.add("active");
+      }
+    }
+
+    // Add click handlers to tabs
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", function () {
+        const sectionId = this.getAttribute("data-section");
+        showSection(sectionId);
+      });
+    });
+
+    // Search functionality
+    const searchInput = document.getElementById("helpSearch");
+    if (searchInput) {
+      searchInput.addEventListener("input", function () {
+        const searchTerm = this.value.toLowerCase();
+
+        if (searchTerm.length === 0) {
+          // Show default section if search is empty
+          showSection("quick-start");
+          return;
+        }
+
+        // Search through all sections
+        let foundResults = false;
+        sections.forEach((section) => {
+          const content = section.textContent.toLowerCase();
+          if (content.includes(searchTerm)) {
+            section.style.display = "block";
+            foundResults = true;
+
+            // Highlight search terms (simple implementation)
+            highlightSearchTerms(section, searchTerm);
+          } else {
+            section.style.display = "none";
+          }
+        });
+
+        // Remove active state from tabs during search
+        if (searchTerm.length > 0) {
+          tabs.forEach((tab) => tab.classList.remove("active"));
+        }
+      });
+    }
+
+    function highlightSearchTerms(element, term) {
+      // Simple highlighting - in a real app you'd want more sophisticated highlighting
+      // This is a basic implementation
+      const walker = document.createTreeWalker(
+        element,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      );
+
+      const textNodes = [];
+      let node;
+      while ((node = walker.nextNode())) {
+        if (node.textContent.toLowerCase().includes(term)) {
+          textNodes.push(node);
+        }
+      }
+
+      // Note: This is a simplified highlighting approach
+      // In production, you'd want to use a more robust highlighting library
+    }
+
+    // Initialize with quick start section visible
+    showSection("quick-start");
+
+    // Smooth scrolling for internal links
+    document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
+      anchor.addEventListener("click", function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute("href"));
+        if (target) {
+          target.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }
+      });
+    });
+
+    // Add keyboard navigation
+    document.addEventListener("keydown", function (e) {
+      if (e.ctrlKey && e.key === "f") {
+        e.preventDefault();
+        searchInput.focus();
+      }
+    });
+  });
+</script>
+
+{% endblock %}

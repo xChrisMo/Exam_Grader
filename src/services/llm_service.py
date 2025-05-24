@@ -6,13 +6,12 @@ student exam submissions against marking guides.
 """
 
 import os
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, Optional, Tuple
 import json
-import time
 import re
-import threading
+import importlib.metadata
+from packaging import version
 
-from openai import OpenAI
 from dotenv import load_dotenv
 
 from utils.logger import logger
@@ -26,28 +25,26 @@ class LLMServiceError(Exception):
 
 class LLMService:
     """
-    A service for interacting with the DeepSeek LLM to grade exam submissions.
+    LLM service for grading exam submissions using DeepSeek Reasoner API.
 
-    This class handles:
-    - API key management
-    - Prompt construction
-    - Response handling
-    - Rate limiting and retries
-
-    The primary use case is to compare student answers with model answers
-    and provide grading with justification.
+    This service provides methods for:
+    - Comparing student answers to expected answers
+    - Grading submissions based on marking guides
+    - Generating feedback for student submissions
     """
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         base_url: str = "https://api.deepseek.com/v1",
-        model: str = "deepseek-reasoner",
-        temperature: float = 0.0,
-        max_retries: int = 3,
-        retry_delay: float = 2.0,
-        seed: Optional[int] = 42,
-        deterministic: bool = True
+        model: str = "deepseek-chat",  # Use faster model by default
+        temperature: float = 0.1,  # Slightly higher for faster responses
+        max_retries: int = 2,  # Reduce retries for faster failure
+        retry_delay: float = 1.0,  # Reduce retry delay
+        seed: Optional[int] = None,  # Disable seed for faster responses
+        deterministic: bool = False,  # Disable deterministic mode for speed
+        timeout: float = 30.0,  # Add timeout for API calls
+        max_tokens: int = 1000  # Limit response length
     ):
         """
         Initialize the LLM service.
@@ -56,11 +53,13 @@ class LLMService:
             api_key: DeepSeek API key (from environment if not provided)
             base_url: DeepSeek API base URL
             model: DeepSeek model name to use
-            temperature: Sampling temperature (0.0 for most deterministic output)
+            temperature: Sampling temperature (0.1 for faster responses)
             max_retries: Maximum number of retry attempts for API calls
             retry_delay: Delay between retry attempts in seconds
-            seed: Random seed for deterministic outputs (default: 42)
-            deterministic: Whether to use deterministic mode (default: True)
+            seed: Random seed for deterministic outputs (None for faster responses)
+            deterministic: Whether to use deterministic mode (False for speed)
+            timeout: Timeout for API calls in seconds
+            max_tokens: Maximum tokens in response
 
         Raises:
             LLMServiceError: If API key is not available
@@ -76,24 +75,38 @@ class LLMService:
         self.retry_delay = retry_delay
         self.seed = seed
         self.deterministic = deterministic
+        self.timeout = timeout
+        self.max_tokens = max_tokens
 
-        # Log the deterministic mode setting
+        # Log the performance optimizations
+        logger.info(f"LLM service initialized with model: {self.model}")
+        logger.info(f"Performance settings - Timeout: {self.timeout}s, Max tokens: {self.max_tokens}")
         if self.deterministic:
-            logger.info(f"LLM service initialized in deterministic mode with seed: {self.seed}")
+            logger.info(f"Deterministic mode enabled with seed: {self.seed}")
         else:
-            logger.info("LLM service initialized in non-deterministic mode")
+            logger.info("Non-deterministic mode enabled for faster responses")
 
         try:
-            # Initialize OpenAI client with DeepSeek configuration - simplified initialization
-            # Only pass the essential parameters to ensure compatibility across different OpenAI package versions
+            # Import OpenAI in a way that handles different versions
+            from openai import OpenAI
+
+            # Get the OpenAI version
+            try:
+                openai_version_str = importlib.metadata.version("openai")
+                logger.info(f"Using OpenAI library version: {openai_version_str}")
+            except (importlib.metadata.PackageNotFoundError, version.InvalidVersion):
+                logger.warning("Could not determine OpenAI library version")
+
+            # Initialize OpenAI client with timeout support
             client_params = {
                 "api_key": self.api_key,
-                "base_url": self.base_url
+                "base_url": self.base_url,
+                "timeout": self.timeout
             }
 
-            # Create the client with only the essential parameters
+            # Create the client with timeout support
             self.client = OpenAI(**client_params)
-            logger.info(f"LLM service initialized with model: {self.model}")
+            logger.info(f"LLM client initialized with {self.timeout}s timeout")
         except Exception as e:
             logger.error(f"Failed to initialize LLM service: {str(e)}")
             raise LLMServiceError(f"Failed to initialize LLM service: {str(e)}")
@@ -115,18 +128,18 @@ class LLMService:
             system_prompt = "You are a helpful assistant."
             user_prompt = "Please respond with a simple 'Connection successful' if you receive this message."
 
-            # Make a minimal API call
+            # Make a minimal API call with optimized settings
             params = {
                 "model": self.model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                "temperature": 0.0,
-                "max_tokens": 20
+                "temperature": self.temperature,
+                "max_tokens": 20  # Keep small for connection test
             }
 
-            # Add seed parameter if in deterministic mode
+            # Add seed parameter only if in deterministic mode
             if self.deterministic and self.seed is not None:
                 params["seed"] = self.seed
 
@@ -207,18 +220,18 @@ class LLMService:
             # Log sending request
             logger.info("Sending request to LLM service...")
 
-            # Make the API call
+            # Make the API call with optimized settings
             params = {
                 "model": self.model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                "temperature": 0.0,
-                "max_tokens": 500
+                "temperature": self.temperature,
+                "max_tokens": min(self.max_tokens, 500)  # Use configured max_tokens but cap at 500 for grading
             }
 
-            # Add seed parameter if in deterministic mode
+            # Add seed parameter only if in deterministic mode
             if self.deterministic and self.seed is not None:
                 params["seed"] = self.seed
 
@@ -279,8 +292,7 @@ class LLMService:
     def grade_submission(
         self,
         marking_guide_text: str,
-        student_submission_text: str,
-        max_tokens: int = 2048
+        student_submission_text: str
     ) -> Dict:
         """
         Grade a student submission against a marking guide.
@@ -291,7 +303,6 @@ class LLMService:
         Args:
             marking_guide_text: Full text of the marking guide
             student_submission_text: Full text of the student submission
-            max_tokens: Maximum tokens for the response
 
         Returns:
             Dict: Grading result with scores and feedback
@@ -303,7 +314,7 @@ class LLMService:
         mapping_service = MappingService(llm_service=self)
 
         # Map the submission to the guide
-        mapping_result, mapping_error = mapping_service.map_submission_to_guide(
+        _, mapping_error = mapping_service.map_submission_to_guide(
             marking_guide_text,
             student_submission_text
         )
@@ -329,7 +340,8 @@ class LLMService:
     def map_submission_to_guide(
         self,
         marking_guide_content: str,
-        student_submission_content: str
+        student_submission_content: str,
+        num_questions: int = None
     ) -> Tuple[Dict, Optional[str]]:
         """
         Map a student submission to a marking guide.
@@ -338,6 +350,7 @@ class LLMService:
         Args:
             marking_guide_content: Full text of the marking guide
             student_submission_content: Full text of the student submission
+            num_questions: Optional number of questions to map (for best N answers)
 
         Returns:
             Tuple[Dict, Optional[str]]: (Mapping result, Error message if any)
@@ -349,7 +362,14 @@ class LLMService:
         mapping_service = MappingService(llm_service=self)
 
         # Map the submission to the guide
-        return mapping_service.map_submission_to_guide(
-            marking_guide_content,
-            student_submission_content
-        )
+        if num_questions is not None:
+            return mapping_service.map_submission_to_guide(
+                marking_guide_content,
+                student_submission_content,
+                num_questions=num_questions
+            )
+        else:
+            return mapping_service.map_submission_to_guide(
+                marking_guide_content,
+                student_submission_content
+            )

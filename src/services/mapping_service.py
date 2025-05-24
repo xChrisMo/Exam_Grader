@@ -66,7 +66,7 @@ class MappingService:
             Please analyze this marking guide and determine if it primarily contains questions or answers.
 
             Marking guide content:
-            {marking_guide_content[:2000]}  # Limit to first 2000 chars for efficiency
+            {marking_guide_content[:1500]}  # Reduced to 1500 chars for faster processing
             """
 
             # Log the request
@@ -76,14 +76,15 @@ class MappingService:
             supports_json = "deepseek-reasoner" not in self.llm_service.model.lower()
 
             if supports_json:
-                # Make the API call with JSON response format
+                # Make the API call with JSON response format and optimized settings
                 params = {
                     "model": self.llm_service.model,
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    "temperature": 0.0,
+                    "temperature": self.llm_service.temperature,
+                    "max_tokens": 200,  # Small response for guide type determination
                     "response_format": {"type": "json_object"}
                 }
 
@@ -105,7 +106,8 @@ class MappingService:
                         {"role": "system", "content": modified_system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    "temperature": 0.0
+                    "temperature": self.llm_service.temperature,
+                    "max_tokens": 200  # Small response for guide type determination
                 }
 
                 # Add seed parameter if in deterministic mode
@@ -478,13 +480,13 @@ class MappingService:
                     # Log the mapping process
                     logger.info(f"Using LLM to map submission to guide (finding best {num_questions} answers)...")
 
-                    # Pass the raw content to the LLM for mapping and grading
+                    # Pass optimized content to the LLM for mapping and grading
                     user_prompt = f"""
                     Marking Guide Content:
-                    {marking_guide_content[:5000]}
+                    {marking_guide_content[:3000]}
 
                     Student Submission Content:
-                    {student_submission_content[:5000]}
+                    {student_submission_content[:3000]}
 
                     Number of questions to answer: {num_questions}
 
@@ -595,14 +597,15 @@ class MappingService:
                     6. Be sure to identify and properly map multi-part questions and their sub-questions
                     """
 
-                    # Use a simpler prompt for the deepseek-reasoner model
+                    # Use optimized settings for faster processing
                     params = {
                         "model": self.llm_service.model,
                         "messages": [
                             {"role": "system", "content": modified_system_prompt},
                             {"role": "user", "content": user_prompt}
                         ],
-                        "temperature": 0.0
+                        "temperature": self.llm_service.temperature,
+                        "max_tokens": self.llm_service.max_tokens  # Use configured max_tokens
                     }
 
                     # Add seed parameter if in deterministic mode

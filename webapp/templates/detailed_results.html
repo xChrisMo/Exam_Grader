@@ -1,442 +1,203 @@
-{% extends "base.html" %} {% block title %}Detailed Grading Results - Exam
-Grader{% endblock %} {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h1 class="mb-0">
-    <i class="bi bi-award text-primary me-2"></i>
-    Detailed Grading Results
-  </h1>
-  <div>
-    <a
-      href="{{ url_for('view_results') }}"
-      class="btn btn-outline-primary me-2"
-    >
-      <i class="bi bi-arrow-left me-1"></i> Back to Summary
-    </a>
-    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
-      <i class="bi bi-house me-1"></i> Home
-    </a>
-  </div>
-</div>
+{% extends "base.html" %} {% block title %}Detailed Results{% endblock %} {%
+block header %}Detailed Grading Results{% endblock %}
 
-<!-- Score Summary Card -->
-<div class="card mb-4">
-  <div
-    class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
-  >
-    <h5 class="mb-0">Score Summary</h5>
-    <span class="badge bg-light text-primary fs-6"
-      >{{
-      result.normalized_score|default(result.percent_score)|default(0)|round|int
-      }}% ({{ result.letter_grade|default('N/A') }})</span
-    >
-  </div>
-  <div class="card-body">
-    <div class="row">
-      <div class="col-md-3 text-center mb-3 mb-md-0">
-        <div
-          class="score-circle-lg {% if result.normalized_score|default(result.percent_score) is defined and result.normalized_score|default(result.percent_score) >= 80 %}bg-success {% elif result.normalized_score|default(result.percent_score) is defined and result.normalized_score|default(result.percent_score) >= 60 %}bg-primary {% elif result.normalized_score|default(result.percent_score) is defined and result.normalized_score|default(result.percent_score) >= 40 %}bg-warning {% else %}bg-danger{% endif %}"
+{% block header_actions %}
+<div class="header-actions">
+  <button class="btn btn-primary" onclick="downloadResults()">
+    <i class="fas fa-file-excel"></i> Export to Excel
+  </button>
+  <button class="btn btn-secondary" onclick="window.history.back()">
+    <i class="fas fa-arrow-left"></i> Back
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="detailed-results-container">
+  <!-- Result Overview -->
+  <section class="result-overview glass-card">
+    <div class="overview-header">
+      <div class="student-info">
+        <h2>{{ result.submission_id }}</h2>
+        <span class="grade-badge {{ result.letter_grade|lower }}"
+          >{{ result.letter_grade }}</span
         >
-          {{
-          result.normalized_score|default(result.percent_score)|default(0)|round|int
-          }}%
-        </div>
       </div>
-      <div class="col-md-9">
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <div class="card h-100 border-0 shadow-sm">
-              <div class="card-body">
-                <h6 class="card-title text-primary">Score Breakdown</h6>
-                <div
-                  class="d-flex justify-content-between align-items-center mb-2"
-                >
-                  <span>Normalized Score:</span>
-                  <span class="fw-bold"
-                    >{{
-                    result.normalized_score|default(result.percent_score)|default(0)|round|int
-                    }}/100</span
-                  >
-                </div>
-                <div
-                  class="d-flex justify-content-between align-items-center mb-2"
-                >
-                  <span>Points Earned:</span>
-                  <span class="fw-bold"
-                    >{{ result.overall_score|default(0) }}/{{
-                    result.max_possible_score|default(100) }}</span
-                  >
-                </div>
-                <div class="d-flex justify-content-between align-items-center">
-                  <span>Questions Graded:</span>
-                  <span class="fw-bold"
-                    >{{ result.metadata.total_questions|default(0) }}</span
-                  >
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-6 mb-3">
-            <div class="card h-100 border-0 shadow-sm">
-              <div class="card-body">
-                <h6 class="card-title text-primary">Performance Analysis</h6>
-                <div class="performance-meter">
-                  <div class="progress mb-2" style="height: 10px">
-                    <div
-                      class="progress-bar bg-success"
-                      role="progressbar"
-                      style="width: {{ result.performance_metrics.strengths_percentage|default(0) }}%"
-                      aria-valuenow="{{ result.performance_metrics.strengths_percentage|default(0) }}"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    ></div>
-                  </div>
-                  <div
-                    class="d-flex justify-content-between align-items-center mb-2"
-                  >
-                    <span>Strengths:</span>
-                    <span class="badge bg-success"
-                      >{{ result.detailed_feedback.strengths|length if
-                      result.detailed_feedback and
-                      result.detailed_feedback.strengths is defined else 0
-                      }}</span
-                    >
-                  </div>
-                  <div class="progress mb-2" style="height: 10px">
-                    <div
-                      class="progress-bar bg-warning"
-                      role="progressbar"
-                      style="width: {{ result.performance_metrics.weaknesses_percentage|default(0) }}%"
-                      aria-valuenow="{{ result.performance_metrics.weaknesses_percentage|default(0) }}"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    ></div>
-                  </div>
-                  <div
-                    class="d-flex justify-content-between align-items-center"
-                  >
-                    <span>Areas to Improve:</span>
-                    <span class="badge bg-warning"
-                      >{{ result.detailed_feedback.weaknesses|length if
-                      result.detailed_feedback and
-                      result.detailed_feedback.weaknesses is defined else 0
-                      }}</span
-                    >
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div
+        class="score-circle {{ 'excellent' if result.percent_score >= 90 else 'good' if result.percent_score >= 80 else 'fair' if result.percent_score >= 70 else 'poor' }}"
+      >
+        {{ result.percent_score|round|int }}%
       </div>
     </div>
-  </div>
-</div>
-
-<!-- Detailed Feedback Tabs -->
-<div class="card mb-4">
-  <div class="card-header bg-primary text-white">
-    <h5 class="mb-0">Comprehensive Feedback</h5>
-  </div>
-  <div class="card-body">
-    <ul class="nav nav-tabs" id="feedbackTabs" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button
-          class="nav-link active"
-          id="strengths-tab"
-          data-bs-toggle="tab"
-          data-bs-target="#strengths"
-          type="button"
-          role="tab"
-          aria-controls="strengths"
-          aria-selected="true"
+    <div class="overview-details">
+      <div class="detail-item">
+        <span class="label">Total Points:</span>
+        <span class="value"
+          >{{ result.overall_score }} / {{ result.max_possible_score }}</span
         >
-          <i class="bi bi-check-circle text-success me-1"></i> Strengths
-          <span class="badge bg-success ms-1"
-            >{{ result.detailed_feedback.strengths|length if
-            result.detailed_feedback and result.detailed_feedback.strengths is
-            defined else 0 }}</span
-          >
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button
-          class="nav-link"
-          id="weaknesses-tab"
-          data-bs-toggle="tab"
-          data-bs-target="#weaknesses"
-          type="button"
-          role="tab"
-          aria-controls="weaknesses"
-          aria-selected="false"
-        >
-          <i class="bi bi-exclamation-triangle text-warning me-1"></i> Areas to
-          Improve
-          <span class="badge bg-warning ms-1"
-            >{{ result.detailed_feedback.weaknesses|length if
-            result.detailed_feedback and result.detailed_feedback.weaknesses is
-            defined else 0 }}</span
-          >
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button
-          class="nav-link"
-          id="suggestions-tab"
-          data-bs-toggle="tab"
-          data-bs-target="#suggestions"
-          type="button"
-          role="tab"
-          aria-controls="suggestions"
-          aria-selected="false"
-        >
-          <i class="bi bi-lightbulb text-info me-1"></i> Improvement Suggestions
-          <span class="badge bg-info ms-1"
-            >{{ result.detailed_feedback.improvement_suggestions|length if
-            result.detailed_feedback and
-            result.detailed_feedback.improvement_suggestions is defined else 0
-            }}</span
-          >
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button
-          class="nav-link"
-          id="questions-tab"
-          data-bs-toggle="tab"
-          data-bs-target="#questions"
-          type="button"
-          role="tab"
-          aria-controls="questions"
-          aria-selected="false"
-        >
-          <i class="bi bi-list-check text-primary me-1"></i> Question Analysis
-          <span class="badge bg-primary ms-1"
-            >{{ result.criteria_scores|length if result.criteria_scores is
-            defined else 0 }}</span
-          >
-        </button>
-      </li>
-    </ul>
-    <div
-      class="tab-content p-3 border border-top-0 rounded-bottom"
-      id="feedbackTabsContent"
-    >
-      <!-- Strengths Tab -->
-      <div
-        class="tab-pane fade show active"
-        id="strengths"
-        role="tabpanel"
-        aria-labelledby="strengths-tab"
-      >
-        {% if result.detailed_feedback.strengths %}
-        <div class="alert alert-success mb-3">
-          <i class="bi bi-info-circle me-2"></i> These are the areas where you
-          demonstrated good understanding and application of concepts.
-        </div>
-        <ul class="list-group strength-list">
-          {% for strength in result.detailed_feedback.strengths %}
-          <li class="list-group-item border-success">
-            <i class="bi bi-check-circle-fill text-success me-2"></i>
-            {{ strength }}
-          </li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        <div class="alert alert-warning">
-          <i class="bi bi-exclamation-triangle me-2"></i>
-          No specific strengths were identified. Review the detailed question
-          analysis for more information.
-        </div>
-        {% endif %}
       </div>
-
-      <!-- Weaknesses Tab -->
-      <div
-        class="tab-pane fade"
-        id="weaknesses"
-        role="tabpanel"
-        aria-labelledby="weaknesses-tab"
-      >
-        {% if result.detailed_feedback.weaknesses %}
-        <div class="alert alert-warning mb-3">
-          <i class="bi bi-info-circle me-2"></i> These are the areas where
-          improvement is needed to better demonstrate your understanding.
-        </div>
-        <ul class="list-group weakness-list">
-          {% for weakness in result.detailed_feedback.weaknesses %}
-          <li class="list-group-item border-warning">
-            <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
-            {{ weakness }}
-          </li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        <div class="alert alert-success">
-          <i class="bi bi-check-circle me-2"></i>
-          No significant weaknesses were identified. Great job!
-        </div>
-        {% endif %}
+      <div class="detail-item">
+        <span class="label">Graded:</span>
+        <span class="value"
+          >{{ result.metadata.graded_at|default('N/A', true) }}</span
+        >
       </div>
+    </div>
+  </section>
 
-      <!-- Improvement Suggestions Tab -->
-      <div
-        class="tab-pane fade"
-        id="suggestions"
-        role="tabpanel"
-        aria-labelledby="suggestions-tab"
-      >
-        {% if result.detailed_feedback.improvement_suggestions %}
-        <div class="alert alert-info mb-3">
-          <i class="bi bi-info-circle me-2"></i> These suggestions can help you
-          improve your understanding and performance in future assessments.
+  <!-- Score Breakdown -->
+  <section class="score-breakdown glass-card">
+    <h3><i class="fas fa-chart-pie"></i> Score Breakdown</h3>
+    <div class="criteria-grid">
+      {% for criteria in result.criteria_scores %}
+      <div class="criteria-card">
+        <div class="criteria-header">
+          <h4>
+            {{ criteria.description|default('Question ' ~ loop.index, true) }}
+          </h4>
+          <span class="points"
+            >{{ criteria.points_earned }}/{{ criteria.points_possible }}</span
+          >
         </div>
-        <ul class="list-group suggestion-list">
-          {% for suggestion in result.detailed_feedback.improvement_suggestions
-          %}
-          <li class="list-group-item border-info">
-            <i class="bi bi-lightbulb-fill text-info me-2"></i>
-            {{ suggestion }}
-          </li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        <div class="alert alert-secondary">
-          <i class="bi bi-info-circle me-2"></i>
-          No specific improvement suggestions were provided. Review the detailed
-          question analysis for more information.
-        </div>
-        {% endif %}
-      </div>
-
-      <!-- Question Analysis Tab -->
-      <div
-        class="tab-pane fade"
-        id="questions"
-        role="tabpanel"
-        aria-labelledby="questions-tab"
-      >
-        {% if result.criteria_scores %}
-        <div class="alert alert-primary mb-3">
-          <i class="bi bi-info-circle me-2"></i> This section provides a
-          detailed analysis of your performance on each question.
-        </div>
-        <div class="accordion" id="questionAccordion">
-          {% for criteria in result.criteria_scores %}
-          <div class="accordion-item">
-            <h2 class="accordion-header" id="heading-{{ loop.index }}">
-              <button
-                class="accordion-button {% if loop.index > 1 %}collapsed{% endif %}"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#collapse-{{ loop.index }}"
-                aria-expanded="{{ 'true' if loop.index == 1 else 'false' }}"
-                aria-controls="collapse-{{ loop.index }}"
-              >
-                <div
-                  class="d-flex justify-content-between align-items-center w-100 me-3"
-                >
-                  <div>
-                    <span class="fw-bold">Question {{ loop.index }}:</span>
-                    {{ criteria.description|truncate(50) }}
-                  </div>
-                  <div>
-                    <span
-                      class="badge {% if (criteria.points_earned / criteria.points_possible) >= 0.8 %}bg-success{% elif (criteria.points_earned / criteria.points_possible) >= 0.6 %}bg-primary{% elif (criteria.points_earned / criteria.points_possible) >= 0.4 %}bg-warning{% else %}bg-danger{% endif %}"
-                    >
-                      {{ criteria.points_earned|default(0) }}/{{
-                      criteria.points_possible|default(0) }}
-                    </span>
-                  </div>
-                </div>
-              </button>
-            </h2>
+        <div class="criteria-details">
+          <div class="score-bar">
             <div
-              id="collapse-{{ loop.index }}"
-              class="accordion-collapse collapse {% if loop.index == 1 %}show{% endif %}"
-              aria-labelledby="heading-{{ loop.index }}"
-              data-bs-parent="#questionAccordion"
-            >
-              <div class="accordion-body">
-                <div class="row">
-                  <div class="col-md-12 mb-3">
-                    <h6 class="fw-bold">Question:</h6>
-                    <div class="p-3 bg-light rounded">
-                      {{ criteria.description }}
-                    </div>
-                  </div>
-                </div>
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <h6 class="fw-bold text-success">Model Answer:</h6>
-                    <div class="p-3 bg-light rounded">
-                      {{ criteria.guide_answer|nl2br }}
-                    </div>
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <h6 class="fw-bold text-primary">Your Answer:</h6>
-                    <div class="p-3 bg-light rounded">
-                      {{ criteria.student_answer|nl2br }}
-                    </div>
-                  </div>
-                </div>
-                <div class="row">
-                  <div class="col-md-12 mb-3">
-                    <h6 class="fw-bold">Feedback:</h6>
-                    <div class="p-3 bg-light rounded">
-                      {{ criteria.feedback }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+              class="score-progress"
+              data-progress="{{ (criteria.points_earned / criteria.points_possible * 100)|round }}"
+            ></div>
           </div>
-          {% endfor %}
+          <span class="match-percent"
+            >{{ (criteria.similarity * 100)|round }}% Match</span
+          >
         </div>
-        {% else %}
-        <div class="alert alert-warning">
-          <i class="bi bi-exclamation-triangle me-2"></i>
-          No question analysis available.
+        {% if criteria.feedback %}
+        <div class="criteria-feedback">
+          <p>{{ criteria.feedback }}</p>
         </div>
         {% endif %}
       </div>
+      {% endfor %}
     </div>
-  </div>
-</div>
+  </section>
 
-<!-- Actions -->
-<div class="card mb-4">
-  <div class="card-header bg-secondary text-white">
-    <h5 class="mb-0">Actions</h5>
-  </div>
-  <div class="card-body">
-    <div class="row">
-      <div class="col-md-6 mb-3 mb-md-0">
-        <div class="d-grid gap-2">
-          <a href="{{ url_for('view_results') }}" class="btn btn-primary">
-            <i class="bi bi-arrow-left me-1"></i> Back to Summary
-          </a>
-          <a
-            href="{{ url_for('view_mapping') }}"
-            class="btn btn-outline-secondary"
-          >
-            <i class="bi bi-diagram-3 me-1"></i> View Mapping
-          </a>
-        </div>
+  <!-- Detailed Feedback -->
+  <section class="detailed-feedback">
+    <div class="feedback-grid">
+      <!-- Strengths -->
+      <div class="feedback-card glass-card strengths">
+        <h3><i class="fas fa-check-circle"></i> Strengths</h3>
+        {% if result.detailed_feedback.strengths %}
+        <ul class="feedback-list">
+          {% for strength in result.detailed_feedback.strengths %}
+          <li>
+            <i class="fas fa-check"></i>
+            <span>{{ strength }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="no-data">No specific strengths identified</p>
+        {% endif %}
       </div>
-      <div class="col-md-6">
-        <div class="d-grid gap-2">
-          <a href="{{ url_for('download_excel') }}" class="btn btn-success">
-            <i class="bi bi-file-excel me-1"></i> Download Excel Report
-          </a>
-          <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
-            <i class="bi bi-house me-1"></i> Back to Home
-          </a>
-        </div>
+
+      <!-- Areas to Improve -->
+      <div class="feedback-card glass-card improvements">
+        <h3><i class="fas fa-exclamation-circle"></i> Areas to Improve</h3>
+        {% if result.detailed_feedback.weaknesses %}
+        <ul class="feedback-list">
+          {% for weakness in result.detailed_feedback.weaknesses %}
+          <li>
+            <i class="fas fa-exclamation"></i>
+            <span>{{ weakness }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="no-data">No specific areas for improvement identified</p>
+        {% endif %}
       </div>
     </div>
-  </div>
+  </section>
+
+  <!-- Answer Details -->
+  <section class="answer-details glass-card">
+    <h3><i class="fas fa-list-ol"></i> Answer Details</h3>
+    <div class="answers-grid">
+      {% for answer in result.answers %}
+      <div
+        class="answer-card {{ 'correct' if answer.is_correct else 'incorrect' }}"
+      >
+        <div class="answer-header">
+          <h4>Question {{ loop.index }}</h4>
+          <span class="status-badge">
+            {% if answer.is_correct %}
+            <i class="fas fa-check"></i> Correct {% else %}
+            <i class="fas fa-times"></i> Incorrect {% endif %}
+          </span>
+        </div>
+        <div class="answer-content">
+          <div class="answer-item">
+            <span class="label">Your Answer:</span>
+            <span class="value">{{ answer.given_answer }}</span>
+          </div>
+          <div class="answer-item">
+            <span class="label">Correct Answer:</span>
+            <span class="value">{{ answer.correct_answer }}</span>
+          </div>
+          {% if answer.explanation %}
+          <div class="answer-explanation">
+            <p>{{ answer.explanation }}</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
 </div>
-{% endblock %} {% block extra_css %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Animate progress bars on scroll
+  function animateProgressBars() {
+    const progressBars = document.querySelectorAll(".score-progress");
+    progressBars.forEach((bar) => {
+      const progress = bar.dataset.progress;
+      bar.style.width = progress + "%";
+    });
+  }
+
+  // Initialize animations when content is loaded
+  document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(animateProgressBars, 300);
+  });
+
+  // Download functionality
+  function downloadResults() {
+    showLoading();
+    fetch("/download-detailed-results/{{ result.submission_id }}")
+      .then((response) => response.blob())
+      .then((blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "detailed_results_{{ result.submission_id }}.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        hideLoading();
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        hideLoading();
+        alert("Failed to download results");
+      });
+  }
+</script>
+{% endblock %}
+
+{% block extra_css %}
 <style>
   .score-circle-lg {
     width: 150px;
@@ -476,6 +237,226 @@ Grader{% endblock %} {% block content %}
 
   .performance-meter .progress {
     height: 8px;
+    border-radius: 4px;
+  }
+
+  /* New styles for the detailed results */
+  .detailed-results-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .header-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 20px;
+  }
+
+  .header-actions .btn {
+    margin-left: 10px;
+  }
+
+  .result-overview {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .student-info {
+    flex: 1;
+  }
+
+  .grade-badge {
+    padding: 5px 10px;
+    border-radius: 12px;
+    font-weight: bold;
+    color: white;
+  }
+
+  .score-circle {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 20px;
+    font-size: 2rem;
+    font-weight: bold;
+    color: white;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+
+  .overview-details {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+  }
+
+  .detail-item {
+    flex: 1;
+    margin-right: 10px;
+  }
+
+  .detail-item:last-child {
+    margin-right: 0;
+  }
+
+  .score-breakdown {
+    margin-top: 30px;
+  }
+
+  .criteria-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 20px;
+  }
+
+  .criteria-card {
+    background: #f9f9f9;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .criteria-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .points {
+    background: #007bff;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: bold;
+  }
+
+  .criteria-details {
+    margin-top: 10px;
+  }
+
+  .score-bar {
+    background: #e9ecef;
+    border-radius: 4px;
+    height: 8px;
+    overflow: hidden;
+  }
+
+  .score-progress {
+    background: #007bff;
+    height: 100%;
+    transition: width 0.4s ease;
+  }
+
+  .match-percent {
+    display: block;
+    margin-top: 5px;
+    font-size: 0.875rem;
+    color: #6c757d;
+  }
+
+  .detailed-feedback {
+    margin-top: 30px;
+  }
+
+  .feedback-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .feedback-card {
+    background: #f9f9f9;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .feedback-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .feedback-list li {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .feedback-list i {
+    color: #28a745;
+    margin-right: 10px;
+  }
+
+  .no-data {
+    color: #6c757d;
+    font-style: italic;
+  }
+
+  .answer-details {
+    margin-top: 30px;
+  }
+
+  .answers-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .answer-card {
+    background: #f9f9f9;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .answer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .status-badge {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: bold;
+    color: white;
+  }
+
+  .answer-content {
+    margin-top: 10px;
+  }
+
+  .answer-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .label {
+    color: #6c757d;
+  }
+
+  .value {
+    font-weight: bold;
+  }
+
+  .answer-explanation {
+    margin-top: 10px;
+    padding: 10px;
+    background: #e9ecef;
     border-radius: 4px;
   }
 </style>

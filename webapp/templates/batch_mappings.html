@@ -185,7 +185,9 @@ endblock %} {% block content %}
     </div>
   </div>
 </div>
-{% endblock %} {% block extra_css %}
+{% endblock %}
+
+{% block extra_css %}
 <style>
   .score-pill {
     display: inline-block;
@@ -284,7 +286,9 @@ endblock %} {% block content %}
     font-weight: bold;
   }
 </style>
-{% endblock %} {% block extra_js %}
+{% endblock %}
+
+{% block extra_js %}
 <script>
   // Store all results data
   const allResults = {{ results|tojson }};

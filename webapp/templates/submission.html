@@ -250,7 +250,9 @@ endblock %} {% block content %}
   </div>
 </div>
 
-{% endblock %} {% block extra_css %}
+{% endblock %}
+
+{% block extra_css %}
 <style>
   .submission-content {
     max-height: 60vh;
@@ -268,7 +270,9 @@ endblock %} {% block content %}
     width: 70px;
   }
 </style>
-{% endblock %} {% block extra_js %}
+{% endblock %}
+
+{% block extra_js %}
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     // Add confirmation for buttons

@@ -25,17 +25,31 @@ classifiers = [
 ]
 
 dependencies = [
+    # Core Dependencies
     "requests>=2.31.0",
     "python-dotenv>=1.0.1",
     "numpy>=1.26.4",
     "pandas>=2.2.0",
+    "openpyxl>=3.1.2",
+    "openai>=1.12.0",
+    "MarkupSafe>=3.0.2",
+    "validators>=0.22.0",
+    "packaging>=23.0",
+
+    # Document Processing
     "PyMuPDF>=1.23.8",
     "python-docx>=1.1.0",
     "Pillow>=10.2.0",
+
+    # Text Processing
     "nltk>=3.8.1",
     "scikit-learn>=1.4.0",
+
+    # Web Framework
     "Flask>=3.0.2",
+    "Flask-Session>=0.5.0",
     "Werkzeug>=3.0.1",
+    "Jinja2>=3.1.2",
 ]
 
 [project.optional-dependencies]
@@ -73,4 +87,4 @@ minversion = "6.0"
 addopts = "-ra -q --cov=src --cov=utils"
 testpaths = [
     "tests",
-] 
+]

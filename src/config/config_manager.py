@@ -142,3 +142,38 @@ class ConfigManager:
             int: Maximum file size in bytes
         """
         return self.config.max_file_size_mb * 1024 * 1024  # Convert MB to bytes
+
+    @property
+    def max_file_size_mb(self) -> int:
+        """Get maximum file size in MB."""
+        return self.config.max_file_size_mb
+
+    @property
+    def supported_formats(self) -> List[str]:
+        """Get supported file formats."""
+        return self.config.supported_formats
+
+    @property
+    def temp_dir(self) -> str:
+        """Get temporary directory path."""
+        return self.config.temp_dir
+
+    @property
+    def secret_key(self) -> str:
+        """Get secret key."""
+        return self.config.secret_key
+
+    @property
+    def debug(self) -> bool:
+        """Get debug mode."""
+        return self.config.debug
+
+    @property
+    def host(self) -> str:
+        """Get host."""
+        return self.config.host
+
+    @property
+    def port(self) -> int:
+        """Get port."""
+        return self.config.port

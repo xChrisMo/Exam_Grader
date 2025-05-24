@@ -3,29 +3,23 @@ requests>=2.31.0
 python-dotenv>=1.0.1
 numpy>=1.26.4
 pandas>=2.2.0
-openpyxl>=3.1.2  # For Excel export
-openai>=1.12.0  # Latest OpenAI API client
+openpyxl>=3.1.2
+openai>=1.12.0
 MarkupSafe>=3.0.2
 validators>=0.22.0
+packaging>=23.0
 
 # Document Processing
-PyMuPDF>=1.23.8  # For PDF processing
-python-docx>=1.1.0  # For Word documents
-Pillow>=10.2.0  # For image processing
+PyMuPDF>=1.23.8
+python-docx>=1.1.0
+Pillow>=10.2.0
+
+# Text Processing
+nltk>=3.8.1
+scikit-learn>=1.4.0
 
 # Web Framework
 Flask>=3.0.2
+Flask-Session>=0.5.0
 Werkzeug>=3.0.1
-
-# Development Dependencies
-pytest>=8.0.0
-black>=24.2.0
-isort>=5.13.2
-flake8>=7.0.0
-mypy>=1.8.0
-pytest-cov>=4.1.0
-
-# Type Stubs
-types-requests
-types-python-dateutil
-types-PyYAML
+Jinja2>=3.1.2

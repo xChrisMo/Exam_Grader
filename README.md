@@ -117,26 +117,21 @@ The application follows a modular architecture:
 
 ```
 exam-grader/
-├── config/             # Configuration files
-├── data/               # Data storage
-├── logs/               # Log files
-├── output/             # Output files
-├── results/            # Grading results
 ├── src/                # Source code
 │   ├── config/         # Configuration management
 │   ├── parsing/        # Document parsing modules
 │   ├── services/       # Core services (OCR, LLM, grading, mapping)
-│   ├── storage/        # Storage services for caching results
-│   └── tests/          # Unit tests for source code
-├── temp/               # Temporary files
-├── tests/              # Integration and functional tests
-├── utils/              # Utility functions and helpers
+│   └── storage/        # Storage services for caching results
 ├── webapp/             # Web interface using Flask
-│   ├── blueprints/     # Flask blueprints
-│   ├── static/         # Static assets
+│   ├── static/         # Static assets (CSS, JS, images)
 │   └── templates/      # HTML templates
+├── utils/              # Utility functions and helpers
+├── tests/              # Test files
+├── temp/               # Runtime temporary files (auto-created)
+├── logs/               # Application logs (auto-created)
 ├── .env                # Environment variables
 ├── requirements.txt    # Python dependencies
+├── pyproject.toml      # Project configuration
 └── run_app.py          # Application entry point
 ```
 

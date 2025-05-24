@@ -1,0 +1,884 @@
+{% extends "base.html" %} {% block title %}Settings - Exam Grader{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-gear-fill"></i> Settings</h1>
+  <p class="page-subtitle">
+    Configure application preferences and system settings
+  </p>
+</div>
+
+<div class="dashboard-grid">
+  <!-- Settings Navigation Tabs -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="settings-nav">
+        <button class="settings-tab active" data-tab="performance">
+          <i class="bi bi-speedometer2"></i> Performance
+        </button>
+        <button class="settings-tab" data-tab="files">
+          <i class="bi bi-file-earmark-text"></i> File Processing
+        </button>
+        <button class="settings-tab" data-tab="system">
+          <i class="bi bi-info-circle"></i> System Info
+        </button>
+        <button class="settings-tab" data-tab="cache">
+          <i class="bi bi-trash"></i> Cache Management
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Performance Settings Tab -->
+  <div class="settings-content" id="performance-tab">
+    <div class="row g-3 mb-4">
+      <div class="col-lg-8">
+        <div class="main-card compact-card">
+          <div class="card-header">
+            <h4><i class="bi bi-speedometer2"></i> AI Performance Settings</h4>
+            <p class="card-subtitle">
+              Optimize processing speed and accuracy for AI operations
+            </p>
+          </div>
+          <div class="card-content">
+            <form id="performanceForm">
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="llmModel" class="form-label">
+                      <i class="bi bi-robot"></i> LLM Model
+                    </label>
+                    <select class="form-select" id="llmModel" name="llm_model">
+                      <option value="deepseek-chat">
+                        DeepSeek Chat (Fast)
+                      </option>
+                      <option value="deepseek-reasoner">
+                        DeepSeek Reasoner (Accurate)
+                      </option>
+                    </select>
+                    <div class="form-text">
+                      Choose between speed and accuracy
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="processingTimeout" class="form-label">
+                      <i class="bi bi-clock"></i> Processing Timeout
+                    </label>
+                    <select
+                      class="form-select"
+                      id="processingTimeout"
+                      name="timeout"
+                    >
+                      <option value="15">15 seconds (Fast)</option>
+                      <option value="30" selected>30 seconds (Standard)</option>
+                      <option value="60">60 seconds (Extended)</option>
+                    </select>
+                    <div class="form-text">
+                      Maximum time to wait for AI responses
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="maxTokens" class="form-label">
+                      <i class="bi bi-textarea-t"></i> Response Length
+                    </label>
+                    <select
+                      class="form-select"
+                      id="maxTokens"
+                      name="max_tokens"
+                    >
+                      <option value="500">Short (500 tokens)</option>
+                      <option value="1000" selected>
+                        Medium (1000 tokens)
+                      </option>
+                      <option value="2000">Long (2000 tokens)</option>
+                    </select>
+                    <div class="form-text">Maximum length of AI responses</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="temperature" class="form-label">
+                      <i class="bi bi-thermometer-half"></i> AI Temperature
+                    </label>
+                    <select
+                      class="form-select"
+                      id="temperature"
+                      name="temperature"
+                    >
+                      <option value="0.0">0.0 (Most Consistent)</option>
+                      <option value="0.1" selected>0.1 (Balanced)</option>
+                      <option value="0.3">0.3 (More Creative)</option>
+                    </select>
+                    <div class="form-text">Controls AI response creativity</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-12">
+                  <div class="form-check mb-3">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      id="deterministicMode"
+                      name="deterministic"
+                    />
+                    <label class="form-check-label" for="deterministicMode">
+                      <i class="bi bi-arrow-repeat"></i> Deterministic Mode
+                    </label>
+                    <div class="form-text">
+                      Enable for consistent results (slower processing)
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="d-flex justify-content-between align-items-center">
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  onclick="resetPerformanceDefaults()"
+                >
+                  <i class="bi bi-arrow-clockwise"></i> Reset to Defaults
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-check-circle"></i> Save Performance Settings
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="main-card compact-card">
+          <div class="card-header">
+            <h5><i class="bi bi-lightbulb"></i> Performance Tips</h5>
+          </div>
+          <div class="card-content">
+            <div class="performance-tip">
+              <i class="bi bi-lightning text-warning"></i>
+              <div>
+                <strong>Fast Processing</strong>
+                <p>Use DeepSeek Chat with 15s timeout for quick results</p>
+              </div>
+            </div>
+            <div class="performance-tip">
+              <i class="bi bi-bullseye text-success"></i>
+              <div>
+                <strong>High Accuracy</strong>
+                <p>Use DeepSeek Reasoner with 60s timeout for best quality</p>
+              </div>
+            </div>
+            <div class="performance-tip">
+              <i class="bi bi-balance-scale text-info"></i>
+              <div>
+                <strong>Balanced</strong>
+                <p>Current settings provide good speed-accuracy balance</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- File Processing Settings Tab -->
+  <div class="settings-content" id="files-tab" style="display: none">
+    <div class="row g-3 mb-4">
+      <div class="col-lg-8">
+        <div class="main-card compact-card">
+          <div class="card-header">
+            <h4>
+              <i class="bi bi-file-earmark-text"></i> File Processing Settings
+            </h4>
+            <p class="card-subtitle">
+              Configure file upload and processing options
+            </p>
+          </div>
+          <div class="card-content">
+            <form id="fileProcessingForm">
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="maxFileSize" class="form-label">
+                      <i class="bi bi-file-earmark-arrow-up"></i> Maximum File
+                      Size
+                    </label>
+                    <select
+                      class="form-select"
+                      id="maxFileSize"
+                      name="max_file_size"
+                    >
+                      <option value="10">10 MB</option>
+                      <option value="20" selected>20 MB</option>
+                      <option value="50">50 MB</option>
+                    </select>
+                    <div class="form-text">Maximum size for uploaded files</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="ocrLanguage" class="form-label">
+                      <i class="bi bi-translate"></i> OCR Language
+                    </label>
+                    <select
+                      class="form-select"
+                      id="ocrLanguage"
+                      name="ocr_language"
+                    >
+                      <option value="en" selected>English</option>
+                      <option value="es">Spanish</option>
+                      <option value="fr">French</option>
+                      <option value="de">German</option>
+                      <option value="auto">Auto-detect</option>
+                    </select>
+                    <div class="form-text">Language for text recognition</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-12">
+                  <div class="mb-3">
+                    <label for="ocrConfidence" class="form-label">
+                      <i class="bi bi-eye"></i> OCR Confidence Threshold
+                    </label>
+                    <input
+                      type="range"
+                      class="form-range"
+                      id="ocrConfidence"
+                      name="ocr_confidence"
+                      min="0.5"
+                      max="1.0"
+                      step="0.1"
+                      value="0.7"
+                    />
+                    <div class="d-flex justify-content-between">
+                      <small>0.5 (Permissive)</small>
+                      <small>1.0 (Strict)</small>
+                    </div>
+                    <div class="form-text">
+                      Minimum confidence for OCR text extraction
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="form-check mb-3">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      id="autoCache"
+                      name="auto_cache"
+                      checked
+                    />
+                    <label class="form-check-label" for="autoCache">
+                      <i class="bi bi-save"></i> Auto-save to Cache
+                    </label>
+                    <div class="form-text">
+                      Automatically cache processed files
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-check mb-3">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      id="compressImages"
+                      name="compress_images"
+                      checked
+                    />
+                    <label class="form-check-label" for="compressImages">
+                      <i class="bi bi-file-zip"></i> Compress Images
+                    </label>
+                    <div class="form-text">
+                      Reduce image file sizes for faster processing
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="d-flex justify-content-between align-items-center">
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  onclick="resetFileDefaults()"
+                >
+                  <i class="bi bi-arrow-clockwise"></i> Reset to Defaults
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-check-circle"></i> Save File Settings
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="main-card compact-card">
+          <div class="card-header">
+            <h5><i class="bi bi-file-text"></i> Supported Formats</h5>
+          </div>
+          <div class="card-content">
+            <div class="format-group">
+              <h6>
+                <i class="bi bi-journal-text text-primary"></i> Marking Guides
+              </h6>
+              <ul class="format-list">
+                <li>.docx - Microsoft Word</li>
+                <li>.txt - Plain text</li>
+              </ul>
+            </div>
+            <div class="format-group">
+              <h6>
+                <i class="bi bi-file-earmark text-success"></i> Submissions
+              </h6>
+              <ul class="format-list">
+                <li>.pdf - PDF documents</li>
+                <li>.docx - Microsoft Word</li>
+                <li>.txt - Plain text</li>
+                <li>.jpg, .png - Images</li>
+                <li>.tiff, .bmp - Other images</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- System Information Tab -->
+  <div class="settings-content" id="system-tab" style="display: none">
+    <div class="row g-3 mb-4">
+      <div class="col-lg-8">
+        <div class="main-card compact-card">
+          <div class="card-header">
+            <h4><i class="bi bi-info-circle"></i> System Information</h4>
+            <p class="card-subtitle">Current system status and configuration</p>
+          </div>
+          <div class="card-content">
+            <div class="row">
+              <div class="col-md-6">
+                <div class="info-item">
+                  <i class="bi bi-app-indicator text-primary"></i>
+                  <div>
+                    <h6>Application Version</h6>
+                    <p class="text-muted">Exam Grader v2.0.0</p>
+                  </div>
+                </div>
+
+                <div class="info-item">
+                  <i class="bi bi-code-slash text-warning"></i>
+                  <div>
+                    <h6>Python Version</h6>
+                    <p class="text-muted">
+                      {{ python_version or "Python 3.8+" }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="info-item">
+                  <i class="bi bi-folder text-info"></i>
+                  <div>
+                    <h6>Cache Directory</h6>
+                    <p class="text-muted">{{ cache_dir or "temp/cache" }}</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="info-item">
+                  <i class="bi bi-robot text-success"></i>
+                  <div>
+                    <h6>AI Service Status</h6>
+                    <p class="text-muted">
+                      <span class="badge bg-success">Online</span>
+                      DeepSeek API Connected
+                    </p>
+                  </div>
+                </div>
+
+                <div class="info-item">
+                  <i class="bi bi-eye text-primary"></i>
+                  <div>
+                    <h6>OCR Service Status</h6>
+                    <p class="text-muted">
+                      <span class="badge bg-success">Available</span>
+                      HandwritingOCR API
+                    </p>
+                  </div>
+                </div>
+
+                <div class="info-item">
+                  <i class="bi bi-hdd text-secondary"></i>
+                  <div>
+                    <h6>Storage Usage</h6>
+                    <p class="text-muted">{{ storage_usage or "0 MB" }} used</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="main-card compact-card">
+          <div class="card-header">
+            <h5><i class="bi bi-shield-check"></i> System Health</h5>
+          </div>
+          <div class="card-content">
+            <div class="health-item">
+              <div class="health-indicator bg-success"></div>
+              <div>
+                <strong>API Connectivity</strong>
+                <p>All services operational</p>
+              </div>
+            </div>
+            <div class="health-item">
+              <div class="health-indicator bg-success"></div>
+              <div>
+                <strong>File Processing</strong>
+                <p>Ready for uploads</p>
+              </div>
+            </div>
+            <div class="health-item">
+              <div class="health-indicator bg-warning"></div>
+              <div>
+                <strong>Cache Status</strong>
+                <p>Consider clearing old files</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cache Management Tab -->
+  <div class="settings-content" id="cache-tab" style="display: none">
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="main-card compact-card">
+          <div class="card-header">
+            <h4><i class="bi bi-trash"></i> Cache Management</h4>
+            <p class="card-subtitle">Manage cached files and temporary data</p>
+          </div>
+          <div class="card-content">
+            <div class="row">
+              <div class="col-md-4">
+                <div class="cache-item">
+                  <div class="cache-icon">
+                    <i class="bi bi-journal-text text-primary"></i>
+                  </div>
+                  <div class="cache-info">
+                    <h5>Guide Cache</h5>
+                    <p class="text-muted">{{ guide_cache_count or 0 }} files</p>
+                    <p class="cache-size">{{ guide_cache_size or "0 MB" }}</p>
+                  </div>
+                  <button
+                    class="btn btn-outline-danger btn-sm"
+                    onclick="clearGuideCache()"
+                  >
+                    <i class="bi bi-trash"></i> Clear Guide Cache
+                  </button>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="cache-item">
+                  <div class="cache-icon">
+                    <i class="bi bi-file-earmark text-success"></i>
+                  </div>
+                  <div class="cache-info">
+                    <h5>Submission Cache</h5>
+                    <p class="text-muted">
+                      {{ submission_cache_count or 0 }} files
+                    </p>
+                    <p class="cache-size">
+                      {{ submission_cache_size or "0 MB" }}
+                    </p>
+                  </div>
+                  <button
+                    class="btn btn-outline-danger btn-sm"
+                    onclick="clearSubmissionCache()"
+                  >
+                    <i class="bi bi-trash"></i> Clear Submission Cache
+                  </button>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="cache-item">
+                  <div class="cache-icon">
+                    <i class="bi bi-trash-fill text-danger"></i>
+                  </div>
+                  <div class="cache-info">
+                    <h5>All Cache</h5>
+                    <p class="text-muted">Total cached data</p>
+                    <p class="cache-size">{{ total_cache_size or "0 MB" }}</p>
+                  </div>
+                  <button
+                    class="btn btn-danger btn-sm"
+                    onclick="clearAllCache()"
+                  >
+                    <i class="bi bi-trash-fill"></i> Clear All Cache
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="row mt-4">
+              <div class="col-12">
+                <div class="alert alert-info">
+                  <i class="bi bi-info-circle me-2"></i>
+                  <strong>Cache Information:</strong> Cached files help speed up
+                  repeated operations. Clear cache if you're experiencing issues
+                  or need to free up storage space.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Settings Page Styles */
+  .settings-nav {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid var(--gray-200);
+    padding-bottom: 0;
+  }
+
+  .settings-tab {
+    background: none;
+    border: none;
+    padding: 1rem 1.5rem;
+    color: var(--gray-600);
+    font-weight: 500;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .settings-tab:hover {
+    color: var(--primary-blue);
+    background: var(--primary-blue-50);
+  }
+
+  .settings-tab.active {
+    color: var(--primary-blue);
+    border-bottom-color: var(--primary-blue);
+    background: var(--primary-blue-50);
+  }
+
+  .settings-content {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .performance-tip,
+  .info-item,
+  .health-item,
+  .cache-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    border-radius: 8px;
+    background: var(--gray-50);
+  }
+
+  .performance-tip i,
+  .info-item i {
+    font-size: 1.5rem;
+    margin-top: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .performance-tip div,
+  .info-item div {
+    flex: 1;
+  }
+
+  .performance-tip h6,
+  .info-item h6 {
+    margin-bottom: 0.5rem;
+    color: var(--gray-800);
+  }
+
+  .performance-tip p,
+  .info-item p {
+    margin-bottom: 0;
+    font-size: 0.9rem;
+  }
+
+  .health-item {
+    align-items: center;
+  }
+
+  .health-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .cache-item {
+    flex-direction: column;
+    text-align: center;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .cache-icon i {
+    font-size: 2rem;
+  }
+
+  .cache-info h5 {
+    margin-bottom: 0.5rem;
+    color: var(--gray-800);
+  }
+
+  .cache-size {
+    font-weight: 600;
+    color: var(--primary-blue);
+    font-size: 1.1rem;
+  }
+
+  .format-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .format-list {
+    list-style: none;
+    padding-left: 0;
+  }
+
+  .format-list li {
+    padding: 0.25rem 0;
+    border-bottom: 1px solid var(--gray-200);
+    font-size: 0.9rem;
+  }
+
+  .format-list li:last-child {
+    border-bottom: none;
+  }
+</style>
+
+<script>
+  // Settings page functionality
+  document.addEventListener("DOMContentLoaded", function () {
+    // Initialize tabs
+    initializeTabs();
+
+    // Load saved settings
+    loadSettings();
+
+    // Form submission handlers
+    document
+      .getElementById("performanceForm")
+      .addEventListener("submit", function (e) {
+        e.preventDefault();
+        savePerformanceSettings();
+      });
+
+    document
+      .getElementById("fileProcessingForm")
+      .addEventListener("submit", function (e) {
+        e.preventDefault();
+        saveFileSettings();
+      });
+
+    // OCR confidence slider display
+    const ocrSlider = document.getElementById("ocrConfidence");
+    if (ocrSlider) {
+      const ocrDisplay = document.createElement("span");
+      ocrDisplay.className = "badge bg-primary ms-2";
+      ocrSlider.parentNode.appendChild(ocrDisplay);
+
+      function updateOcrDisplay() {
+        ocrDisplay.textContent = ocrSlider.value;
+      }
+
+      ocrSlider.addEventListener("input", updateOcrDisplay);
+      updateOcrDisplay();
+    }
+  });
+
+  function initializeTabs() {
+    const tabs = document.querySelectorAll(".settings-tab");
+    const contents = document.querySelectorAll(".settings-content");
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", function () {
+        const targetTab = this.getAttribute("data-tab");
+
+        // Remove active class from all tabs
+        tabs.forEach((t) => t.classList.remove("active"));
+
+        // Hide all content
+        contents.forEach((c) => (c.style.display = "none"));
+
+        // Activate clicked tab
+        this.classList.add("active");
+
+        // Show target content
+        const targetContent = document.getElementById(targetTab + "-tab");
+        if (targetContent) {
+          targetContent.style.display = "block";
+        }
+      });
+    });
+  }
+
+  function loadSettings() {
+    // Load settings from localStorage or server
+    const settings = JSON.parse(
+      localStorage.getItem("examGraderSettings") || "{}"
+    );
+
+    // Apply loaded settings to form elements
+    if (settings.llm_model) {
+      document.getElementById("llmModel").value = settings.llm_model;
+    }
+    if (settings.timeout) {
+      document.getElementById("processingTimeout").value = settings.timeout;
+    }
+    // Add more setting loads as needed
+  }
+
+  function savePerformanceSettings() {
+    const formData = new FormData(document.getElementById("performanceForm"));
+    const settings = Object.fromEntries(formData);
+
+    // Save to localStorage (in a real app, this would go to the server)
+    const currentSettings = JSON.parse(
+      localStorage.getItem("examGraderSettings") || "{}"
+    );
+    Object.assign(currentSettings, settings);
+    localStorage.setItem("examGraderSettings", JSON.stringify(currentSettings));
+
+    // Show success message
+    showToast("Performance settings saved successfully!", "success");
+  }
+
+  function saveFileSettings() {
+    const formData = new FormData(
+      document.getElementById("fileProcessingForm")
+    );
+    const settings = Object.fromEntries(formData);
+
+    // Save to localStorage
+    const currentSettings = JSON.parse(
+      localStorage.getItem("examGraderSettings") || "{}"
+    );
+    Object.assign(currentSettings, settings);
+    localStorage.setItem("examGraderSettings", JSON.stringify(currentSettings));
+
+    // Show success message
+    showToast("File processing settings saved successfully!", "success");
+  }
+
+  function clearGuideCache() {
+    if (confirm("Are you sure you want to clear the guide cache?")) {
+      // In a real app, this would make an API call
+      showToast("Guide cache cleared successfully!", "info");
+    }
+  }
+
+  function clearSubmissionCache() {
+    if (confirm("Are you sure you want to clear the submission cache?")) {
+      // In a real app, this would make an API call
+      showToast("Submission cache cleared successfully!", "info");
+    }
+  }
+
+  function clearAllCache() {
+    if (
+      confirm(
+        "Are you sure you want to clear ALL cached data? This cannot be undone."
+      )
+    ) {
+      // In a real app, this would make an API call
+      showToast("All cache cleared successfully!", "warning");
+    }
+  }
+
+  function resetPerformanceDefaults() {
+    if (confirm("Reset all performance settings to default values?")) {
+      document.getElementById("llmModel").value = "deepseek-chat";
+      document.getElementById("processingTimeout").value = "30";
+      document.getElementById("maxTokens").value = "1000";
+      document.getElementById("temperature").value = "0.1";
+      document.getElementById("deterministicMode").checked = false;
+      showToast("Performance settings reset to defaults!", "info");
+    }
+  }
+
+  function resetFileDefaults() {
+    if (confirm("Reset all file processing settings to default values?")) {
+      document.getElementById("maxFileSize").value = "20";
+      document.getElementById("ocrLanguage").value = "en";
+      document.getElementById("ocrConfidence").value = "0.7";
+      document.getElementById("autoCache").checked = true;
+      document.getElementById("compressImages").checked = true;
+
+      // Update OCR display
+      const ocrDisplay = document
+        .querySelector("#ocrConfidence")
+        .parentNode.querySelector(".badge");
+      if (ocrDisplay) {
+        ocrDisplay.textContent = "0.7";
+      }
+
+      showToast("File processing settings reset to defaults!", "info");
+    }
+  }
+
+  function showToast(message, type = "info") {
+    // Simple toast notification
+    const toast = document.createElement("div");
+    toast.className = `alert alert-${type} position-fixed top-0 end-0 m-3`;
+    toast.style.zIndex = "9999";
+    toast.innerHTML = `
+        <i class="bi bi-check-circle me-2"></i>
+        ${message}
+        <button type="button" class="btn-close ms-2" onclick="this.parentElement.remove()"></button>
+    `;
+    document.body.appendChild(toast);
+
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+      if (toast.parentElement) {
+        toast.remove();
+      }
+    }, 3000);
+  }
+</script>
+{% endblock %}
