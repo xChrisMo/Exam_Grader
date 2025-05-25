@@ -221,19 +221,25 @@ def create_app():
             # Check for file in request
             if 'file' not in request.files:
                 logger.error("❌ No file part in request")
-                flash('No file part', 'error')
-                return redirect(url_for('index'))
+                return jsonify({
+                    'success': False,
+                    'message': 'No file part in request'
+                }), 400
 
             file = request.files['file']
 
             if file.filename == '':
-                flash('No selected file', 'error')
-                return redirect(url_for('index'))
+                return jsonify({
+                    'success': False,
+                    'message': 'No selected file'
+                }), 400
 
             # Validate file extension
             if not allowed_file(file.filename, {'.docx', '.txt'}):
-                flash('Invalid file format. Supported formats: txt, docx', 'error')
-                return redirect(url_for('index'))
+                return jsonify({
+                    'success': False,
+                    'message': 'Invalid file format. Supported formats: txt, docx'
+                }), 400
 
             # Save file temporarily
             filename = secure_filename(file.filename)
@@ -243,12 +249,16 @@ def create_app():
             # Parse marking guide
             guide, error = parse_marking_guide(file_path)
             if error:
-                flash(f'Failed to parse marking guide: {error}', 'error')
-                return redirect(url_for('index'))
+                return jsonify({
+                    'success': False,
+                    'message': f'Failed to parse marking guide: {error}'
+                }), 400
 
             if not guide:
-                flash('Failed to extract guide content', 'error')
-                return redirect(url_for('index'))
+                return jsonify({
+                    'success': False,
+                    'message': 'Failed to extract guide content'
+                }), 400
 
             # Store raw content
             session['guide_content'] = guide.raw_content
@@ -264,13 +274,18 @@ def create_app():
             guide_storage.store_guide(file_content, filename, {'raw_content': guide.raw_content})
             logger.info(f"Stored marking guide in cache: {filename}")
 
-            flash('Marking guide uploaded successfully', 'success')
-            return redirect(url_for('index'))
+            return jsonify({
+                'success': True,
+                'message': 'Marking guide uploaded successfully',
+                'guide_content': guide.raw_content
+            })
 
         except Exception as e:
             logger.error(f"Guide upload error: {str(e)}")
-            flash(f'An error occurred: {str(e)}', 'error')
-            return redirect(url_for('index'))
+            return jsonify({
+                'success': False,
+                'message': f'An error occurred: {str(e)}'
+            }), 500
         finally:
             # Clean up temporary file
             try:
@@ -291,14 +306,18 @@ def create_app():
             # Check for file in request
             if 'file' not in request.files:
                 logger.error("❌ No file part in request")
-                flash('No file part', 'error')
-                return redirect(url_for('index'))
+                return jsonify({
+                    'success': False,
+                    'message': 'No file part in request'
+                }), 400
 
             files = request.files.getlist('file')
 
             if not files or all(file.filename == '' for file in files):
-                flash('No selected file', 'error')
-                return redirect(url_for('index'))
+                return jsonify({
+                    'success': False,
+                    'message': 'No selected file'
+                }), 400
 
             # Initialize submissions list if it doesn't exist
             if 'submissions' not in session:
@@ -308,6 +327,7 @@ def create_app():
             successful_uploads = 0
             failed_uploads = 0
             temp_files = []
+            processed_submissions = []
 
             for file in files:
                 if file.filename == '':
@@ -354,6 +374,7 @@ def create_app():
 
                     # Add to submissions list
                     session['submissions'] = session.get('submissions', []) + [submission_data]
+                    processed_submissions.append(submission_data)
 
                     # Also set as last_submission for backward compatibility
                     session['last_submission'] = submission_data
@@ -364,20 +385,30 @@ def create_app():
                     failed_uploads += 1
                     logger.error(f"Error processing {file.filename}: {str(e)}")
 
-            # Show appropriate message based on results
+            # Prepare response message
             if successful_uploads > 0 and failed_uploads > 0:
-                flash(f'Uploaded {successful_uploads} submission(s) successfully. {failed_uploads} file(s) failed.', 'warning')
+                message = f'Uploaded {successful_uploads} submission(s) successfully. {failed_uploads} file(s) failed.'
+                status = 'warning'
             elif successful_uploads > 0:
-                flash(f'Successfully uploaded {successful_uploads} submission(s)', 'success')
+                message = f'Successfully uploaded {successful_uploads} submission(s)'
+                status = 'success'
             else:
-                flash('All uploads failed. Please check file formats and try again.', 'error')
+                message = 'All uploads failed. Please check file formats and try again.'
+                status = 'error'
 
-            return redirect(url_for('index'))
+            return jsonify({
+                'success': successful_uploads > 0,
+                'message': message,
+                'status': status,
+                'submissions': processed_submissions
+            })
 
         except Exception as e:
             logger.error(f"Submission upload error: {str(e)}")
-            flash(f'An error occurred: {str(e)}', 'error')
-            return redirect(url_for('index'))
+            return jsonify({
+                'success': False,
+                'message': f'An error occurred: {str(e)}'
+            }), 500
         finally:
             # Clean up temporary files
             for temp_file in temp_files if 'temp_files' in locals() else []:
@@ -869,8 +900,6 @@ def create_app():
         except Exception as e:
             logger.error(f"Error setting selected mapping: {str(e)}")
             return jsonify({"success": False, "message": str(e)})
-
-
 
     @app.route('/view_mapping')
     def view_mapping():
@@ -1723,8 +1752,6 @@ def create_app():
             headers={"Content-Disposition": f"attachment;filename={filename}"}
         )
 
-
-
     @app.errorhandler(404)
     def page_not_found(e):
         return render_template('errors/404.html'), 404
@@ -1748,10 +1775,7 @@ def create_app():
         """Help page with user documentation."""
         return render_template('help.html')
 
-
-
     return app
-
 
 if __name__ == '__main__':
     app = create_app()

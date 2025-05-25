@@ -2053,3 +2053,114 @@ body {
     padding: 5px 10px;
   }
 }
+
+/* Upload Dropzone Styles */
+.upload-dropzone {
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background-color: #f8f9fa;
+    position: relative;
+}
+
+.upload-dropzone:hover,
+.upload-dropzone.dragover {
+    border-color: #007bff;
+    background-color: #e3f2fd;
+}
+
+.upload-dropzone .upload-icon {
+    font-size: 2rem;
+    color: #6c757d;
+    margin-bottom: 10px;
+}
+
+.upload-dropzone .upload-text h6 {
+    margin: 0;
+    color: #495057;
+}
+
+.upload-dropzone .upload-text p {
+    margin: 5px 0;
+    color: #6c757d;
+}
+
+.upload-dropzone .upload-link {
+    color: #007bff;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.upload-dropzone .upload-formats {
+    color: #6c757d;
+    font-size: 0.875rem;
+}
+
+.upload-dropzone .upload-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: #e9ecef;
+    border-radius: 0 0 8px 8px;
+    overflow: hidden;
+}
+
+.upload-dropzone .progress-bar {
+    height: 100%;
+    background: #007bff;
+    width: 0;
+    transition: width 0.3s ease;
+}
+
+.upload-dropzone .progress-text {
+    position: absolute;
+    bottom: 8px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.upload-success {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding: 10px;
+    background: #d4edda;
+    border-radius: 4px;
+}
+
+.upload-success .success-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.upload-success .success-info i {
+    font-size: 1.25rem;
+}
+
+.upload-success .success-info div {
+    display: flex;
+    flex-direction: column;
+}
+
+.upload-success .success-info strong {
+    color: #155724;
+}
+
+.upload-success .success-info small {
+    color: #2c7a3d;
+}
+
+.upload-success .upload-actions {
+    display: flex;
+    gap: 8px;
+}
