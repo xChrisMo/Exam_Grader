@@ -6,10 +6,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Submission Upload
     setupUploadArea('submissionDropzone', 'submissionFile', 'submissionForm');
 
-    // Prevent default form submissions
+    // Prevent default form submissions and handle clear actions
     document.querySelectorAll('form').forEach(form => {
         form.addEventListener('submit', (e) => {
             e.preventDefault(); // Prevent traditional form submission
+            
+            // Handle clear submission form
+            if (form.action.includes('clear_submission')) {
+                handleClearSubmissions(form);
+            }
+            // Handle clear guide form
+            else if (form.action.includes('clear_guide')) {
+                handleClearGuide(form);
+            }
         });
     });
 });
@@ -73,11 +82,18 @@ function setupUploadArea(dropzoneId, fileInputId, formId) {
 function handleFiles(files, dropzone, progressBar, progressText, form) {
     if (files.length === 0) return;
 
-    // Show upload progress UI
+    // Show both the upload progress UI and global loading spinner
     if (progressBar && progressText) {
         progressBar.style.width = '0%';
         progressBar.parentElement.style.display = 'block';
         progressText.textContent = 'Uploading...';
+    }
+    
+    // Show global loading spinner
+    const loadingOverlay = document.querySelector('.loading-overlay');
+    if (loadingOverlay) {
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.querySelector('.loading-text').textContent = 'Processing upload...';
     }
 
     // Create FormData and append files
@@ -118,6 +134,11 @@ function handleFiles(files, dropzone, progressBar, progressText, form) {
                 showToast('success', 'Upload completed successfully');
             }
 
+            // Hide global loading spinner
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'none';
+            }
+
             // Refresh the page after a short delay to show the updated state
             setTimeout(() => {
                 window.location.reload();
@@ -126,12 +147,22 @@ function handleFiles(files, dropzone, progressBar, progressText, form) {
             const errorData = await response.json().catch(() => ({ message: 'Upload failed' }));
             showToast('error', errorData.message || 'Upload failed');
             updateProgressUI(progressBar, progressText, 100, 'Upload failed');
+            
+            // Hide global loading spinner
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'none';
+            }
         }
     })
     .catch(error => {
         console.error('Upload error:', error);
         showToast('error', 'Upload failed: ' + error.message);
         updateProgressUI(progressBar, progressText, 100, 'Upload failed');
+        
+        // Hide global loading spinner
+        if (loadingOverlay) {
+            loadingOverlay.style.display = 'none';
+        }
     });
 }
 
@@ -216,4 +247,78 @@ function updateSubmissionsList(submissions) {
 function preventDefaults(e) {
     e.preventDefault();
     e.stopPropagation();
+}
+
+async function handleClearSubmissions(form) {
+    // Show loading spinner
+    const loadingOverlay = document.querySelector('.loading-overlay');
+    if (loadingOverlay) {
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.querySelector('.loading-text').textContent = 'Clearing submissions...';
+    }
+
+    try {
+        const response = await fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            }
+        });
+
+        if (response.ok) {
+            showToast('success', 'All submissions cleared successfully');
+            // Redirect to home page after a short delay
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 1000);
+        } else {
+            const errorData = await response.json().catch(() => ({ message: 'Failed to clear submissions' }));
+            showToast('error', errorData.message || 'Failed to clear submissions');
+        }
+    } catch (error) {
+        console.error('Clear submissions error:', error);
+        showToast('error', 'Failed to clear submissions: ' + error.message);
+    } finally {
+        // Hide loading spinner
+        if (loadingOverlay) {
+            loadingOverlay.style.display = 'none';
+        }
+    }
+}
+
+async function handleClearGuide(form) {
+    // Show loading spinner
+    const loadingOverlay = document.querySelector('.loading-overlay');
+    if (loadingOverlay) {
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.querySelector('.loading-text').textContent = 'Removing guide...';
+    }
+
+    try {
+        const response = await fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            }
+        });
+
+        if (response.ok) {
+            showToast('success', 'Guide removed successfully');
+            // Redirect to home page after a short delay
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 1000);
+        } else {
+            const errorData = await response.json().catch(() => ({ message: 'Failed to remove guide' }));
+            showToast('error', errorData.message || 'Failed to remove guide');
+        }
+    } catch (error) {
+        console.error('Clear guide error:', error);
+        showToast('error', 'Failed to remove guide: ' + error.message);
+    } finally {
+        // Hide loading spinner
+        if (loadingOverlay) {
+            loadingOverlay.style.display = 'none';
+        }
+    }
 } 
