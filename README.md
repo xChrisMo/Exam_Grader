@@ -60,34 +60,41 @@ An AI-powered application for educators to grade student exam submissions agains
 4. Run the application:
 
    ```
-   python web/app.py
+   python run_app.py
    ```
-
-5. Access the web interface at `http://localhost:8501`
 
 ## Usage Guide
 
-### Step 1: Upload Marking Guide
+### Core Application
 
-- Upload your marking guide document (DOCX or TXT format)
-- The system will extract criteria, questions, and mark allocations
+The application provides a command-line interface and Python API for:
 
-### Step 2: Upload Student Submission
+1. **Document Parsing**: Extract text from various file formats
+2. **OCR Processing**: Convert handwritten content to text
+3. **LLM Integration**: AI-powered grading and mapping
+4. **Result Storage**: Cache and store grading results
 
-- Upload a student's submission (PDF, DOCX, images, or TXT)
-- OCR will automatically extract text from images or scanned documents
+### Supported File Formats
 
-### Step 3: Map Submission to Criteria
+- **Documents**: PDF, DOCX, TXT
+- **Images**: JPG, JPEG, PNG, TIFF, BMP, GIF (processed with OCR)
 
-- Click "Map Submission to Criteria" to analyze how the submission addresses each criterion
-- View the mapping to see which parts of the submission match each criterion
-- Identify unmapped criteria and submission sections
+### Python API Usage
 
-### Step 4: Grade Submission
+```python
+from src.parsing.parse_submission import parse_student_submission
+from src.services.llm_service import LLMService
+from src.services.mapping_service import MappingService
 
-- Click "Grade Submission" to evaluate the submission against the marking guide
-- Review detailed feedback and scores for each criterion
-- Export results as needed
+# Parse a document
+result, text, error = parse_student_submission('exam.pdf')
+if not error:
+    print(f'Extracted text: {text}')
+
+# Use LLM service for grading
+llm = LLMService()
+# ... grading logic
+```
 
 ## Running Tests
 
@@ -122,16 +129,16 @@ exam-grader/
 │   ├── parsing/        # Document parsing modules
 │   ├── services/       # Core services (OCR, LLM, grading, mapping)
 │   └── storage/        # Storage services for caching results
-├── webapp/             # Web interface using Flask
-│   ├── static/         # Static assets (CSS, JS, images)
-│   └── templates/      # HTML templates
 ├── utils/              # Utility functions and helpers
-├── tests/              # Test files
 ├── temp/               # Runtime temporary files (auto-created)
 ├── logs/               # Application logs (auto-created)
+├── output/             # Output files (auto-created)
+├── results/            # Results storage (auto-created)
 ├── .env                # Environment variables
+├── .env.example        # Environment configuration template
 ├── requirements.txt    # Python dependencies
 ├── pyproject.toml      # Project configuration
+├── validate_setup.py   # Setup validation script
 └── run_app.py          # Application entry point
 ```
 
@@ -162,5 +169,5 @@ The grading service evaluates student submissions by:
 ## Acknowledgements
 
 - DeepSeek for providing the LLM API
-- OCR libraries for text extraction
-- Flask for the web framework
+- HandwritingOCR for text extraction from images
+- Python community for excellent libraries

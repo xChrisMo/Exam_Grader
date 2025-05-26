@@ -1,6 +1,12 @@
+"""
+Configuration manager for the exam grader application.
+
+This module provides centralized configuration management for the application,
+loading settings from environment variables and providing validation.
+"""
 import os
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -8,9 +14,15 @@ from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+
 @dataclass
 class Config:
-    """Configuration settings for the application."""
+    """
+    Configuration settings for the application.
+
+    This dataclass holds all configuration values loaded from environment
+    variables with appropriate defaults and validation.
+    """
     # Core settings
     debug: bool
     log_level: str
@@ -32,30 +44,50 @@ class Config:
     handwriting_ocr_api_key: str
     handwriting_ocr_delete_after: int
 
-    def __post_init__(self):
-        """Validate configuration after initialization."""
+    def __post_init__(self) -> None:
+        """
+        Validate configuration after initialization.
+
+        Raises:
+            ValueError: If required configuration is missing or invalid
+        """
         if not self.handwriting_ocr_api_key:
-            raise ValueError("HandwritingOCR API key not configured")
+            logger.warning("HandwritingOCR API key not configured - OCR features will be disabled")
+            # Don't raise error, allow app to run without OCR
 
 class ConfigManager:
-    """Manages application configuration."""
+    """
+    Manages application configuration using singleton pattern.
 
-    _instance = None
+    This class loads configuration from environment variables and provides
+    a centralized access point for all application settings.
+    """
 
-    def __new__(cls):
-        """Create singleton instance."""
+    _instance: Optional['ConfigManager'] = None
+
+    def __new__(cls) -> 'ConfigManager':
+        """
+        Create singleton instance.
+
+        Returns:
+            ConfigManager: The singleton instance
+        """
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self):
-        """Initialize configuration manager."""
-        if self._initialized:
+    def __init__(self) -> None:
+        """
+        Initialize configuration manager.
+
+        Loads configuration from environment variables and validates settings.
+        """
+        if getattr(self, '_initialized', False):
             return
 
-        # Load environment variables from both .env and config.env
-        load_dotenv('.env')  # Load from .env file
+        # Load environment variables from .env file
+        load_dotenv('.env')
 
         # Create configuration object
         self.config = Config(

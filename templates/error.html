@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Error {{ error_code }} - Exam Grader{% endblock %}
+
+{% block content %}
+<div class="container-fluid d-flex align-items-center justify-content-center" style="min-height: 60vh;">
+    <div class="text-center">
+        <div class="mb-4">
+            {% if error_code == 404 %}
+                <i class="bi bi-exclamation-triangle-fill text-warning" style="font-size: 5rem;"></i>
+            {% elif error_code == 500 %}
+                <i class="bi bi-x-circle-fill text-danger" style="font-size: 5rem;"></i>
+            {% else %}
+                <i class="bi bi-exclamation-circle-fill text-secondary" style="font-size: 5rem;"></i>
+            {% endif %}
+        </div>
+        
+        <h1 class="display-1 fw-bold text-muted">{{ error_code }}</h1>
+        
+        <h2 class="mb-3">
+            {% if error_code == 404 %}
+                Page Not Found
+            {% elif error_code == 500 %}
+                Internal Server Error
+            {% else %}
+                Something Went Wrong
+            {% endif %}
+        </h2>
+        
+        <p class="lead text-muted mb-4">
+            {% if error_code == 404 %}
+                The page you're looking for doesn't exist or has been moved.
+            {% elif error_code == 500 %}
+                We're experiencing some technical difficulties. Please try again later.
+            {% else %}
+                {{ error_message or "An unexpected error occurred." }}
+            {% endif %}
+        </p>
+        
+        <div class="d-flex gap-3 justify-content-center">
+            <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg">
+                <i class="bi bi-house-fill me-2"></i>
+                Go Home
+            </a>
+            
+            <button onclick="history.back()" class="btn btn-outline-secondary btn-lg">
+                <i class="bi bi-arrow-left me-2"></i>
+                Go Back
+            </button>
+            
+            {% if error_code == 500 %}
+            <button onclick="location.reload()" class="btn btn-outline-primary btn-lg">
+                <i class="bi bi-arrow-clockwise me-2"></i>
+                Try Again
+            </button>
+            {% endif %}
+        </div>
+        
+        {% if error_code == 404 %}
+        <div class="mt-5">
+            <h5 class="text-muted mb-3">Popular Pages</h5>
+            <div class="row justify-content-center">
+                <div class="col-auto">
+                    <a href="{{ url_for('upload_page') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-cloud-upload me-2"></i>Upload Files
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="{{ url_for('results_page') }}" class="btn btn-outline-success">
+                        <i class="bi bi-graph-up me-2"></i>View Results
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="{{ url_for('settings_page') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-gear me-2"></i>Settings
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

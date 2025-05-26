@@ -37,15 +37,15 @@ class LLMService:
         self,
         api_key: Optional[str] = None,
         base_url: str = "https://api.deepseek.com/v1",
-        model: str = "deepseek-chat",  # Use faster model by default
-        temperature: float = 0.1,  # Slightly higher for faster responses
-        max_retries: int = 2,  # Reduce retries for faster failure
-        retry_delay: float = 1.0,  # Reduce retry delay
-        seed: Optional[int] = None,  # Disable seed for faster responses
-        deterministic: bool = False,  # Disable deterministic mode for speed
-        timeout: float = 30.0,  # Add timeout for API calls
-        max_tokens: int = 1000  # Limit response length
-    ):
+        model: str = "deepseek-chat",
+        temperature: float = 0.1,
+        max_retries: int = 2,
+        retry_delay: float = 1.0,
+        seed: Optional[int] = None,
+        deterministic: bool = False,
+        timeout: float = 30.0,
+        max_tokens: int = 1000
+    ) -> None:
         """
         Initialize the LLM service.
 

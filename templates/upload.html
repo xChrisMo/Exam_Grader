@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Files - Exam Grader{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Page Header -->
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h3 mb-1">
+                    <i class="bi bi-cloud-upload-fill text-primary me-2"></i>
+                    Upload Files
+                </h1>
+                <p class="text-muted mb-0">Upload your marking guide and student submissions to start grading</p>
+            </div>
+            <div>
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Form -->
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <div class="row g-4">
+                        <!-- Marking Guide Upload -->
+                        <div class="col-md-6">
+                            <div class="upload-area" id="guideUploadArea">
+                                <div class="upload-content text-center">
+                                    <div class="upload-icon mb-3">
+                                        <i class="bi bi-file-earmark-text-fill text-primary" style="font-size: 3rem;"></i>
+                                    </div>
+                                    <h5 class="mb-2">Marking Guide</h5>
+                                    <p class="text-muted mb-3">Upload your marking guide or rubric</p>
+                                    <div class="upload-button-container">
+                                        <input type="file" id="markingGuide" name="marking_guide" accept=".pdf,.docx,.txt" class="d-none">
+                                        <button type="button" class="btn btn-primary" onclick="document.getElementById('markingGuide').click()">
+                                            <i class="bi bi-cloud-upload me-2"></i>Choose File
+                                        </button>
+                                    </div>
+                                    <p class="text-muted small mt-2">Supported: PDF, DOCX, TXT</p>
+                                </div>
+                                <div class="upload-preview d-none" id="guidePreview">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-file-earmark-check-fill text-success fs-4 me-3"></i>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1" id="guideFileName"></h6>
+                                            <p class="text-muted small mb-0" id="guideFileSize"></p>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFile('guide')">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Student Submission Upload -->
+                        <div class="col-md-6">
+                            <div class="upload-area" id="submissionUploadArea">
+                                <div class="upload-content text-center">
+                                    <div class="upload-icon mb-3">
+                                        <i class="bi bi-file-earmark-person-fill text-success" style="font-size: 3rem;"></i>
+                                    </div>
+                                    <h5 class="mb-2">Student Submission</h5>
+                                    <p class="text-muted mb-3">Upload the student's exam submission</p>
+                                    <div class="upload-button-container">
+                                        <input type="file" id="studentSubmission" name="submission" accept=".pdf,.docx,.txt,.jpg,.jpeg,.png,.tiff,.bmp,.gif" class="d-none">
+                                        <button type="button" class="btn btn-success" onclick="document.getElementById('studentSubmission').click()">
+                                            <i class="bi bi-cloud-upload me-2"></i>Choose File
+                                        </button>
+                                    </div>
+                                    <p class="text-muted small mt-2">Supported: PDF, DOCX, TXT, Images</p>
+                                </div>
+                                <div class="upload-preview d-none" id="submissionPreview">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-file-earmark-check-fill text-success fs-4 me-3"></i>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1" id="submissionFileName"></h6>
+                                            <p class="text-muted small mb-0" id="submissionFileSize"></p>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFile('submission')">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Processing Options -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="card bg-light border-0">
+                                <div class="card-body">
+                                    <h6 class="card-title mb-3">
+                                        <i class="bi bi-gear-fill text-secondary me-2"></i>
+                                        Processing Options
+                                    </h6>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="detailedFeedback" checked>
+                                                <label class="form-check-label" for="detailedFeedback">
+                                                    Generate detailed feedback
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="criteriaMapping" checked>
+                                                <label class="form-check-label" for="criteriaMapping">
+                                                    Create criteria mapping
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="confidenceScores">
+                                                <label class="form-check-label" for="confidenceScores">
+                                                    Include confidence scores
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="improvementSuggestions">
+                                                <label class="form-check-label" for="improvementSuggestions">
+                                                    Suggest improvements
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="row mt-4">
+                        <div class="col-12 text-center">
+                            <button type="submit" id="submitBtn" class="btn btn-primary btn-lg px-5" disabled>
+                                <i class="bi bi-play-circle-fill me-2"></i>
+                                Start Grading
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Modal -->
+<div class="modal fade" id="progressModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title">
+                    <i class="bi bi-cpu-fill text-primary me-2"></i>
+                    Processing Your Submission
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                
+                <div class="progress mb-3" style="height: 10px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         id="progressBar" role="progressbar" style="width: 0%"></div>
+                </div>
+                
+                <div class="text-center">
+                    <h6 id="progressStage">Uploading files...</h6>
+                    <p class="text-muted mb-0" id="progressMessage">Please wait while we process your submission</p>
+                </div>
+
+                <!-- Progress Steps -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between">
+                            <div class="text-center">
+                                <div class="progress-step active" id="step1">
+                                    <i class="bi bi-cloud-upload-fill"></i>
+                                </div>
+                                <small class="text-muted">Upload</small>
+                            </div>
+                            <div class="text-center">
+                                <div class="progress-step" id="step2">
+                                    <i class="bi bi-file-text"></i>
+                                </div>
+                                <small class="text-muted">Parse</small>
+                            </div>
+                            <div class="text-center">
+                                <div class="progress-step" id="step3">
+                                    <i class="bi bi-cpu"></i>
+                                </div>
+                                <small class="text-muted">Analyze</small>
+                            </div>
+                            <div class="text-center">
+                                <div class="progress-step" id="step4">
+                                    <i class="bi bi-check-circle"></i>
+                                </div>
+                                <small class="text-muted">Complete</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Results Modal -->
+<div class="modal fade" id="resultsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                    Grading Complete
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="resultsContent">
+                <!-- Results will be populated here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary">
+                    <i class="bi bi-download me-2"></i>Download Report
+                </button>
+                <a href="{{ url_for('results_page') }}" class="btn btn-success">
+                    <i class="bi bi-graph-up me-2"></i>View All Results
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/upload.js') }}"></script>
+{% endblock %}
