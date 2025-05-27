@@ -1,25 +1,25 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block title %}Dashboard - Exam Grader{% endblock %}
 
 {% block content %}
-<div class="row">
-    <!-- Page Header -->
+<div class="row fade-in-up">
+    <!-- Enhanced Page Header -->
     <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h1 class="h2 mb-1 text-white">
-                    <i class="bi bi-speedometer2 me-2"></i>
-                    Dashboard for Exam Grader
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center mb-5">
+            <div class="mb-3 mb-lg-0">
+                <h1 class="h2 mb-2 fw-bold">
+                    <i class="bi bi-speedometer2 me-2 text-gradient"></i>
+                    Dashboard
                 </h1>
-                <p class="text-white-50 mb-0">Welcome back! Here's your assessment overview.</p>
+                <p class="text-muted mb-0 fs-5">Welcome back! Here's your assessment overview and recent activity.</p>
             </div>
-            <div class="d-flex gap-2">
-                <button class="btn btn-outline-light">
-                    <i class="bi bi-download me-1"></i>
+            <div class="d-flex flex-column flex-sm-row gap-2">
+                <button class="btn btn-outline-secondary hover-lift">
+                    <i class="bi bi-download me-2"></i>
                     Export Data
                 </button>
-                <a href="{{ url_for('upload_page') }}" class="btn btn-primary">
+                <a href="{{ url_for('upload_page') }}" class="btn btn-primary hover-lift">
                     <i class="bi bi-plus-circle me-2"></i>New Assessment
                 </a>
             </div>
@@ -27,44 +27,88 @@
     </div>
 </div>
 
-<div class="row g-4">
-    <!-- Performance Metrics (inspired by the circular progress in the design) -->
+<div class="row g-4 slide-in-right">
+    <!-- Enhanced Performance Metrics -->
     <div class="col-xl-3 col-md-6">
-        <div class="metric-card">
-            <div class="metric-value">{{ recent_results|length or 0 }}</div>
-            <div class="metric-label">Total Submissions</div>
-            <div class="mt-3">
-                <i class="bi bi-file-earmark-text-fill text-primary fs-4"></i>
+        <div class="stats-card hover-lift">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="stats-icon">
+                        <i class="bi bi-file-earmark-text-fill text-primary fs-2"></i>
+                    </div>
+                    <div class="stats-change positive">
+                        <i class="bi bi-arrow-up"></i>
+                        +12%
+                    </div>
+                </div>
+                <div class="stats-value">{{ recent_results|length or 0 }}</div>
+                <div class="stats-label">Total Submissions</div>
+                <div class="progress mt-3" style="height: 4px;">
+                    <div class="progress-bar bg-primary" style="width: 75%"></div>
+                </div>
             </div>
         </div>
     </div>
 
     <div class="col-xl-3 col-md-6">
-        <div class="metric-card">
-            <div class="metric-value">95.4%</div>
-            <div class="metric-label">Accuracy Rate</div>
-            <div class="mt-3">
-                <i class="bi bi-check-circle-fill text-success fs-4"></i>
+        <div class="stats-card hover-lift">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="stats-icon">
+                        <i class="bi bi-check-circle-fill text-success fs-2"></i>
+                    </div>
+                    <div class="stats-change positive">
+                        <i class="bi bi-arrow-up"></i>
+                        +2.1%
+                    </div>
+                </div>
+                <div class="stats-value">95.4%</div>
+                <div class="stats-label">Accuracy Rate</div>
+                <div class="progress mt-3" style="height: 4px;">
+                    <div class="progress-bar bg-success" style="width: 95%"></div>
+                </div>
             </div>
         </div>
     </div>
 
     <div class="col-xl-3 col-md-6">
-        <div class="metric-card">
-            <div class="metric-value">2.3m</div>
-            <div class="metric-label">Avg. Processing</div>
-            <div class="mt-3">
-                <i class="bi bi-clock-fill text-warning fs-4"></i>
+        <div class="stats-card hover-lift">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="stats-icon">
+                        <i class="bi bi-clock-fill text-warning fs-2"></i>
+                    </div>
+                    <div class="stats-change negative">
+                        <i class="bi bi-arrow-down"></i>
+                        -0.3s
+                    </div>
+                </div>
+                <div class="stats-value">2.3m</div>
+                <div class="stats-label">Avg. Processing</div>
+                <div class="progress mt-3" style="height: 4px;">
+                    <div class="progress-bar bg-warning" style="width: 60%"></div>
+                </div>
             </div>
         </div>
     </div>
 
     <div class="col-xl-3 col-md-6">
-        <div class="metric-card">
-            <div class="metric-value">78%</div>
-            <div class="metric-label">Average Score</div>
-            <div class="mt-3">
-                <i class="bi bi-graph-up text-info fs-4"></i>
+        <div class="stats-card hover-lift">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="stats-icon">
+                        <i class="bi bi-graph-up text-info fs-2"></i>
+                    </div>
+                    <div class="stats-change positive">
+                        <i class="bi bi-arrow-up"></i>
+                        +5.2%
+                    </div>
+                </div>
+                <div class="stats-value">78%</div>
+                <div class="stats-label">Average Score</div>
+                <div class="progress mt-3" style="height: 4px;">
+                    <div class="progress-bar bg-info" style="width: 78%"></div>
+                </div>
             </div>
         </div>
     </div>

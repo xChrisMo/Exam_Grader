@@ -23,54 +23,54 @@ class ResultsStorage:
                 'temp',
                 'results'
             )
-        
+
         self.base_dir = base_dir
         self.mapping_dir = os.path.join(base_dir, 'mappings')
         self.grading_dir = os.path.join(base_dir, 'gradings')
         self.batch_dir = os.path.join(base_dir, 'batches')
-        
+
         # Create directories if they don't exist
         os.makedirs(self.mapping_dir, exist_ok=True)
         os.makedirs(self.grading_dir, exist_ok=True)
         os.makedirs(self.batch_dir, exist_ok=True)
-        
+
         logger.info(f"Results storage initialized at {base_dir}")
 
     def store_mapping_result(self, mapping_result):
         """
         Store a mapping result and return a reference ID.
-        
+
         Args:
             mapping_result: The mapping result dictionary
-            
+
         Returns:
             str: A unique ID for the stored result
         """
         # Generate a unique ID
         result_id = str(uuid.uuid4())
-        
+
         # Add metadata
         if 'metadata' not in mapping_result:
             mapping_result['metadata'] = {}
-        
+
         mapping_result['metadata']['stored_at'] = datetime.now().isoformat()
         mapping_result['metadata']['result_id'] = result_id
-        
+
         # Save to file
         file_path = os.path.join(self.mapping_dir, f"{result_id}.json")
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(mapping_result, f, ensure_ascii=False, indent=2)
-        
+
         logger.debug(f"Stored mapping result with ID {result_id}")
         return result_id
 
     def get_mapping_result(self, result_id):
         """
         Retrieve a mapping result by its ID.
-        
+
         Args:
             result_id: The unique ID of the result
-            
+
         Returns:
             dict: The mapping result, or None if not found
         """
@@ -78,7 +78,7 @@ class ResultsStorage:
         if not os.path.exists(file_path):
             logger.warning(f"Mapping result with ID {result_id} not found")
             return None
-        
+
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 result = json.load(f)
@@ -90,38 +90,38 @@ class ResultsStorage:
     def store_grading_result(self, grading_result):
         """
         Store a grading result and return a reference ID.
-        
+
         Args:
             grading_result: The grading result dictionary
-            
+
         Returns:
             str: A unique ID for the stored result
         """
         # Generate a unique ID
         result_id = str(uuid.uuid4())
-        
+
         # Add metadata
         if 'metadata' not in grading_result:
             grading_result['metadata'] = {}
-        
+
         grading_result['metadata']['stored_at'] = datetime.now().isoformat()
         grading_result['metadata']['result_id'] = result_id
-        
+
         # Save to file
         file_path = os.path.join(self.grading_dir, f"{result_id}.json")
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(grading_result, f, ensure_ascii=False, indent=2)
-        
+
         logger.debug(f"Stored grading result with ID {result_id}")
         return result_id
 
     def get_grading_result(self, result_id):
         """
         Retrieve a grading result by its ID.
-        
+
         Args:
             result_id: The unique ID of the result
-            
+
         Returns:
             dict: The grading result, or None if not found
         """
@@ -129,7 +129,7 @@ class ResultsStorage:
         if not os.path.exists(file_path):
             logger.warning(f"Grading result with ID {result_id} not found")
             return None
-        
+
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 result = json.load(f)
@@ -141,17 +141,17 @@ class ResultsStorage:
     def store_batch_results(self, batch_type, results):
         """
         Store a batch of results and return a reference ID.
-        
+
         Args:
             batch_type: Type of batch ('mapping' or 'grading')
             results: List of result dictionaries
-            
+
         Returns:
             str: A unique ID for the stored batch
         """
         # Generate a unique ID
         batch_id = str(uuid.uuid4())
-        
+
         # Create a batch metadata object
         batch_data = {
             'batch_id': batch_id,
@@ -160,22 +160,22 @@ class ResultsStorage:
             'count': len(results),
             'results': results
         }
-        
+
         # Save to file
         file_path = os.path.join(self.batch_dir, f"{batch_id}.json")
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(batch_data, f, ensure_ascii=False, indent=2)
-        
+
         logger.debug(f"Stored batch {batch_type} results with ID {batch_id}")
         return batch_id
 
     def get_batch_results(self, batch_id):
         """
         Retrieve a batch of results by its ID.
-        
+
         Args:
             batch_id: The unique ID of the batch
-            
+
         Returns:
             dict: The batch data, or None if not found
         """
@@ -183,7 +183,7 @@ class ResultsStorage:
         if not os.path.exists(file_path):
             logger.warning(f"Batch results with ID {batch_id} not found")
             return None
-        
+
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 batch_data = json.load(f)
@@ -191,6 +191,65 @@ class ResultsStorage:
         except Exception as e:
             logger.error(f"Error loading batch results {batch_id}: {str(e)}")
             return None
+
+    def list_results(self, result_type='all'):
+        """
+        List all stored results of a specific type.
+
+        Args:
+            result_type: Type of results to list ('mapping', 'grading', 'batch', or 'all')
+
+        Returns:
+            list: List of result dictionaries
+        """
+        results = []
+
+        try:
+            if result_type in ['mapping', 'all']:
+                # List mapping results
+                for file_name in os.listdir(self.mapping_dir):
+                    if file_name.endswith('.json'):
+                        file_path = os.path.join(self.mapping_dir, file_name)
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                result_data = json.load(f)
+                                result_data['result_type'] = 'mapping'
+                                results.append(result_data)
+                        except Exception as e:
+                            logger.error(f"Error loading mapping result {file_name}: {str(e)}")
+
+            if result_type in ['grading', 'all']:
+                # List grading results
+                for file_name in os.listdir(self.grading_dir):
+                    if file_name.endswith('.json'):
+                        file_path = os.path.join(self.grading_dir, file_name)
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                result_data = json.load(f)
+                                result_data['result_type'] = 'grading'
+                                results.append(result_data)
+                        except Exception as e:
+                            logger.error(f"Error loading grading result {file_name}: {str(e)}")
+
+            if result_type in ['batch', 'all']:
+                # List batch results
+                for file_name in os.listdir(self.batch_dir):
+                    if file_name.endswith('.json'):
+                        file_path = os.path.join(self.batch_dir, file_name)
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                result_data = json.load(f)
+                                result_data['result_type'] = 'batch'
+                                results.append(result_data)
+                        except Exception as e:
+                            logger.error(f"Error loading batch result {file_name}: {str(e)}")
+
+            logger.debug(f"Listed {len(results)} results of type '{result_type}'")
+            return results
+
+        except Exception as e:
+            logger.error(f"Error listing results: {str(e)}")
+            return []
 
     def clear(self):
         """Clear all stored results."""
@@ -203,5 +262,5 @@ class ResultsStorage:
                         logger.debug(f"Removed result file: {file_path}")
             except Exception as e:
                 logger.error(f"Error clearing directory {directory}: {str(e)}")
-        
+
         logger.info("Cleared all stored results")

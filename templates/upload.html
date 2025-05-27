@@ -1,23 +1,26 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block title %}Upload Files - Exam Grader{% endblock %}
 
 {% block content %}
-<div class="row">
-    <!-- Page Header -->
+<div class="row fade-in-up">
+    <!-- Enhanced Page Header -->
     <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h1 class="h3 mb-1">
-                    <i class="bi bi-cloud-upload-fill text-primary me-2"></i>
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center mb-5">
+            <div class="mb-3 mb-lg-0">
+                <h1 class="h2 mb-2 fw-bold">
+                    <i class="bi bi-cloud-upload-fill me-2 text-gradient"></i>
                     Upload Files
                 </h1>
-                <p class="text-muted mb-0">Upload your marking guide and student submissions to start grading</p>
+                <p class="text-muted mb-0 fs-5">Upload your marking guide and student submissions to start AI-powered grading</p>
             </div>
-            <div>
-                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary hover-lift">
                     <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
                 </a>
+                <button class="btn btn-outline-primary hover-lift" data-bs-toggle="modal" data-bs-target="#helpModal">
+                    <i class="bi bi-question-circle me-2"></i>Help
+                </button>
             </div>
         </div>
     </div>
@@ -30,65 +33,77 @@
             <div class="card-body p-4">
                 <form id="uploadForm" enctype="multipart/form-data">
                     <div class="row g-4">
-                        <!-- Marking Guide Upload -->
+                        <!-- Enhanced Marking Guide Upload -->
                         <div class="col-md-6">
-                            <div class="upload-area" id="guideUploadArea">
-                                <div class="upload-content text-center">
-                                    <div class="upload-icon mb-3">
-                                        <i class="bi bi-file-earmark-text-fill text-primary" style="font-size: 3rem;"></i>
+                            <div class="upload-area hover-lift" id="guideUploadArea"
+                                 ondrop="handleDrop(event, 'guide')"
+                                 ondragover="handleDragOver(event)"
+                                 ondragenter="handleDragEnter(event, 'guide')"
+                                 ondragleave="handleDragLeave(event, 'guide')">
+                                <div class="upload-content">
+                                    <div class="upload-icon">
+                                        <i class="bi bi-file-earmark-text-fill"></i>
                                     </div>
-                                    <h5 class="mb-2">Marking Guide</h5>
-                                    <p class="text-muted mb-3">Upload your marking guide or rubric</p>
+                                    <div class="upload-text">Marking Guide</div>
+                                    <div class="upload-subtext">Drag & drop your marking guide here</div>
                                     <div class="upload-button-container">
                                         <input type="file" id="markingGuide" name="marking_guide" accept=".pdf,.docx,.txt" class="d-none">
                                         <button type="button" class="btn btn-primary" onclick="document.getElementById('markingGuide').click()">
                                             <i class="bi bi-cloud-upload me-2"></i>Choose File
                                         </button>
                                     </div>
-                                    <p class="text-muted small mt-2">Supported: PDF, DOCX, TXT</p>
+                                    <div class="upload-subtext">
+                                        <small class="text-muted">Supported formats: PDF, DOCX, TXT (Max 50MB)</small>
+                                    </div>
                                 </div>
                                 <div class="upload-preview d-none" id="guidePreview">
-                                    <div class="d-flex align-items-center">
-                                        <i class="bi bi-file-earmark-check-fill text-success fs-4 me-3"></i>
-                                        <div class="flex-grow-1">
-                                            <h6 class="mb-1" id="guideFileName"></h6>
-                                            <p class="text-muted small mb-0" id="guideFileSize"></p>
-                                        </div>
-                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFile('guide')">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
+                                    <div class="upload-preview-icon">
+                                        <i class="bi bi-file-earmark-check-fill"></i>
+                                    </div>
+                                    <div class="upload-preview-info">
+                                        <div class="upload-preview-name" id="guideFileName"></div>
+                                        <div class="upload-preview-size" id="guideFileSize"></div>
+                                    </div>
+                                    <div class="upload-preview-remove" onclick="removeFile('guide')">
+                                        <i class="bi bi-x-circle-fill"></i>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Student Submission Upload -->
+                        <!-- Enhanced Student Submission Upload -->
                         <div class="col-md-6">
-                            <div class="upload-area" id="submissionUploadArea">
-                                <div class="upload-content text-center">
-                                    <div class="upload-icon mb-3">
-                                        <i class="bi bi-file-earmark-person-fill text-success" style="font-size: 3rem;"></i>
+                            <div class="upload-area hover-lift" id="submissionUploadArea"
+                                 ondrop="handleDrop(event, 'submission')"
+                                 ondragover="handleDragOver(event)"
+                                 ondragenter="handleDragEnter(event, 'submission')"
+                                 ondragleave="handleDragLeave(event, 'submission')">
+                                <div class="upload-content">
+                                    <div class="upload-icon">
+                                        <i class="bi bi-file-earmark-person-fill"></i>
                                     </div>
-                                    <h5 class="mb-2">Student Submission</h5>
-                                    <p class="text-muted mb-3">Upload the student's exam submission</p>
+                                    <div class="upload-text">Student Submission</div>
+                                    <div class="upload-subtext">Drag & drop the student's submission here</div>
                                     <div class="upload-button-container">
                                         <input type="file" id="studentSubmission" name="submission" accept=".pdf,.docx,.txt,.jpg,.jpeg,.png,.tiff,.bmp,.gif" class="d-none">
                                         <button type="button" class="btn btn-success" onclick="document.getElementById('studentSubmission').click()">
                                             <i class="bi bi-cloud-upload me-2"></i>Choose File
                                         </button>
                                     </div>
-                                    <p class="text-muted small mt-2">Supported: PDF, DOCX, TXT, Images</p>
+                                    <div class="upload-subtext">
+                                        <small class="text-muted">Supported formats: PDF, DOCX, TXT, Images (Max 50MB)</small>
+                                    </div>
                                 </div>
                                 <div class="upload-preview d-none" id="submissionPreview">
-                                    <div class="d-flex align-items-center">
-                                        <i class="bi bi-file-earmark-check-fill text-success fs-4 me-3"></i>
-                                        <div class="flex-grow-1">
-                                            <h6 class="mb-1" id="submissionFileName"></h6>
-                                            <p class="text-muted small mb-0" id="submissionFileSize"></p>
-                                        </div>
-                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFile('submission')">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
+                                    <div class="upload-preview-icon">
+                                        <i class="bi bi-file-earmark-check-fill"></i>
+                                    </div>
+                                    <div class="upload-preview-info">
+                                        <div class="upload-preview-name" id="submissionFileName"></div>
+                                        <div class="upload-preview-size" id="submissionFileSize"></div>
+                                    </div>
+                                    <div class="upload-preview-remove" onclick="removeFile('submission')">
+                                        <i class="bi bi-x-circle-fill"></i>
                                     </div>
                                 </div>
                             </div>
@@ -174,12 +189,12 @@
                         <span class="visually-hidden">Loading...</span>
                     </div>
                 </div>
-                
+
                 <div class="progress mb-3" style="height: 10px;">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
                          id="progressBar" role="progressbar" style="width: 0%"></div>
                 </div>
-                
+
                 <div class="text-center">
                     <h6 id="progressStage">Uploading files...</h6>
                     <p class="text-muted mb-0" id="progressMessage">Please wait while we process your submission</p>
@@ -250,5 +265,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/upload.js') }}"></script>
+<script src="{{ url_for('static', filename='js/upload-enhanced.js') }}"></script>
 {% endblock %}

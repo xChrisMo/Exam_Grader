@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -14,12 +14,15 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    <!-- Custom CSS -->
-    <link href="{{ url_for('static', filename='css/main.css') }}" rel="stylesheet">
+    <!-- Enhanced Custom CSS -->
+    <link href="{{ url_for('static', filename='css/enhanced.css') }}" rel="stylesheet">
+
+    <!-- Accessibility Skip Link -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
 
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body class="main-container">
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg fixed-top">
         <div class="container-fluid">
@@ -80,39 +83,50 @@
     </nav>
 
     <!-- Main Content -->
-    <main class="container-fluid py-4" style="margin-top: 76px;">
+    <main id="main-content" class="content-wrapper" style="margin-top: 76px;">
         <!-- Flash Messages -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                <div class="row">
-                    <div class="col-12">
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                            </div>
-                        {% endfor %}
+                <div class="container-fluid">
+                    <div class="row">
+                        <div class="col-12">
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show fade-in-down" role="alert">
+                                    <i class="bi bi-{% if category == 'success' %}check-circle-fill{% elif category == 'warning' %}exclamation-triangle-fill{% elif category == 'error' or category == 'danger' %}x-circle-fill{% else %}info-circle-fill{% endif %}"></i>
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        </div>
                     </div>
                 </div>
             {% endif %}
         {% endwith %}
 
-        {% block content %}{% endblock %}
+        <div class="container-fluid">
+            {% block content %}{% endblock %}
+        </div>
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-light py-4 mt-5">
+    <!-- Enhanced Footer -->
+    <footer class="py-4 mt-5">
         <div class="container">
-            <div class="row">
+            <div class="row align-items-center">
                 <div class="col-md-6">
-                    <p class="text-muted mb-0">
-                        <i class="bi bi-mortarboard-fill me-2"></i>
-                        Exam Grader - AI-Powered Assessment Tool
+                    <p class="text-muted mb-0 d-flex align-items-center">
+                        <i class="bi bi-mortarboard-fill me-2 text-gradient"></i>
+                        <span class="fw-medium">Exam Grader</span>
+                        <span class="mx-2">•</span>
+                        <small>AI-Powered Assessment Tool</small>
                     </p>
                 </div>
                 <div class="col-md-6 text-md-end">
                     <p class="text-muted mb-0">
-                        <small>Powered by DeepSeek AI</small>
+                        <small class="d-flex align-items-center justify-content-md-end">
+                            <span>Powered by</span>
+                            <i class="bi bi-lightning-charge-fill mx-1 text-warning"></i>
+                            <span class="fw-medium">DeepSeek AI</span>
+                        </small>
                     </p>
                 </div>
             </div>

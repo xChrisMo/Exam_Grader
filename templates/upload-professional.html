@@ -1,0 +1,333 @@
+{% extends "base-professional.html" %}
+
+{% block title %}Professional Upload - Exam Grader{% endblock %}
+
+{% block content %}
+<!-- Professional Page Header -->
+<div class="page-header-professional fade-in-up">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center">
+        <div class="mb-4 mb-lg-0">
+            <h1 class="page-title-professional">
+                <i class="bi bi-cloud-upload-fill me-3"></i>
+                Upload Assessment Files
+            </h1>
+            <p class="page-subtitle-professional">
+                Upload your marking guide and student submissions to begin AI-powered assessment with advanced analytics and detailed feedback.
+            </p>
+        </div>
+        <div class="d-flex flex-column flex-sm-row gap-3">
+            <a href="{{ url_for('index') }}" class="btn-secondary-professional hover-lift-professional">
+                <i class="bi bi-arrow-left me-2"></i>
+                Back to Dashboard
+            </a>
+            <button class="btn-outline-professional hover-lift-professional" data-bs-toggle="modal" data-bs-target="#uploadGuideModal">
+                <i class="bi bi-question-circle me-2"></i>
+                Upload Guide
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Professional Upload Form -->
+<form id="uploadFormProfessional" enctype="multipart/form-data" class="fade-in-up">
+    <div class="row g-5">
+        <!-- Professional Marking Guide Upload -->
+        <div class="col-lg-6">
+            <div class="upload-area-professional hover-lift-professional" id="guideUploadAreaProfessional"
+                 ondrop="handleDropProfessional(event, 'guide')" 
+                 ondragover="handleDragOverProfessional(event)" 
+                 ondragenter="handleDragEnterProfessional(event, 'guide')" 
+                 ondragleave="handleDragLeaveProfessional(event, 'guide')">
+                <div class="upload-content-professional">
+                    <div class="upload-icon-professional">
+                        <i class="bi bi-file-earmark-text-fill"></i>
+                    </div>
+                    <div class="upload-text-professional">Marking Guide</div>
+                    <div class="upload-subtext-professional">
+                        Drag & drop your marking guide here or click to browse
+                    </div>
+                    <div class="upload-button-container mb-4">
+                        <input type="file" id="markingGuideProfessional" name="marking_guide" accept=".pdf,.docx,.txt" class="d-none">
+                        <button type="button" class="btn-primary-professional" onclick="document.getElementById('markingGuideProfessional').click()">
+                            <i class="bi bi-cloud-upload me-2"></i>
+                            Choose File
+                        </button>
+                    </div>
+                    <div class="upload-subtext-professional">
+                        <small class="text-secondary-500">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Supported formats: PDF, DOCX, TXT • Maximum size: 50MB
+                        </small>
+                    </div>
+                </div>
+                <div class="upload-preview-professional d-none" id="guidePreviewProfessional">
+                    <div class="upload-preview-icon-professional">
+                        <i class="bi bi-file-earmark-check-fill"></i>
+                    </div>
+                    <div class="upload-preview-info-professional">
+                        <div class="upload-preview-name-professional" id="guideFileNameProfessional"></div>
+                        <div class="upload-preview-size-professional" id="guideFileSizeProfessional"></div>
+                    </div>
+                    <div class="upload-preview-remove-professional" onclick="removeFileProfessional('guide')">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Professional Student Submission Upload -->
+        <div class="col-lg-6">
+            <div class="upload-area-professional hover-lift-professional" id="submissionUploadAreaProfessional"
+                 ondrop="handleDropProfessional(event, 'submission')" 
+                 ondragover="handleDragOverProfessional(event)" 
+                 ondragenter="handleDragEnterProfessional(event, 'submission')" 
+                 ondragleave="handleDragLeaveProfessional(event, 'submission')">
+                <div class="upload-content-professional">
+                    <div class="upload-icon-professional" style="background: var(--gradient-success);">
+                        <i class="bi bi-file-earmark-person-fill"></i>
+                    </div>
+                    <div class="upload-text-professional">Student Submission</div>
+                    <div class="upload-subtext-professional">
+                        Drag & drop the student's submission here or click to browse
+                    </div>
+                    <div class="upload-button-container mb-4">
+                        <input type="file" id="studentSubmissionProfessional" name="submission" accept=".pdf,.docx,.txt,.jpg,.jpeg,.png,.tiff,.bmp,.gif" class="d-none">
+                        <button type="button" class="btn-primary-professional" style="background: var(--gradient-success);" onclick="document.getElementById('studentSubmissionProfessional').click()">
+                            <i class="bi bi-cloud-upload me-2"></i>
+                            Choose File
+                        </button>
+                    </div>
+                    <div class="upload-subtext-professional">
+                        <small class="text-secondary-500">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Supported formats: PDF, DOCX, TXT, Images • Maximum size: 50MB
+                        </small>
+                    </div>
+                </div>
+                <div class="upload-preview-professional d-none" id="submissionPreviewProfessional">
+                    <div class="upload-preview-icon-professional">
+                        <i class="bi bi-file-earmark-check-fill"></i>
+                    </div>
+                    <div class="upload-preview-info-professional">
+                        <div class="upload-preview-name-professional" id="submissionFileNameProfessional"></div>
+                        <div class="upload-preview-size-professional" id="submissionFileSizeProfessional"></div>
+                    </div>
+                    <div class="upload-preview-remove-professional" onclick="removeFileProfessional('submission')">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Professional Assessment Options -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="glass-card fade-in-up">
+                <div class="card-header bg-transparent border-0 pb-0">
+                    <h3 class="text-2xl font-semibold text-secondary-900 mb-0">
+                        <i class="bi bi-sliders me-2 text-gradient-professional"></i>
+                        Assessment Configuration
+                    </h3>
+                    <p class="text-secondary-600 mt-2 mb-0">Customize how the AI analyzes and grades the submission</p>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <div class="form-check d-flex align-items-start p-3 bg-primary-50 rounded-xl">
+                                <input class="form-check-input mt-1" type="checkbox" id="detailedFeedbackProfessional" name="detailedFeedback" checked>
+                                <div class="ms-3">
+                                    <label class="form-check-label fw-semibold text-primary-800" for="detailedFeedbackProfessional">
+                                        Detailed Feedback Analysis
+                                    </label>
+                                    <p class="text-sm text-primary-600 mb-0 mt-1">
+                                        Generate comprehensive feedback with specific improvement suggestions
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check d-flex align-items-start p-3 bg-success-50 rounded-xl">
+                                <input class="form-check-input mt-1" type="checkbox" id="criteriaMappingProfessional" name="criteriaMapping" checked>
+                                <div class="ms-3">
+                                    <label class="form-check-label fw-semibold text-success-800" for="criteriaMappingProfessional">
+                                        Criteria Mapping
+                                    </label>
+                                    <p class="text-sm text-success-600 mb-0 mt-1">
+                                        Map submission content to specific marking criteria
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check d-flex align-items-start p-3 bg-warning-50 rounded-xl">
+                                <input class="form-check-input mt-1" type="checkbox" id="confidenceScoresProfessional" name="confidenceScores">
+                                <div class="ms-3">
+                                    <label class="form-check-label fw-semibold text-warning-800" for="confidenceScoresProfessional">
+                                        Confidence Scores
+                                    </label>
+                                    <p class="text-sm text-warning-600 mb-0 mt-1">
+                                        Include AI confidence levels for each assessment
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check d-flex align-items-start p-3 bg-info-50 rounded-xl">
+                                <input class="form-check-input mt-1" type="checkbox" id="improvementSuggestionsProfessional" name="improvementSuggestions" checked>
+                                <div class="ms-3">
+                                    <label class="form-check-label fw-semibold text-info-800" for="improvementSuggestionsProfessional">
+                                        Improvement Suggestions
+                                    </label>
+                                    <p class="text-sm text-info-600 mb-0 mt-1">
+                                        Provide actionable recommendations for student improvement
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Professional Submit Section -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="glass-card fade-in-up">
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <h3 class="text-xl font-semibold text-secondary-900 mb-2">Ready to Begin Assessment?</h3>
+                        <p class="text-secondary-600">
+                            Our AI will analyze your files and provide comprehensive grading results with detailed feedback.
+                        </p>
+                    </div>
+                    
+                    <div class="d-flex flex-column flex-sm-row gap-3 justify-content-center align-items-center">
+                        <button type="button" class="btn-secondary-professional" onclick="resetFormProfessional()">
+                            <i class="bi bi-arrow-clockwise me-2"></i>
+                            Reset Form
+                        </button>
+                        <button type="submit" id="submitBtnProfessional" class="btn-primary-professional btn-lg-professional" disabled>
+                            <i class="bi bi-upload me-2"></i>
+                            Upload Files First
+                        </button>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <small class="text-secondary-500">
+                            <i class="bi bi-shield-check me-1"></i>
+                            Your files are processed securely and are not stored permanently
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Professional Progress Modal -->
+<div class="modal fade" id="progressModalProfessional" tabindex="-1" aria-labelledby="progressModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content-professional">
+            <div class="modal-header-professional">
+                <h5 class="modal-title-professional" id="progressModalLabel">
+                    <i class="bi bi-gear-fill spin me-2"></i>
+                    Processing Assessment
+                </h5>
+            </div>
+            <div class="modal-body-professional">
+                <div class="text-center mb-4">
+                    <div class="progress-professional mb-3">
+                        <div class="progress-bar-professional" id="progressBarProfessional" style="width: 0%"></div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div class="progress-step-professional" id="step1Professional">1</div>
+                        <div class="progress-step-professional" id="step2Professional">2</div>
+                        <div class="progress-step-professional" id="step3Professional">3</div>
+                        <div class="progress-step-professional" id="step4Professional">4</div>
+                    </div>
+                </div>
+                
+                <div class="text-center">
+                    <h4 class="text-lg font-semibold text-secondary-900 mb-2" id="progressStageProfessional">Initializing...</h4>
+                    <p class="text-secondary-600" id="progressMessageProfessional">Preparing your files for processing</p>
+                </div>
+                
+                <div class="mt-4 p-4 bg-primary-50 rounded-xl">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-lightbulb text-primary-600 me-3 fs-4"></i>
+                        <div>
+                            <h6 class="fw-semibold text-primary-800 mb-1">Processing Tip</h6>
+                            <p class="text-sm text-primary-600 mb-0">
+                                Our AI analyzes content semantically, not just keywords. This ensures more accurate and meaningful assessments.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Guide Modal -->
+<div class="modal fade" id="uploadGuideModal" tabindex="-1" aria-labelledby="uploadGuideModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content-professional">
+            <div class="modal-header-professional">
+                <h5 class="modal-title-professional" id="uploadGuideModalLabel">
+                    <i class="bi bi-book-fill me-2"></i>
+                    Upload Guide & Best Practices
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body-professional">
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <h6 class="fw-semibold text-secondary-800 mb-3">Marking Guide Tips</h6>
+                        <ul class="list-unstyled space-y-2">
+                            <li class="d-flex align-items-start">
+                                <i class="bi bi-check-circle-fill text-success-600 me-2 mt-1"></i>
+                                <span class="text-sm">Include clear scoring criteria and point allocations</span>
+                            </li>
+                            <li class="d-flex align-items-start">
+                                <i class="bi bi-check-circle-fill text-success-600 me-2 mt-1"></i>
+                                <span class="text-sm">Provide example answers or key points</span>
+                            </li>
+                            <li class="d-flex align-items-start">
+                                <i class="bi bi-check-circle-fill text-success-600 me-2 mt-1"></i>
+                                <span class="text-sm">Structure content with clear headings</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="fw-semibold text-secondary-800 mb-3">Submission Guidelines</h6>
+                        <ul class="list-unstyled space-y-2">
+                            <li class="d-flex align-items-start">
+                                <i class="bi bi-check-circle-fill text-success-600 me-2 mt-1"></i>
+                                <span class="text-sm">Ensure text is clearly readable</span>
+                            </li>
+                            <li class="d-flex align-items-start">
+                                <i class="bi bi-check-circle-fill text-success-600 me-2 mt-1"></i>
+                                <span class="text-sm">Use high-quality scans for handwritten work</span>
+                            </li>
+                            <li class="d-flex align-items-start">
+                                <i class="bi bi-check-circle-fill text-success-600 me-2 mt-1"></i>
+                                <span class="text-sm">Keep file sizes under 50MB</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer-professional">
+                <button type="button" class="btn-secondary-professional" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn-primary-professional">View Full Documentation</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/upload-professional.js') }}"></script>
+{% endblock %}

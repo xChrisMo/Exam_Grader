@@ -35,7 +35,6 @@ ENV/
 temp/cache/*
 temp/flask_session/*
 temp/progress/*
-temp/uploads/*
 output/submissions/*
 results/*
 logs/*.log

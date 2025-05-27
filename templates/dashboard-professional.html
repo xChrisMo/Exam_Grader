@@ -1,0 +1,315 @@
+{% extends "base-professional.html" %}
+
+{% block title %}Professional Dashboard - Exam Grader{% endblock %}
+
+{% block content %}
+<!-- Professional Page Header -->
+<div class="page-header-professional fade-in-up">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center">
+        <div class="mb-4 mb-lg-0">
+            <h1 class="page-title-professional">
+                <i class="bi bi-speedometer2 me-3"></i>
+                Assessment Dashboard
+            </h1>
+            <p class="page-subtitle-professional">
+                Welcome back! Monitor your AI-powered assessment analytics and recent activity with comprehensive insights.
+            </p>
+        </div>
+        <div class="d-flex flex-column flex-sm-row gap-3">
+            <button class="btn-secondary-professional hover-lift-professional">
+                <i class="bi bi-download me-2"></i>
+                Export Analytics
+            </button>
+            <button class="btn-outline-professional hover-lift-professional">
+                <i class="bi bi-gear me-2"></i>
+                Settings
+            </button>
+            <a href="{{ url_for('upload_page') }}" class="btn-primary-professional hover-lift-professional">
+                <i class="bi bi-plus-circle me-2"></i>
+                New Assessment
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Professional Statistics Cards -->
+<div class="row g-4 slide-in-right">
+    <div class="col-xl-3 col-md-6">
+        <div class="stats-card-professional hover-lift-professional">
+            <div class="stats-card-body">
+                <div class="d-flex align-items-center justify-content-between mb-4">
+                    <div class="stats-icon-professional">
+                        <i class="bi bi-file-earmark-text-fill"></i>
+                    </div>
+                    <div class="stats-change-professional positive">
+                        <i class="bi bi-arrow-up"></i>
+                        +12%
+                    </div>
+                </div>
+                <div class="stats-value-professional">{{ recent_results|length or 0 }}</div>
+                <div class="stats-label-professional">Total Submissions</div>
+                <div class="stats-progress-professional">
+                    <div class="stats-progress-bar-professional" style="width: 75%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="stats-card-professional hover-lift-professional">
+            <div class="stats-card-body">
+                <div class="d-flex align-items-center justify-content-between mb-4">
+                    <div class="stats-icon-professional" style="background: var(--gradient-success);">
+                        <i class="bi bi-check-circle-fill"></i>
+                    </div>
+                    <div class="stats-change-professional positive">
+                        <i class="bi bi-arrow-up"></i>
+                        +2.1%
+                    </div>
+                </div>
+                <div class="stats-value-professional">95.4%</div>
+                <div class="stats-label-professional">Accuracy Rate</div>
+                <div class="stats-progress-professional">
+                    <div class="stats-progress-bar-professional" style="width: 95%; background: var(--gradient-success);"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="stats-card-professional hover-lift-professional">
+            <div class="stats-card-body">
+                <div class="d-flex align-items-center justify-content-between mb-4">
+                    <div class="stats-icon-professional" style="background: var(--gradient-warning);">
+                        <i class="bi bi-clock-fill"></i>
+                    </div>
+                    <div class="stats-change-professional negative">
+                        <i class="bi bi-arrow-down"></i>
+                        -0.3s
+                    </div>
+                </div>
+                <div class="stats-value-professional">2.3m</div>
+                <div class="stats-label-professional">Avg. Processing</div>
+                <div class="stats-progress-professional">
+                    <div class="stats-progress-bar-professional" style="width: 60%; background: var(--gradient-warning);"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="stats-card-professional hover-lift-professional">
+            <div class="stats-card-body">
+                <div class="d-flex align-items-center justify-content-between mb-4">
+                    <div class="stats-icon-professional" style="background: var(--gradient-info);">
+                        <i class="bi bi-graph-up"></i>
+                    </div>
+                    <div class="stats-change-professional positive">
+                        <i class="bi bi-arrow-up"></i>
+                        +5.2%
+                    </div>
+                </div>
+                <div class="stats-value-professional">78%</div>
+                <div class="stats-label-professional">Average Score</div>
+                <div class="stats-progress-professional">
+                    <div class="stats-progress-bar-professional" style="width: 78%; background: var(--gradient-info);"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Professional Content Sections -->
+<div class="row g-4 mt-4">
+    <!-- Recent Activity -->
+    <div class="col-lg-8">
+        <div class="glass-card fade-in-up">
+            <div class="card-header bg-transparent border-0 pb-0">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3 class="text-2xl font-semibold text-secondary-900 mb-0">
+                        <i class="bi bi-activity me-2 text-gradient-professional"></i>
+                        Recent Activity
+                    </h3>
+                    <button class="btn-outline-professional btn-sm-professional">
+                        <i class="bi bi-arrow-clockwise me-1"></i>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if recent_results %}
+                    <div class="space-y-4">
+                        {% for result in recent_results[:5] %}
+                        <div class="d-flex align-items-center p-4 bg-secondary-50 rounded-xl hover-lift-professional">
+                            <div class="stats-icon-professional me-4" style="width: 48px; height: 48px; font-size: 1.25rem;">
+                                <i class="bi bi-file-earmark-check"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h4 class="font-semibold text-secondary-900 mb-1">Assessment Completed</h4>
+                                <p class="text-sm text-secondary-600 mb-0">
+                                    Processed {{ result.get('submission_filename', 'submission') }} 
+                                    <span class="text-xs text-secondary-500">• {{ result.get('timestamp', 'Recently') }}</span>
+                                </p>
+                            </div>
+                            <div class="text-right">
+                                <div class="badge bg-success-100 text-success-800 px-3 py-1 rounded-full text-xs font-medium">
+                                    Score: {{ result.get('overall_score', 'N/A') }}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-12">
+                        <div class="stats-icon-professional mx-auto mb-4" style="background: var(--color-secondary-200); color: var(--color-secondary-500);">
+                            <i class="bi bi-inbox"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-secondary-700 mb-2">No Recent Activity</h3>
+                        <p class="text-secondary-500 mb-4">Start by uploading your first assessment to see activity here.</p>
+                        <a href="{{ url_for('upload_page') }}" class="btn-primary-professional">
+                            <i class="bi bi-plus-circle me-2"></i>
+                            Create First Assessment
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="col-lg-4">
+        <div class="glass-card fade-in-up">
+            <div class="card-header bg-transparent border-0 pb-0">
+                <h3 class="text-2xl font-semibold text-secondary-900 mb-0">
+                    <i class="bi bi-lightning-charge me-2 text-gradient-professional"></i>
+                    Quick Actions
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="space-y-3">
+                    <a href="{{ url_for('upload_page') }}" class="d-block p-4 bg-primary-50 rounded-xl hover-lift-professional text-decoration-none">
+                        <div class="d-flex align-items-center">
+                            <div class="stats-icon-professional me-3" style="width: 40px; height: 40px; font-size: 1rem;">
+                                <i class="bi bi-cloud-upload"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-primary-800 mb-1">Upload Files</h4>
+                                <p class="text-sm text-primary-600 mb-0">Start new assessment</p>
+                            </div>
+                        </div>
+                    </a>
+
+                    <a href="{{ url_for('results_page') }}" class="d-block p-4 bg-success-50 rounded-xl hover-lift-professional text-decoration-none">
+                        <div class="d-flex align-items-center">
+                            <div class="stats-icon-professional me-3" style="width: 40px; height: 40px; font-size: 1rem; background: var(--gradient-success);">
+                                <i class="bi bi-bar-chart"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-success-800 mb-1">View Results</h4>
+                                <p class="text-sm text-success-600 mb-0">Browse all assessments</p>
+                            </div>
+                        </div>
+                    </a>
+
+                    <a href="{{ url_for('settings_page') }}" class="d-block p-4 bg-secondary-50 rounded-xl hover-lift-professional text-decoration-none">
+                        <div class="d-flex align-items-center">
+                            <div class="stats-icon-professional me-3" style="width: 40px; height: 40px; font-size: 1rem; background: var(--gradient-secondary);">
+                                <i class="bi bi-gear"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-secondary-800 mb-1">Settings</h4>
+                                <p class="text-sm text-secondary-600 mb-0">Configure preferences</p>
+                            </div>
+                        </div>
+                    </a>
+
+                    <div class="p-4 bg-warning-50 rounded-xl">
+                        <div class="d-flex align-items-center">
+                            <div class="stats-icon-professional me-3" style="width: 40px; height: 40px; font-size: 1rem; background: var(--gradient-warning);">
+                                <i class="bi bi-question-circle"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-warning-800 mb-1">Help & Support</h4>
+                                <p class="text-sm text-warning-600 mb-0">Get assistance</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Professional Performance Chart Section -->
+<div class="row mt-5">
+    <div class="col-12">
+        <div class="glass-card fade-in-up">
+            <div class="card-header bg-transparent border-0 pb-0">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3 class="text-2xl font-semibold text-secondary-900 mb-0">
+                        <i class="bi bi-graph-up-arrow me-2 text-gradient-professional"></i>
+                        Performance Analytics
+                    </h3>
+                    <div class="d-flex gap-2">
+                        <button class="btn-outline-professional btn-sm-professional">7 Days</button>
+                        <button class="btn-primary-professional btn-sm-professional">30 Days</button>
+                        <button class="btn-outline-professional btn-sm-professional">90 Days</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="text-center py-12">
+                    <div class="stats-icon-professional mx-auto mb-4" style="background: var(--color-info-100); color: var(--color-info-600);">
+                        <i class="bi bi-graph-up"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-secondary-700 mb-2">Analytics Coming Soon</h3>
+                    <p class="text-secondary-500">Detailed performance charts and insights will be available here.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Professional Dashboard Interactions
+document.addEventListener('DOMContentLoaded', function() {
+    // Animate statistics on load
+    const statsValues = document.querySelectorAll('.stats-value-professional');
+    statsValues.forEach(stat => {
+        const finalValue = stat.textContent;
+        stat.textContent = '0';
+        
+        // Animate to final value
+        setTimeout(() => {
+            stat.style.transition = 'all 1s ease-out';
+            stat.textContent = finalValue;
+        }, 500);
+    });
+
+    // Animate progress bars
+    const progressBars = document.querySelectorAll('.stats-progress-bar-professional');
+    progressBars.forEach(bar => {
+        const width = bar.style.width;
+        bar.style.width = '0%';
+        
+        setTimeout(() => {
+            bar.style.width = width;
+        }, 800);
+    });
+
+    // Add hover effects to cards
+    const cards = document.querySelectorAll('.stats-card-professional');
+    cards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-8px) scale(1.02)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0) scale(1)';
+        });
+    });
+});
+</script>
+{% endblock %}
