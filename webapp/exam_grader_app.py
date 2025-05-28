@@ -378,7 +378,7 @@ def upload_guide():
 
 @app.route('/upload-submission', methods=['GET', 'POST'])
 def upload_submission():
-    """Upload and process student submission."""
+    """Upload and process student submission(s)."""
     if request.method == 'GET':
         return render_template('upload_submission.html', page_title='Upload Submission')
 
@@ -387,96 +387,138 @@ def upload_submission():
             flash('Please upload a marking guide first.', 'warning')
             return redirect(url_for('upload_guide'))
 
-        if 'submission_file' not in request.files:
-            flash('No file selected.', 'error')
-            return redirect(request.url)
+        upload_mode = request.form.get('upload_mode', 'single')
 
-        file = request.files['submission_file']
-        if file.filename == '':
-            flash('No file selected.', 'error')
-            return redirect(request.url)
+        if upload_mode == 'multiple':
+            # Handle multiple file upload
+            files = request.files.getlist('submission_files')
+            if not files or all(f.filename == '' for f in files):
+                flash('No files selected.', 'error')
+                return redirect(request.url)
+        else:
+            # Handle single file upload
+            if 'submission_file' not in request.files:
+                flash('No file selected.', 'error')
+                return redirect(request.url)
 
-        if not allowed_file(file.filename):
-            flash('File type not supported. Please upload a PDF, Word document, or image file.', 'error')
-            return redirect(request.url)
+            file = request.files['submission_file']
+            if file.filename == '':
+                flash('No file selected.', 'error')
+                return redirect(request.url)
+            files = [file]
+
+        # Validate all files
+        for file in files:
+            if not allowed_file(file.filename):
+                flash(f'File type not supported for {file.filename}. Please upload PDF, Word document, or image files.', 'error')
+                return redirect(request.url)
 
         # Create temp directory if it doesn't exist
         temp_dir = getattr(config, 'TEMP_DIR', getattr(config, 'temp_dir', 'temp'))
         os.makedirs(temp_dir, exist_ok=True)
 
-        # Save file
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(temp_dir, f"submission_{uuid.uuid4().hex}_{filename}")
-        file.save(file_path)
+        processed_submissions = []
 
-        # Process submission
-        try:
-            if 'parse_student_submission' in globals():
-                answers, raw_text, error = parse_student_submission(file_path)
-                if error:
-                    flash(f'Error processing submission: {error}', 'error')
-                    os.remove(file_path)
-                    return redirect(request.url)
-            else:
-                # Create basic submission data
-                answers = {'extracted_text': f'Sample text from {filename}'}
-                raw_text = f'Raw text content from {filename}'
-        except Exception as parse_error:
-            logger.error(f"Error parsing submission: {str(parse_error)}")
-            answers = {'extracted_text': f'Sample text from {filename}'}
-            raw_text = f'Raw text content from {filename}'
+        # Process each file
+        for file in files:
+            try:
+                # Save file
+                filename = secure_filename(file.filename)
+                file_path = os.path.join(temp_dir, f"submission_{uuid.uuid4().hex}_{filename}")
+                file.save(file_path)
 
-        # Store submission
-        try:
-            if submission_storage:
-                with open(file_path, 'rb') as f:
-                    file_content = f.read()
-                submission_id = submission_storage.store_results(file_content, filename, answers, raw_text)
-            else:
-                submission_id = str(uuid.uuid4())
-                session[f'submission_{submission_id}'] = {
+                # Process submission
+                try:
+                    if 'parse_student_submission' in globals():
+                        answers, raw_text, error = parse_student_submission(file_path)
+                        if error:
+                            logger.warning(f'Error processing {filename}: {error}')
+                            answers = {'extracted_text': f'Error processing {filename}: {error}'}
+                            raw_text = f'Error processing {filename}'
+                    else:
+                        # Create basic submission data
+                        answers = {'extracted_text': f'Sample text from {filename}'}
+                        raw_text = f'Raw text content from {filename}'
+                except Exception as parse_error:
+                    logger.error(f"Error parsing submission {filename}: {str(parse_error)}")
+                    answers = {'extracted_text': f'Sample text from {filename}'}
+                    raw_text = f'Raw text content from {filename}'
+
+                # Store submission
+                try:
+                    if submission_storage:
+                        with open(file_path, 'rb') as f:
+                            file_content = f.read()
+                        submission_id = submission_storage.store_results(file_content, filename, answers, raw_text)
+                    else:
+                        submission_id = str(uuid.uuid4())
+                        session[f'submission_{submission_id}'] = {
+                            'filename': filename,
+                            'answers': answers,
+                            'raw_text': raw_text
+                        }
+                except Exception as storage_error:
+                    logger.error(f"Error storing submission {filename}: {str(storage_error)}")
+                    submission_id = str(uuid.uuid4())
+                    session[f'submission_{submission_id}'] = {
+                        'filename': filename,
+                        'answers': answers,
+                        'raw_text': raw_text
+                    }
+
+                processed_submissions.append({
+                    'id': submission_id,
                     'filename': filename,
-                    'answers': answers,
-                    'raw_text': raw_text
-                }
-        except Exception as storage_error:
-            logger.error(f"Error storing submission: {str(storage_error)}")
-            submission_id = str(uuid.uuid4())
-            session[f'submission_{submission_id}'] = {
-                'filename': filename,
-                'answers': answers,
-                'raw_text': raw_text
-            }
+                    'uploaded_at': datetime.now().isoformat(),
+                    'processed': True
+                })
 
-        # Update session
+                # Clean up temp file
+                try:
+                    os.remove(file_path)
+                except:
+                    pass
+
+            except Exception as file_error:
+                logger.error(f"Error processing file {file.filename}: {str(file_error)}")
+                flash(f'Error processing {file.filename}. Skipping this file.', 'warning')
+                continue
+
+        if not processed_submissions:
+            flash('No files were successfully processed.', 'error')
+            return redirect(request.url)
+
+        # Update session with all processed submissions
         submissions = session.get('submissions', [])
-        submissions.append({
-            'id': submission_id,
-            'filename': filename,
-            'uploaded_at': datetime.now().isoformat(),
-            'processed': True
-        })
+        submissions.extend(processed_submissions)
         session['submissions'] = submissions
-        session['last_submission'] = submission_id
+        session['last_submission'] = processed_submissions[-1]['id']
 
         # Add to recent activity
         activity = session.get('recent_activity', [])
-        activity.insert(0, {
-            'type': 'submission_upload',
-            'message': f'Uploaded submission: {filename}',
-            'timestamp': datetime.now().isoformat(),
-            'icon': 'upload'
-        })
+        if len(processed_submissions) == 1:
+            activity.insert(0, {
+                'type': 'submission_upload',
+                'message': f'Uploaded submission: {processed_submissions[0]["filename"]}',
+                'timestamp': datetime.now().isoformat(),
+                'icon': 'upload'
+            })
+        else:
+            activity.insert(0, {
+                'type': 'batch_upload',
+                'message': f'Uploaded {len(processed_submissions)} submissions in batch',
+                'timestamp': datetime.now().isoformat(),
+                'icon': 'upload'
+            })
         session['recent_activity'] = activity[:10]
 
-        flash('Submission uploaded and processed successfully!', 'success')
-        logger.info(f"Submission uploaded successfully: {filename}")
+        # Success message
+        if len(processed_submissions) == 1:
+            flash('Submission uploaded and processed successfully!', 'success')
+        else:
+            flash(f'{len(processed_submissions)} submissions uploaded and processed successfully!', 'success')
 
-        # Clean up temp file
-        try:
-            os.remove(file_path)
-        except:
-            pass
+        logger.info(f"Successfully processed {len(processed_submissions)} submission(s)")
 
         return redirect(url_for('dashboard'))
 
@@ -582,89 +624,6 @@ def process_grading():
     except Exception as e:
         logger.error(f"Error processing grading: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
-
-@app.route('/settings', methods=['GET', 'POST'])
-def settings():
-    """Application settings page."""
-    if request.method == 'GET':
-        # Get current settings from session or defaults
-        current_settings = session.get('app_settings', {
-            'max_file_size': 16,
-            'allowed_formats': ['pdf', 'docx', 'doc', 'jpg', 'jpeg', 'png', 'tiff', 'bmp', 'gif'],
-            'auto_process': True,
-            'save_temp_files': False,
-            'notification_level': 'all',
-            'theme': 'light',
-            'language': 'en'
-        })
-
-        context = {
-            'page_title': 'Settings',
-            'settings': current_settings,
-            'available_formats': ['pdf', 'docx', 'doc', 'txt', 'jpg', 'jpeg', 'png', 'tiff', 'bmp', 'gif'],
-            'notification_levels': [
-                {'value': 'all', 'label': 'All notifications'},
-                {'value': 'important', 'label': 'Important only'},
-                {'value': 'errors', 'label': 'Errors only'},
-                {'value': 'none', 'label': 'No notifications'}
-            ],
-            'themes': [
-                {'value': 'light', 'label': 'Light'},
-                {'value': 'dark', 'label': 'Dark'},
-                {'value': 'auto', 'label': 'Auto (System)'}
-            ],
-            'languages': [
-                {'value': 'en', 'label': 'English'},
-                {'value': 'es', 'label': 'Spanish'},
-                {'value': 'fr', 'label': 'French'},
-                {'value': 'de', 'label': 'German'}
-            ]
-        }
-        return render_template('settings.html', **context)
-
-    try:
-        # Handle settings update
-        settings_data = {
-            'max_file_size': int(request.form.get('max_file_size', 16)),
-            'allowed_formats': request.form.getlist('allowed_formats'),
-            'auto_process': request.form.get('auto_process') == 'on',
-            'save_temp_files': request.form.get('save_temp_files') == 'on',
-            'notification_level': request.form.get('notification_level', 'all'),
-            'theme': request.form.get('theme', 'light'),
-            'language': request.form.get('language', 'en')
-        }
-
-        # Validate settings
-        if settings_data['max_file_size'] < 1 or settings_data['max_file_size'] > 100:
-            flash('Max file size must be between 1 and 100 MB.', 'error')
-            return redirect(request.url)
-
-        if not settings_data['allowed_formats']:
-            flash('At least one file format must be selected.', 'error')
-            return redirect(request.url)
-
-        # Save settings to session
-        session['app_settings'] = settings_data
-
-        # Add to recent activity
-        activity = session.get('recent_activity', [])
-        activity.insert(0, {
-            'type': 'settings_update',
-            'message': 'Application settings updated',
-            'timestamp': datetime.now().isoformat(),
-            'icon': 'cog'
-        })
-        session['recent_activity'] = activity[:10]
-
-        flash('Settings updated successfully!', 'success')
-        logger.info("Application settings updated")
-
-        return redirect(url_for('settings'))
-
-    except Exception as e:
-        logger.error(f"Error updating settings: {str(e)}")
-        flash('Error updating settings. Please try again.', 'error')
-        return redirect(request.url)
 
 if __name__ == '__main__':
     print("🚀 Starting Exam Grader Web Application...")
