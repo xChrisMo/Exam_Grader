@@ -1,934 +1,261 @@
-{% extends "base.html" %} {% block title %}Grading Results - Exam Grader{%
-endblock %} {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h1 class="mb-0">
-    <i class="bi bi-award text-primary me-2"></i>
-    Grading Results
-  </h1>
-  <div>
-    <a href="{{ url_for('download_excel') }}" class="btn btn-success me-2">
-      <i class="bi bi-file-excel me-1"></i> Download Excel
-    </a>
-    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
-      <i class="bi bi-arrow-left me-1"></i> Back to Home
-    </a>
-  </div>
-</div>
+{% extends "layout.html" %}
 
-<!-- Score Overview -->
-<div class="card mb-4 border-0 shadow-sm">
-  <div class="card-header bg-gradient-primary text-white">
-    <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Score Overview</h5>
-  </div>
-  <div class="card-body">
-    <div class="row align-items-center">
-      <div class="col-md-4 text-center mb-4 mb-md-0">
-        <div class="score-container">
-          <div
-            class="score-circle mb-3 {% if result.percent_score is defined and result.percent_score >= 80 %}bg-gradient-success {% elif result.percent_score is defined and result.percent_score >= 60 %}bg-gradient-primary {% elif result.percent_score is defined and result.percent_score >= 40 %}bg-gradient-warning {% else %}bg-gradient-danger{% endif %}"
-          >
-            {% set display_score = result.percent_score|default(0)|round|int %}
-            {{ display_score }}%
-          </div>
-          <h4 class="mb-2">Overall Score</h4>
-          <div class="score-details">
-            <div class="d-flex justify-content-center align-items-center mb-2">
-              <span class="badge bg-primary fs-5 px-3 py-2"
-                >{{ result.letter_grade|default('N/A') }}</span
-              >
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Grading Results</h1>
+                <p class="mt-2 text-sm text-gray-600">
+                    Detailed grading results and feedback for the submitted work.
+                </p>
             </div>
-            <p class="text-muted mb-1">
-              <strong>{{ result.overall_score|default(0) }}</strong> out of
-              <strong>{{ result.max_possible_score|default(100) }}</strong>
-              marks
-            </p>
-            <div class="mt-2 small text-info">
-              <i class="bi bi-info-circle"></i> Based on the best {{
-              session.get('num_questions', 1) }} answers
+            <div class="flex space-x-3">
+                <button onclick="exportResults()" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Export Results
+                </button>
+                <a href="{{ url_for('dashboard') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                    Back to Dashboard
+                </a>
             </div>
-            {% if result.metadata.total_marks_available is defined and
-            result.metadata.total_marks_available != result.max_possible_score
-            %}
-            <div class="mt-2 small text-warning">
-              <i class="bi bi-info-circle"></i> Total marks available in guide:
-              {{ result.metadata.total_marks_available }}
-            </div>
-            {% endif %}
-          </div>
         </div>
-      </div>
-      <div class="col-md-8">
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <div class="stat-card">
-              <div class="stat-icon bg-primary-light">
-                <i class="bi bi-list-check text-primary"></i>
-              </div>
-              <div class="stat-content">
-                <h6 class="stat-title">Questions Graded</h6>
-                <div class="stat-value">
-                  {{ result.metadata.total_questions|default(0) }}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-6 mb-3">
-            <div class="stat-card">
-              <div class="stat-icon bg-success-light">
-                <i class="bi bi-check2-square text-success"></i>
-              </div>
-              <div class="stat-content">
-                <h6 class="stat-title">Questions to Answer</h6>
-                <div class="stat-value">
-                  {{ session.get('num_questions', 1) }}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-6 mb-3">
-            <div class="stat-card">
-              <div class="stat-icon bg-info-light">
-                <i class="bi bi-calendar-check text-info"></i>
-              </div>
-              <div class="stat-content">
-                <h6 class="stat-title">Graded At</h6>
-                <div class="stat-value small">
-                  {{ result.metadata.graded_at|format_date }}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-6 mb-3">
-            <div class="stat-card">
-              <div class="stat-icon bg-secondary-light">
-                <i class="bi bi-gear text-secondary"></i>
-              </div>
-              <div class="stat-content">
-                <h6 class="stat-title">Grading Method</h6>
-                <div class="stat-value">
-                  {{ result.metadata.grading_method|default('Similarity') }}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-6 mb-3">
-            <div class="stat-card">
-              <div class="stat-icon bg-success-light">
-                <i class="bi bi-trophy text-success"></i>
-              </div>
-              <div class="stat-content">
-                <h6 class="stat-title">Total Marks Available</h6>
-                <div class="stat-value">
-                  {{
-                  result.metadata.total_marks_available|default(result.max_possible_score)
-                  }}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-6 mb-3">
-            <div class="stat-card">
-              <div class="stat-icon bg-warning-light">
-                <i class="bi bi-journal-text text-warning"></i>
-              </div>
-              <div class="stat-content">
-                <h6 class="stat-title">Guide Type</h6>
-                <div class="stat-value">
-                  {{ result.metadata.guide_type|default('Unknown')|title }}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Detailed Feedback -->
-{% if result.detailed_feedback is defined or result.strengths is defined or
-result.weaknesses is defined %}
-<div class="card mb-4 border-0 shadow-sm">
-  <div class="card-header bg-gradient-primary text-white">
-    <h5 class="mb-0">
-      <i class="bi bi-chat-square-text me-2"></i>Detailed Feedback
-    </h5>
-  </div>
-  <div class="card-body p-0">
-    <div class="row g-0">
-      <!-- Strengths Column -->
-      <div class="col-md-6 border-end">
-        <div class="p-4">
-          <h5 class="text-success d-flex align-items-center">
-            <i class="bi bi-check-circle me-2"></i>Strengths
-          </h5>
-          {% if result.detailed_feedback.strengths|default(result.strengths,
-          [])|length > 0 %}
-          <div class="feedback-list strengths-list">
-            {% for strength in
-            result.detailed_feedback.strengths|default(result.strengths, []) %}
-            <div class="feedback-item strength-item">
-              <div class="feedback-icon">
-                <i class="bi bi-check-circle-fill"></i>
-              </div>
-              <div class="feedback-text">{{ strength }}</div>
-            </div>
-            {% endfor %}
-          </div>
-          {% else %}
-          <div class="alert alert-light border">
-            <i class="bi bi-info-circle me-2"></i>No specific strengths were
-            identified.
-          </div>
-          {% endif %}
-        </div>
-      </div>
-
-      <!-- Weaknesses Column -->
-      <div class="col-md-6">
-        <div class="p-4">
-          <h5 class="text-warning d-flex align-items-center">
-            <i class="bi bi-exclamation-triangle me-2"></i>Areas to Improve
-          </h5>
-          {% if result.detailed_feedback.weaknesses|default(result.weaknesses,
-          [])|length > 0 %}
-          <div class="feedback-list weaknesses-list">
-            {% for weakness in
-            result.detailed_feedback.weaknesses|default(result.weaknesses, [])
-            %}
-            <div class="feedback-item weakness-item">
-              <div class="feedback-icon">
-                <i class="bi bi-exclamation-triangle-fill"></i>
-              </div>
-              <div class="feedback-text">{{ weakness }}</div>
-            </div>
-            {% endfor %}
-          </div>
-          {% else %}
-          <div class="alert alert-light border">
-            <i class="bi bi-info-circle me-2"></i>No specific areas for
-            improvement were identified.
-          </div>
-          {% endif %}
-        </div>
-      </div>
     </div>
 
-    <!-- Improvement Suggestions -->
-    {% if result.detailed_feedback.improvement_suggestions|default([])|length >
-    0 %}
-    <div class="border-top">
-      <div class="p-4">
-        <h5 class="text-info d-flex align-items-center">
-          <i class="bi bi-lightbulb me-2"></i>Suggestions for Improvement
-        </h5>
-        <div class="feedback-list suggestions-list">
-          {% for suggestion in result.detailed_feedback.improvement_suggestions
-          %}
-          <div class="feedback-item suggestion-item">
-            <div class="feedback-icon">
-              <i class="bi bi-lightbulb-fill"></i>
-            </div>
-            <div class="feedback-text">{{ suggestion }}</div>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-    {% endif %}
-  </div>
-</div>
-{% endif %}
-
-<!-- Question Scores -->
-{% if result.criteria_scores is defined and result.criteria_scores %}
-<div class="card mb-4 border-0 shadow-sm">
-  <div class="card-header bg-gradient-primary text-white">
-    <h5 class="mb-0"><i class="bi bi-list-check me-2"></i>Question Scores</h5>
-  </div>
-  <div class="card-body">
-    <div class="table-responsive">
-      <table class="table table-hover">
-        <thead class="table-light">
-          <tr>
-            <th style="width: 50%">Question</th>
-            <th class="text-center" style="width: 12%">Score</th>
-            <th class="text-center" style="width: 12%">Max</th>
-            <th class="text-center" style="width: 15%">Match %</th>
-            <th class="text-center" style="width: 11%">Details</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for criteria in result.criteria_scores %}
-          <tr class="align-middle">
-            <td>
-              <div class="question-text">{{ criteria.description }}</div>
-              {% if criteria.feedback %}
-              <div class="feedback-preview text-muted small mt-1">
-                <i class="bi bi-chat-quote me-1"></i>{{
-                criteria.feedback|truncate(80) }}
-              </div>
-              {% endif %}
-            </td>
-            <td class="text-center">
-              <span
-                class="badge {% if (criteria.points_earned / criteria.points_possible) >= 0.8 %}bg-success{% elif (criteria.points_earned / criteria.points_possible) >= 0.6 %}bg-primary{% elif (criteria.points_earned / criteria.points_possible) >= 0.4 %}bg-warning{% else %}bg-danger{% endif %} fs-6 px-2 py-1"
-              >
-                {{ criteria.points_earned|default(0) }}
-              </span>
-            </td>
-            <td class="text-center">
-              <span class="badge bg-secondary fs-6 px-2 py-1">
-                {{ criteria.points_possible|default(0) }}
-              </span>
-            </td>
-            <td>
-              {% if criteria.similarity is defined %}
-              <div class="progress" style="height: 10px">
-                {% set score = (criteria.similarity * 100)|int %}
-                <div
-                  class="progress-bar {% if score >= 80 %}bg-success {% elif score >= 60 %}bg-primary {% elif score >= 40 %}bg-warning {% else %}bg-danger{% endif %}"
-                  role="progressbar"
-                  style="width: {{ score }}%;"
-                  aria-valuenow="{{ score }}"
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                ></div>
-              </div>
-              <div class="text-center mt-1 small">{{ score }}%</div>
-              {% else %}
-              <span class="badge bg-secondary">N/A</span>
-              {% endif %}
-            </td>
-            <td class="text-center">
-              <button
-                class="btn btn-sm btn-outline-primary rounded-pill"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#details-{{ loop.index }}"
-                aria-expanded="false"
-              >
-                <i class="bi bi-info-circle me-1"></i> View
-              </button>
-            </td>
-          </tr>
-          <tr class="collapse bg-light" id="details-{{ loop.index }}">
-            <td colspan="5" class="p-0">
-              <div class="p-3">
-                <div class="row">
-                  <div class="col-md-6">
-                    <div class="card border-0 shadow-sm mb-3">
-                      <div class="card-header bg-success-light">
-                        <h6 class="mb-0 text-success">
-                          <i class="bi bi-check-circle me-2"></i>Model Answer
-                        </h6>
-                      </div>
-                      <div class="card-body">
-                        <div class="model-answer">
-                          {{ criteria.guide_answer|nl2br }}
-                        </div>
-                      </div>
+    <!-- Overall Score Card -->
+    <div class="bg-white shadow rounded-lg mb-8">
+        <div class="px-4 py-5 sm:p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">Overall Score</h3>
+                    <p class="mt-1 text-sm text-gray-500">Total points achieved</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-3xl font-bold text-primary-600">
+                        {{ results.total_score if results and results.total_score else session.get('last_score', 0) }}%
                     </div>
-
-                    {% if criteria.detailed_feedback and
-                    criteria.detailed_feedback.key_points %}
-                    <div class="card border-0 shadow-sm">
-                      <div class="card-header bg-info-light">
-                        <h6 class="mb-0 text-info">
-                          <i class="bi bi-key me-2"></i>Key Points
-                        </h6>
-                      </div>
-                      <div class="card-body">
-                        {% if criteria.detailed_feedback.key_points.matched %}
-                        <div class="mb-2">
-                          <div class="d-flex align-items-center mb-1">
-                            <span class="badge bg-success me-2"
-                              ><i class="bi bi-check"></i
-                            ></span>
-                            <strong>Matched Points</strong>
-                          </div>
-                          <ul class="key-points-list matched-points">
-                            {% for point in
-                            criteria.detailed_feedback.key_points.matched %}
-                            <li>{{ point }}</li>
-                            {% endfor %}
-                          </ul>
-                        </div>
-                        {% endif %} {% if
-                        criteria.detailed_feedback.key_points.partially_matched
-                        %}
-                        <div class="mb-2">
-                          <div class="d-flex align-items-center mb-1">
-                            <span class="badge bg-warning me-2"
-                              ><i class="bi bi-dash"></i
-                            ></span>
-                            <strong>Partially Matched</strong>
-                          </div>
-                          <ul class="key-points-list partial-points">
-                            {% for point in
-                            criteria.detailed_feedback.key_points.partially_matched
-                            %}
-                            <li>{{ point }}</li>
-                            {% endfor %}
-                          </ul>
-                        </div>
-                        {% endif %} {% if
-                        criteria.detailed_feedback.key_points.missed %}
-                        <div>
-                          <div class="d-flex align-items-center mb-1">
-                            <span class="badge bg-danger me-2"
-                              ><i class="bi bi-x"></i
-                            ></span>
-                            <strong>Missed Points</strong>
-                          </div>
-                          <ul class="key-points-list missed-points">
-                            {% for point in
-                            criteria.detailed_feedback.key_points.missed %}
-                            <li>{{ point }}</li>
-                            {% endfor %}
-                          </ul>
-                        </div>
+                    <div class="text-sm text-gray-500">
+                        {% set score = results.total_score if results and results.total_score else session.get('last_score', 0) %}
+                        {% if score >= 90 %}
+                            <span class="text-success-600 font-medium">Excellent</span>
+                        {% elif score >= 80 %}
+                            <span class="text-success-600 font-medium">Good</span>
+                        {% elif score >= 70 %}
+                            <span class="text-warning-600 font-medium">Satisfactory</span>
+                        {% elif score >= 60 %}
+                            <span class="text-warning-600 font-medium">Needs Improvement</span>
+                        {% else %}
+                            <span class="text-danger-600 font-medium">Unsatisfactory</span>
                         {% endif %}
-                      </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Score Breakdown -->
+            <div class="mt-6">
+                <div class="bg-gray-200 rounded-full h-3">
+                    {% set score = results.total_score if results and results.total_score else session.get('last_score', 0) %}
+                    <div class="h-3 rounded-full {% if score >= 80 %}bg-success-500{% elif score >= 60 %}bg-warning-500{% else %}bg-danger-500{% endif %}" style="width: {{ score }}%"></div>
+                </div>
+                <div class="flex justify-between text-sm text-gray-500 mt-2">
+                    <span>0%</span>
+                    <span>50%</span>
+                    <span>100%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Question-by-Question Results -->
+    <div class="bg-white shadow rounded-lg mb-8">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">Question-by-Question Breakdown</h3>
+            
+            {% if results and results.questions %}
+                {% for question in results.questions %}
+                <div class="border-b border-gray-200 pb-6 mb-6 last:border-b-0 last:pb-0 last:mb-0">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <h4 class="text-md font-medium text-gray-900">Question {{ loop.index }}</h4>
+                            <p class="mt-1 text-sm text-gray-600">{{ question.text or 'Question text not available' }}</p>
+                        </div>
+                        <div class="ml-4 text-right">
+                            <div class="text-lg font-semibold {% if question.score >= question.max_score * 0.8 %}text-success-600{% elif question.score >= question.max_score * 0.6 %}text-warning-600{% else %}text-danger-600{% endif %}">
+                                {{ question.score }}/{{ question.max_score }}
+                            </div>
+                            <div class="text-sm text-gray-500">
+                                {{ ((question.score / question.max_score) * 100)|round(1) }}%
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Student Answer -->
+                    <div class="mt-4">
+                        <h5 class="text-sm font-medium text-gray-700">Student Answer:</h5>
+                        <div class="mt-2 p-3 bg-gray-50 rounded-md">
+                            <p class="text-sm text-gray-900">{{ question.student_answer or 'No answer provided' }}</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Feedback -->
+                    {% if question.feedback %}
+                    <div class="mt-4">
+                        <h5 class="text-sm font-medium text-gray-700">Feedback:</h5>
+                        <div class="mt-2 p-3 bg-blue-50 rounded-md">
+                            <p class="text-sm text-blue-900">{{ question.feedback }}</p>
+                        </div>
                     </div>
                     {% endif %}
-                  </div>
-
-                  <div class="col-md-6">
-                    <div class="card border-0 shadow-sm mb-3">
-                      <div class="card-header bg-primary-light">
-                        <h6 class="mb-0 text-primary">
-                          <i class="bi bi-pencil me-2"></i>Student Answer
-                        </h6>
-                      </div>
-                      <div class="card-body">
-                        <div class="student-answer">
-                          {{ criteria.student_answer|nl2br }}
+                    
+                    <!-- Expected Answer -->
+                    {% if question.expected_answer %}
+                    <div class="mt-4">
+                        <h5 class="text-sm font-medium text-gray-700">Expected Answer:</h5>
+                        <div class="mt-2 p-3 bg-green-50 rounded-md">
+                            <p class="text-sm text-green-900">{{ question.expected_answer }}</p>
                         </div>
-                      </div>
                     </div>
-
-                    <div class="card border-0 shadow-sm">
-                      <div class="card-header bg-secondary-light">
-                        <h6 class="mb-0 text-secondary">
-                          <i class="bi bi-bar-chart me-2"></i>Grading Breakdown
-                        </h6>
-                      </div>
-                      <div class="card-body p-0">
-                        <div class="table-responsive">
-                          <table class="table table-sm mb-0">
-                            <tbody>
-                              {% if criteria.match_score is defined %}
-                              <tr>
-                                <td class="ps-3">Text Match Score</td>
-                                <td class="text-end pe-3">
-                                  <div
-                                    class="d-flex align-items-center justify-content-end"
-                                  >
-                                    <div
-                                      class="progress me-2"
-                                      style="width: 60px; height: 8px"
-                                    >
-                                      <div
-                                        class="progress-bar bg-primary"
-                                        style="width: {{ (criteria.match_score * 100)|round|int }}%"
-                                      ></div>
-                                    </div>
-                                    <span
-                                      >{{ (criteria.match_score * 100)|round|int
-                                      }}%</span
-                                    >
-                                  </div>
-                                </td>
-                              </tr>
-                              {% endif %} {% if criteria.answer_score is defined
-                              %}
-                              <tr>
-                                <td class="ps-3">Answer Similarity</td>
-                                <td class="text-end pe-3">
-                                  <div
-                                    class="d-flex align-items-center justify-content-end"
-                                  >
-                                    <div
-                                      class="progress me-2"
-                                      style="width: 60px; height: 8px"
-                                    >
-                                      <div
-                                        class="progress-bar bg-success"
-                                        style="width: {{ (criteria.answer_score * 100)|round|int }}%"
-                                      ></div>
-                                    </div>
-                                    <span
-                                      >{{ (criteria.answer_score *
-                                      100)|round|int }}%</span
-                                    >
-                                  </div>
-                                </td>
-                              </tr>
-                              {% endif %} {% if criteria.keyword_score is
-                              defined %}
-                              <tr>
-                                <td class="ps-3">Keyword Match</td>
-                                <td class="text-end pe-3">
-                                  <div
-                                    class="d-flex align-items-center justify-content-end"
-                                  >
-                                    <div
-                                      class="progress me-2"
-                                      style="width: 60px; height: 8px"
-                                    >
-                                      <div
-                                        class="progress-bar bg-info"
-                                        style="width: {{ (criteria.keyword_score * 100)|round|int }}%"
-                                      ></div>
-                                    </div>
-                                    <span
-                                      >{{ (criteria.keyword_score *
-                                      100)|round|int }}%</span
-                                    >
-                                  </div>
-                                </td>
-                              </tr>
-                              {% endif %} {% if criteria.match_reason %}
-                              <tr>
-                                <td
-                                  colspan="2"
-                                  class="text-muted small ps-3 pe-3"
-                                >
-                                  <div
-                                    class="alert alert-light border py-2 px-3 mb-0 mt-2"
-                                  >
-                                    <i class="bi bi-info-circle me-1"></i>{{
-                                    criteria.match_reason }}
-                                  </div>
-                                </td>
-                              </tr>
-                              {% endif %} {% if criteria.detailed_feedback and
-                              criteria.detailed_feedback.breakdown %} {% if
-                              criteria.detailed_feedback.breakdown.content_accuracy
-                              %}
-                              <tr>
-                                <td class="ps-3">Content Accuracy (40%)</td>
-                                <td class="text-end pe-3">
-                                  {{
-                                  criteria.detailed_feedback.breakdown.content_accuracy.score
-                                  }}/10
-                                </td>
-                              </tr>
-                              {% endif %} {% if
-                              criteria.detailed_feedback.breakdown.completeness
-                              %}
-                              <tr>
-                                <td class="ps-3">Completeness (30%)</td>
-                                <td class="text-end pe-3">
-                                  {{
-                                  criteria.detailed_feedback.breakdown.completeness.score
-                                  }}/10
-                                </td>
-                              </tr>
-                              {% endif %} {% if
-                              criteria.detailed_feedback.breakdown.understanding
-                              %}
-                              <tr>
-                                <td class="ps-3">Understanding (20%)</td>
-                                <td class="text-end pe-3">
-                                  {{
-                                  criteria.detailed_feedback.breakdown.understanding.score
-                                  }}/10
-                                </td>
-                              </tr>
-                              {% endif %} {% if
-                              criteria.detailed_feedback.breakdown.clarity %}
-                              <tr>
-                                <td class="ps-3">Clarity (10%)</td>
-                                <td class="text-end pe-3">
-                                  {{
-                                  criteria.detailed_feedback.breakdown.clarity.score
-                                  }}/10
-                                </td>
-                              </tr>
-                              {% endif %} {% endif %}
-                            </tbody>
-                          </table>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <!-- Mock Questions for Demo -->
+                <div class="border-b border-gray-200 pb-6 mb-6">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <h4 class="text-md font-medium text-gray-900">Question 1</h4>
+                            <p class="mt-1 text-sm text-gray-600">Explain the concept of machine learning and its applications.</p>
                         </div>
-                      </div>
+                        <div class="ml-4 text-right">
+                            <div class="text-lg font-semibold text-success-600">8/10</div>
+                            <div class="text-sm text-gray-500">80%</div>
+                        </div>
                     </div>
-                  </div>
+                    
+                    <div class="mt-4">
+                        <h5 class="text-sm font-medium text-gray-700">Student Answer:</h5>
+                        <div class="mt-2 p-3 bg-gray-50 rounded-md">
+                            <p class="text-sm text-gray-900">Machine learning is a subset of artificial intelligence that enables computers to learn and make decisions from data without being explicitly programmed. It has applications in healthcare, finance, and autonomous vehicles.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h5 class="text-sm font-medium text-gray-700">Feedback:</h5>
+                        <div class="mt-2 p-3 bg-blue-50 rounded-md">
+                            <p class="text-sm text-blue-900">Good understanding of the basic concept. Could have included more specific examples of algorithms and mentioned supervised vs unsupervised learning.</p>
+                        </div>
+                    </div>
                 </div>
 
-                {% if criteria.feedback %}
-                <div class="mt-3">
-                  <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-warning-light">
-                      <h6 class="mb-0 text-warning">
-                        <i class="bi bi-chat-left-text me-2"></i>Feedback
-                      </h6>
+                <div class="border-b border-gray-200 pb-6 mb-6">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <h4 class="text-md font-medium text-gray-900">Question 2</h4>
+                            <p class="mt-1 text-sm text-gray-600">Describe the difference between supervised and unsupervised learning.</p>
+                        </div>
+                        <div class="ml-4 text-right">
+                            <div class="text-lg font-semibold text-warning-600">6/10</div>
+                            <div class="text-sm text-gray-500">60%</div>
+                        </div>
                     </div>
-                    <div class="card-body">{{ criteria.feedback }}</div>
-                  </div>
+                    
+                    <div class="mt-4">
+                        <h5 class="text-sm font-medium text-gray-700">Student Answer:</h5>
+                        <div class="mt-2 p-3 bg-gray-50 rounded-md">
+                            <p class="text-sm text-gray-900">Supervised learning uses labeled data while unsupervised learning doesn't use labels.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h5 class="text-sm font-medium text-gray-700">Feedback:</h5>
+                        <div class="mt-2 p-3 bg-blue-50 rounded-md">
+                            <p class="text-sm text-blue-900">Correct but incomplete. Should have provided examples and explained the goals of each approach (prediction vs pattern discovery).</p>
+                        </div>
+                    </div>
                 </div>
+
+                <div class="pb-6">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <h4 class="text-md font-medium text-gray-900">Question 3</h4>
+                            <p class="mt-1 text-sm text-gray-600">What are the main challenges in implementing machine learning systems?</p>
+                        </div>
+                        <div class="ml-4 text-right">
+                            <div class="text-lg font-semibold text-success-600">9/10</div>
+                            <div class="text-sm text-gray-500">90%</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h5 class="text-sm font-medium text-gray-700">Student Answer:</h5>
+                        <div class="mt-2 p-3 bg-gray-50 rounded-md">
+                            <p class="text-sm text-gray-900">Main challenges include data quality issues, overfitting, computational requirements, interpretability of models, and ensuring fairness and avoiding bias in algorithms.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h5 class="text-sm font-medium text-gray-700">Feedback:</h5>
+                        <div class="mt-2 p-3 bg-blue-50 rounded-md">
+                            <p class="text-sm text-blue-900">Excellent comprehensive answer covering most key challenges. Shows good understanding of practical implementation issues.</p>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Summary and Recommendations -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Summary and Recommendations</h3>
+            
+            <div class="prose prose-sm text-gray-600">
+                {% if results and results.feedback %}
+                    <p>{{ results.feedback }}</p>
+                {% else %}
+                    <p>The student demonstrates a solid understanding of machine learning concepts with room for improvement in providing more detailed explanations and specific examples. Focus areas for improvement include:</p>
+                    <ul class="mt-4 space-y-2">
+                        <li>• Providing more specific examples when explaining concepts</li>
+                        <li>• Including technical details about algorithms and methodologies</li>
+                        <li>• Discussing practical implementation challenges</li>
+                        <li>• Connecting theoretical concepts to real-world applications</li>
+                    </ul>
+                    
+                    <p class="mt-4">Overall, this is a good performance that shows understanding of fundamental concepts. With more detailed explanations and examples, the student can achieve even better results.</p>
                 {% endif %}
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-{% endif %}
-
-<!-- Unmapped Guide Items Summary -->
-{% if result.metadata.unmapped_guide_count is defined and
-result.metadata.unmapped_guide_count > 0 %}
-<div class="card mb-4 border-0 shadow-sm">
-  <div class="card-header bg-gradient-warning text-dark">
-    <h5 class="mb-0">
-      <i class="bi bi-exclamation-triangle me-2"></i>Unmapped Guide Items
-    </h5>
-  </div>
-  <div class="card-body">
-    <div class="alert alert-warning border-warning">
-      <div class="d-flex align-items-center">
-        <div class="alert-icon me-3">
-          <i class="bi bi-exclamation-triangle-fill fs-3"></i>
+            </div>
         </div>
-        <div class="alert-content">
-          <h5 class="alert-heading mb-1">Unmapped Content Detected</h5>
-          <p class="mb-2">
-            <strong
-              >{{ result.metadata.unmapped_guide_count }} guide items</strong
-            >
-            couldn't be matched to the submission.
-          </p>
-          <a href="{{ url_for('view_mapping') }}" class="btn btn-warning">
-            <i class="bi bi-diagram-3 me-1"></i> View Mapping Details
-          </a>
-        </div>
-      </div>
     </div>
-  </div>
 </div>
-{% endif %}
+{% endblock %}
 
-<!-- Actions -->
-<div class="card mb-4 border-0 shadow-sm">
-  <div class="card-header bg-gradient-secondary text-white">
-    <h5 class="mb-0"><i class="bi bi-tools me-2"></i>Actions</h5>
-  </div>
-  <div class="card-body">
-    <div class="row g-3">
-      <div class="col-md-12">
-        <a
-          href="{{ url_for('view_detailed_results') }}"
-          class="btn btn-primary btn-lg w-100 shadow-sm"
-        >
-          <i class="bi bi-file-earmark-text me-2"></i> View Detailed Analysis &
-          Suggestions
-        </a>
-      </div>
-      <div class="col-md-4">
-        <a
-          href="{{ url_for('view_mapping') }}"
-          class="btn btn-outline-secondary w-100"
-        >
-          <i class="bi bi-diagram-3 me-2"></i> View Mapping
-        </a>
-      </div>
-      <div class="col-md-4">
-        <a
-          href="{{ url_for('view_guide') }}"
-          class="btn btn-outline-secondary w-100"
-        >
-          <i class="bi bi-file-text me-2"></i> View Marking Guide
-        </a>
-      </div>
-      <div class="col-md-4">
-        <a
-          href="{{ url_for('view_submission') }}"
-          class="btn btn-outline-secondary w-100"
-        >
-          <i class="bi bi-file-text me-2"></i> View Submission
-        </a>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Debug Information (Collapsible) -->
-<div class="card mb-4 border-0 shadow-sm">
-  <div class="card-header bg-gradient-secondary text-white">
-    <div class="d-flex justify-content-between align-items-center">
-      <h5 class="mb-0"><i class="bi bi-bug me-2"></i>Debug Information</h5>
-      <button
-        class="btn btn-sm btn-light"
-        type="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#debugInfo"
-        aria-expanded="false"
-      >
-        <i class="bi bi-code-slash me-1"></i> Toggle Debug Data
-      </button>
-    </div>
-  </div>
-  <div class="collapse" id="debugInfo">
-    <div class="card-body">
-      <p class="text-muted">
-        This section shows the raw data structure to help diagnose any issues.
-      </p>
-      <pre
-        class="bg-light p-3 rounded"
-      ><code>{{ result|tojson(indent=2) }}</code></pre>
-    </div>
-  </div>
-</div>
-
-<div class="d-flex justify-content-between mt-4 mb-4">
-  <a href="{{ url_for('index') }}" class="btn btn-secondary shadow-sm">
-    <i class="bi bi-arrow-left me-1"></i> Back to Home
-  </a>
-
-  <div class="btn-group shadow-sm">
-    <a href="{{ url_for('download_excel') }}" class="btn btn-success">
-      <i class="bi bi-file-excel me-1"></i> Download Excel
-    </a>
-    <a href="{{ url_for('view_detailed_results') }}" class="btn btn-primary">
-      <i class="bi bi-file-earmark-text me-1"></i> Detailed Results
-    </a>
-    <a
-      href="{{ url_for('clear_all') }}"
-      class="btn btn-danger"
-      onclick="return confirm('Are you sure you want to clear all data? This action cannot be undone.');"
-    >
-      <i class="bi bi-trash me-1"></i> Clear All
-    </a>
-  </div>
-</div>
-{% endblock %} {% block extra_css %}
-<style>
-  /* Score Circle */
-  .score-circle {
-    width: 150px;
-    height: 150px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto;
-    font-size: 2.5rem;
-    font-weight: bold;
-    color: white;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
-  }
-
-  .score-container {
-    padding: 1rem;
-    border-radius: 0.5rem;
-    background-color: rgba(248, 249, 250, 0.5);
-  }
-
-  .score-details {
-    max-width: 250px;
-    margin: 0 auto;
-  }
-
-  /* Stat Cards */
-  .stat-card {
-    display: flex;
-    align-items: center;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    background-color: #fff;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-    height: 100%;
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-
-  .stat-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  }
-
-  .stat-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    margin-right: 1rem;
-  }
-
-  .stat-content {
-    flex: 1;
-  }
-
-  .stat-title {
-    margin-bottom: 0.25rem;
-    font-size: 0.875rem;
-    color: #6c757d;
-  }
-
-  .stat-value {
-    font-size: 1.25rem;
-    font-weight: 600;
-  }
-
-  /* Feedback Items */
-  .feedback-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .feedback-item {
-    display: flex;
-    align-items: flex-start;
-    padding: 0.75rem;
-    border-radius: 0.5rem;
-    background-color: #fff;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    transition: transform 0.2s;
-  }
-
-  .feedback-item:hover {
-    transform: translateX(3px);
-  }
-
-  .strength-item {
-    border-left: 4px solid var(--bs-success);
-  }
-
-  .weakness-item {
-    border-left: 4px solid var(--bs-warning);
-  }
-
-  .suggestion-item {
-    border-left: 4px solid var(--bs-info);
-  }
-
-  .feedback-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    margin-right: 0.75rem;
-    font-size: 1rem;
-  }
-
-  .strength-item .feedback-icon {
-    color: var(--bs-success);
-  }
-
-  .weakness-item .feedback-icon {
-    color: var(--bs-warning);
-  }
-
-  .suggestion-item .feedback-icon {
-    color: var(--bs-info);
-  }
-
-  .feedback-text {
-    flex: 1;
-  }
-
-  /* Question Scores */
-  .question-text {
-    font-weight: 500;
-  }
-
-  .model-answer,
-  .student-answer {
-    white-space: pre-wrap;
-    font-size: 0.9rem;
-    max-height: 200px;
-    overflow-y: auto;
-  }
-
-  .key-points-list {
-    padding-left: 1.5rem;
-    margin-bottom: 0;
-  }
-
-  .key-points-list li {
-    margin-bottom: 0.25rem;
-  }
-
-  .matched-points li {
-    color: var(--bs-success);
-  }
-
-  .partial-points li {
-    color: var(--bs-warning);
-  }
-
-  .missed-points li {
-    color: var(--bs-danger);
-  }
-
-  /* Alert Styling */
-  .alert-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 48px;
-    height: 48px;
-  }
-
-  /* Background Colors */
-  .bg-primary-light {
-    background-color: rgba(13, 110, 253, 0.1);
-  }
-
-  .bg-success-light {
-    background-color: rgba(25, 135, 84, 0.1);
-  }
-
-  .bg-warning-light {
-    background-color: rgba(255, 193, 7, 0.1);
-  }
-
-  .bg-danger-light {
-    background-color: rgba(220, 53, 69, 0.1);
-  }
-
-  .bg-info-light {
-    background-color: rgba(13, 202, 240, 0.1);
-  }
-
-  .bg-secondary-light {
-    background-color: rgba(108, 117, 125, 0.1);
-  }
-
-  /* Gradient Backgrounds */
-  .bg-gradient-primary {
-    background: linear-gradient(135deg, #0d6efd, #0a58ca);
-  }
-
-  .bg-gradient-success {
-    background: linear-gradient(135deg, #198754, #157347);
-  }
-
-  .bg-gradient-warning {
-    background: linear-gradient(135deg, #ffc107, #e0a800);
-  }
-
-  .bg-gradient-danger {
-    background: linear-gradient(135deg, #dc3545, #b02a37);
-  }
-
-  .bg-gradient-secondary {
-    background: linear-gradient(135deg, #6c757d, #5c636a);
-  }
-
-  /* Debug Section */
-  pre code {
-    font-family: monospace;
-    white-space: pre-wrap;
-    font-size: 0.85rem;
-  }
-</style>
+{% block extra_js %}
+<script>
+function exportResults() {
+    // Mock export functionality
+    const results = {
+        overall_score: {{ results.total_score if results and results.total_score else session.get('last_score', 0) }},
+        timestamp: new Date().toISOString(),
+        questions: [
+            { question: 1, score: 8, max_score: 10, percentage: 80 },
+            { question: 2, score: 6, max_score: 10, percentage: 60 },
+            { question: 3, score: 9, max_score: 10, percentage: 90 }
+        ]
+    };
+    
+    const dataStr = JSON.stringify(results, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = 'grading_results_' + new Date().toISOString().split('T')[0] + '.json';
+    link.click();
+}
+</script>
 {% endblock %}
