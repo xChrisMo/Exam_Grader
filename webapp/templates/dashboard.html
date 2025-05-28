@@ -139,8 +139,37 @@
 </div>
 
 <!-- Main Action Cards -->
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-    <!-- Upload Files Card -->
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Upload Marking Guide Card -->
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="h-8 w-8 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <div class="ml-5">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">Marking Guide</h3>
+                    <p class="mt-2 text-sm text-gray-500">Upload marking guide</p>
+                </div>
+            </div>
+            <div class="mt-5">
+                {% if not guide_uploaded %}
+                    <a href="{{ url_for('upload_guide') }}" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        Upload Guide
+                    </a>
+                {% else %}
+                    <div class="text-center">
+                        <div class="text-sm text-success-600 font-medium mb-2">✓ Guide Uploaded</div>
+                        <a href="{{ url_for('upload_guide') }}" class="text-sm text-primary-600 hover:text-primary-500">Upload New Guide</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Submission Card -->
     <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="px-4 py-5 sm:p-6">
             <div class="flex items-center">
@@ -150,22 +179,23 @@
                     </svg>
                 </div>
                 <div class="ml-5">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900">Upload Files</h3>
-                    <p class="mt-2 text-sm text-gray-500">Upload guide and submissions</p>
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">Upload Submission</h3>
+                    <p class="mt-2 text-sm text-gray-500">Upload student work</p>
                 </div>
             </div>
             <div class="mt-5">
-                <div class="space-y-3">
-                    {% if not guide_uploaded %}
-                        <a href="{{ url_for('upload_guide') }}" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                            Upload Marking Guide
-                        </a>
-                    {% else %}
-                        <a href="{{ url_for('upload_submission') }}" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                {% if not guide_uploaded %}
+                    <div class="text-center">
+                        <div class="text-sm text-gray-500 mb-2">Upload guide first</div>
+                        <button disabled class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-400 bg-gray-100 cursor-not-allowed">
                             Upload Submission
-                        </a>
-                    {% endif %}
-                </div>
+                        </button>
+                    </div>
+                {% else %}
+                    <a href="{{ url_for('upload_submission') }}" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-success-600 hover:bg-success-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-success-500">
+                        Upload Submission
+                    </a>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -181,26 +211,31 @@
                 </div>
                 <div class="ml-5">
                     <h3 class="text-lg leading-6 font-medium text-gray-900">AI Processing</h3>
-                    <p class="mt-2 text-sm text-gray-500">Grade with AI analysis</p>
+                    <p class="mt-2 text-sm text-gray-500">Grade with AI</p>
                 </div>
             </div>
             <div class="mt-5">
                 {% if guide_uploaded and total_submissions > 0 %}
-                    <button id="process-mapping" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-success-600 hover:bg-success-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-success-500">
+                    <button id="process-mapping" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-warning-600 hover:bg-warning-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-warning-500 mb-2">
                         Process Mapping
                     </button>
                     {% if session.get('mapping_completed') %}
-                        <button id="process-grading" class="mt-2 w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-success-600 hover:bg-success-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-success-500">
+                        <button id="process-grading" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-warning-600 hover:bg-warning-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-warning-500">
                             Process Grading
                         </button>
                     {% endif %}
                 {% else %}
-                    <div class="text-sm text-gray-500">
-                        {% if not guide_uploaded %}
-                            Upload marking guide first
-                        {% elif total_submissions == 0 %}
-                            Upload submissions first
-                        {% endif %}
+                    <div class="text-center">
+                        <div class="text-sm text-gray-500 mb-2">
+                            {% if not guide_uploaded %}
+                                Need guide & submissions
+                            {% elif total_submissions == 0 %}
+                                Need submissions
+                            {% endif %}
+                        </div>
+                        <button disabled class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-400 bg-gray-100 cursor-not-allowed">
+                            Process
+                        </button>
                     </div>
                 {% endif %}
             </div>
@@ -223,16 +258,19 @@
             </div>
             <div class="mt-5">
                 {% if session.get('last_grading_result') %}
-                    <a href="{{ url_for('view_results') }}" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <a href="{{ url_for('view_results') }}" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 mb-2">
                         View Results
                     </a>
                 {% else %}
-                    <div class="text-sm text-gray-500">
-                        No results yet
+                    <div class="text-center mb-2">
+                        <div class="text-sm text-gray-500 mb-2">No results yet</div>
+                        <button disabled class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-400 bg-gray-100 cursor-not-allowed">
+                            View Results
+                        </button>
                     </div>
                 {% endif %}
                 {% if total_submissions > 0 %}
-                    <a href="{{ url_for('view_submissions') }}" class="mt-2 w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <a href="{{ url_for('view_submissions') }}" class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                         View Submissions
                     </a>
                 {% endif %}
@@ -308,7 +346,7 @@ document.addEventListener('DOMContentLoaded', function() {
         processMappingBtn.addEventListener('click', function() {
             this.disabled = true;
             this.textContent = 'Processing...';
-            
+
             fetch('/api/process-mapping', {
                 method: 'POST',
                 headers: {
@@ -333,14 +371,14 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
-    
+
     // Process Grading Button
     const processGradingBtn = document.getElementById('process-grading');
     if (processGradingBtn) {
         processGradingBtn.addEventListener('click', function() {
             this.disabled = true;
             this.textContent = 'Processing...';
-            
+
             fetch('/api/process-grading', {
                 method: 'POST',
                 headers: {

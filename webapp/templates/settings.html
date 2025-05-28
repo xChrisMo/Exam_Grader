@@ -1,0 +1,279 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-gray-900">Application Settings</h1>
+        <p class="mt-2 text-sm text-gray-600">
+            Configure your exam grader application preferences and settings.
+        </p>
+    </div>
+
+    <form method="POST" id="settings-form">
+        <div class="space-y-8">
+            <!-- File Upload Settings -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">File Upload Settings</h3>
+                    
+                    <!-- Max File Size -->
+                    <div class="mb-6">
+                        <label for="max_file_size" class="block text-sm font-medium text-gray-700 mb-2">
+                            Maximum File Size (MB)
+                        </label>
+                        <div class="flex items-center space-x-3">
+                            <input type="range" id="max_file_size" name="max_file_size" 
+                                   min="1" max="100" value="{{ settings.max_file_size }}"
+                                   class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                            <span id="file_size_display" class="text-sm font-medium text-gray-900 min-w-[3rem]">
+                                {{ settings.max_file_size }}MB
+                            </span>
+                        </div>
+                        <p class="mt-1 text-sm text-gray-500">
+                            Maximum size allowed for uploaded files (1-100 MB)
+                        </p>
+                    </div>
+
+                    <!-- Allowed File Formats -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-3">
+                            Allowed File Formats
+                        </label>
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                            {% for format in available_formats %}
+                            <label class="flex items-center">
+                                <input type="checkbox" name="allowed_formats" value="{{ format }}"
+                                       {% if format in settings.allowed_formats %}checked{% endif %}
+                                       class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700 uppercase">{{ format }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500">
+                            Select which file formats are allowed for upload
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Processing Settings -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Processing Settings</h3>
+                    
+                    <!-- Auto Process -->
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <label for="auto_process" class="text-sm font-medium text-gray-700">
+                                    Auto-process submissions
+                                </label>
+                                <p class="text-sm text-gray-500">
+                                    Automatically start processing when files are uploaded
+                                </p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="auto_process" name="auto_process" 
+                                       {% if settings.auto_process %}checked{% endif %}
+                                       class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Save Temp Files -->
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <label for="save_temp_files" class="text-sm font-medium text-gray-700">
+                                    Save temporary files
+                                </label>
+                                <p class="text-sm text-gray-500">
+                                    Keep temporary files for debugging purposes
+                                </p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="save_temp_files" name="save_temp_files" 
+                                       {% if settings.save_temp_files %}checked{% endif %}
+                                       class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Interface Settings -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">User Interface Settings</h3>
+                    
+                    <!-- Notification Level -->
+                    <div class="mb-6">
+                        <label for="notification_level" class="block text-sm font-medium text-gray-700 mb-2">
+                            Notification Level
+                        </label>
+                        <select id="notification_level" name="notification_level"
+                                class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                            {% for level in notification_levels %}
+                            <option value="{{ level.value }}" {% if level.value == settings.notification_level %}selected{% endif %}>
+                                {{ level.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-sm text-gray-500">
+                            Choose which notifications to display
+                        </p>
+                    </div>
+
+                    <!-- Theme -->
+                    <div class="mb-6">
+                        <label for="theme" class="block text-sm font-medium text-gray-700 mb-2">
+                            Theme
+                        </label>
+                        <select id="theme" name="theme"
+                                class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                            {% for theme in themes %}
+                            <option value="{{ theme.value }}" {% if theme.value == settings.theme %}selected{% endif %}>
+                                {{ theme.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-sm text-gray-500">
+                            Select your preferred theme
+                        </p>
+                    </div>
+
+                    <!-- Language -->
+                    <div class="mb-6">
+                        <label for="language" class="block text-sm font-medium text-gray-700 mb-2">
+                            Language
+                        </label>
+                        <select id="language" name="language"
+                                class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                            {% for lang in languages %}
+                            <option value="{{ lang.value }}" {% if lang.value == settings.language %}selected{% endif %}>
+                                {{ lang.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-sm text-gray-500">
+                            Choose your preferred language
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Information -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">System Information</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Application Version</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ app_version }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Storage Usage</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ storage_stats.total_size_mb }}MB / {{ storage_stats.max_size_mb }}MB</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">OCR Service</dt>
+                            <dd class="mt-1">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                    {% if service_status.ocr_status %}bg-success-100 text-success-800{% else %}bg-danger-100 text-danger-800{% endif %}">
+                                    {% if service_status.ocr_status %}Online{% else %}Offline{% endif %}
+                                </span>
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">AI Service</dt>
+                            <dd class="mt-1">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                    {% if service_status.llm_status %}bg-success-100 text-success-800{% else %}bg-danger-100 text-danger-800{% endif %}">
+                                    {% if service_status.llm_status %}Online{% else %}Offline{% endif %}
+                                </span>
+                            </dd>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center justify-between">
+                <a href="{{ url_for('dashboard') }}" 
+                   class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                    Back to Dashboard
+                </a>
+                
+                <div class="flex space-x-3">
+                    <button type="button" id="reset-settings" 
+                            class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        Reset to Defaults
+                    </button>
+                    
+                    <button type="submit" 
+                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileSizeSlider = document.getElementById('max_file_size');
+    const fileSizeDisplay = document.getElementById('file_size_display');
+    const resetButton = document.getElementById('reset-settings');
+    const settingsForm = document.getElementById('settings-form');
+
+    // Update file size display
+    fileSizeSlider.addEventListener('input', function() {
+        fileSizeDisplay.textContent = this.value + 'MB';
+    });
+
+    // Reset settings
+    resetButton.addEventListener('click', function() {
+        if (confirm('Are you sure you want to reset all settings to their default values?')) {
+            // Reset form to defaults
+            fileSizeSlider.value = 16;
+            fileSizeDisplay.textContent = '16MB';
+            
+            // Reset checkboxes
+            document.querySelectorAll('input[name="allowed_formats"]').forEach(cb => {
+                const defaultFormats = ['pdf', 'docx', 'doc', 'jpg', 'jpeg', 'png', 'tiff', 'bmp', 'gif'];
+                cb.checked = defaultFormats.includes(cb.value);
+            });
+            
+            document.getElementById('auto_process').checked = true;
+            document.getElementById('save_temp_files').checked = false;
+            document.getElementById('notification_level').value = 'all';
+            document.getElementById('theme').value = 'light';
+            document.getElementById('language').value = 'en';
+        }
+    });
+
+    // Form validation
+    settingsForm.addEventListener('submit', function(e) {
+        const checkedFormats = document.querySelectorAll('input[name="allowed_formats"]:checked');
+        if (checkedFormats.length === 0) {
+            e.preventDefault();
+            alert('Please select at least one file format.');
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %}
