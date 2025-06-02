@@ -24,14 +24,10 @@ A modern, responsive Flask web application for automated exam grading using AI-p
 ```
 webapp/
 ├── exam_grader_app.py      # Main Flask application
-├── run.py                  # Development server runner
-├── requirements.txt        # Python dependencies
 ├── README.md              # This file
 ├── static/                # Static assets
-│   ├── css/
-│   │   └── custom.css     # Custom styles
-│   ├── js/
-│   │   └── app.js         # Application JavaScript
+│   ├── css/               # Stylesheets
+│   ├── js/                # JavaScript files
 │   └── favicon.ico        # Site icon
 └── templates/             # Jinja2 templates
     ├── layout.html        # Base template
@@ -40,6 +36,8 @@ webapp/
     ├── upload_submission.html # Submission upload page
     ├── submissions.html   # Submissions list
     ├── results.html       # Grading results
+    ├── marking_guides.html # Marking guides library
+    ├── settings.html      # Application settings
     └── error.html         # Error pages
 ```
 
@@ -65,9 +63,10 @@ webapp/
 
 ### Development Mode
 
-1. **Using the run script** (recommended):
+1. **Using the main run script** (recommended):
    ```bash
-   python run.py
+   cd ..
+   python run_app.py
    ```
 
 2. **Direct Flask execution**:

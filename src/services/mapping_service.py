@@ -351,6 +351,263 @@ class MappingService:
 
         return items
 
+    def extract_questions_and_total_marks(self, content: str) -> Dict:
+        """
+        Extract questions and calculate total marks from marking guide content using LLM.
+        This is specifically designed for marking guide upload and storage.
+
+        Args:
+            content: Raw text content of the marking guide
+
+        Returns:
+            Dict containing:
+            - questions: List of extracted questions with marks
+            - total_marks: Total marks calculated from all questions
+            - extraction_method: Method used for extraction ('llm' or 'regex')
+        """
+        if not content or not content.strip():
+            return {'questions': [], 'total_marks': 0, 'extraction_method': 'none'}
+
+        if self.llm_service:
+            try:
+                logger.info("Using LLM to extract questions and total marks from marking guide...")
+
+                # Enhanced system prompt specifically for marking guide question extraction
+                system_prompt = """
+                You are an expert at analyzing marking guides for educational assessments. Your task is to extract ALL questions and their mark allocations from a marking guide document.
+
+                CRITICAL REQUIREMENTS:
+                1. Extract EVERY question from the document, including sub-questions
+                2. Find the exact mark allocation for each question/sub-question
+                3. Calculate the total marks for the entire assessment
+                4. Preserve the original question numbering and structure
+
+                Question Identification Guidelines:
+                - Look for patterns like: "QUESTION 1", "Question 1:", "Q1", "1.", "1)", etc.
+                - Include sub-questions like: "a)", "i)", "1.1", "Part A", etc.
+                - Questions may span multiple paragraphs
+                - Some questions may have multiple parts with individual mark allocations
+
+                Mark Allocation Guidelines:
+                - Look for marks in formats like:
+                  * "(25 marks)", "[25 marks]", "25 marks", "25 points"
+                  * "Total: 25 marks", "Maximum: 25 marks"
+                  * "25% of total", "Worth 25 marks"
+                  * Sub-question marks: "a) 10 marks", "Part i: 5 marks"
+                - If a question has sub-parts, sum up all sub-part marks for the total
+                - If no marks are explicitly stated, set marks to null
+                - Pay attention to mark distributions across question parts
+
+                Total Marks Calculation:
+                - Sum all individual question marks to get total marks
+                - Look for explicit total marks statements like "Total marks: 100"
+                - Verify that individual marks sum to any stated total
+
+                Output Format:
+                Respond with ONLY a valid JSON object in this exact format:
+                {
+                    "questions": [
+                        {
+                            "id": "q1",
+                            "number": "1",
+                            "text": "Complete question text including all parts",
+                            "marks": 25,
+                            "sub_questions": [
+                                {
+                                    "id": "q1a",
+                                    "number": "1a",
+                                    "text": "Sub-question text",
+                                    "marks": 10
+                                }
+                            ]
+                        }
+                    ],
+                    "total_marks": 100,
+                    "extraction_summary": {
+                        "total_questions": 4,
+                        "questions_with_marks": 4,
+                        "questions_without_marks": 0,
+                        "total_sub_questions": 8
+                    }
+                }
+                """
+
+                user_prompt = f"""
+                Please analyze this marking guide document and extract ALL questions with their mark allocations.
+
+                IMPORTANT INSTRUCTIONS:
+                1. Extract every single question from the document
+                2. Find the exact marks for each question (look carefully for mark allocations)
+                3. Include sub-questions and their individual marks
+                4. Calculate the total marks for the entire assessment
+                5. Preserve original question numbering
+
+                Marking Guide Content:
+                {content}
+
+                Remember: Respond with ONLY valid JSON. No comments, no explanations, just the JSON object.
+                """
+
+                # Use the LLM service to extract questions
+                params = {
+                    "model": self.llm_service.model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": 0.0,
+                    "max_tokens": 2048
+                }
+
+                # Add seed parameter if in deterministic mode
+                if hasattr(self.llm_service, 'deterministic') and self.llm_service.deterministic and hasattr(self.llm_service, 'seed') and self.llm_service.seed is not None:
+                    params["seed"] = self.llm_service.seed
+
+                response = self.llm_service.client.chat.completions.create(**params)
+                result = response.choices[0].message.content
+
+                logger.info("Processing LLM response for question extraction...")
+
+                # Clean up the response
+                try:
+                    # Find JSON content between curly braces
+                    json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                    if json_match:
+                        result = json_match.group(0)
+
+                    # Remove comments
+                    result = re.sub(r'//.*?$', '', result, flags=re.MULTILINE)
+                    result = re.sub(r'/\*.*?\*/', '', result, flags=re.DOTALL)
+                    result = re.sub(r'#.*?$', '', result, flags=re.MULTILINE)
+
+                    parsed = json.loads(result)
+
+                    # Validate the response structure
+                    if 'questions' in parsed and 'total_marks' in parsed:
+                        questions = parsed['questions']
+                        total_marks = parsed['total_marks']
+
+                        # Convert to the format expected by the application
+                        formatted_questions = []
+                        for i, q in enumerate(questions):
+                            formatted_q = {
+                                'number': i + 1,
+                                'text': q.get('text', ''),
+                                'marks': q.get('marks', 0),
+                                'criteria': '',  # Can be populated later
+                                'type': 'question'
+                            }
+                            formatted_questions.append(formatted_q)
+
+                        logger.info(f"LLM successfully extracted {len(formatted_questions)} questions with {total_marks} total marks")
+
+                        return {
+                            'questions': formatted_questions,
+                            'total_marks': total_marks,
+                            'extraction_method': 'llm'
+                        }
+                    else:
+                        logger.warning("LLM response missing required fields, falling back to regex")
+
+                except json.JSONDecodeError as e:
+                    logger.warning(f"JSON parsing error in LLM response: {str(e)}, falling back to regex")
+
+            except Exception as e:
+                logger.warning(f"LLM extraction failed: {str(e)}, falling back to regex")
+
+        # Fallback to enhanced regex extraction
+        logger.info("Using enhanced regex extraction for questions and marks...")
+        return self._extract_questions_regex_enhanced(content)
+
+    def _extract_questions_regex_enhanced(self, content: str) -> Dict:
+        """
+        Enhanced regex-based question extraction with better mark detection.
+        """
+        questions = []
+        total_marks = 0
+
+        # Enhanced question patterns to match various formats
+        question_patterns = [
+            # QUESTION 1: ... (25 marks)
+            r'(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^(]*?)\s*\((\d+)\s*marks?\)',
+            # Question 1: ... [10 marks]
+            r'(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^[]*?)\s*\[(\d+)\s*marks?\]',
+            # a) Define object-oriented programming... (10 marks)
+            r'(?:^|\n)\s*([a-z])\)\s*([^(]*?)\s*\((\d+)\s*marks?\)',
+            # Question 1: ... 10 marks
+            r'(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^0-9]*?)(\d+)\s*marks?',
+        ]
+
+        for pattern in question_patterns:
+            matches = re.findall(pattern, content, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+            if matches:
+                logger.info(f"Found {len(matches)} questions using regex pattern")
+                for match in matches:
+                    if len(match) == 3:
+                        q_num, q_text, marks_str = match
+                        try:
+                            marks = int(marks_str)
+                            question_data = {
+                                'number': len(questions) + 1,
+                                'text': f"Question {q_num}: {q_text.strip()}",
+                                'marks': marks,
+                                'criteria': '',
+                                'type': 'question'
+                            }
+                            questions.append(question_data)
+                            total_marks += marks
+                        except ValueError:
+                            continue
+                break  # Use first successful pattern
+
+        # If no questions found with marks, try general patterns
+        if not questions:
+            logger.info("No questions with marks found, trying general question patterns...")
+            general_patterns = [
+                r'(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^\n]+)',
+                r'(?:^|\n)\s*([a-z])\)\s*([^\n]+)',
+            ]
+
+            for pattern in general_patterns:
+                matches = re.findall(pattern, content, re.IGNORECASE | re.MULTILINE)
+                if matches:
+                    logger.info(f"Found {len(matches)} questions without explicit marks")
+                    for match in matches:
+                        q_num, q_text = match
+                        # Assign default marks based on question complexity
+                        if len(q_text) > 100:
+                            marks = 25  # Complex question
+                        elif len(q_text) > 50:
+                            marks = 15  # Medium question
+                        else:
+                            marks = 10  # Simple question
+
+                        question_data = {
+                            'number': len(questions) + 1,
+                            'text': f"Question {q_num}: {q_text.strip()}",
+                            'marks': marks,
+                            'criteria': '',
+                            'type': 'question'
+                        }
+                        questions.append(question_data)
+                        total_marks += marks
+                    break
+
+        # Try to extract total marks from the document
+        if not total_marks and questions:
+            total_marks_match = re.search(r'total[:\s]*(\d+)\s*marks?', content, re.IGNORECASE)
+            if total_marks_match:
+                total_marks = int(total_marks_match.group(1))
+                logger.info(f"Found total marks in document: {total_marks}")
+
+        logger.info(f"Regex extraction complete: {len(questions)} questions, {total_marks} total marks")
+
+        return {
+            'questions': questions,
+            'total_marks': total_marks,
+            'extraction_method': 'regex'
+        }
+
     def map_submission_to_guide(self, marking_guide_content: str, student_submission_content: str, num_questions: int = 1) -> Tuple[Dict, Optional[str]]:
         """
         Map a student submission to a marking guide using LLM for intelligent grouping and grading.

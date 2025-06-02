@@ -45,7 +45,7 @@ class GradingService:
 
                 mappings = mapping_result.get("mappings", [])
             else:
-                # Create a placeholder mapping service if none was provided
+                # Initialize mapping service if none was provided
                 from src.services.mapping_service import MappingService
                 temp_mapping_service = MappingService()
                 mapping_result, mapping_error = temp_mapping_service.map_submission_to_guide(

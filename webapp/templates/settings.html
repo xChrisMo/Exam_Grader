@@ -247,13 +247,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Reset settings
     resetButton.addEventListener('click', function() {
         if (confirm('Are you sure you want to reset all settings to their default values?')) {
-            // Reset form to defaults
-            fileSizeSlider.value = 16;
-            fileSizeDisplay.textContent = '16MB';
-            
+            // Reset form to defaults from server config
+            const defaultFileSize = {{ (config.max_file_size_mb if config and config.max_file_size_mb else 20) }};
+            fileSizeSlider.value = defaultFileSize;
+            fileSizeDisplay.textContent = defaultFileSize + 'MB';
+
             // Reset checkboxes
             document.querySelectorAll('input[name="allowed_formats"]').forEach(cb => {
-                const defaultFormats = ['pdf', 'docx', 'doc', 'jpg', 'jpeg', 'png', 'tiff', 'bmp', 'gif'];
+                const defaultFormats = {{ (config.supported_formats if config and config.supported_formats else ['pdf', 'docx', 'doc', 'jpg', 'jpeg', 'png', 'tiff', 'bmp', 'gif']) | tojson }};
                 cb.checked = defaultFormats.includes(cb.value);
             });
             

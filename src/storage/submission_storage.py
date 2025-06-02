@@ -1,6 +1,4 @@
-"""
-Storage module for handling parsed submission results.
-"""
+"""Storage module for handling parsed submission results."""
 import json
 import os
 import time
@@ -8,6 +6,10 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 import hashlib
 from datetime import datetime
+from utils.logger import setup_logger
+
+# Set up logger for this module
+logger = setup_logger(__name__)
 
 class SubmissionStorage:
     """Handles storage and retrieval of parsed submission results."""
@@ -30,8 +32,8 @@ class SubmissionStorage:
         for file in self.storage_dir.glob('*.json'):
             try:
                 total_size += os.path.getsize(file)
-            except Exception:
-                pass
+            except (OSError, FileNotFoundError) as e:
+                logger.warning(f"Error getting size of {file}: {str(e)}")
         return total_size
 
     def _cleanup_old_files(self, required_space: int = 0):
@@ -50,7 +52,8 @@ class SubmissionStorage:
                 mtime = os.path.getmtime(file)
                 size = os.path.getsize(file)
                 files_info.append((file, mtime, size))
-            except Exception:
+            except (OSError, FileNotFoundError) as e:
+                logger.warning(f"Error accessing file {file}: {str(e)}")
                 continue
 
         # Sort by modification time (oldest first)
@@ -62,8 +65,9 @@ class SubmissionStorage:
                 try:
                     os.remove(file)
                     files_info.remove((file, mtime, _))
-                except Exception:
-                    pass
+                    logger.info(f"Removed expired file: {file}")
+                except (OSError, FileNotFoundError) as e:
+                    logger.warning(f"Error removing expired file {file}: {str(e)}")
 
         # If we still need space, remove oldest files
         current_size = sum(size for _, _, size in files_info)
@@ -146,13 +150,15 @@ class SubmissionStorage:
             if current_time - data.get('timestamp', 0) > self.expiration_seconds:
                 try:
                     os.remove(result_file)
-                except Exception:
-                    pass
+                    logger.info(f"Removed expired result file: {result_file}")
+                except (OSError, FileNotFoundError) as e:
+                    logger.warning(f"Error removing expired result file {result_file}: {str(e)}")
                 return None
 
             return data['results'], data['raw_text'], data['filename']
 
-        except Exception:
+        except (json.JSONDecodeError, OSError, FileNotFoundError) as e:
+            logger.error(f"Error retrieving submission results: {str(e)}")
             return None
 
     def clear_storage(self):
@@ -164,8 +170,9 @@ class SubmissionStorage:
         for file in self.storage_dir.glob('*.json'):
             try:
                 os.remove(file)
-            except Exception:
-                pass
+                logger.info(f"Removed file during storage clear: {file}")
+            except (OSError, FileNotFoundError) as e:
+                logger.warning(f"Error removing file during clear {file}: {str(e)}")
 
     def get_storage_stats(self) -> Dict:
         """Get storage statistics."""
@@ -179,6 +186,7 @@ class SubmissionStorage:
         current_time = time.time()
         for file in self.storage_dir.glob('*.json'):
             try:
+               
                 stats['file_count'] += 1
                 stats['total_size_mb'] += os.path.getsize(file) / (1024 * 1024)
 
@@ -191,10 +199,23 @@ class SubmissionStorage:
                 if 'newest_file_days' not in stats or age_days < stats['newest_file_days']:
                     stats['newest_file_days'] = age_days
 
-            except Exception:
+                return stats
+            except Exception as e:
+                logger.warning(f"Error getting storage stats: {str(e)}")
                 continue
 
-        return stats
+    def is_available(self) -> bool:
+        """Check if the storage is available by attempting to write and delete a dummy file."""
+        try:
+            # Attempt to create a dummy file
+            dummy_file_path = self.storage_dir / ".availability_test"
+            with open(dummy_file_path, 'w') as f:
+                f.write("test")
+            os.remove(dummy_file_path)
+            return True
+        except Exception as e:
+            logger.error(f"SubmissionStorage is not available: {e}")
+            return False
 
     def get_latest_submission(self) -> Optional[Dict]:
         """
@@ -226,7 +247,8 @@ class SubmissionStorage:
                             'file_size': os.path.getsize(file)
                         }
 
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Error processing file {file}: {str(e)}")
                 continue
 
         return latest_submission

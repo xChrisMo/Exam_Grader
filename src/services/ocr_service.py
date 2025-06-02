@@ -13,7 +13,25 @@ from utils.logger import logger
 
 class OCRServiceError(Exception):
     """Exception raised for errors in the OCR service."""
-    pass
+
+    def __init__(self, message: str, error_code: str = None, original_error: Exception = None):
+        """Initialize OCR service error.
+
+        Args:
+            message: Human-readable error message
+            error_code: Optional error code for categorization
+            original_error: Original exception that caused this error
+        """
+        super().__init__(message)
+        self.message = message
+        self.error_code = error_code
+        self.original_error = original_error
+
+    def __str__(self):
+        """Return string representation of the error."""
+        if self.error_code:
+            return f"[{self.error_code}] {self.message}"
+        return self.message
 
 class OCRService:
     """OCR service that uses HandwritingOCR API for text extraction."""
@@ -30,6 +48,20 @@ class OCRService:
             'Accept': 'application/json'
         }
         logger.info("OCR service initialized successfully")
+
+    def is_available(self) -> bool:
+        """Check if the OCR service is available."""
+        try:
+            # Simple availability check - verify API key and base URL are configured
+            if not self.api_key:
+                return False
+            if not self.base_url:
+                return False
+            # Could add a ping test here if the API supports it
+            return True
+        except Exception as e:
+            logger.error(f"OCR service availability check failed: {str(e)}")
+            return False
 
     def _validate_file(self, file_path: Union[str, Path]) -> None:
         """
@@ -113,6 +145,14 @@ class OCRService:
             # Log network error
             logger.error(f"Network error during OCR request: {str(e)}")
             raise OCRServiceError(f"Network error during OCR request: {str(e)}")
+        except (ValueError, TypeError) as e:
+            # Log data handling errors
+            logger.error(f"Data handling error during OCR processing: {str(e)}")
+            raise OCRServiceError(f"Data handling error during OCR processing: {str(e)}")
+        except json.JSONDecodeError as e:
+            # Log JSON parsing errors
+            logger.error(f"Failed to parse OCR API response: {str(e)}")
+            raise OCRServiceError(f"Failed to parse OCR API response: {str(e)}")
         except Exception as e:
             # Log general error
             logger.error(f"OCR processing failed: {str(e)}")
@@ -159,7 +199,8 @@ class OCRService:
                     error_details = response.json()
                     if isinstance(error_details, dict) and 'error' in error_details:
                         error_msg += f" - {error_details['error']}"
-                except:
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Could not parse error response as JSON: {str(e)}")
                     error_msg += f" - {response.text}"
                 raise OCRServiceError(error_msg)
 

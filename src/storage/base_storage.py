@@ -123,14 +123,20 @@ class BaseStorage:
                                 age_days = (now - file_time).total_seconds() / (24 * 3600)
                                 newest_age = min(newest_age, age_days)
                                 oldest_age = max(oldest_age, age_days)
-                    except Exception as e:
-                        logger.warning(f"Failed to read cache file {filename}: {str(e)}")
+                    except (OSError, FileNotFoundError) as e:
+                        logger.warning(f"Failed to access cache file {filename}: {str(e)}")
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Failed to parse cache file {filename}: {str(e)}")
+                    except ValueError as e:
+                        logger.warning(f"Invalid timestamp format in cache file {filename}: {str(e)}")
             
             # Add file age information to stats
             stats['newest_file_days'] = newest_age if newest_age != float('inf') else 0
             stats['oldest_file_days'] = oldest_age
             
             return stats
+        except (OSError, FileNotFoundError) as e:
+            logger.error(f"Failed to access cache directory: {str(e)}")
         except Exception as e:
             logger.error(f"Failed to get cache stats: {str(e)}")
             return {
@@ -141,4 +147,22 @@ class BaseStorage:
                 'cleanup_threshold': 0.9,
                 'newest_file_days': 0,
                 'oldest_file_days': 0
-            } 
+            }
+
+    def is_available(self) -> bool:
+        """Check if the storage is available by checking if there's any data for this prefix."""
+        try:
+            # This is a simplified check. A more robust check might involve
+            # trying to list keys or checking a specific 'heartbeat' key.
+            # For now, we assume if the cache is operational, it's 'available'.
+            # To check if there's *any* data, we might need a method in Cache
+            # to check for keys by prefix or just check if the cache is not empty.
+            # Assuming cache.get_all_keys() returns keys, we can check for prefix.
+            all_keys = self.cache.get_all_keys()
+            for key in all_keys:
+                if key.startswith(self.prefix):
+                    return True
+            return False
+        except Exception as e:
+            logger.error(f"Error checking storage availability for {self.prefix}: {str(e)}")
+            return False

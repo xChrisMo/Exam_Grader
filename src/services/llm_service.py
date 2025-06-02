@@ -3,6 +3,8 @@ LLM Service for grading exam submissions using DeepSeek Reasoner API.
 
 This module provides a service for integrating with the DeepSeek API to grade
 student exam submissions against marking guides.
+
+This is an updated version that works with the latest OpenAI library.
 """
 
 import os
@@ -11,8 +13,9 @@ import json
 import time
 import re
 import threading
+import importlib.metadata
+from packaging import version
 
-from openai import OpenAI
 from dotenv import load_dotenv
 
 from utils.logger import logger
@@ -22,20 +25,34 @@ load_dotenv()
 
 class LLMServiceError(Exception):
     """Exception raised for errors in the LLM service."""
-    pass
+
+    def __init__(self, message: str, error_code: str = None, original_error: Exception = None):
+        """Initialize LLM service error.
+
+        Args:
+            message: Human-readable error message
+            error_code: Optional error code for categorization
+            original_error: Original exception that caused this error
+        """
+        super().__init__(message)
+        self.message = message
+        self.error_code = error_code
+        self.original_error = original_error
+
+    def __str__(self):
+        """Return string representation of the error."""
+        if self.error_code:
+            return f"[{self.error_code}] {self.message}"
+        return self.message
 
 class LLMService:
     """
-    A service for interacting with the DeepSeek LLM to grade exam submissions.
+    LLM service for grading exam submissions using DeepSeek Reasoner API.
 
-    This class handles:
-    - API key management
-    - Prompt construction
-    - Response handling
-    - Rate limiting and retries
-
-    The primary use case is to compare student answers with model answers
-    and provide grading with justification.
+    This service provides methods for:
+    - Comparing student answers to expected answers
+    - Grading submissions based on marking guides
+    - Generating feedback for student submissions
     """
 
     def __init__(
@@ -84,19 +101,44 @@ class LLMService:
             logger.info("LLM service initialized in non-deterministic mode")
 
         try:
-            # Initialize OpenAI client with DeepSeek configuration - simplified initialization
-            # Only pass the essential parameters to ensure compatibility across different OpenAI package versions
+            # Import OpenAI in a way that handles different versions
+            from openai import OpenAI
+
+            # Get the OpenAI version
+            try:
+                openai_version_str = importlib.metadata.version("openai")
+                openai_version = version.parse(openai_version_str)
+                logger.info(f"Using OpenAI library version: {openai_version_str}")
+            except (importlib.metadata.PackageNotFoundError, version.InvalidVersion):
+                openai_version = version.parse("0.0.0")
+                logger.warning("Could not determine OpenAI library version")
+
+            # Initialize OpenAI client with parameters based on version
             client_params = {
                 "api_key": self.api_key,
                 "base_url": self.base_url
             }
 
-            # Create the client with only the essential parameters
+            # Create the client with appropriate parameters
             self.client = OpenAI(**client_params)
             logger.info(f"LLM service initialized with model: {self.model}")
         except Exception as e:
             logger.error(f"Failed to initialize LLM service: {str(e)}")
             raise LLMServiceError(f"Failed to initialize LLM service: {str(e)}")
+
+    def is_available(self) -> bool:
+        """Check if the LLM service is available."""
+        try:
+            # Simple availability check - verify API key and client are configured
+            if not self.api_key:
+                return False
+            if not self.client:
+                return False
+            # Could add a ping test here, but for now just check configuration
+            return True
+        except Exception as e:
+            logger.error(f"LLM service availability check failed: {str(e)}")
+            return False
 
     def test_connection(self) -> bool:
         """
@@ -270,9 +312,14 @@ class LLMService:
                 logger.error("No valid response received from API")
                 raise LLMServiceError("No valid response received from API")
 
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM response as JSON: {str(e)}")
+            return 0, f"Error parsing response: {str(e)}"
+        except (AttributeError, IndexError) as e:
+            logger.error(f"Invalid response structure from LLM API: {str(e)}")
+            return 0, f"Error processing response: {str(e)}"
         except Exception as e:
             logger.error(f"Answer comparison failed: {str(e)}")
-
             # Return a default score and error message
             return 0, f"Error: {str(e)}"
 
@@ -329,7 +376,8 @@ class LLMService:
     def map_submission_to_guide(
         self,
         marking_guide_content: str,
-        student_submission_content: str
+        student_submission_content: str,
+        num_questions: int = None
     ) -> Tuple[Dict, Optional[str]]:
         """
         Map a student submission to a marking guide.
@@ -338,6 +386,7 @@ class LLMService:
         Args:
             marking_guide_content: Full text of the marking guide
             student_submission_content: Full text of the student submission
+            num_questions: Optional number of questions to map (for best N answers)
 
         Returns:
             Tuple[Dict, Optional[str]]: (Mapping result, Error message if any)
@@ -349,7 +398,14 @@ class LLMService:
         mapping_service = MappingService(llm_service=self)
 
         # Map the submission to the guide
-        return mapping_service.map_submission_to_guide(
-            marking_guide_content,
-            student_submission_content
-        )
+        if num_questions is not None:
+            return mapping_service.map_submission_to_guide(
+                marking_guide_content,
+                student_submission_content,
+                num_questions=num_questions
+            )
+        else:
+            return mapping_service.map_submission_to_guide(
+                marking_guide_content,
+                student_submission_content
+            )

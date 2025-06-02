@@ -1,0 +1,477 @@
+{% extends "layout.html" %} {% block content %}
+<div class="max-w-7xl mx-auto">
+  <!-- Page Header -->
+  <div class="mb-8">
+    <div class="flex items-center justify-between">
+      <div>
+        <nav class="flex" aria-label="Breadcrumb">
+          <ol class="flex items-center space-x-4">
+            <li>
+              <div>
+                <a
+                  href="{{ url_for('view_submissions') }}"
+                  class="text-gray-400 hover:text-gray-500"
+                >
+                  <svg
+                    class="flex-shrink-0 h-5 w-5"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"
+                    />
+                  </svg>
+                  <span class="sr-only">Submissions</span>
+                </a>
+              </div>
+            </li>
+            <li>
+              <div class="flex items-center">
+                <svg
+                  class="flex-shrink-0 h-5 w-5 text-gray-300"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+                <span class="ml-4 text-sm font-medium text-gray-500"
+                  >{{ filename }}</span
+                >
+              </div>
+            </li>
+          </ol>
+        </nav>
+        <h1 class="mt-2 text-2xl font-bold text-gray-900">
+          Submission Content
+        </h1>
+        <p class="mt-2 text-sm text-gray-600">
+          View and analyze the extracted content from this submission.
+        </p>
+      </div>
+      <div class="flex space-x-3">
+        <button
+          type="button"
+          onclick="downloadContent()"
+          class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+        >
+          <svg
+            class="mr-2 h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
+          Download
+        </button>
+        <a
+          href="{{ url_for('view_submissions') }}"
+          class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+        >
+          <svg
+            class="mr-2 h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            />
+          </svg>
+          Back to Submissions
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Submission Info Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+      <div class="p-5 text-center">
+        <div
+          class="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mx-auto mb-3"
+        >
+          <svg
+            class="w-6 h-6 text-white"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
+        </div>
+        <dl>
+          <dt class="text-sm font-medium text-gray-500 mb-1">Filename</dt>
+          <dd class="text-lg font-medium text-gray-900">{{ filename }}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+      <div class="p-5 text-center">
+        <div
+          class="w-12 h-12 bg-success-500 rounded-lg flex items-center justify-center mx-auto mb-3"
+        >
+          <svg
+            class="w-6 h-6 text-white"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+        </div>
+        <dl>
+          <dt class="text-sm font-medium text-gray-500 mb-1">Status</dt>
+          <dd class="text-lg font-medium text-gray-900">
+            {% if processed %}
+            <span class="text-success-600">Processed</span>
+            {% else %}
+            <span class="text-warning-600">Pending</span>
+            {% endif %}
+          </dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+      <div class="p-5 text-center">
+        <div
+          class="w-12 h-12 bg-info-500 rounded-lg flex items-center justify-center mx-auto mb-3"
+        >
+          <svg
+            class="w-6 h-6 text-white"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+        </div>
+        <dl>
+          <dt class="text-sm font-medium text-gray-500 mb-1">Uploaded</dt>
+          <dd class="text-lg font-medium text-gray-900">
+            {{ uploaded_at[:10] if uploaded_at else 'Unknown' }}
+          </dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+      <div class="p-5 text-center">
+        <div
+          class="w-12 h-12 bg-warning-500 rounded-lg flex items-center justify-center mx-auto mb-3"
+        >
+          <svg
+            class="w-6 h-6 text-white"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+            />
+          </svg>
+        </div>
+        <dl>
+          <dt class="text-sm font-medium text-gray-500 mb-1">Size</dt>
+          <dd class="text-lg font-medium text-gray-900">
+            {{ "%.1f"|format(file_size) }} KB
+          </dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content Tabs -->
+  <div class="bg-white shadow rounded-lg">
+    <div class="border-b border-gray-200">
+      <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+        <button
+          type="button"
+          onclick="showTab('raw-text')"
+          id="raw-text-tab"
+          class="tab-button border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+        >
+          Raw Text
+        </button>
+        <button
+          type="button"
+          onclick="showTab('extracted-answers')"
+          id="extracted-answers-tab"
+          class="tab-button border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+        >
+          Extracted Answers
+        </button>
+        <button
+          type="button"
+          onclick="showTab('metadata')"
+          id="metadata-tab"
+          class="tab-button border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+        >
+          Metadata
+        </button>
+      </nav>
+    </div>
+
+    <!-- Raw Text Tab -->
+    <div id="raw-text-content" class="tab-content p-6">
+      <div class="mb-4">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-2">
+          Raw Extracted Text
+        </h3>
+        <p class="text-sm text-gray-600">
+          This is the raw text content extracted from the uploaded file.
+        </p>
+      </div>
+      <div class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
+        <pre class="text-sm text-gray-800 whitespace-pre-wrap font-mono">
+{{ raw_text }}</pre
+        >
+      </div>
+      <div class="mt-4 flex justify-between items-center">
+        <span class="text-sm text-gray-500"
+          >{{ raw_text|length }} characters</span
+        >
+        <button
+          type="button"
+          onclick="copyToClipboard('raw-text')"
+          class="inline-flex items-center px-3 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50"
+        >
+          <svg
+            class="mr-1 h-3 w-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+            />
+          </svg>
+          Copy
+        </button>
+      </div>
+    </div>
+
+    <!-- Extracted Answers Tab -->
+    <div id="extracted-answers-content" class="tab-content p-6 hidden">
+      <div class="mb-4">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-2">
+          Extracted Answers
+        </h3>
+        <p class="text-sm text-gray-600">
+          Structured data extracted from the submission.
+        </p>
+      </div>
+      {% if extracted_answers %}
+      <div class="space-y-4">
+        {% for key, value in extracted_answers.items() %}
+        <div class="bg-gray-50 rounded-lg p-4">
+          <h4 class="text-sm font-medium text-gray-900 mb-2">
+            {{ key|title }}
+          </h4>
+          <div class="text-sm text-gray-700">
+            {% if value is string %}
+            <pre class="whitespace-pre-wrap">{{ value }}</pre>
+            {% else %}
+            <pre class="whitespace-pre-wrap">{{ value|tojson(indent=2) }}</pre>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-center py-8">
+        <svg
+          class="mx-auto h-12 w-12 text-gray-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+          />
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">
+          No extracted answers
+        </h3>
+        <p class="mt-1 text-sm text-gray-500">
+          No structured answers were extracted from this submission.
+        </p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Metadata Tab -->
+    <div id="metadata-content" class="tab-content p-6 hidden">
+      <div class="mb-4">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-2">
+          Submission Metadata
+        </h3>
+        <p class="text-sm text-gray-600">
+          Technical information about this submission.
+        </p>
+      </div>
+      <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Submission ID</dt>
+          <dd class="mt-1 text-sm text-gray-900 font-mono">
+            {{ submission_id }}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Filename</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ filename }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Upload Date</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            {{ uploaded_at if uploaded_at else 'Unknown' }}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Processing Status</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            {% if processed %}
+            <span
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-100 text-success-800"
+            >
+              Processed
+            </span>
+            {% else %}
+            <span
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-warning-100 text-warning-800"
+            >
+              Pending
+            </span>
+            {% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Content Size</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            {{ "%.1f"|format(file_size) }} KB
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Character Count</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            {{ raw_text|length }} characters
+          </dd>
+        </div>
+      </dl>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Show the first tab by default
+    showTab("raw-text");
+  });
+
+  function showTab(tabName) {
+    // Hide all tab contents
+    const tabContents = document.querySelectorAll(".tab-content");
+    tabContents.forEach((content) => {
+      content.classList.add("hidden");
+    });
+
+    // Remove active class from all tab buttons
+    const tabButtons = document.querySelectorAll(".tab-button");
+    tabButtons.forEach((button) => {
+      button.classList.remove("border-primary-500", "text-primary-600");
+      button.classList.add("border-transparent", "text-gray-500");
+    });
+
+    // Show selected tab content
+    const selectedContent = document.getElementById(tabName + "-content");
+    if (selectedContent) {
+      selectedContent.classList.remove("hidden");
+    }
+
+    // Add active class to selected tab button
+    const selectedButton = document.getElementById(tabName + "-tab");
+    if (selectedButton) {
+      selectedButton.classList.remove("border-transparent", "text-gray-500");
+      selectedButton.classList.add("border-primary-500", "text-primary-600");
+    }
+  }
+
+  function copyToClipboard(contentType) {
+    let textToCopy = "";
+
+    if (contentType === "raw-text") {
+      textToCopy = JSON.parse(`{{ raw_text|tojson|safe }}`);
+    }
+
+    navigator.clipboard
+      .writeText(textToCopy)
+      .then(function () {
+        // Show success message
+        ExamGrader.utils.showToast("Content copied to clipboard!", "success");
+      })
+      .catch(function (err) {
+        console.error("Failed to copy: ", err);
+        ExamGrader.utils.showToast("Failed to copy content", "error");
+      });
+  }
+
+  function downloadContent() {
+    const content = {
+      submission_id: "{{ submission_id }}",
+      filename: "{{ filename }}",
+      uploaded_at: "{{ uploaded_at }}",
+      raw_text: JSON.parse("{{ raw_text|tojson }}"),
+      extracted_answers: JSON.parse(`{{ extracted_answers|tojson|safe }}`),
+    };
+
+    const dataStr = JSON.stringify(content, null, 2);
+    const dataBlob = new Blob([dataStr], { type: "application/json" });
+
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `submission_${content.submission_id.substring(
+      0,
+      8
+    )}_content.json`;
+    link.click();
+  }
+</script>
+{% endblock %}

@@ -1,359 +1,579 @@
 <!DOCTYPE html>
 <html lang="en" class="h-full bg-gray-50">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Exam Grader - AI-powered educational assessment platform">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Exam Grader - AI-powered educational assessment platform"
+    />
     <title>{% block title %}{{ page_title }} - Exam Grader{% endblock %}</title>
 
     <!-- Favicon -->
-    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link
+      rel="icon"
+      href="{{ url_for('static', filename='favicon.ico') }}"
+      type="image/x-icon"
+    />
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+
     <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: {
-                            50: '#eff6ff',
-                            100: '#dbeafe',
-                            200: '#bfdbfe',
-                            300: '#93c5fd',
-                            400: '#60a5fa',
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                            700: '#1d4ed8',
-                            800: '#1e40af',
-                            900: '#1e3a8a',
-                        },
-                        success: {
-                            50: '#f0fdf4',
-                            100: '#dcfce7',
-                            200: '#bbf7d0',
-                            300: '#86efac',
-                            400: '#4ade80',
-                            500: '#22c55e',
-                            600: '#16a34a',
-                            700: '#15803d',
-                            800: '#166534',
-                            900: '#14532d',
-                        },
-                        warning: {
-                            50: '#fffbeb',
-                            100: '#fef3c7',
-                            200: '#fde68a',
-                            300: '#fcd34d',
-                            400: '#fbbf24',
-                            500: '#f59e0b',
-                            600: '#d97706',
-                            700: '#b45309',
-                            800: '#92400e',
-                            900: '#78350f',
-                        },
-                        danger: {
-                            50: '#fef2f2',
-                            100: '#fee2e2',
-                            200: '#fecaca',
-                            300: '#fca5a5',
-                            400: '#f87171',
-                            500: '#ef4444',
-                            600: '#dc2626',
-                            700: '#b91c1c',
-                            800: '#991b1b',
-                            900: '#7f1d1d',
-                        }
-                    },
-                    fontFamily: {
-                        'sans': ['Inter', 'system-ui', 'sans-serif'],
-                        'display': ['Inter', 'system-ui', 'sans-serif'],
-                    },
-                    animation: {
-                        'fade-in': 'fadeIn 0.5s ease-in-out',
-                        'slide-up': 'slideUp 0.3s ease-out',
-                        'pulse-slow': 'pulse 3s infinite',
-                    },
-                    keyframes: {
-                        fadeIn: {
-                            '0%': { opacity: '0' },
-                            '100%': { opacity: '1' },
-                        },
-                        slideUp: {
-                            '0%': { transform: 'translateY(10px)', opacity: '0' },
-                            '100%': { transform: 'translateY(0)', opacity: '1' },
-                        }
-                    }
-                }
-            }
-        }
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50: "#eff6ff",
+                100: "#dbeafe",
+                200: "#bfdbfe",
+                300: "#93c5fd",
+                400: "#60a5fa",
+                500: "#3b82f6",
+                600: "#2563eb",
+                700: "#1d4ed8",
+                800: "#1e40af",
+                900: "#1e3a8a",
+              },
+              success: {
+                50: "#f0fdf4",
+                100: "#dcfce7",
+                200: "#bbf7d0",
+                300: "#86efac",
+                400: "#4ade80",
+                500: "#22c55e",
+                600: "#16a34a",
+                700: "#15803d",
+                800: "#166534",
+                900: "#14532d",
+              },
+              warning: {
+                50: "#fffbeb",
+                100: "#fef3c7",
+                200: "#fde68a",
+                300: "#fcd34d",
+                400: "#fbbf24",
+                500: "#f59e0b",
+                600: "#d97706",
+                700: "#b45309",
+                800: "#92400e",
+                900: "#78350f",
+              },
+              danger: {
+                50: "#fef2f2",
+                100: "#fee2e2",
+                200: "#fecaca",
+                300: "#fca5a5",
+                400: "#f87171",
+                500: "#ef4444",
+                600: "#dc2626",
+                700: "#b91c1c",
+                800: "#991b1b",
+                900: "#7f1d1d",
+              },
+            },
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+              display: ["Inter", "system-ui", "sans-serif"],
+            },
+            animation: {
+              "fade-in": "fadeIn 0.5s ease-in-out",
+              "slide-up": "slideUp 0.3s ease-out",
+              "pulse-slow": "pulse 3s infinite",
+            },
+            keyframes: {
+              fadeIn: {
+                "0%": { opacity: "0" },
+                "100%": { opacity: "1" },
+              },
+              slideUp: {
+                "0%": { transform: "translateY(10px)", opacity: "0" },
+                "100%": { transform: "translateY(0)", opacity: "1" },
+              },
+            },
+          },
+        },
+      };
     </script>
 
     <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/custom.css') }}"
+    />
+
+    <!-- Security Headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+
+    <!-- CSRF Token for JavaScript -->
+    {% if csrf_token %}
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    {% endif %}
 
     {% block extra_css %}{% endblock %}
-</head>
-<body class="h-full overflow-hidden font-sans antialiased">
+  </head>
+  <body class="h-full overflow-hidden font-sans antialiased">
     <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            <div id="flash-messages" class="fixed top-4 right-4 z-50 space-y-2">
-                {% for category, message in messages %}
-                    <div class="flash-message animate-slide-up max-w-sm bg-white border-l-4
-                        {% if category == 'error' %}border-danger-500 bg-danger-50{% endif %}
-                        {% if category == 'warning' %}border-warning-500 bg-warning-50{% endif %}
-                        {% if category == 'success' %}border-success-500 bg-success-50{% endif %}
-                        {% if category == 'info' %}border-primary-500 bg-primary-50{% endif %}
-                        rounded-lg shadow-lg p-4">
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                {% if category == 'error' %}
-                                    <svg class="h-5 w-5 text-danger-500" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-                                    </svg>
-                                {% elif category == 'warning' %}
-                                    <svg class="h-5 w-5 text-warning-500" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                                    </svg>
-                                {% elif category == 'success' %}
-                                    <svg class="h-5 w-5 text-success-500" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                    </svg>
-                                {% else %}
-                                    <svg class="h-5 w-5 text-primary-500" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
-                                    </svg>
-                                {% endif %}
-                            </div>
-                            <div class="ml-3">
-                                <p class="text-sm font-medium
-                                    {% if category == 'error' %}text-danger-800{% endif %}
-                                    {% if category == 'warning' %}text-warning-800{% endif %}
-                                    {% if category == 'success' %}text-success-800{% endif %}
-                                    {% if category == 'info' %}text-primary-800{% endif %}">
-                                    {{ message }}
-                                </p>
-                            </div>
-                            <div class="ml-auto pl-3">
-                                <button type="button" class="flash-close inline-flex rounded-md p-1.5
-                                    {% if category == 'error' %}text-danger-500 hover:bg-danger-100{% endif %}
-                                    {% if category == 'warning' %}text-warning-500 hover:bg-warning-100{% endif %}
-                                    {% if category == 'success' %}text-success-500 hover:bg-success-100{% endif %}
-                                    {% if category == 'info' %}text-primary-500 hover:bg-primary-100{% endif %}
-                                    focus:outline-none focus:ring-2 focus:ring-offset-2
-                                    {% if category == 'error' %}focus:ring-danger-500{% endif %}
-                                    {% if category == 'warning' %}focus:ring-warning-500{% endif %}
-                                    {% if category == 'success' %}focus:ring-success-500{% endif %}
-                                    {% if category == 'info' %}focus:ring-primary-500{% endif %}">
-                                    <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
-        {% endif %}
-    {% endwith %}
+    {% with messages = get_flashed_messages(with_categories=true) %} {% if
+    messages %}
+    <div id="flash-messages" class="fixed top-4 right-4 z-50 space-y-2">
+      {% for category, message in messages %}
+      <div
+        class="flash-message animate-slide-up max-w-sm bg-white border-l-4 {% if category == 'error' %}border-danger-500 bg-danger-50{% endif %} {% if category == 'warning' %}border-warning-500 bg-warning-50{% endif %} {% if category == 'success' %}border-success-500 bg-success-50{% endif %} {% if category == 'info' %}border-primary-500 bg-primary-50{% endif %} rounded-lg shadow-lg p-4"
+      >
+        <div class="flex items-center">
+          <div class="flex-shrink-0">
+            {% if category == 'error' %}
+            <svg
+              class="h-5 w-5 text-danger-500"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            {% elif category == 'warning' %}
+            <svg
+              class="h-5 w-5 text-warning-500"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            {% elif category == 'success' %}
+            <svg
+              class="h-5 w-5 text-success-500"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            {% else %}
+            <svg
+              class="h-5 w-5 text-primary-500"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            {% endif %}
+          </div>
+          <div class="ml-3">
+            <p
+              class="text-sm font-medium {% if category == 'error' %}text-danger-800{% endif %} {% if category == 'warning' %}text-warning-800{% endif %} {% if category == 'success' %}text-success-800{% endif %} {% if category == 'info' %}text-primary-800{% endif %}"
+            >
+              {{ message }}
+            </p>
+          </div>
+          <div class="ml-auto pl-3">
+            <button
+              type="button"
+              class="flash-close inline-flex rounded-md p-1.5 {% if category == 'error' %}text-danger-500 hover:bg-danger-100{% endif %} {% if category == 'warning' %}text-warning-500 hover:bg-warning-100{% endif %} {% if category == 'success' %}text-success-500 hover:bg-success-100{% endif %} {% if category == 'info' %}text-primary-500 hover:bg-primary-100{% endif %} focus:outline-none focus:ring-2 focus:ring-offset-2 {% if category == 'error' %}focus:ring-danger-500{% endif %} {% if category == 'warning' %}focus:ring-warning-500{% endif %} {% if category == 'success' %}focus:ring-success-500{% endif %} {% if category == 'info' %}focus:ring-primary-500{% endif %}"
+            >
+              <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fill-rule="evenodd"
+                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %} {% endwith %}
 
     <!-- Main Layout -->
     <div class="flex h-full">
-        <!-- Sidebar -->
-        <div class="hidden lg:flex lg:flex-shrink-0">
-            <div class="flex flex-col w-64">
-                <div class="flex flex-col flex-grow bg-white border-r border-gray-200 pt-5 pb-4 overflow-y-auto">
-                    <!-- Logo -->
-                    <div class="flex items-center flex-shrink-0 px-4">
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <div class="h-8 w-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                                    <svg class="h-5 w-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
-                                </div>
-                            </div>
-                            <div class="ml-3">
-                                <h1 class="text-lg font-semibold text-gray-900">Exam Grader</h1>
-                                <p class="text-xs text-gray-500">v{{ app_version }}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Navigation -->
-                    <nav class="mt-8 flex-1 px-2 space-y-1">
-                        <a href="{{ url_for('dashboard') }}"
-                           class="nav-link {% if request.endpoint == 'dashboard' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
-                            <svg class="{% if request.endpoint == 'dashboard' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"/>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h2a2 2 0 012 2v0M8 5a2 2 0 000 4h8a2 2 0 000-4M8 5v0"/>
-                            </svg>
-                            Dashboard
-                        </a>
-
-                        <a href="{{ url_for('upload_guide') }}"
-                           class="nav-link {% if request.endpoint == 'upload_guide' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
-                            <svg class="{% if request.endpoint == 'upload_guide' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
-                            Upload Guide
-                        </a>
-
-                        <a href="{{ url_for('marking_guides') }}"
-                           class="nav-link {% if request.endpoint in ['marking_guides', 'create_guide'] %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
-                            <svg class="{% if request.endpoint in ['marking_guides', 'create_guide'] %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-                            </svg>
-                            Guide Library
-                        </a>
-
-                        <a href="{{ url_for('upload_submission') }}"
-                           class="nav-link {% if request.endpoint == 'upload_submission' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
-                            <svg class="{% if request.endpoint == 'upload_submission' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                            </svg>
-                            Upload Submission
-                        </a>
-
-                        {% if session.get('submissions') %}
-                        <a href="{{ url_for('view_submissions') }}"
-                           class="nav-link {% if request.endpoint == 'view_submissions' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
-                            <svg class="{% if request.endpoint == 'view_submissions' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
-                            Submissions
-                            <span class="ml-auto bg-primary-100 text-primary-600 py-0.5 px-2 rounded-full text-xs font-medium">
-                                {{ session.get('submissions', [])|length }}
-                            </span>
-                        </a>
-                        {% endif %}
-
-                        {% if session.get('last_grading_result') %}
-                        <a href="{{ url_for('view_results') }}"
-                           class="nav-link {% if request.endpoint == 'view_results' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
-                            <svg class="{% if request.endpoint == 'view_results' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                            </svg>
-                            Results
-                        </a>
-                        {% endif %}
-
-                        <!-- Settings -->
-                        <a href="{{ url_for('settings') }}"
-                           class="nav-link {% if request.endpoint == 'settings' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
-                            <svg class="{% if request.endpoint == 'settings' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                            </svg>
-                            Settings
-                        </a>
-                    </nav>
-
-                    <!-- System Status -->
-                    <div class="flex-shrink-0 px-4 py-4 border-t border-gray-200">
-                        <div class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">System Status</div>
-                        <div class="space-y-1">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs text-gray-600">OCR Service</span>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
-                                    {% if service_status.ocr_status %}bg-success-100 text-success-800{% else %}bg-danger-100 text-danger-800{% endif %}">
-                                    {% if service_status.ocr_status %}Online{% else %}Offline{% endif %}
-                                </span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs text-gray-600">AI Service</span>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
-                                    {% if service_status.llm_status %}bg-success-100 text-success-800{% else %}bg-danger-100 text-danger-800{% endif %}">
-                                    {% if service_status.llm_status %}Online{% else %}Offline{% endif %}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
+      <!-- Sidebar -->
+      <div class="hidden lg:flex lg:flex-shrink-0">
+        <div class="flex flex-col w-64">
+          <div
+            class="flex flex-col flex-grow bg-white border-r border-gray-200 pt-5 pb-4 overflow-y-auto"
+          >
+            <!-- Logo -->
+            <div class="flex items-center flex-shrink-0 px-4">
+              <div class="flex items-center">
+                <div class="flex-shrink-0">
+                  <div
+                    class="h-8 w-8 bg-primary-600 rounded-lg flex items-center justify-center"
+                  >
+                    <svg
+                      class="h-5 w-5 text-white"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
                 </div>
+                <div class="ml-3">
+                  <h1 class="text-lg font-semibold text-gray-900">
+                    Exam Grader
+                  </h1>
+                  <p class="text-xs text-gray-500">v{{ app_version }}</p>
+                </div>
+              </div>
             </div>
-        </div>
 
-        <!-- Main Content -->
-        <div class="flex flex-col flex-1 overflow-hidden">
-            <!-- Top Header -->
-            <header class="bg-white shadow-sm border-b border-gray-200">
-                <div class="flex items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-                    <div class="flex items-center">
-                        <button type="button" class="lg:hidden -ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500">
-                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                            </svg>
-                        </button>
-                        <h1 class="ml-4 lg:ml-0 text-lg font-semibold text-gray-900">{{ page_title or 'Dashboard' }}</h1>
-                    </div>
+            <!-- Navigation -->
+            <nav class="mt-8 flex-1 px-2 space-y-1">
+              <a
+                href="{{ url_for('dashboard') }}"
+                class="nav-link {% if request.endpoint == 'dashboard' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md"
+              >
+                <svg
+                  class="{% if request.endpoint == 'dashboard' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
+                  />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M8 5a2 2 0 012-2h2a2 2 0 012 2v0M8 5a2 2 0 000 4h8a2 2 0 000-4M8 5v0"
+                  />
+                </svg>
+                Dashboard
+              </a>
 
-                    <div class="flex items-center space-x-4">
-                        <!-- Storage Usage -->
-                        <div class="hidden sm:flex items-center text-sm text-gray-500">
-                            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
-                            </svg>
-                            {{ storage_stats.total_size_mb }}MB / {{ storage_stats.max_size_mb }}MB
-                        </div>
+              <a
+                href="{{ url_for('upload_guide') }}"
+                class="nav-link {% if request.endpoint == 'upload_guide' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md"
+              >
+                <svg
+                  class="{% if request.endpoint == 'upload_guide' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                Upload Guide
+              </a>
 
-                        <!-- Current Year -->
-                        <div class="text-sm text-gray-500">
-                            {{ current_year }}
-                        </div>
-                    </div>
+              <a
+                href="{{ url_for('marking_guides') }}"
+                class="nav-link {% if request.endpoint in ['marking_guides', 'create_guide'] %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md"
+              >
+                <svg
+                  class="{% if request.endpoint in ['marking_guides', 'create_guide'] %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                  />
+                </svg>
+                Guide Library
+              </a>
+
+              <a
+                href="{{ url_for('upload_submission') }}"
+                class="nav-link {% if request.endpoint == 'upload_submission' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md"
+              >
+                <svg
+                  class="{% if request.endpoint == 'upload_submission' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                  />
+                </svg>
+                Upload Submission
+              </a>
+
+              {% if session.get('submissions') %}
+              <a
+                href="{{ url_for('view_submissions') }}"
+                class="nav-link {% if request.endpoint == 'view_submissions' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md"
+              >
+                <svg
+                  class="{% if request.endpoint == 'view_submissions' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                Submissions
+                <span
+                  class="ml-auto bg-primary-100 text-primary-600 py-0.5 px-2 rounded-full text-xs font-medium"
+                >
+                  {{ session.get('submissions', [])|length }}
+                </span>
+              </a>
+              {% endif %} {% if session.get('last_grading_result') %}
+              <a
+                href="{{ url_for('view_results') }}"
+                class="nav-link {% if request.endpoint == 'view_results' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md"
+              >
+                <svg
+                  class="{% if request.endpoint == 'view_results' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                  />
+                </svg>
+                Results
+              </a>
+              {% endif %}
+
+              <!-- Settings -->
+              <a
+                href="{{ url_for('settings') }}"
+                class="nav-link {% if request.endpoint == 'settings' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md"
+              >
+                <svg
+                  class="{% if request.endpoint == 'settings' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                  />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                </svg>
+                Settings
+              </a>
+            </nav>
+
+            <!-- System Status -->
+            <div class="flex-shrink-0 px-4 py-4 border-t border-gray-200">
+              <div
+                class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2"
+              >
+                System Status
+              </div>
+              <div class="space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-gray-600">OCR Service</span>
+                  <span
+                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {% if service_status.ocr_status %}bg-success-100 text-success-800{% else %}bg-danger-100 text-danger-800{% endif %}"
+                  >
+                    {% if service_status.ocr_status %}Online{% else %}Offline{%
+                    endif %}
+                  </span>
                 </div>
-            </header>
-
-            <!-- Page Content -->
-            <main class="flex-1 overflow-y-auto bg-gray-50">
-                <div class="py-6">
-                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        {% block content %}{% endblock %}
-                    </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-gray-600">AI Service</span>
+                  <span
+                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {% if service_status.llm_status %}bg-success-100 text-success-800{% else %}bg-danger-100 text-danger-800{% endif %}"
+                  >
+                    {% if service_status.llm_status %}Online{% else %}Offline{%
+                    endif %}
+                  </span>
                 </div>
-            </main>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <!-- Main Content -->
+      <div class="flex flex-col flex-1 overflow-hidden">
+        <!-- Top Header -->
+        <header class="bg-white shadow-sm border-b border-gray-200">
+          <div
+            class="flex items-center justify-between px-4 py-4 sm:px-6 lg:px-8"
+          >
+            <div class="flex items-center">
+              <button
+                type="button"
+                class="lg:hidden -ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500"
+              >
+                <svg
+                  class="h-6 w-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
+                </svg>
+              </button>
+              <h1 class="ml-4 lg:ml-0 text-lg font-semibold text-gray-900">
+                {{ page_title or 'Dashboard' }}
+              </h1>
+            </div>
+
+            <div class="flex items-center space-x-4">
+              <!-- Storage Usage -->
+              <div class="hidden sm:flex items-center text-sm text-gray-500">
+                <svg
+                  class="h-4 w-4 mr-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                  />
+                </svg>
+                {{ storage_stats.total_size_mb }}MB / {{
+                storage_stats.max_size_mb }}MB
+              </div>
+
+              <!-- Current Year -->
+              <div class="text-sm text-gray-500">{{ current_year }}</div>
+            </div>
+          </div>
+        </header>
+
+        <!-- Page Content -->
+        <main class="flex-1 overflow-y-auto bg-gray-50">
+          <div class="py-6">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              {% block content %}{% endblock %}
+            </div>
+          </div>
+        </main>
+      </div>
     </div>
 
     <!-- JavaScript -->
     <script>
-        // Flash message auto-hide and close functionality
-        document.addEventListener('DOMContentLoaded', function() {
-            // Auto-hide flash messages after 5 seconds
-            setTimeout(function() {
-                const flashMessages = document.querySelectorAll('.flash-message');
-                flashMessages.forEach(function(message) {
-                    message.style.transition = 'opacity 0.5s ease-out';
-                    message.style.opacity = '0';
-                    setTimeout(function() {
-                        message.remove();
-                    }, 500);
-                });
-            }, 5000);
+      // Flash message auto-hide and close functionality
+      document.addEventListener("DOMContentLoaded", function () {
+        // Auto-hide flash messages after 5 seconds
+        setTimeout(function () {
+          const flashMessages = document.querySelectorAll(".flash-message");
+          flashMessages.forEach(function (message) {
+            message.style.transition = "opacity 0.5s ease-out";
+            message.style.opacity = "0";
+            setTimeout(function () {
+              message.remove();
+            }, 500);
+          });
+        }, 5000);
 
-            // Close button functionality
-            document.querySelectorAll('.flash-close').forEach(function(button) {
-                button.addEventListener('click', function() {
-                    const message = this.closest('.flash-message');
-                    message.style.transition = 'opacity 0.3s ease-out';
-                    message.style.opacity = '0';
-                    setTimeout(function() {
-                        message.remove();
-                    }, 300);
-                });
-            });
+        // Close button functionality
+        document.querySelectorAll(".flash-close").forEach(function (button) {
+          button.addEventListener("click", function () {
+            const message = this.closest(".flash-message");
+            message.style.transition = "opacity 0.3s ease-out";
+            message.style.opacity = "0";
+            setTimeout(function () {
+              message.remove();
+            }, 300);
+          });
         });
+      });
     </script>
 
     <!-- Custom JavaScript -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 
+    <!-- Initialize client config from server -->
+    <script>
+      // Initialize ExamGrader config from server data
+      if (typeof ExamGrader !== 'undefined') {
+        ExamGrader.config.maxFileSize = {{ (config.max_file_size_mb if config and config.max_file_size_mb else 20) * 1024 * 1024 }};
+        ExamGrader.config.allowedFileTypes = {{ (config.supported_formats if config and config.supported_formats else ['.pdf', '.docx', '.doc', '.txt', '.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.gif']) | tojson }};
+      }
+    </script>
+
     {% block extra_js %}{% endblock %}
-</body>
+
+    <script>
+      // Diagnostic script to ensure all anchor tags are clickable
+      document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll("a").forEach(function (link) {
+          link.addEventListener(
+            "click",
+            function (event) {
+              // Ensure default behavior is not prevented by other scripts
+              if (event.defaultPrevented) {
+                console.warn(
+                  "Default prevented on link:",
+                  link.href,
+                  "by another script. Attempting to re-enable."
+                );
+                // Optionally, you could try to manually navigate if default was prevented
+                // window.location.href = link.href;
+              }
+            },
+            true
+          ); // Use capture phase to catch events early
+        });
+      });
+    </script>
+  </body>
 </html>

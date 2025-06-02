@@ -8,7 +8,7 @@
             <div>
                 <h1 class="text-2xl font-bold text-gray-900">Grading Results</h1>
                 <p class="mt-2 text-sm text-gray-600">
-                    Detailed grading results and feedback for the submitted work.
+                    Comprehensive grading results and feedback for all student submissions.
                 </p>
             </div>
             <div class="flex space-x-3">
@@ -28,234 +28,334 @@
         </div>
     </div>
 
-    <!-- Overall Score Card -->
-    <div class="bg-white shadow rounded-lg mb-8">
-        <div class="px-4 py-5 sm:p-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="text-lg leading-6 font-medium text-gray-900">Overall Score</h3>
-                    <p class="mt-1 text-sm text-gray-500">Total points achieved</p>
+    {% if has_results %}
+    <!-- Batch Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5 text-center">
+                <div class="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
                 </div>
-                <div class="text-right">
-                    <div class="text-3xl font-bold text-primary-600">
-                        {{ results.total_score if results and results.total_score else session.get('last_score', 0) }}%
-                    </div>
-                    <div class="text-sm text-gray-500">
-                        {% set score = results.total_score if results and results.total_score else session.get('last_score', 0) %}
-                        {% if score >= 90 %}
-                            <span class="text-success-600 font-medium">Excellent</span>
-                        {% elif score >= 80 %}
-                            <span class="text-success-600 font-medium">Good</span>
-                        {% elif score >= 70 %}
-                            <span class="text-warning-600 font-medium">Satisfactory</span>
-                        {% elif score >= 60 %}
-                            <span class="text-warning-600 font-medium">Needs Improvement</span>
-                        {% else %}
-                            <span class="text-danger-600 font-medium">Unsatisfactory</span>
-                        {% endif %}
-                    </div>
-                </div>
+                <dl>
+                    <dt class="text-sm font-medium text-gray-500 mb-1">Total Submissions</dt>
+                    <dd class="text-lg font-medium text-gray-900">{{ successful_grades }}</dd>
+                </dl>
             </div>
-            
-            <!-- Score Breakdown -->
-            <div class="mt-6">
-                <div class="bg-gray-200 rounded-full h-3">
-                    {% set score = results.total_score if results and results.total_score else session.get('last_score', 0) %}
-                    <div class="h-3 rounded-full {% if score >= 80 %}bg-success-500{% elif score >= 60 %}bg-warning-500{% else %}bg-danger-500{% endif %}" style="width: {{ score }}%"></div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5 text-center">
+                <div class="w-12 h-12 bg-success-500 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
                 </div>
-                <div class="flex justify-between text-sm text-gray-500 mt-2">
-                    <span>0%</span>
-                    <span>50%</span>
-                    <span>100%</span>
+                <dl>
+                    <dt class="text-sm font-medium text-gray-500 mb-1">Average Score</dt>
+                    <dd class="text-lg font-medium text-gray-900">{{ batch_summary.average_score if batch_summary else 0 }}%</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5 text-center">
+                <div class="w-12 h-12 bg-warning-500 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
                 </div>
+                <dl>
+                    <dt class="text-sm font-medium text-gray-500 mb-1">Highest Score</dt>
+                    <dd class="text-lg font-medium text-gray-900">{{ batch_summary.highest_score if batch_summary else 0 }}%</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5 text-center">
+                <div class="w-12 h-12 bg-info-500 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/>
+                    </svg>
+                </div>
+                <dl>
+                    <dt class="text-sm font-medium text-gray-500 mb-1">Lowest Score</dt>
+                    <dd class="text-lg font-medium text-gray-900">{{ batch_summary.lowest_score if batch_summary else 0 }}%</dd>
+                </dl>
             </div>
         </div>
     </div>
 
-    <!-- Question-by-Question Results -->
+    <!-- Individual Results Table -->
     <div class="bg-white shadow rounded-lg mb-8">
         <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">Question-by-Question Breakdown</h3>
-            
-            {% if results and results.questions %}
-                {% for question in results.questions %}
-                <div class="border-b border-gray-200 pb-6 mb-6 last:border-b-0 last:pb-0 last:mb-0">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1">
-                            <h4 class="text-md font-medium text-gray-900">Question {{ loop.index }}</h4>
-                            <p class="mt-1 text-sm text-gray-600">{{ question.text or 'Question text not available' }}</p>
-                        </div>
-                        <div class="ml-4 text-right">
-                            <div class="text-lg font-semibold {% if question.score >= question.max_score * 0.8 %}text-success-600{% elif question.score >= question.max_score * 0.6 %}text-warning-600{% else %}text-danger-600{% endif %}">
-                                {{ question.score }}/{{ question.max_score }}
-                            </div>
-                            <div class="text-sm text-gray-500">
-                                {{ ((question.score / question.max_score) * 100)|round(1) }}%
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Student Answer -->
-                    <div class="mt-4">
-                        <h5 class="text-sm font-medium text-gray-700">Student Answer:</h5>
-                        <div class="mt-2 p-3 bg-gray-50 rounded-md">
-                            <p class="text-sm text-gray-900">{{ question.student_answer or 'No answer provided' }}</p>
-                        </div>
-                    </div>
-                    
-                    <!-- Feedback -->
-                    {% if question.feedback %}
-                    <div class="mt-4">
-                        <h5 class="text-sm font-medium text-gray-700">Feedback:</h5>
-                        <div class="mt-2 p-3 bg-blue-50 rounded-md">
-                            <p class="text-sm text-blue-900">{{ question.feedback }}</p>
-                        </div>
-                    </div>
-                    {% endif %}
-                    
-                    <!-- Expected Answer -->
-                    {% if question.expected_answer %}
-                    <div class="mt-4">
-                        <h5 class="text-sm font-medium text-gray-700">Expected Answer:</h5>
-                        <div class="mt-2 p-3 bg-green-50 rounded-md">
-                            <p class="text-sm text-green-900">{{ question.expected_answer }}</p>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            {% else %}
-                <!-- Mock Questions for Demo -->
-                <div class="border-b border-gray-200 pb-6 mb-6">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1">
-                            <h4 class="text-md font-medium text-gray-900">Question 1</h4>
-                            <p class="mt-1 text-sm text-gray-600">Explain the concept of machine learning and its applications.</p>
-                        </div>
-                        <div class="ml-4 text-right">
-                            <div class="text-lg font-semibold text-success-600">8/10</div>
-                            <div class="text-sm text-gray-500">80%</div>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-4">
-                        <h5 class="text-sm font-medium text-gray-700">Student Answer:</h5>
-                        <div class="mt-2 p-3 bg-gray-50 rounded-md">
-                            <p class="text-sm text-gray-900">Machine learning is a subset of artificial intelligence that enables computers to learn and make decisions from data without being explicitly programmed. It has applications in healthcare, finance, and autonomous vehicles.</p>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-4">
-                        <h5 class="text-sm font-medium text-gray-700">Feedback:</h5>
-                        <div class="mt-2 p-3 bg-blue-50 rounded-md">
-                            <p class="text-sm text-blue-900">Good understanding of the basic concept. Could have included more specific examples of algorithms and mentioned supervised vs unsupervised learning.</p>
-                        </div>
-                    </div>
-                </div>
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">Individual Submission Results</h3>
 
-                <div class="border-b border-gray-200 pb-6 mb-6">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1">
-                            <h4 class="text-md font-medium text-gray-900">Question 2</h4>
-                            <p class="mt-1 text-sm text-gray-600">Describe the difference between supervised and unsupervised learning.</p>
-                        </div>
-                        <div class="ml-4 text-right">
-                            <div class="text-lg font-semibold text-warning-600">6/10</div>
-                            <div class="text-sm text-gray-500">60%</div>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-4">
-                        <h5 class="text-sm font-medium text-gray-700">Student Answer:</h5>
-                        <div class="mt-2 p-3 bg-gray-50 rounded-md">
-                            <p class="text-sm text-gray-900">Supervised learning uses labeled data while unsupervised learning doesn't use labels.</p>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-4">
-                        <h5 class="text-sm font-medium text-gray-700">Feedback:</h5>
-                        <div class="mt-2 p-3 bg-blue-50 rounded-md">
-                            <p class="text-sm text-blue-900">Correct but incomplete. Should have provided examples and explained the goals of each approach (prediction vs pattern discovery).</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="pb-6">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1">
-                            <h4 class="text-md font-medium text-gray-900">Question 3</h4>
-                            <p class="mt-1 text-sm text-gray-600">What are the main challenges in implementing machine learning systems?</p>
-                        </div>
-                        <div class="ml-4 text-right">
-                            <div class="text-lg font-semibold text-success-600">9/10</div>
-                            <div class="text-sm text-gray-500">90%</div>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-4">
-                        <h5 class="text-sm font-medium text-gray-700">Student Answer:</h5>
-                        <div class="mt-2 p-3 bg-gray-50 rounded-md">
-                            <p class="text-sm text-gray-900">Main challenges include data quality issues, overfitting, computational requirements, interpretability of models, and ensuring fairness and avoiding bias in algorithms.</p>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-4">
-                        <h5 class="text-sm font-medium text-gray-700">Feedback:</h5>
-                        <div class="mt-2 p-3 bg-blue-50 rounded-md">
-                            <p class="text-sm text-blue-900">Excellent comprehensive answer covering most key challenges. Shows good understanding of practical implementation issues.</p>
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
+            <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                <table class="min-w-full divide-y divide-gray-300">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Submission
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Score
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Grade
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Questions
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Graded At
+                            </th>
+                            <th scope="col" class="relative px-6 py-3">
+                                <span class="sr-only">Actions</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for result in results_list %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10">
+                                        <div class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
+                                            <svg class="h-5 w-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">{{ result.filename }}</div>
+                                        <div class="text-sm text-gray-500">ID: {{ result.submission_id[:8] }}...</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900">{{ result.score }}%</div>
+                                <div class="w-16 bg-gray-200 rounded-full h-2 mt-1">
+                                    <div class="h-2 rounded-full {% if result.score >= 80 %}bg-success-500{% elif result.score >= 60 %}bg-warning-500{% else %}bg-danger-500{% endif %}" style="width: {{ result.score }}%"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if result.score >= 90 %}bg-success-100 text-success-800{% elif result.score >= 80 %}bg-success-100 text-success-800{% elif result.score >= 70 %}bg-warning-100 text-warning-800{% elif result.score >= 60 %}bg-warning-100 text-warning-800{% else %}bg-danger-100 text-danger-800{% endif %}">
+                                    {{ result.letter_grade }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ result.total_questions }} questions
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ result.graded_at[:10] if result.graded_at else 'Unknown' }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button onclick="viewDetails('{{ result.submission_id }}')" class="text-primary-600 hover:text-primary-900 mr-3">
+                                    View Details
+                                </button>
+                                <a href="{{ url_for('view_submission_content', submission_id=result.submission_id) }}" class="text-info-600 hover:text-info-900">
+                                    View Content
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
-    <!-- Summary and Recommendations -->
-    <div class="bg-white shadow rounded-lg">
-        <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Summary and Recommendations</h3>
-            
-            <div class="prose prose-sm text-gray-600">
-                {% if results and results.feedback %}
-                    <p>{{ results.feedback }}</p>
-                {% else %}
-                    <p>The student demonstrates a solid understanding of machine learning concepts with room for improvement in providing more detailed explanations and specific examples. Focus areas for improvement include:</p>
-                    <ul class="mt-4 space-y-2">
-                        <li>• Providing more specific examples when explaining concepts</li>
-                        <li>• Including technical details about algorithms and methodologies</li>
-                        <li>• Discussing practical implementation challenges</li>
-                        <li>• Connecting theoretical concepts to real-world applications</li>
-                    </ul>
-                    
-                    <p class="mt-4">Overall, this is a good performance that shows understanding of fundamental concepts. With more detailed explanations and examples, the student can achieve even better results.</p>
-                {% endif %}
+    {% else %}
+    <!-- No Results State -->
+    <div class="text-center py-12">
+        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">No grading results available</h3>
+        <p class="mt-1 text-sm text-gray-500">Upload submissions and complete the grading process to see results here.</p>
+        <div class="mt-6">
+            <a href="{{ url_for('upload_submission') }}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+                Upload Submissions
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Detailed Results Modal -->
+    <div id="detailsModal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onclick="closeDetailsModal()"></div>
+
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="flex items-start justify-between">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                            Detailed Results
+                        </h3>
+                        <button type="button" onclick="closeDetailsModal()" class="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                            <span class="sr-only">Close</span>
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div id="modalContent" class="mt-4">
+                        <!-- Content will be loaded here -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
-
 {% block extra_js %}
 <script>
 function exportResults() {
-    // Mock export functionality
-    const results = {
-        overall_score: {{ results.total_score if results and results.total_score else session.get('last_score', 0) }},
-        timestamp: new Date().toISOString(),
-        questions: [
-            { question: 1, score: 8, max_score: 10, percentage: 80 },
-            { question: 2, score: 6, max_score: 10, percentage: 60 },
-            { question: 3, score: 9, max_score: 10, percentage: 90 }
-        ]
-    };
-    
-    const dataStr = JSON.stringify(results, null, 2);
-    const dataBlob = new Blob([dataStr], {type: 'application/json'});
-    
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(dataBlob);
-    link.download = 'grading_results_' + new Date().toISOString().split('T')[0] + '.json';
-    link.click();
+    // Call the API to export results
+    fetch('/api/export-results')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const dataStr = JSON.stringify(data.data, null, 2);
+                const dataBlob = new Blob([dataStr], {type: 'application/json'});
+
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(dataBlob);
+                link.download = data.filename;
+                link.click();
+
+                ExamGrader.utils.showToast('Results exported successfully!', 'success');
+            } else {
+                ExamGrader.utils.showToast('Failed to export results: ' + data.error, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Export error:', error);
+            ExamGrader.utils.showToast('Failed to export results', 'error');
+        });
 }
+
+function viewDetails(submissionId) {
+    // Find the result data for this submission
+    const results = JSON.parse(`{{ results_list|tojson|safe }}`);
+    const result = results.find(r => r.submission_id === submissionId);
+
+    if (!result) {
+        ExamGrader.utils.showToast('Result details not found', 'error');
+        return;
+    }
+
+    // Build detailed content
+    let content = `
+        <div class="space-y-6">
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h4 class="text-lg font-medium text-gray-900 mb-2">${result.filename}</h4>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <span class="font-medium text-gray-500">Score:</span>
+                        <span class="ml-2 text-gray-900">${result.score}% (${result.letter_grade})</span>
+                    </div>
+                    <div>
+                        <span class="font-medium text-gray-500">Questions:</span>
+                        <span class="ml-2 text-gray-900">${result.total_questions}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <h5 class="text-sm font-medium text-gray-700 mb-3">Question Breakdown:</h5>
+                <div class="space-y-3">
+    `;
+
+    // Add question details
+    if (result.criteria_scores) {
+        result.criteria_scores.forEach((criteria, index) => {
+            content += `
+                <div class="border border-gray-200 rounded-lg p-3">
+                    <div class="flex justify-between items-start mb-2">
+                        <h6 class="text-sm font-medium text-gray-900">${criteria.description}</h6>
+                        <span class="text-sm font-medium ${criteria.percentage >= 80 ? 'text-success-600' : criteria.percentage >= 60 ? 'text-warning-600' : 'text-danger-600'}">${criteria.points_earned}/${criteria.points_possible}</span>
+                    </div>
+                    <p class="text-xs text-gray-600">${criteria.feedback}</p>
+                </div>
+            `;
+        });
+    }
+
+    content += `
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h5 class="text-sm font-medium text-success-700 mb-2">Strengths:</h5>
+                    <ul class="text-sm text-gray-600 space-y-1">
+    `;
+
+    if (result.strengths) {
+        result.strengths.forEach(strength => {
+            content += `<li>• ${strength}</li>`;
+        });
+    }
+
+    content += `
+                    </ul>
+                </div>
+                <div>
+                    <h5 class="text-sm font-medium text-warning-700 mb-2">Areas for Improvement:</h5>
+                    <ul class="text-sm text-gray-600 space-y-1">
+    `;
+
+    if (result.weaknesses) {
+        result.weaknesses.forEach(weakness => {
+            content += `<li>• ${weakness}</li>`;
+        });
+    }
+
+    content += `
+                    </ul>
+                </div>
+            </div>
+
+            <div>
+                <h5 class="text-sm font-medium text-info-700 mb-2">Suggestions:</h5>
+                <ul class="text-sm text-gray-600 space-y-1">
+    `;
+
+    if (result.suggestions) {
+        result.suggestions.forEach(suggestion => {
+            content += `<li>• ${suggestion}</li>`;
+        });
+    }
+
+    content += `
+                </ul>
+            </div>
+        </div>
+    `;
+
+    // Show modal
+    document.getElementById('modalContent').innerHTML = content;
+    document.getElementById('detailsModal').classList.remove('hidden');
+}
+
+function closeDetailsModal() {
+    document.getElementById('detailsModal').classList.add('hidden');
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeDetailsModal();
+    }
+});
 </script>
 {% endblock %}

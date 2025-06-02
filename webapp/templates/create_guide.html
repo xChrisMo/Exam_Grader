@@ -220,9 +220,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const questionItem = questionElement.querySelector('.question-item');
         questionItem.dataset.questionNumber = questionCount;
         
-        questionElement.querySelector('.question-text').name = `question_${questionCount}_text`;
-        questionElement.querySelector('.question-marks').name = `question_${questionCount}_marks`;
-        questionElement.querySelector('.question-criteria').name = `question_${questionCount}_criteria`;
+        questionElement.querySelector('.question-text').name = 'question_text[]';
+        questionElement.querySelector('.question-marks').name = 'question_marks[]';
+        questionElement.querySelector('.question-criteria').name = 'question_criteria[]';
         
         // Add remove functionality
         questionElement.querySelector('.remove-question').addEventListener('click', function() {
@@ -253,9 +253,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const number = index + 1;
             question.dataset.questionNumber = number;
             question.querySelector('.question-number').textContent = number;
-            question.querySelector('.question-text').name = `question_${number}_text`;
-            question.querySelector('.question-marks').name = `question_${number}_marks`;
-            question.querySelector('.question-criteria').name = `question_${number}_criteria`;
+            question.querySelector('.question-text').name = 'question_text[]';
+            question.querySelector('.question-marks').name = 'question_marks[]';
+            question.querySelector('.question-criteria').name = 'question_criteria[]';
         });
         
         questionCountInput.value = questionCount;

@@ -31,17 +31,30 @@
     <!-- Current Guide Status -->
     {% if current_guide %}
     <div class="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
-        <div class="flex">
-            <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                </svg>
-            </div>
-            <div class="ml-3">
-                <h3 class="text-sm font-medium text-green-800">Current Active Guide</h3>
-                <div class="mt-2 text-sm text-green-700">
-                    <p><strong>{{ current_guide }}</strong> is currently being used for grading.</p>
+        <div class="flex items-start justify-between">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
                 </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-green-800">Current Active Guide</h3>
+                    <div class="mt-2 text-sm text-green-700">
+                        <p><strong>{{ current_guide }}</strong> is currently being used for grading.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="flex-shrink-0">
+                <a href="{{ url_for('clear_session_guide') }}"
+                   onclick="return confirm('Are you sure you want to clear the current active guide? This will remove it from your session.')"
+                   class="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                   title="Clear current active guide from session">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                    Clear
+                </a>
             </div>
         </div>
     </div>
@@ -52,7 +65,7 @@
     <div class="bg-white shadow rounded-lg overflow-hidden">
         <div class="px-4 py-5 sm:p-6">
             <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Saved Marking Guides</h3>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {% for guide in saved_guides %}
                 <div class="bg-gray-50 rounded-lg p-6 hover:bg-gray-100 transition-colors duration-200">
@@ -62,7 +75,7 @@
                             {% if guide.description %}
                             <p class="text-sm text-gray-600 mb-3">{{ guide.description }}</p>
                             {% endif %}
-                            
+
                             <div class="space-y-2 text-sm text-gray-500">
                                 <div class="flex items-center">
                                     <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,7 +97,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Current Guide Indicator -->
                         {% if current_guide == guide.name %}
                         <div class="ml-3">
@@ -94,26 +107,26 @@
                         </div>
                         {% endif %}
                     </div>
-                    
+
                     <!-- Actions -->
                     <div class="mt-4 flex space-x-2">
-                        {% if current_guide != guide.name %}
-                        <a href="{{ url_for('use_guide', guide_id=guide.id) }}" 
+                        {% if guide.id and guide.id|string|length > 0 and guide.id != 'session_guide' and guide.id != '' and guide.id != 'None' and current_guide != guide.name %}
+                        <a href="{{ url_for('use_guide', guide_id=guide.id) }}"
                            class="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                             Use Guide
                         </a>
                         {% else %}
                         <div class="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed">
-                            In Use
+                            {% if guide.id == 'session_guide' %}Active Guide{% else %}In Use{% endif %}
                         </div>
                         {% endif %}
-                        
-                        <button type="button" onclick="viewGuide('{{ guide.id }}')" 
+
+                        <button type="button" onclick="viewGuide('{{ guide.id }}')"
                                 class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                             View
                         </button>
-                        
-                        <button type="button" onclick="deleteGuide('{{ guide.id }}', '{{ guide.name }}')" 
+
+                        <button type="button" onclick="deleteGuide('{{ guide.id }}', '{{ guide.name }}')"
                                 class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-danger-700 bg-white hover:bg-danger-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-danger-500">
                             Delete
                         </button>
@@ -149,28 +162,46 @@
     {% endif %}
 </div>
 
-<!-- View Guide Modal -->
+<!-- Enhanced View Guide Modal -->
 <div id="view-guide-modal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
     <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity backdrop-blur-sm" aria-hidden="true"></div>
         <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
-            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div class="sm:flex sm:items-start">
-                    <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                        <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                            Marking Guide Details
-                        </h3>
-                        <div class="mt-4">
-                            <div id="guide-details" class="text-sm text-gray-500">
-                                <!-- Guide details will be loaded here -->
-                            </div>
-                        </div>
+        <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+            <!-- Modal Header -->
+            <div class="bg-gradient-to-r from-primary-50 to-blue-50 px-6 py-4 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xl font-semibold text-gray-900" id="modal-title">
+                        <svg class="inline w-6 h-6 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Marking Guide Details
+                    </h3>
+                    <button type="button" onclick="closeModal()" class="text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded-lg p-1">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="bg-white px-6 py-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                <div id="guide-details" class="text-sm text-gray-500">
+                    <!-- Guide details will be loaded here -->
+                    <div class="flex items-center justify-center py-12">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                        <span class="ml-3 text-gray-600">Loading guide details...</span>
                     </div>
                 </div>
             </div>
-            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:w-auto sm:text-sm" onclick="closeModal()">
+
+            <!-- Modal Footer -->
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                <button type="button" onclick="closeModal()" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
                     Close
                 </button>
             </div>
@@ -187,14 +218,14 @@ const guidesData = {{ saved_guides | tojson }};
 function viewGuide(guideId) {
     const guide = guidesData.find(g => g.id === guideId);
     if (!guide) return;
-    
+
     const detailsHtml = `
         <div class="space-y-4">
             <div>
                 <h4 class="font-medium text-gray-900">${guide.name}</h4>
                 ${guide.description ? `<p class="text-gray-600 mt-1">${guide.description}</p>` : ''}
             </div>
-            
+
             <div class="grid grid-cols-2 gap-4 text-sm">
                 <div>
                     <span class="font-medium">Total Questions:</span> ${guide.questions.length}
@@ -209,7 +240,7 @@ function viewGuide(guideId) {
                     <span class="font-medium">Created By:</span> ${guide.created_by}
                 </div>
             </div>
-            
+
             <div>
                 <h5 class="font-medium text-gray-900 mb-2">Questions:</h5>
                 <div class="space-y-3">
@@ -227,7 +258,7 @@ function viewGuide(guideId) {
             </div>
         </div>
     `;
-    
+
     document.getElementById('guide-details').innerHTML = detailsHtml;
     document.getElementById('view-guide-modal').classList.remove('hidden');
 }

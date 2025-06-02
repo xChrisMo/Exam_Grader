@@ -54,8 +54,8 @@ class ConfigManager:
         if self._initialized:
             return
 
-        # Load environment variables from both .env and config.env
-        load_dotenv('.env')  # Load from .env file
+        # Load environment variables from root .env file
+        load_dotenv('.env', override=True)
 
         # Create configuration object
         self.config = Config(
@@ -63,17 +63,17 @@ class ConfigManager:
             debug=os.getenv('DEBUG', 'False').lower() == 'true',
             log_level=os.getenv('LOG_LEVEL', 'INFO'),
             secret_key=os.getenv('SECRET_KEY', os.urandom(24).hex()),
-            host=os.getenv('HOST', '0.0.0.0'),
-            port=int(os.getenv('PORT', '5000').split('#')[0].strip()),
+            host=os.getenv('HOST', '127.0.0.1'),
+            port=int(os.getenv('PORT', '8501').split('#')[0].strip()),
 
             # Directory settings
             temp_dir=os.getenv('TEMP_DIR', 'temp'),
             output_dir=os.getenv('OUTPUT_DIR', 'output'),
 
             # File processing settings
-            max_file_size_mb=int(os.getenv('MAX_FILE_SIZE_MB', '10').split('#')[0].strip()),
+            max_file_size_mb=int(os.getenv('MAX_FILE_SIZE_MB', '20').split('#')[0].strip()),
             supported_formats=os.getenv('SUPPORTED_FORMATS',
-                '.txt,.docx,.pdf,.jpg,.jpeg,.png,.tiff,.bmp,.gif').split(','),
+                '.pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.bmp,.tiff,.gif').split(','),
 
             # OCR settings
             ocr_confidence_threshold=float(os.getenv('OCR_CONFIDENCE_THRESHOLD', '0.7').split('#')[0].strip()),

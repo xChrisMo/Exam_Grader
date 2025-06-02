@@ -24,23 +24,23 @@ from src.services.ocr_service import OCRService, OCRServiceError
 
 class TestLLMService(unittest.TestCase):
     """Test cases for the LLMService class."""
-    
+
     @patch('openai.OpenAI')
     def setUp(self, mock_openai):
         """Set up test fixtures."""
         # Mock the OpenAI client
         self.mock_client = MagicMock()
         mock_openai.return_value = self.mock_client
-        
+
         # Create LLM service with mock API key
         self.llm_service = LLMService(api_key="test_api_key")
-    
+
     def test_initialization(self):
         """Test LLM service initialization."""
         self.assertEqual(self.llm_service.api_key, "test_api_key")
         self.assertEqual(self.llm_service.model, "deepseek-reasoner")
         self.assertEqual(self.llm_service.temperature, 0.0)
-    
+
     @patch('openai.OpenAI')
     def test_test_connection(self, mock_openai):
         """Test the connection test functionality."""
@@ -48,14 +48,14 @@ class TestLLMService(unittest.TestCase):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         self.mock_client.chat.completions.create.return_value = mock_response
-        
+
         # Test the connection
         result = self.llm_service.test_connection()
         self.assertTrue(result)
-        
+
         # Verify the API was called correctly
         self.mock_client.chat.completions.create.assert_called_once()
-    
+
     @patch('openai.OpenAI')
     def test_compare_answers(self, mock_openai):
         """Test the answer comparison functionality."""
@@ -65,7 +65,7 @@ class TestLLMService(unittest.TestCase):
         mock_message.content = '{"score": 8.5, "feedback": "Good answer"}'
         mock_response.choices = [MagicMock(message=mock_message)]
         self.mock_client.chat.completions.create.return_value = mock_response
-        
+
         # Test answer comparison
         score, feedback = self.llm_service.compare_answers(
             "What is the capital of France?",
@@ -73,60 +73,74 @@ class TestLLMService(unittest.TestCase):
             "Paris is the capital of France.",
             10
         )
-        
+
         # Verify results
         self.assertEqual(score, 8.5)
         self.assertEqual(feedback, "Good answer")
-        
+
         # Verify the API was called correctly
         self.mock_client.chat.completions.create.assert_called_once()
 
 class TestOCRService(unittest.TestCase):
     """Test cases for the OCRService class."""
-    
+
     def setUp(self):
         """Set up test fixtures."""
         # Create OCR service with mock API key
         self.ocr_service = OCRService(api_key="test_api_key")
-    
+
     def test_initialization(self):
         """Test OCR service initialization."""
         self.assertEqual(self.ocr_service.api_key, "test_api_key")
         self.assertTrue(self.ocr_service.base_url.endswith('/api/v3'))
-    
+
+    @patch('requests.get')
     @patch('requests.post')
-    def test_extract_text_from_image(self, mock_post):
+    def test_extract_text_from_image(self, mock_post, mock_get):
         """Test the image text extraction functionality."""
-        # Mock the requests.post method
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "status": "success",
-            "data": {
-                "text": "Sample extracted text"
-            }
+        # Mock the upload response (POST)
+        mock_upload_response = MagicMock()
+        mock_upload_response.json.return_value = {"id": "test_doc_id"}
+        mock_upload_response.status_code = 201
+        mock_post.return_value = mock_upload_response
+
+        # Mock the status check response (GET)
+        mock_status_response = MagicMock()
+        mock_status_response.json.return_value = {"status": "processed"}
+        mock_status_response.status_code = 200
+
+        # Mock the result response (GET)
+        mock_result_response = MagicMock()
+        mock_result_response.json.return_value = {
+            "results": [
+                {"transcript": "Sample extracted text"}
+            ]
         }
-        mock_response.status_code = 200
-        mock_post.return_value = mock_response
-        
+        mock_result_response.status_code = 200
+
+        # Set up GET to return different responses for different calls
+        mock_get.side_effect = [mock_status_response, mock_result_response]
+
         # Create a temporary test file
         test_file = "test_image.jpg"
         with open(test_file, 'w') as f:
             f.write("dummy content")
-        
+
         try:
             # Test text extraction
             result = self.ocr_service.extract_text_from_image(test_file)
-            
+
             # Verify results
             self.assertEqual(result, "Sample extracted text")
-            
+
             # Verify the API was called correctly
             mock_post.assert_called_once()
+            self.assertEqual(mock_get.call_count, 2)  # Status check + result fetch
         finally:
             # Clean up the test file
             if os.path.exists(test_file):
                 os.remove(test_file)
-    
+
     @patch('requests.post')
     def test_extract_text_error_handling(self, mock_post):
         """Test error handling in text extraction."""
@@ -138,12 +152,12 @@ class TestOCRService(unittest.TestCase):
         }
         mock_response.status_code = 400
         mock_post.return_value = mock_response
-        
+
         # Create a temporary test file
         test_file = "test_image.jpg"
         with open(test_file, 'w') as f:
             f.write("dummy content")
-        
+
         try:
             # Test text extraction with error
             with self.assertRaises(OCRServiceError):

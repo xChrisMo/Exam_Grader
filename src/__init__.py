@@ -24,17 +24,11 @@ from utils.logger import logger
 # Load environment variables
 load_dotenv('.env', override=True)
 
-# Initialize configuration
-try:
-    config = ConfigManager()
-except Exception as e:
-    logger.log_error("Config Error", f"Failed to initialize configuration: {str(e)}")
-    raise
+# Configuration will be initialized by the Flask app when needed
 
 # Export public interface
 __all__ = [
     'parse_student_submission',
     'OCRService',
-    'ConfigManager',
-    'config'
-] 
+    'ConfigManager'
+]

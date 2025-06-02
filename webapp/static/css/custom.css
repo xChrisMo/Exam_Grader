@@ -1,5 +1,18 @@
 /* Custom CSS for Exam Grader Application */
 
+/* Performance optimizations */
+* {
+    box-sizing: border-box;
+}
+
+/* GPU acceleration for animations */
+.animate-fade-in,
+.animate-slide-up,
+.card-hover {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+}
+
 /* Additional animations and utilities */
 @keyframes fadeIn {
     from { opacity: 0; }
@@ -7,19 +20,49 @@
 }
 
 @keyframes slideUp {
-    from { 
-        transform: translateY(10px); 
-        opacity: 0; 
+    from {
+        transform: translateY(10px);
+        opacity: 0;
     }
-    to { 
-        transform: translateY(0); 
-        opacity: 1; 
+    to {
+        transform: translateY(0);
+        opacity: 1;
     }
 }
 
 @keyframes pulse-slow {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .card-hover,
+    .bg-white {
+        border: 2px solid #000;
+    }
+
+    .text-gray-500,
+    .text-gray-600 {
+        color: #000 !important;
+    }
+
+    .bg-primary-500,
+    .bg-primary-600 {
+        background-color: #000 !important;
+    }
 }
 
 /* Custom utility classes */
@@ -154,16 +197,65 @@
     max-width: 400px;
 }
 
-/* Responsive text sizing */
+/* Enhanced mobile responsiveness */
 @media (max-width: 640px) {
     .text-responsive-lg {
         font-size: 1.5rem;
         line-height: 2rem;
     }
-    
+
     .text-responsive-xl {
         font-size: 1.875rem;
         line-height: 2.25rem;
+    }
+
+    /* Mobile-specific improvements */
+    .card-hover {
+        transform: none; /* Disable hover effects on mobile */
+    }
+
+    .grid-responsive {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    /* Touch-friendly buttons */
+    button,
+    .btn,
+    a[role="button"] {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 12px 16px;
+    }
+
+    /* Improved form inputs for mobile */
+    input[type="file"],
+    input[type="text"],
+    input[type="email"],
+    textarea {
+        font-size: 16px; /* Prevents zoom on iOS */
+        min-height: 44px;
+    }
+
+    /* Mobile navigation improvements */
+    .nav-link {
+        padding: 16px 12px;
+        font-size: 16px;
+    }
+
+    /* Mobile-friendly modals */
+    .modal-backdrop {
+        padding: 1rem;
+    }
+
+    /* Improved spacing for mobile */
+    .p-5 {
+        padding: 1rem;
+    }
+
+    .px-4 {
+        padding-left: 1rem;
+        padding-right: 1rem;
     }
 }
 
@@ -172,11 +264,11 @@
     .no-print {
         display: none !important;
     }
-    
+
     .print-break-before {
         page-break-before: always;
     }
-    
+
     .print-break-after {
         page-break-after: always;
     }
@@ -259,6 +351,127 @@
     }
 }
 
+/* Enhanced Guide Library Styles */
+.guide-card {
+    transition: all 0.2s ease-in-out;
+}
+
+.guide-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Line clamp utility for text truncation */
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Enhanced modal backdrop */
+.backdrop-blur-sm {
+    backdrop-filter: blur(4px);
+}
+
+/* Statistics card animations */
+.stats-card {
+    transition: all 0.3s ease-in-out;
+}
+
+.stats-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Search input focus enhancement */
+.search-input:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    border-color: #3b82f6;
+}
+
+/* Enhanced button hover states */
+.btn-enhanced {
+    transition: all 0.2s ease-in-out;
+}
+
+.btn-enhanced:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Gradient backgrounds */
+.gradient-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.gradient-success {
+    background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+}
+
+.gradient-warning {
+    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+}
+
+/* Enhanced loading states */
+.loading-shimmer {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Enhanced status indicators */
+.status-indicator {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.status-indicator::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+    animation: pulse 2s infinite;
+}
+
+.status-indicator.active::before {
+    background-color: #10b981;
+}
+
+.status-indicator.inactive::before {
+    background-color: #ef4444;
+}
+
+/* Enhanced form controls */
+.form-control-enhanced {
+    transition: all 0.2s ease-in-out;
+    border: 1px solid #d1d5db;
+}
+
+.form-control-enhanced:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+.form-control-enhanced:hover {
+    border-color: #9ca3af;
+}
+
 /* Dark mode support (if needed in future) */
 @media (prefers-color-scheme: dark) {
     .dark-mode-support {
@@ -272,6 +485,15 @@
         border-width: 2px;
         font-weight: 600;
     }
+
+    .guide-card {
+        border: 2px solid #000;
+    }
+
+    .btn-enhanced {
+        border: 2px solid #000;
+        font-weight: 600;
+    }
 }
 
 /* Reduced motion support */
@@ -280,5 +502,17 @@
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
+    }
+
+    .guide-card:hover {
+        transform: none;
+    }
+
+    .stats-card:hover {
+        transform: none;
+    }
+
+    .btn-enhanced:hover {
+        transform: none;
     }
 }
