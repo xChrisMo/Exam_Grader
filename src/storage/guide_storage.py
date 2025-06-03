@@ -15,7 +15,7 @@ class GuideStorage(BaseStorage):
 
     def store_guide(self, file_content: bytes, filename: str, guide_data: Dict) -> str:
         """
-        Store marking guide data.
+        Store marking guide data with validation.
 
         Args:
             file_content: Raw bytes of the guide file
@@ -24,8 +24,11 @@ class GuideStorage(BaseStorage):
 
         Returns:
             Cache key used to store the guide
+
+        Raises:
+            ValidationError: If guide data validation fails
         """
-        return self.store(file_content, filename, guide_data)
+        return self.store(file_content, filename, guide_data, data_type='guide')
 
     def get_guide(self, file_content: bytes) -> Optional[Tuple[Dict, str]]:
         """

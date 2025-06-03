@@ -5,10 +5,20 @@
 
 // Application namespace
 const ExamGrader = {
-  // Configuration - will be initialized from server
+  // Configuration
   config: {
-    maxFileSize: null, // Will be set from server config
-    allowedFileTypes: [], // Will be set from server config
+    maxFileSize: 16 * 1024 * 1024, // 16MB
+    allowedFileTypes: [
+      ".pdf",
+      ".docx",
+      ".doc",
+      ".jpg",
+      ".jpeg",
+      ".png",
+      ".tiff",
+      ".bmp",
+      ".gif",
+    ],
     apiEndpoints: {
       processMapping: "/api/process-mapping",
       processGrading: "/api/process-grading",
@@ -143,7 +153,8 @@ const ExamGrader = {
     apiRequest: async function (url, options = {}) {
       try {
         // Add CSRF token if available
-        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content');
+        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+                         document.querySelector('input[name=csrf_token]')?.value;
 
         const defaultHeaders = {
           "Content-Type": "application/json",

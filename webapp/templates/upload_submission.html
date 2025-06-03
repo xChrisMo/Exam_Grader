@@ -61,74 +61,17 @@
         <p id="message-text"></p>
       </div>
       <form method="POST" enctype="multipart/form-data" id="uploadForm">
-        <!-- File Upload Area -->
-        <div class="mb-6">
-          <label for="submissionFile" class="block text-sm font-medium text-gray-700 mb-2">
-            Select Answer Sheet
-          </label>
-          <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-primary-400 transition-colors duration-200" id="drop-zone">
-            <div class="space-y-1 text-center">
-              <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <div class="flex text-sm text-gray-600">
-                <label for="submissionFile" class="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500">
-                  <span>Upload a file</span>
-                  <input id="submissionFile" name="submission_file" type="file" class="sr-only" accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.tiff,.bmp,.gif" required multiple>
-                </label>
-                <p class="pl-1">or drag and drop</p>
-              </div>
-              <p class="text-xs text-gray-500">PDF, Word, or image files up to 16MB</p>
-            </div>
-          </div>
+        {% if csrf_token %}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        {% endif %}
+        <div class="form-group">
+          <label for="submissionFile">Select Answer Sheet:</label>
+          <input type="file" class="form-control-file" name="file" id="submissionFile" accept=".pdf,.jpg,.png" required>
         </div>
-
-        <!-- File Preview -->
-        <div id="file-preview" class="hidden mb-6">
-          <div class="bg-gray-50 rounded-lg p-4">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center">
-                <svg class="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
-                <div class="ml-3">
-                  <p class="text-sm font-medium text-gray-900" id="file-name">filename.pdf</p>
-                  <p class="text-sm text-gray-500" id="file-size">2.4 MB</p>
-                </div>
-              </div>
-              <button type="button" id="remove-file" class="text-gray-400 hover:text-gray-600">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Upload Progress -->
-        <div id="upload-progress" class="hidden mb-6">
-          <div class="bg-gray-200 rounded-full h-2">
-            <div id="progress-bar" class="bg-primary-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-          </div>
-          <p class="text-sm text-gray-600 mt-2">Uploading and processing...</p>
-        </div>
-
-        <!-- Form Actions -->
-        <div class="flex items-center justify-between">
-          <a href="{{ url_for('dashboard') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-            <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
-            Back to Dashboard
-          </a>
-
-          <button type="submit" id="uploadButton" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-success-600 hover:bg-success-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-success-500 disabled:opacity-50 disabled:cursor-not-allowed">
-            <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-            </svg>
-            Upload Submission
-          </button>
-        </div>
+        <button type="submit" class="btn btn-primary" id="uploadButton">
+          <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display:none;"></span>
+          Upload and Grade
+        </button>
       </form>
     </div>
   </div>
@@ -199,10 +142,51 @@
     </div>
   </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
+{% endblock %} {% block extra_js %}
 <script>
+  // Initialize ExamGrader namespace if not exists
+  window.ExamGrader = window.ExamGrader || {};
+  window.ExamGrader.utils = window.ExamGrader.utils || {};
+
+  // Add utility functions
+  ExamGrader.utils.showButtonLoading = function(button, loadingText) {
+      const originalText = button.innerHTML;
+      button.setAttribute('data-original-text', originalText);
+      button.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>${loadingText || 'Loading...'}`;
+  };
+
+  ExamGrader.utils.hideButtonLoading = function(button, text) {
+      const originalText = button.getAttribute('data-original-text');
+      button.innerHTML = text || originalText;
+  };
+
+  // Utility function to display messages
+  ExamGrader.utils.displayMessage = function(message, type = 'info') {
+      const messageArea = document.getElementById('message-area');
+      const messageText = document.getElementById('message-text');
+
+      messageArea.classList.remove('hidden', 'bg-green-100', 'border-green-400', 'text-green-700', 'bg-red-100', 'border-red-400', 'text-red-700', 'bg-blue-100', 'border-blue-400', 'text-blue-700');
+      messageArea.classList.add('block');
+
+      if (type === 'success') {
+          messageArea.classList.add('bg-green-100', 'border-green-400', 'text-green-700');
+      } else if (type === 'error') {
+          messageArea.classList.add('bg-red-100', 'border-red-400', 'text-red-700');
+      } else {
+          messageArea.classList.add('bg-blue-100', 'border-blue-400', 'text-blue-700');
+      }
+      messageText.textContent = message;
+
+      // Hide message after 5 seconds
+      setTimeout(() => {
+          messageArea.classList.add('hidden');
+      }, 5000);
+  };
+
+  ExamGrader.utils.clearMessages = function() {
+      const messageArea = document.getElementById('message-area');
+      messageArea.classList.add('hidden');
+  };
 
   document.addEventListener('DOMContentLoaded', function() {
       // Get elements that actually exist in the current template
@@ -230,13 +214,13 @@
           e.preventDefault();
 
           if (!fileInput.files || fileInput.files.length === 0) {
-              ExamGrader.utils.showToast('Please select a file to upload.', 'error');
+              ExamGrader.utils.displayMessage('Please select a file to upload.', 'error');
               return;
           }
 
           // Show loading state
           const originalText = uploadButton.innerHTML;
-          uploadButton.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Processing...';
+          uploadButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
           uploadButton.disabled = true;
 
           // Submit the form normally (let Flask handle it)
@@ -259,7 +243,7 @@
               }
           })
           .catch(error => {
-              ExamGrader.utils.showToast('Upload failed: ' + error.message, 'error');
+              ExamGrader.utils.displayMessage('Upload failed: ' + error.message, 'error');
               console.error('Upload error:', error);
           })
           .finally(() => {

@@ -7,6 +7,7 @@ from typing import Dict, Optional, Tuple
 import hashlib
 from datetime import datetime
 from utils.logger import setup_logger
+from .validators import DataValidator, ValidationError, validate_and_sanitize_input
 
 # Set up logger for this module
 logger = setup_logger(__name__)
@@ -86,7 +87,7 @@ class SubmissionStorage:
     def store_results(self, file_content: bytes, filename: str, results: Dict,
                      raw_text: str) -> str:
         """
-        Store submission results.
+        Store submission results with validation.
 
         Args:
             file_content: Raw bytes of the submitted file
@@ -96,15 +97,41 @@ class SubmissionStorage:
 
         Returns:
             File hash that can be used to retrieve results
-        """
-        file_hash = self._generate_file_hash(file_content)
 
-        data = {
-            'filename': filename,
-            'results': results,
-            'raw_text': raw_text,
-            'timestamp': time.time()
-        }
+        Raises:
+            ValidationError: If submission data validation fails
+        """
+        try:
+            # Validate inputs
+            DataValidator.validate_file_content(file_content)
+            DataValidator.validate_filename(filename)
+            DataValidator.validate_text_content(raw_text)
+
+            file_hash = self._generate_file_hash(file_content)
+
+            # Create submission data structure
+            submission_data = {
+                'filename': filename,
+                'answers': results,
+                'raw_text': raw_text
+            }
+
+            # Validate submission data
+            validated_data = validate_and_sanitize_input(submission_data, 'submission')
+
+            data = {
+                'filename': validated_data['filename'],
+                'results': validated_data['answers'],
+                'raw_text': validated_data['raw_text'],
+                'timestamp': time.time(),
+                'file_size': len(file_content)
+            }
+        except ValidationError:
+            logger.error(f"Validation failed for submission: {filename}")
+            raise
+        except Exception as e:
+            logger.error(f"Error preparing submission data: {str(e)}")
+            raise ValidationError(f"Failed to prepare submission data: {str(e)}")
 
         # Convert to JSON string to check size
         json_data = json.dumps(data, ensure_ascii=False, indent=2)

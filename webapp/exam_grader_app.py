@@ -41,6 +41,11 @@ try:
     from src.storage.grading_storage import GradingStorage
     from src.storage.results_storage import ResultsStorage
     from utils.logger import logger
+    from utils.file_processor import FileProcessor, MemoryEfficientFileHandler
+    from utils.rate_limiter import rate_limit_with_whitelist, get_rate_limit_status
+    from utils.input_sanitizer import InputSanitizer, sanitize_form_data, validate_file_upload
+    from utils.error_handler import ErrorHandler, ProgressTracker, create_user_notification
+    from utils.loading_states import loading_manager, LoadingState, create_loading_response, get_loading_state_for_template
 except ImportError as e:
     print(f"Warning: Could not import some modules: {e}")
     # Create mock logger for development
@@ -120,6 +125,10 @@ except Exception as e:
     results_storage = None
 
 # Utility functions
+
+def get_config_value(key: str, default=None):
+    """Get configuration value with fallback."""
+    return getattr(config, key, default)
 
 def get_file_size_mb(file_path: str) -> float:
     """Get file size in MB."""
@@ -260,15 +269,40 @@ def internal_error(e):
                          error_code=500,
                          error_message="Internal server error"), 500
 
+@app.errorhandler(429)
+def rate_limit_exceeded(e):
+    """Handle rate limit exceeded errors."""
+    logger.warning(f"Rate limit exceeded: {request.remote_addr}")
+    if request.is_json or request.path.startswith('/api/'):
+        return jsonify({
+            'error': 'Rate limit exceeded',
+            'message': 'Too many requests. Please wait before trying again.',
+            'status_code': 429
+        }), 429
+    else:
+        flash('Too many requests. Please wait before trying again.', 'warning')
+        return render_template('error.html',
+                             error_code=429,
+                             error_message="Rate limit exceeded. Please wait before trying again."), 429
+
 # Template context processors
 @app.context_processor
 def inject_globals():
     """Inject global variables into all templates."""
+    # Auto-cleanup old loading operations
+    try:
+        loading_manager.auto_cleanup()
+        loading_states = get_loading_state_for_template()
+    except Exception as e:
+        logger.warning(f"Error getting loading states: {str(e)}")
+        loading_states = {'loading_operations': {}, 'has_active_operations': False, 'total_active_operations': 0}
+
     return {
         'app_version': '2.0.0',
         'current_year': datetime.now().year,
         'service_status': get_service_status(),
-        'storage_stats': get_storage_stats()
+        'storage_stats': get_storage_stats(),
+        'loading_states': loading_states
     }
 
 # Routes
@@ -1142,201 +1176,6 @@ def delete_submission():
         logger.error(f"Error deleting submission: {str(e)}")
         return jsonify({'success': False, 'message': 'Internal server error.'}), 500
 
-
-def add_recent_activity(activity_type: str, message: str, icon: str = 'info'):
-    """Add an activity to the recent activity list in session."""
-    try:
-        activity = session.get('recent_activity', [])
-        activity.insert(0, {
-            'type': activity_type,
-            'message': message,
-            'timestamp': datetime.now().isoformat(),
-            'icon': icon
-        })
-        session['recent_activity'] = activity[:10]  # Keep only last 10 activities
-        session.modified = True
-        logger.info(f"Added recent activity: {activity_type} - {message}")
-    except Exception as e:
-        logger.error(f"Error adding recent activity: {str(e)}")
-        # Don't raise exception to avoid breaking the main flow
-
-
-@app.route('/use-guide/<guide_id>')
-def use_guide(guide_id):
-    """Use a specific marking guide."""
-    try:
-        # Load guide from storage
-        if guide_storage:
-            guide = guide_storage.get_guide_data(guide_id)
-            if guide:
-                # Set as current guide in session
-                session['guide_data'] = guide
-                session['guide_filename'] = guide.get('filename', 'Unknown')
-                session['guide_raw_content'] = guide.get('raw_content', '')
-                session['guide_uploaded'] = True
-                session.modified = True
-
-                flash(f'Marking guide "{guide.get("name", "Unknown")}" is now active.', 'success')
-                logger.info(f"Guide {guide_id} set as active guide")
-                add_recent_activity('guide_activated', f'Activated guide: {guide.get("name", "Unknown")}', 'check')
-            else:
-                flash('Guide not found.', 'error')
-                logger.warning(f"Guide {guide_id} not found in storage")
-        else:
-            flash('Guide storage not available.', 'error')
-            logger.error("Guide storage not available")
-
-        return redirect(url_for('marking_guides'))
-    except Exception as e:
-        logger.error(f"Error using guide {guide_id}: {str(e)}")
-        flash('Error loading guide. Please try again.', 'error')
-        return redirect(url_for('marking_guides'))
-
-
-@app.route('/delete-guide/<guide_id>')
-def delete_guide(guide_id):
-    """Delete a specific marking guide."""
-    try:
-        if guide_id == 'session_guide':
-            flash('Cannot delete session guide.', 'error')
-            return redirect(url_for('marking_guides'))
-
-        # Check if this guide is currently active in session
-        current_guide_filename = session.get('guide_filename')
-        is_current_guide = False
-
-        logger.info(f"Delete guide check - guide_id: {guide_id}, current_guide_filename: {current_guide_filename}")
-
-        # Get guide info before deletion for proper cleanup
-        guide_info = None
-        if guide_storage:
-            guide_info = guide_storage.get_guide_data(guide_id)
-            if guide_info:
-                logger.info(f"Guide info - filename: {guide_info.get('filename')}, name: {guide_info.get('name')}")
-                if current_guide_filename:
-                    # Check if this is the currently active guide (multiple ways to match)
-                    is_current_guide = (
-                        guide_info.get('filename') == current_guide_filename or
-                        guide_info.get('name') == current_guide_filename or
-                        guide_info.get('filename', '').replace(' ', '_') == current_guide_filename or
-                        current_guide_filename in guide_info.get('filename', '') or
-                        guide_info.get('filename', '') in current_guide_filename
-                    )
-                    logger.info(f"Is current guide check: {is_current_guide}")
-            else:
-                logger.warning(f"Guide {guide_id} not found in storage for deletion check")
-
-        # Delete guide from storage
-        if guide_storage:
-            success = guide_storage.delete_guide(guide_id)
-            if success:
-                # If this was the current active guide, clear session data
-                if is_current_guide:
-                    logger.info(f"Clearing session data for deleted active guide: {current_guide_filename}")
-                    session.pop('guide_data', None)
-                    session.pop('guide_filename', None)
-                    session.pop('guide_raw_content', None)
-                    session.pop('guide_uploaded', None)
-                    session.modified = True
-                    flash('Active guide deleted and session cleared.', 'warning')
-                else:
-                    flash('Guide deleted successfully.', 'success')
-
-                logger.info(f"Guide {guide_id} deleted successfully")
-                guide_name = guide_info.get('name', guide_id[:8] + '...') if guide_info else guide_id[:8] + '...'
-                add_recent_activity('guide_deleted', f'Deleted guide: {guide_name}', 'trash')
-            else:
-                flash('Guide not found.', 'error')
-                logger.warning(f"Guide {guide_id} not found for deletion")
-        else:
-            flash('Guide storage not available.', 'error')
-            logger.error("Guide storage not available")
-
-        return redirect(url_for('marking_guides'))
-    except Exception as e:
-        logger.error(f"Error deleting guide {guide_id}: {str(e)}")
-        flash('Error deleting guide. Please try again.', 'error')
-        return redirect(url_for('marking_guides'))
-
-
-@app.route('/clear-session-guide')
-def clear_session_guide():
-    """Clear session guide data - utility route for debugging."""
-    try:
-        # Clear all guide-related session data
-        guide_filename = session.get('guide_filename', 'Unknown')
-        session.pop('guide_filename', None)
-        session.pop('guide_data', None)
-        session.pop('guide_raw_content', None)
-        session.pop('guide_uploaded', None)
-        session.modified = True
-
-        flash(f'Session guide data cleared for: {guide_filename}', 'success')
-        logger.info(f"Cleared session guide data for: {guide_filename}")
-
-        return redirect(url_for('marking_guides'))
-    except Exception as e:
-        logger.error(f"Error clearing session guide: {str(e)}")
-        flash('Error clearing session guide data.', 'error')
-        return redirect(url_for('marking_guides'))
-
-
-@app.route('/health')
-def health_check():
-    """Health check endpoint for monitoring and deployment."""
-    try:
-        # Check service status
-        service_status = get_service_status()
-        storage_stats = get_storage_stats()
-
-        # Calculate overall health
-        critical_services = ['config_status']
-        optional_services = ['ocr_status', 'llm_status', 'storage_status']
-
-        # Check critical services
-        critical_healthy = all(service_status.get(service, False) for service in critical_services)
-
-        # Count optional services
-        optional_healthy = sum(1 for service in optional_services if service_status.get(service, False))
-        total_optional = len(optional_services)
-
-        # Determine overall status
-        if critical_healthy and optional_healthy >= 2:
-            status = "healthy"
-            status_code = 200
-        elif critical_healthy and optional_healthy >= 1:
-            status = "degraded"
-            status_code = 200
-        elif critical_healthy:
-            status = "limited"
-            status_code = 200
-        else:
-            status = "unhealthy"
-            status_code = 503
-
-        health_data = {
-            "status": status,
-            "timestamp": datetime.now().isoformat(),
-            "version": "2.0.0",
-            "services": service_status,
-            "storage": {
-                "temp_size_mb": storage_stats.get('temp_size_mb', 0),
-                "output_size_mb": storage_stats.get('output_size_mb', 0),
-                "total_size_mb": storage_stats.get('total_size_mb', 0)
-            },
-            "uptime": "running",
-            "environment": os.getenv('APP_ENV', 'development')
-        }
-
-        return jsonify(health_data), status_code
-
-    except Exception as e:
-        logger.error(f"Health check failed: {str(e)}")
-        return jsonify({
-            "status": "error",
-            "timestamp": datetime.now().isoformat(),
-            "error": str(e)
-        }), 500
 
 
 if __name__ == '__main__':

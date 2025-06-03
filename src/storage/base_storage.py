@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import hashlib
 from utils.cache import Cache
 from utils.logger import Logger
+from .validators import DataValidator, ValidationError, validate_and_sanitize_input
 
 logger = Logger().get_logger()
 
@@ -30,29 +31,51 @@ class BaseStorage:
         file_hash = hashlib.sha256(file_content).hexdigest()
         return f"{self.prefix}_{file_hash}"
         
-    def store(self, file_content: bytes, filename: str, data: Dict) -> str:
+    def store(self, file_content: bytes, filename: str, data: Dict, data_type: str = 'metadata') -> str:
         """
-        Store data in cache.
-        
+        Store data in cache with validation.
+
         Args:
             file_content: Raw bytes of the file
             filename: Original filename
             data: Data to store
-            
+            data_type: Type of data for validation ('guide', 'submission', 'results', 'metadata')
+
         Returns:
             Cache key used to store the data
+
+        Raises:
+            ValidationError: If data validation fails
         """
-        key = self._generate_key(file_content)
-        cache_data = {
-            'filename': filename,
-            'data': data,
-            'timestamp': datetime.now().isoformat()  # Store timestamp for age calculation
-        }
-        
         try:
+            # Validate file content
+            DataValidator.validate_file_content(file_content)
+
+            # Validate filename
+            DataValidator.validate_filename(filename)
+
+            # Validate and sanitize data
+            validated_data = validate_and_sanitize_input(data, data_type)
+
+            key = self._generate_key(file_content)
+            cache_data = {
+                'filename': filename,
+                'data': validated_data,
+                'timestamp': datetime.now().isoformat(),
+                'data_type': data_type,
+                'file_size': len(file_content)
+            }
+
+            # Final validation of cache data
+            DataValidator.validate_json_data(cache_data)
+
             self.cache.set(key, cache_data)
-            logger.debug(f"Stored data in cache with key: {key}")
+            logger.debug(f"Stored validated data in cache with key: {key}")
             return key
+
+        except ValidationError:
+            logger.error(f"Validation failed for data storage")
+            raise
         except Exception as e:
             logger.error(f"Failed to store data: {str(e)}")
             raise
@@ -81,7 +104,7 @@ class BaseStorage:
     def remove(self, file_content: bytes) -> None:
         """
         Remove data from cache.
-        
+
         Args:
             file_content: Raw bytes of the file
         """
@@ -91,6 +114,47 @@ class BaseStorage:
             logger.debug(f"Removed data from cache with key: {key}")
         except Exception as e:
             logger.error(f"Failed to remove data: {str(e)}")
+
+    def get_by_id(self, storage_id: str) -> Optional[Dict]:
+        """
+        Retrieve data by storage ID.
+
+        Args:
+            storage_id: The storage ID (cache key)
+
+        Returns:
+            Stored data if found, None otherwise
+        """
+        try:
+            cache_data = self.cache.get(storage_id)
+            if cache_data:
+                logger.debug(f"Retrieved data by ID: {storage_id}")
+                return cache_data
+            return None
+        except Exception as e:
+            logger.error(f"Failed to retrieve data by ID {storage_id}: {str(e)}")
+            return None
+
+    def remove_by_id(self, storage_id: str) -> bool:
+        """
+        Remove data by storage ID.
+
+        Args:
+            storage_id: The storage ID (cache key)
+
+        Returns:
+            True if removed successfully, False otherwise
+        """
+        try:
+            # Check if data exists
+            if self.cache.get(storage_id):
+                self.cache.remove(storage_id)
+                logger.debug(f"Removed data by ID: {storage_id}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Failed to remove data by ID {storage_id}: {str(e)}")
+            return False
             
     def clear(self) -> None:
         """Clear all cached data."""
@@ -150,19 +214,31 @@ class BaseStorage:
             }
 
     def is_available(self) -> bool:
-        """Check if the storage is available by checking if there's any data for this prefix."""
+        """Check if the storage is available by testing cache operations."""
         try:
-            # This is a simplified check. A more robust check might involve
-            # trying to list keys or checking a specific 'heartbeat' key.
-            # For now, we assume if the cache is operational, it's 'available'.
-            # To check if there's *any* data, we might need a method in Cache
-            # to check for keys by prefix or just check if the cache is not empty.
-            # Assuming cache.get_all_keys() returns keys, we can check for prefix.
-            all_keys = self.cache.get_all_keys()
-            for key in all_keys:
-                if key.startswith(self.prefix):
-                    return True
-            return False
+            # Test if we can perform basic cache operations
+            test_key = f"{self.prefix}_availability_test"
+            test_data = {'test': True, 'timestamp': datetime.now().isoformat()}
+
+            # Try to write and read a test value
+            self.cache.set(test_key, test_data)
+            retrieved_data = self.cache.get(test_key)
+
+            # Clean up test data
+            self.cache.remove(test_key)
+
+            # Return True if we successfully wrote and read the test data
+            return retrieved_data is not None and retrieved_data.get('test') is True
+
         except Exception as e:
             logger.error(f"Error checking storage availability for {self.prefix}: {str(e)}")
+            return False
+
+    def has_data(self) -> bool:
+        """Check if there's any data stored with this prefix."""
+        try:
+            all_keys = self.cache.get_all_keys()
+            return any(key.startswith(self.prefix) for key in all_keys)
+        except Exception as e:
+            logger.error(f"Error checking for data with prefix {self.prefix}: {str(e)}")
             return False

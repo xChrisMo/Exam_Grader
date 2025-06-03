@@ -65,27 +65,39 @@ class Cache:
     
     def remove(self, key: str) -> None:
         """Remove a value from the cache."""
-        cache_path = self._get_cache_path(key)
-        
-        try:
-            if cache_path.exists():
-                cache_path.unlink()
-        except (OSError, IOError) as e:
-            # Log error but continue operation
-            logger.warning(f"Failed to remove cache file {cache_path}: {str(e)}")
+        with self._lock:
+            cache_path = self._get_cache_path(key)
+
+            # Remove from memory cache
+            if key in self._memory_cache:
+                del self._memory_cache[key]
+                del self._access_times[key]
+
+            # Remove from disk cache
+            try:
+                if cache_path.exists():
+                    cache_path.unlink()
+                    logger.debug(f"Removed cache entry for key: {key}")
+            except (OSError, IOError) as e:
+                logger.warning(f"Failed to remove cache file {cache_path}: {str(e)}")
     
     def clear(self) -> None:
         """Clear all cached data."""
-        try:
-            for cache_file in self.cache_dir.glob("*.json"):
-                try:
-                    cache_file.unlink()
-                except (OSError, IOError) as e:
-                    # Log error but continue with other files
-                    logger.warning(f"Failed to remove cache file {cache_file}: {str(e)}")
-        except (OSError, IOError) as e:
-            # Log error for directory access issues
-            logger.warning(f"Failed to access cache directory {self.cache_dir}: {str(e)}")
+        with self._lock:
+            # Clear memory cache
+            self._memory_cache.clear()
+            self._access_times.clear()
+
+            # Clear disk cache
+            try:
+                for cache_file in self.cache_dir.glob("*.json"):
+                    try:
+                        cache_file.unlink()
+                    except (OSError, IOError) as e:
+                        logger.warning(f"Failed to remove cache file {cache_file}: {str(e)}")
+                logger.info("Cache cleared successfully")
+            except (OSError, IOError) as e:
+                logger.warning(f"Failed to access cache directory {self.cache_dir}: {str(e)}")
     
     def get_all_keys(self) -> list[str]:
         """Get all keys currently in the cache."""
@@ -104,25 +116,69 @@ class Cache:
         return keys
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
-        try:
-            cache_files = list(self.cache_dir.glob("*.json"))
-            total_size = sum(f.stat().st_size for f in cache_files)
-            
+        """Get enhanced cache statistics."""
+        with self._lock:
+            try:
+                cache_files = list(self.cache_dir.glob("*.json"))
+                total_size = sum(f.stat().st_size for f in cache_files)
+
+                # Count expired entries
+                expired_count = 0
+                for cache_file in cache_files:
+                    try:
+                        with open(cache_file, 'r', encoding='utf-8') as f:
+                            cache_data = json.load(f)
+                        if 'timestamp' in cache_data and self._is_expired(cache_data['timestamp']):
+                            expired_count += 1
+                    except (OSError, IOError, json.JSONDecodeError):
+                        expired_count += 1  # Count corrupted files as expired
+
+                return {
+                    'total_size_bytes': total_size,
+                    'total_size_mb': round(total_size / (1024 * 1024), 2),
+                    'max_size_mb': round(self.max_size_bytes / (1024 * 1024), 2),
+                    'file_count': len(cache_files),
+                    'expired_count': expired_count,
+                    'memory_cache_size': len(self._memory_cache),
+                    'memory_cache_max_size': self._memory_cache_max_size,
+                    'ttl_hours': round(self.ttl_seconds / 3600, 2),
+                    'usage_percentage': round((total_size / self.max_size_bytes) * 100, 2) if self.max_size_bytes > 0 else 0
+                }
+            except (OSError, IOError) as e:
+                logger.warning(f"Failed to get cache stats: {str(e)}")
+                return {
+                    'total_size_bytes': 0,
+                    'total_size_mb': 0,
+                    'max_size_mb': round(self.max_size_bytes / (1024 * 1024), 2),
+                    'file_count': 0,
+                    'expired_count': 0,
+                    'memory_cache_size': 0,
+                    'memory_cache_max_size': self._memory_cache_max_size,
+                    'ttl_hours': round(self.ttl_seconds / 3600, 2),
+                    'usage_percentage': 0
+                }
+
+    def cleanup(self) -> Dict[str, int]:
+        """Manually trigger cache cleanup and return statistics."""
+        with self._lock:
+            expired_removed = self._cleanup_expired_entries()
+            size_removed = self._enforce_size_limit()
+
             return {
-                'total_size_bytes': total_size,
-                'total_size_mb': round(total_size / (1024 * 1024), 2),
-                'file_count': len(cache_files),
-                'max_size_mb': 100,
-                'cleanup_threshold': 0.9
+                'expired_removed': expired_removed,
+                'size_limit_removed': size_removed,
+                'total_removed': expired_removed + size_removed
             }
-        except (OSError, IOError) as e:
-            # Log error for directory or file access issues
-            logger.warning(f"Failed to get cache stats: {str(e)}")
-            return {
-                'total_size_bytes': 0,
-                'total_size_mb': 0,
-                'file_count': 0,
-                'max_size_mb': 100,
-                'cleanup_threshold': 0.9
-            }
+
+    def warm_cache(self, keys: List[str]) -> int:
+        """Pre-load specified keys into memory cache."""
+        loaded_count = 0
+        with self._lock:
+            for key in keys:
+                if key not in self._memory_cache:
+                    value = self.get(key)  # This will load into memory cache
+                    if value is not None:
+                        loaded_count += 1
+
+        logger.debug(f"Warmed cache with {loaded_count} entries")
+        return loaded_count

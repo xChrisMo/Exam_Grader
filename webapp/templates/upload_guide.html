@@ -14,6 +14,9 @@
     <div class="bg-white shadow rounded-lg">
         <div class="px-4 py-5 sm:p-6">
             <form method="POST" enctype="multipart/form-data" id="upload-form">
+                {% if csrf_token %}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                {% endif %}
                 <!-- File Upload Area -->
                 <div class="mb-6">
                     <label for="guide_file" class="block text-sm font-medium text-gray-700 mb-2">
@@ -167,9 +170,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle file selection
     function handleFileSelect(file) {
         fileName.textContent = file.name;
-        fileSize.textContent = ExamGrader.utils.formatFileSize(file.size);
+        fileSize.textContent = formatFileSize(file.size);
         filePreview.classList.remove('hidden');
         dropZone.classList.add('hidden');
+    }
+
+    // Format file size
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
     // Form submission with progress
@@ -177,7 +189,7 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         
         if (!fileInput.files.length) {
-            ExamGrader.utils.showToast('Please select a file to upload.', 'error');
+            alert('Please select a file to upload.');
             return;
         }
 
@@ -218,7 +230,7 @@ document.addEventListener('DOMContentLoaded', function() {
             uploadProgress.classList.add('hidden');
             submitBtn.disabled = false;
             ExamGrader.utils.hideButtonLoading(submitBtn, 'Upload Guide');
-            ExamGrader.utils.showToast('Upload failed. Please try again.', 'error');
+            alert('Upload failed. Please try again.');
         });
     });
 });
