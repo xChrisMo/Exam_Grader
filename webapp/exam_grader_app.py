@@ -23,92 +23,148 @@ from flask import (
     Flask, render_template, request, redirect, url_for,
     flash, session, jsonify, send_file, abort
 )
+from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
 
 # Import project modules
 try:
-    from src.config.config_manager import ConfigManager
+    from src.config.unified_config import config
+    from src.database import db, User, MarkingGuide, Submission, Mapping, GradingResult, MigrationManager, DatabaseUtils
+    from src.security.session_manager import SecureSessionManager
+    from src.security.secrets_manager import secrets_manager, initialize_secrets
     from src.services.ocr_service import OCRService
     from src.services.llm_service import LLMService
     from src.services.mapping_service import MappingService
     from src.services.grading_service import GradingService
+    from src.services.file_cleanup_service import FileCleanupService
     from src.parsing.parse_submission import parse_student_submission
     from src.parsing.parse_guide import parse_marking_guide
-    from src.storage.submission_storage import SubmissionStorage
-    from src.storage.guide_storage import GuideStorage
-    from src.storage.mapping_storage import MappingStorage
-    from src.storage.grading_storage import GradingStorage
-    from src.storage.results_storage import ResultsStorage
     from utils.logger import logger
-    from utils.file_processor import FileProcessor, MemoryEfficientFileHandler
     from utils.rate_limiter import rate_limit_with_whitelist, get_rate_limit_status
     from utils.input_sanitizer import InputSanitizer, sanitize_form_data, validate_file_upload
-    from utils.error_handler import ErrorHandler, ProgressTracker, create_user_notification
+    from utils.error_handler import ErrorHandler, ProgressTracker, create_user_notification, add_recent_activity
     from utils.loading_states import loading_manager, LoadingState, create_loading_response, get_loading_state_for_template
 except ImportError as e:
-    print(f"Warning: Could not import some modules: {e}")
-    # Create mock logger for development
-    class MockLogger:
-        def info(self, msg): print(f"INFO: {msg}")
-        def error(self, msg): print(f"ERROR: {msg}")
-        def warning(self, msg): print(f"WARNING: {msg}")
-    logger = MockLogger()
+    print(f"❌ Failed to import required modules: {e}")
+    print("   Make sure all dependencies are installed and the project structure is correct")
+    sys.exit(1)
+
+# Import authentication functions
+try:
+    from webapp.auth import init_auth, login_required, get_current_user
+    print("✅ Authentication modules imported successfully")
+except ImportError as e:
+    print(f"❌ Failed to import authentication modules: {e}")
+    sys.exit(1)
 
 # Initialize Flask application
 app = Flask(__name__)
 
-# Load configuration
+# Load unified configuration
 try:
-    from config import get_config, allowed_file as config_allowed_file
-    config_class = get_config()
-    app.config.from_object(config_class)
-    config_class.init_app(app)
+    # Validate configuration
+    config.validate()
 
-    # Use config class for settings
-    config = config_class()
-    allowed_file = config_allowed_file
+    # Configure Flask app with unified config
+    app.config.update(config.get_flask_config())
 
-    logger.info("Configuration loaded successfully")
+    logger.info(f"Configuration loaded successfully for environment: {config.environment}")
 except Exception as e:
     logger.error(f"Failed to load configuration: {str(e)}")
-    # Use fallback configuration
-    app.config['SECRET_KEY'] = 'fallback-secret-key-for-development'
-    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+    print(f"❌ Configuration error: {e}")
+    sys.exit(1)
 
-    # Create mock config object
-    class MockConfig:
-        def __init__(self):
-            self.secret_key = 'fallback-secret-key-for-development'
-            self.max_file_size_mb = 16
-            self.temp_dir = 'temp'
-            self.output_dir = 'output'
-            self.port = 5000
-            self.host = '127.0.0.1'
-            self.debug = True
-            self.supported_formats = ['.txt', '.docx', '.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif']
-
-    config = MockConfig()
-
-    def allowed_file(filename):
-        if not filename:
-            return False
-        ext = '.' + filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-        return ext in config.supported_formats
-
-# Initialize services
+# Initialize CSRF protection
 try:
-    ocr_service = OCRService()
-    llm_service = LLMService()
-    mapping_service = MappingService()
-    grading_service = GradingService()
+    csrf = CSRFProtect(app)
+    logger.info("CSRF protection initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize CSRF protection: {str(e)}")
+    print(f"❌ CSRF protection error: {e}")
+    sys.exit(1)
 
-    # Initialize storage services
-    submission_storage = SubmissionStorage()
-    guide_storage = GuideStorage()
-    mapping_storage = MappingStorage()
-    grading_storage = GradingStorage()
-    results_storage = ResultsStorage()
+# Initialize database
+try:
+    db.init_app(app)
+
+    with app.app_context():
+        # Run migrations
+        migration_manager = MigrationManager(config.database.database_url)
+        if not migration_manager.migrate():
+            logger.error("Database migration failed")
+            sys.exit(1)
+
+        # Create default user if needed
+        DatabaseUtils.create_default_user()
+
+    logger.info("Database initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize database: {str(e)}")
+    print(f"❌ Database error: {e}")
+    sys.exit(1)
+
+# Initialize secrets manager
+try:
+    initialize_secrets()
+    logger.info("Secrets manager initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize secrets manager: {str(e)}")
+    print(f"❌ Secrets manager error: {e}")
+    sys.exit(1)
+
+# Initialize secure session manager
+try:
+    session_manager = SecureSessionManager(
+        config.security.secret_key,
+        config.security.session_timeout
+    )
+    logger.info("Secure session manager initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize session manager: {str(e)}")
+    print(f"❌ Session manager error: {e}")
+    sys.exit(1)
+
+# Initialize authentication system
+try:
+    init_auth(app, session_manager)
+    logger.info("Authentication system initialized successfully")
+
+    # Test that login_required is available
+    @login_required
+    def test_decorator():
+        pass
+    logger.info("login_required decorator is working")
+
+except Exception as e:
+    logger.error(f"Failed to initialize authentication: {str(e)}")
+    print(f"❌ Authentication error: {e}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+
+def allowed_file(filename):
+    """Check if file type is allowed."""
+    if not filename:
+        return False
+    ext = '.' + filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    return ext in config.files.supported_formats
+
+# Initialize services with secure API key handling
+try:
+    # Get API keys from secrets manager
+    ocr_api_key = secrets_manager.get_secret('HANDWRITING_OCR_API_KEY')
+    llm_api_key = secrets_manager.get_secret('DEEPSEEK_API_KEY')
+
+    # Initialize services with retry mechanisms
+    ocr_service = OCRService(api_key=ocr_api_key) if ocr_api_key else None
+    llm_service = LLMService(api_key=llm_api_key) if llm_api_key else None
+    mapping_service = MappingService(llm_service=llm_service)
+    grading_service = GradingService(llm_service=llm_service, mapping_service=mapping_service)
+
+    # Initialize file cleanup service
+    file_cleanup_service = FileCleanupService(config)
+    file_cleanup_service.start_scheduled_cleanup()
 
     logger.info("All services initialized successfully")
 except Exception as e:
@@ -118,11 +174,7 @@ except Exception as e:
     llm_service = None
     mapping_service = None
     grading_service = None
-    submission_storage = None
-    guide_storage = None
-    mapping_storage = None
-    grading_storage = None
-    results_storage = None
+    file_cleanup_service = None
 
 # Utility functions
 
@@ -143,8 +195,8 @@ def get_storage_stats() -> Dict[str, Any]:
         temp_size = 0
         output_size = 0
 
-        temp_dir = getattr(config, 'TEMP_DIR', getattr(config, 'temp_dir', 'temp'))
-        output_dir = getattr(config, 'OUTPUT_DIR', getattr(config, 'output_dir', 'output'))
+        temp_dir = str(config.files.temp_dir)
+        output_dir = str(config.files.output_dir)
 
         if os.path.exists(temp_dir):
             temp_size = sum(
@@ -160,9 +212,7 @@ def get_storage_stats() -> Dict[str, Any]:
                 for filename in filenames
             ) / (1024 * 1024)
 
-        max_file_size = getattr(config, 'MAX_CONTENT_LENGTH', getattr(config, 'max_file_size_mb', 16))
-        if isinstance(max_file_size, int) and max_file_size > 1000:  # If it's in bytes
-            max_file_size = max_file_size / (1024 * 1024)  # Convert to MB
+        max_file_size = config.files.max_file_size_mb
 
         return {
             'temp_size_mb': round(temp_size, 2),
@@ -206,23 +256,22 @@ def get_service_status() -> Dict[str, bool]:
                 logger.warning(f"Error checking LLM service availability: {str(e)}")
                 llm_available = False
 
-        # Check storage services
+        # Check database storage (new system)
+        storage_available = False
         submission_storage_available = False
         guide_storage_available = False
 
-        if submission_storage:
-            try:
-                submission_storage_available = submission_storage.is_available()
-            except Exception as e:
-                logger.warning(f"Error checking submission storage: {str(e)}")
-
-        if guide_storage:
-            try:
-                guide_storage_available = guide_storage.is_available()
-            except Exception as e:
-                logger.warning(f"Error checking guide storage: {str(e)}")
-
-        storage_available = submission_storage_available and guide_storage_available
+        try:
+            # Check if database is accessible
+            with app.app_context():
+                from src.database.models import User
+                User.query.count()  # Simple query to test database
+                storage_available = True
+                submission_storage_available = True
+                guide_storage_available = True
+        except Exception as e:
+            logger.warning(f"Error checking database storage: {str(e)}")
+            storage_available = False
 
         # For development/demo purposes, if no services are available, show them as available
         # This allows the app to function in demo mode
@@ -253,7 +302,7 @@ def get_service_status() -> Dict[str, bool]:
 # Error handlers
 @app.errorhandler(413)
 def too_large(e):
-    flash(f'File too large. Maximum size is {config.max_file_size_mb}MB.', 'error')
+    flash(f'File too large. Maximum size is {config.files.max_file_size_mb}MB.', 'error')
     return redirect(request.url)
 
 @app.errorhandler(404)
@@ -297,30 +346,105 @@ def inject_globals():
         logger.warning(f"Error getting loading states: {str(e)}")
         loading_states = {'loading_operations': {}, 'has_active_operations': False, 'total_active_operations': 0}
 
+    # Generate CSRF token
+    try:
+        from flask_wtf.csrf import generate_csrf
+        csrf_token = generate_csrf
+    except Exception as e:
+        logger.warning(f"Error generating CSRF token: {str(e)}")
+        csrf_token = lambda: ''
+
     return {
         'app_version': '2.0.0',
         'current_year': datetime.now().year,
         'service_status': get_service_status(),
         'storage_stats': get_storage_stats(),
-        'loading_states': loading_states
+        'loading_states': loading_states,
+        'csrf_token': csrf_token
     }
 
 # Routes
+@app.route('/landing')
+def landing():
+    """Public landing page."""
+    try:
+        # Check if user is authenticated
+        current_user = get_current_user()
+        is_authenticated = current_user is not None
+
+        context = {
+            'page_title': 'Welcome to Exam Grader',
+            'is_authenticated': is_authenticated,
+            'current_user': current_user
+        }
+        return render_template('landing.html', **context)
+    except Exception as e:
+        logger.error(f"Error loading landing page: {str(e)}")
+        # Fallback to basic landing page
+        return render_template('landing.html',
+                             page_title='Welcome to Exam Grader',
+                             is_authenticated=False,
+                             current_user=None)
+
 @app.route('/')
+def root():
+    """Root route - redirect based on authentication status."""
+    try:
+        current_user = get_current_user()
+        if current_user:
+            # User is authenticated, redirect to dashboard
+            return redirect(url_for('dashboard'))
+        else:
+            # User is not authenticated, show landing page
+            return redirect(url_for('landing'))
+    except Exception as e:
+        logger.error(f"Error in root route: {str(e)}")
+        # Fallback to landing page
+        return redirect(url_for('landing'))
+
+@app.route('/dashboard')
+@login_required
 def dashboard():
     """Main dashboard route."""
     try:
-        # Calculate dashboard statistics
-        submissions = session.get('submissions', [])
-        guide_uploaded = session.get('guide_uploaded', False)
-        logger.info(f"Dashboard: guide_uploaded from session: {guide_uploaded}")
-        last_score = session.get('last_score', 0)
-        recent_activity = session.get('recent_activity', [])
+        # Get current user
+        current_user = get_current_user()
+        if not current_user:
+            flash('Please log in to access the dashboard.', 'error')
+            return redirect(url_for('auth.login'))
 
-        # Calculate additional metrics
-        total_submissions = len(submissions)
-        processed_submissions = len([s for s in submissions if s.get('processed', False)])
-        avg_score = last_score if last_score else 0
+        # Calculate dashboard statistics from database (user-specific)
+        from src.database.models import Submission, MarkingGuide, GradingResult
+
+        # Get statistics from database (filtered by current user)
+        total_submissions = Submission.query.filter_by(user_id=current_user.id).count()
+        processed_submissions = Submission.query.filter(
+            Submission.user_id == current_user.id,
+            Submission.processing_status == 'completed'
+        ).count()
+        guide_uploaded = MarkingGuide.query.filter_by(user_id=current_user.id).count() > 0
+
+        # Get recent submissions as activity (user-specific)
+        recent_submissions = Submission.query.filter_by(user_id=current_user.id).order_by(
+            Submission.created_at.desc()
+        ).limit(5).all()
+
+        recent_activity = []
+        for submission in recent_submissions:
+            recent_activity.append({
+                'type': 'submission_upload',
+                'message': f'Processed submission: {submission.filename}',
+                'timestamp': submission.created_at.isoformat(),
+                'icon': 'document'
+            })
+
+        # Calculate average score from grading results (user-specific)
+        # Join with submissions to filter by user_id since GradingResult doesn't have user_id directly
+        avg_result = db.session.query(db.func.avg(GradingResult.percentage)).join(
+            Submission, GradingResult.submission_id == Submission.id
+        ).filter(Submission.user_id == current_user.id).scalar()
+        avg_score = round(avg_result, 1) if avg_result else 0
+        last_score = avg_score  # Use average as last score for now
 
         service_status = get_service_status()
         context = {
@@ -330,8 +454,8 @@ def dashboard():
             'guide_uploaded': guide_uploaded,
             'last_score': last_score,
             'avg_score': avg_score,
-            'recent_activity': recent_activity[:5],  # Show last 5 activities
-            'submissions': submissions,
+            'recent_activity': recent_activity,
+            'submissions': [s.to_dict() for s in recent_submissions],  # Convert to dict for template
             'guide_storage_available': service_status.get('guide_storage_available', False),
             'submission_storage_available': service_status.get('submission_storage_available', False)
         }
@@ -350,6 +474,7 @@ def dashboard():
                              submissions=[])
 
 @app.route('/upload-guide', methods=['GET', 'POST'])
+@login_required
 def upload_guide():
     """Upload and process marking guide."""
     if request.method == 'GET':
@@ -370,7 +495,7 @@ def upload_guide():
             return redirect(request.url)
 
         # Create temp directory if it doesn't exist
-        temp_dir = getattr(config, 'TEMP_DIR', getattr(config, 'temp_dir', 'temp'))
+        temp_dir = str(config.files.temp_dir)
         os.makedirs(temp_dir, exist_ok=True)
 
         # Save file
@@ -414,33 +539,50 @@ def upload_guide():
 
 
 
-        # Store guide
-        logger.info("Entering guide storage block.")
+        # Store guide in database
+        logger.info("Storing guide in database.")
         try:
-            if guide_storage:
-                with open(file_path, 'rb') as f:
-                    file_content = f.read()
-                logger.info("Attempting to store guide via guide_storage.")
-                guide_id = guide_storage.store_guide(file_content, filename, guide_data)
-                logger.info(f"Guide stored with ID: {guide_id}")
-            else:
-                logger.info("Using session storage as fallback for guide.")
-                # Use session storage as fallback
-                guide_id = str(uuid.uuid4())
-                session['guide_data'] = guide_data
-        except Exception as storage_error:
-            logger.error(f"Error storing guide: {str(storage_error)}")
-            # Use session storage as fallback
-            guide_id = str(uuid.uuid4())
-            session['guide_data'] = guide_data
+            from src.database.models import MarkingGuide, User
 
-        # Update session
+            # Get current logged-in user
+            current_user = get_current_user()
+            if not current_user:
+                flash('Error: User session expired. Please log in again.', 'error')
+                os.remove(file_path)
+                return redirect(url_for('auth.login'))
+
+            # Create marking guide record
+            marking_guide = MarkingGuide(
+                user_id=current_user.id,
+                title=guide_data.get('title', filename),
+                description=f"Uploaded guide: {filename}",
+                filename=filename,
+                file_path=file_path,  # Keep the file path for now
+                file_size=os.path.getsize(file_path),
+                file_type=filename.split('.')[-1].lower(),
+                content_text=guide_data.get('raw_content', ''),
+                questions=guide_data.get('questions', []),
+                total_marks=guide_data.get('total_marks', 0.0)
+            )
+
+            db.session.add(marking_guide)
+            db.session.commit()
+            guide_id = marking_guide.id
+
+            logger.info(f"Guide stored in database with ID: {guide_id}")
+
+        except Exception as storage_error:
+            logger.error(f"Error storing guide in database: {str(storage_error)}")
+            db.session.rollback()
+            flash(f'Error storing guide: {str(storage_error)}', 'error')
+            os.remove(file_path)
+            return redirect(request.url)
+
+        # Update session for backward compatibility
         logger.info("Updating session variables after guide storage.")
-        # Store only the raw content, which is JSON serializable
-        session['guide_raw_content'] = guide.raw_content
+        session['guide_id'] = guide_id
         session['guide_uploaded'] = True
         session['guide_filename'] = filename
-        session['guide_uploaded'] = True
         session.modified = True
         logger.info(f"upload_guide: guide_uploaded set to {session.get('guide_uploaded')} before redirect")
 
@@ -471,6 +613,7 @@ def upload_guide():
         return redirect(request.url)
 
 @app.route('/upload-submission', methods=['GET', 'POST'])
+@login_required
 def upload_submission():
     """Upload and process student submission."""
     if request.method == 'GET':
@@ -488,7 +631,7 @@ def upload_submission():
             flash('No files selected.', 'error')
             return redirect(request.url)
 
-        temp_dir = getattr(config, 'TEMP_DIR', getattr(config, 'temp_dir', 'temp'))
+        temp_dir = str(config.files.temp_dir)
         os.makedirs(temp_dir, exist_ok=True)
 
         uploaded_count = 0
@@ -606,6 +749,7 @@ def upload_submission():
         return redirect(request.url)
 
 @app.route('/submissions')
+@login_required
 def view_submissions():
     """View all submissions."""
     try:
@@ -701,10 +845,23 @@ def process_mapping():
         successful_mappings = 0
         failed_mappings = 0
 
-        if mapping_service and guide_storage and submission_storage:
+        if mapping_service:
             try:
-                # Get guide content
-                guide_data = guide_storage.get_guide_data(guide_id)
+                # Get guide content from database or session
+                guide_data = None
+                try:
+                    from src.database.models import MarkingGuide
+                    guide = MarkingGuide.query.get(guide_id)
+                    if guide:
+                        guide_data = {
+                            'questions': guide.questions or [],
+                            'content': guide.content_text,
+                            'total_marks': guide.total_marks
+                        }
+                except Exception:
+                    # Fallback to session data
+                    guide_data = session.get('guide_data', {})
+
                 if not guide_data:
                     return jsonify({'error': 'Guide data not found'}), 404
 
@@ -715,8 +872,23 @@ def process_mapping():
                         continue
 
                     try:
-                        # Get submission content
-                        submission_data = submission_storage.get_results(submission_id)
+                        # Get submission content from database or session
+                        submission_data = None
+                        try:
+                            from src.database.models import Submission
+                            db_submission = Submission.query.get(int(submission_id))
+                            if db_submission:
+                                submission_data = {
+                                    'answers': db_submission.answers,
+                                    'content': db_submission.content_text,
+                                    'filename': db_submission.filename
+                                }
+                        except (ValueError, TypeError):
+                            # Try session storage as fallback
+                            session_key = f'submission_{submission_id}'
+                            if session_key in session:
+                                submission_data = session[session_key]
+
                         if not submission_data:
                             failed_mappings += 1
                             continue
@@ -912,8 +1084,9 @@ def process_grading():
 
 # Additional routes for enhanced functionality
 @app.route('/marking-guides')
+@login_required
 def marking_guides():
-    """View marking guide library with enhanced features and safe JSON serialization."""
+    """View marking guide library with optimized performance and authentication."""
     try:
         guides = []
 
@@ -943,14 +1116,33 @@ def marking_guides():
             except Exception as session_error:
                 logger.error(f"Error processing session guide: {str(session_error)}")
 
-        # Get stored guides from storage
-        if guide_storage:
-            try:
-                stored_guides = guide_storage.get_all_guides()
-                guides.extend(stored_guides)
-                logger.info(f"Added {len(stored_guides)} stored guides")
-            except Exception as storage_error:
-                logger.error(f"Error loading stored guides: {str(storage_error)}")
+        # Get stored guides from database (optimized)
+        try:
+            from src.database.models import MarkingGuide
+            current_user = get_current_user()
+            if current_user:
+                # Use efficient database query
+                db_guides = MarkingGuide.query.filter_by(
+                    user_id=current_user.id,
+                    is_active=True
+                ).order_by(MarkingGuide.created_at.desc()).limit(50).all()
+
+                for guide in db_guides:
+                    guides.append({
+                        'id': guide.id,
+                        'name': guide.title,
+                        'filename': guide.filename,
+                        'description': guide.description or f'Database guide - {guide.title}',
+                        'questions': guide.questions or [],
+                        'total_marks': guide.total_marks or 0,
+                        'extraction_method': 'database',
+                        'created_at': guide.created_at.isoformat(),
+                        'created_by': current_user.username,
+                        'is_session_guide': False
+                    })
+                logger.info(f"Loaded {len(db_guides)} guides from database")
+        except Exception as db_error:
+            logger.error(f"Error loading guides from database: {str(db_error)}")
 
         # Calculate statistics
         total_guides = len(guides)
@@ -999,6 +1191,23 @@ def create_guide():
         logger.error(f"Error loading create guide page: {str(e)}")
         flash('Error loading create guide page. Please try again.', 'error')
         return redirect(url_for('dashboard'))
+
+@app.route('/clear-session-guide', methods=['POST'])
+def clear_session_guide():
+    """Clear the current session guide."""
+    try:
+        session.pop('guide_data', None)
+        session.pop('guide_filename', None)
+        session.pop('guide_raw_content', None)
+        session.pop('guide_uploaded', None)
+        session.pop('guide_id', None)
+        session.modified = True
+        flash('Session guide cleared successfully.', 'success')
+        return redirect(url_for('marking_guides'))
+    except Exception as e:
+        logger.error(f"Error clearing session guide: {str(e)}")
+        flash('Error clearing session guide. Please try again.', 'error')
+        return redirect(url_for('marking_guides'))
 
 @app.route('/view-submission/<submission_id>')
 def view_submission_content(submission_id):
@@ -1126,13 +1335,9 @@ def export_results():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"exam_results_{timestamp}.json"
 
-        # Try to save to results storage if available
-        if results_storage:
-            try:
-                results_storage.store_results(export_data, filename)
-                logger.info(f"Results exported to storage: {filename}")
-            except Exception as storage_error:
-                logger.warning(f"Could not save results to storage: {str(storage_error)}")
+        # Note: results_storage service is not available
+        # Results are returned directly to the client
+        logger.info(f"Results prepared for export: {filename}")
 
         return jsonify({
             'success': True,

@@ -21,6 +21,11 @@ Jinja2>=3.1.3
 # Security
 Flask-WTF>=1.2.1  # CSRF protection
 Flask-Limiter>=3.5.0  # Rate limiting
+cryptography>=42.0.0  # For encryption and secure storage
+
+# Database
+Flask-SQLAlchemy>=3.1.1  # Database ORM
+SQLAlchemy>=2.0.25  # Database toolkit
 
 # Performance and Monitoring
 Flask-Caching>=2.1.0  # Caching support

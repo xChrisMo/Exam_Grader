@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Exam Grader - AI-powered educational assessment platform for automated grading and feedback"
+    />
+    <title>Exam Grader - AI-Powered Educational Assessment Platform</title>
+
+    <!-- Favicon -->
+    <link
+      rel="icon"
+      href="{{ url_for('static', filename='favicon.ico') }}"
+      type="image/x-icon"
+    />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50: "#eff6ff",
+                100: "#dbeafe",
+                200: "#bfdbfe",
+                300: "#93c5fd",
+                400: "#60a5fa",
+                500: "#3b82f6",
+                600: "#2563eb",
+                700: "#1d4ed8",
+                800: "#1e40af",
+                900: "#1e3a8a",
+              },
+              success: {
+                50: "#f0fdf4",
+                100: "#dcfce7",
+                200: "#bbf7d0",
+                300: "#86efac",
+                400: "#4ade80",
+                500: "#22c55e",
+                600: "#16a34a",
+                700: "#15803d",
+                800: "#166534",
+                900: "#14532d",
+              },
+            },
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+              display: ["Inter", "system-ui", "sans-serif"],
+            },
+            animation: {
+              "fade-in": "fadeIn 0.5s ease-in-out",
+              "slide-up": "slideUp 0.3s ease-out",
+              "pulse-slow": "pulse 3s infinite",
+            },
+            keyframes: {
+              fadeIn: {
+                "0%": { opacity: "0" },
+                "100%": { opacity: "1" },
+              },
+              slideUp: {
+                "0%": { transform: "translateY(10px)", opacity: "0" },
+                "100%": { transform: "translateY(0)", opacity: "1" },
+              },
+            },
+          },
+        },
+      };
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Custom CSS -->
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/custom.css') }}"
+    />
+  </head>
+  <body class="h-full font-sans antialiased">
+    <!-- Navigation Header -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center py-4">
+          <!-- Logo -->
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <div
+                class="h-10 w-10 bg-primary-600 rounded-lg flex items-center justify-center"
+              >
+                <svg
+                  class="h-6 w-6 text-white"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+            <div class="ml-3">
+              <h1 class="text-xl font-bold text-gray-900">Exam Grader</h1>
+              <p class="text-sm text-gray-500">AI-Powered Assessment</p>
+            </div>
+          </div>
+
+          <!-- Navigation Links -->
+          <div class="flex items-center space-x-4">
+            {% if is_authenticated %}
+            <a
+              href="{{ url_for('dashboard') }}"
+              class="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
+            >
+              Dashboard
+            </a>
+            <a
+              href="{{ url_for('auth.profile') }}"
+              class="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
+            >
+              Profile
+            </a>
+            <a
+              href="{{ url_for('auth.logout') }}"
+              class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+            >
+              Sign Out
+            </a>
+            {% else %}
+            <a
+              href="{{ url_for('auth.login') }}"
+              class="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
+            >
+              Sign In
+            </a>
+            <a
+              href="{{ url_for('auth.signup') }}"
+              class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+            >
+              Get Started
+            </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="bg-gradient-to-br from-primary-50 to-primary-100">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+        <div class="text-center">
+          <h1
+            class="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6"
+          >
+            AI-Powered
+            <span class="text-primary-600">Exam Grading</span>
+          </h1>
+          <p class="text-xl sm:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
+            Revolutionize your assessment process with intelligent, automated
+            grading that saves time and provides consistent, detailed feedback.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4 justify-center">
+            {% if not is_authenticated %}
+            <a
+              href="{{ url_for('auth.signup') }}"
+              class="bg-primary-600 hover:bg-primary-700 text-white px-8 py-4 rounded-lg text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+            >
+              Start Grading Now
+            </a>
+            <a
+              href="{{ url_for('auth.login') }}"
+              class="bg-white hover:bg-gray-50 text-primary-600 border-2 border-primary-600 px-8 py-4 rounded-lg text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+            >
+              Sign In
+            </a>
+            {% else %}
+            <a
+              href="{{ url_for('dashboard') }}"
+              class="bg-primary-600 hover:bg-primary-700 text-white px-8 py-4 rounded-lg text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+            >
+              Go to Dashboard
+            </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Features Section -->
+    <div class="py-16 bg-white">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+          <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+            Powerful Features for Modern Education
+          </h2>
+          <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+            Everything you need to streamline your grading process and provide
+            better feedback to students.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <!-- Feature 1 -->
+          <div class="text-center p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow">
+            <div class="w-16 h-16 bg-primary-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">AI-Powered Grading</h3>
+            <p class="text-gray-600">
+              Advanced AI algorithms provide accurate, consistent grading across all submissions with detailed feedback.
+            </p>
+          </div>
+
+          <!-- Feature 2 -->
+          <div class="text-center p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow">
+            <div class="w-16 h-16 bg-success-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-success-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">Time Saving</h3>
+            <p class="text-gray-600">
+              Reduce grading time by up to 90% while maintaining high-quality assessment standards.
+            </p>
+          </div>
+
+          <!-- Feature 3 -->
+          <div class="text-center p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow">
+            <div class="w-16 h-16 bg-warning-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-warning-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+              </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">Detailed Analytics</h3>
+            <p class="text-gray-600">
+              Comprehensive insights and analytics to track student performance and identify learning gaps.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Benefits Section -->
+    <div class="py-16 bg-gray-50">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-6">
+              Why Choose Exam Grader?
+            </h2>
+            <div class="space-y-6">
+              <div class="flex items-start">
+                <div class="flex-shrink-0">
+                  <div class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
+                    <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                    </svg>
+                  </div>
+                </div>
+                <div class="ml-4">
+                  <h3 class="text-lg font-semibold text-gray-900">Consistent Grading</h3>
+                  <p class="text-gray-600">Eliminate grading bias and ensure fair, consistent evaluation across all submissions.</p>
+                </div>
+              </div>
+
+              <div class="flex items-start">
+                <div class="flex-shrink-0">
+                  <div class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
+                    <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                    </svg>
+                  </div>
+                </div>
+                <div class="ml-4">
+                  <h3 class="text-lg font-semibold text-gray-900">Instant Feedback</h3>
+                  <p class="text-gray-600">Provide immediate, detailed feedback to help students learn and improve faster.</p>
+                </div>
+              </div>
+
+              <div class="flex items-start">
+                <div class="flex-shrink-0">
+                  <div class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
+                    <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                    </svg>
+                  </div>
+                </div>
+                <div class="ml-4">
+                  <h3 class="text-lg font-semibold text-gray-900">Secure & Private</h3>
+                  <p class="text-gray-600">Your data is protected with enterprise-grade security and privacy measures.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="text-center">
+            <div class="bg-white rounded-lg shadow-xl p-8">
+              <div class="text-4xl font-bold text-primary-600 mb-2">90%</div>
+              <div class="text-gray-600 mb-4">Time Saved</div>
+              <div class="text-4xl font-bold text-success-600 mb-2">99%</div>
+              <div class="text-gray-600 mb-4">Accuracy Rate</div>
+              <div class="text-4xl font-bold text-warning-600 mb-2">24/7</div>
+              <div class="text-gray-600">Available</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CTA Section -->
+    <div class="bg-primary-600">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div class="text-center">
+          <h2 class="text-3xl sm:text-4xl font-bold text-white mb-4">
+            Ready to Transform Your Grading Process?
+          </h2>
+          <p class="text-xl text-primary-100 mb-8 max-w-2xl mx-auto">
+            Join thousands of educators who have already revolutionized their assessment workflow with Exam Grader.
+          </p>
+          {% if not is_authenticated %}
+          <a
+            href="{{ url_for('auth.signup') }}"
+            class="bg-white hover:bg-gray-100 text-primary-600 px-8 py-4 rounded-lg text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 inline-block"
+          >
+            Get Started Today
+          </a>
+          {% else %}
+          <a
+            href="{{ url_for('dashboard') }}"
+            class="bg-white hover:bg-gray-100 text-primary-600 px-8 py-4 rounded-lg text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 inline-block"
+          >
+            Go to Your Dashboard
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div class="text-center">
+          <div class="flex items-center justify-center mb-4">
+            <div class="h-8 w-8 bg-primary-600 rounded-lg flex items-center justify-center mr-3">
+              <svg class="h-5 w-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <span class="text-xl font-bold">Exam Grader</span>
+          </div>
+          <p class="text-gray-400 mb-4">
+            AI-Powered Educational Assessment Platform
+          </p>
+          <p class="text-gray-500 text-sm">
+            © {{ current_year }} Exam Grader. All rights reserved.
+          </p>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

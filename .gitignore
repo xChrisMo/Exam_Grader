@@ -47,6 +47,10 @@ output/
 logs/
 *.log
 !.gitkeep
+secrets.enc
+migration_backup/
+*.backup
+*.backup2
 
 # Test coverage and cache
 .coverage

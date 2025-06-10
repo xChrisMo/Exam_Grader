@@ -7,26 +7,29 @@ student exam submissions against marking guides.
 This is an updated version that works with the latest OpenAI library.
 """
 
-import os
-from typing import Dict, List, Optional, Tuple, Any
+import importlib.metadata
 import json
-import time
+import os
 import re
 import threading
-import importlib.metadata
-from packaging import version
+import time
+from typing import Any, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
+from packaging import version
 
 from utils.logger import logger
 
 # Load environment variables
 load_dotenv()
 
+
 class LLMServiceError(Exception):
     """Exception raised for errors in the LLM service."""
 
-    def __init__(self, message: str, error_code: str = None, original_error: Exception = None):
+    def __init__(
+        self, message: str, error_code: str = None, original_error: Exception = None
+    ):
         """Initialize LLM service error.
 
         Args:
@@ -44,6 +47,7 @@ class LLMServiceError(Exception):
         if self.error_code:
             return f"[{self.error_code}] {self.message}"
         return self.message
+
 
 class LLMService:
     """
@@ -64,7 +68,7 @@ class LLMService:
         max_retries: int = 3,
         retry_delay: float = 2.0,
         seed: Optional[int] = 42,
-        deterministic: bool = True
+        deterministic: bool = True,
     ):
         """
         Initialize the LLM service.
@@ -84,7 +88,9 @@ class LLMService:
         """
         self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
         if not self.api_key:
-            raise LLMServiceError("DeepSeek API key not configured. Set DEEPSEEK_API_KEY in .env")
+            raise LLMServiceError(
+                "DeepSeek API key not configured. Set DEEPSEEK_API_KEY in .env"
+            )
 
         self.base_url = base_url
         self.model = model
@@ -96,7 +102,9 @@ class LLMService:
 
         # Log the deterministic mode setting
         if self.deterministic:
-            logger.info(f"LLM service initialized in deterministic mode with seed: {self.seed}")
+            logger.info(
+                f"LLM service initialized in deterministic mode with seed: {self.seed}"
+            )
         else:
             logger.info("LLM service initialized in non-deterministic mode")
 
@@ -114,10 +122,7 @@ class LLMService:
                 logger.warning("Could not determine OpenAI library version")
 
             # Initialize OpenAI client with parameters based on version
-            client_params = {
-                "api_key": self.api_key,
-                "base_url": self.base_url
-            }
+            client_params = {"api_key": self.api_key, "base_url": self.base_url}
 
             # Create the client with appropriate parameters
             self.client = OpenAI(**client_params)
@@ -127,15 +132,45 @@ class LLMService:
             raise LLMServiceError(f"Failed to initialize LLM service: {str(e)}")
 
     def is_available(self) -> bool:
-        """Check if the LLM service is available."""
+        """Check if the LLM service is available by testing API connectivity."""
         try:
-            # Simple availability check - verify API key and client are configured
+            # Basic configuration check
             if not self.api_key:
+                logger.debug("LLM service unavailable: No API key configured")
                 return False
             if not self.client:
+                logger.debug("LLM service unavailable: No client configured")
                 return False
-            # Could add a ping test here, but for now just check configuration
-            return True
+
+            # Test API connectivity with a minimal request
+            try:
+                params = {
+                    "model": self.model,
+                    "messages": [
+                        {"role": "user", "content": "test"}
+                    ],
+                    "temperature": 0.0,
+                    "max_tokens": 1,
+                }
+
+                # Add seed parameter if in deterministic mode
+                if self.deterministic and self.seed is not None:
+                    params["seed"] = self.seed
+
+                response = self.client.chat.completions.create(**params)
+
+                # Check if we got a valid response
+                if hasattr(response, "choices") and len(response.choices) > 0:
+                    logger.debug("LLM service connectivity confirmed")
+                    return True
+                else:
+                    logger.debug("LLM service test failed: No valid response")
+                    return False
+
+            except Exception as api_error:
+                logger.debug(f"LLM service API test failed: {str(api_error)}")
+                return False
+
         except Exception as e:
             logger.error(f"LLM service availability check failed: {str(e)}")
             return False
@@ -162,10 +197,10 @@ class LLMService:
                 "model": self.model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
                 "temperature": 0.0,
-                "max_tokens": 20
+                "max_tokens": 20,
             }
 
             # Add seed parameter if in deterministic mode
@@ -175,7 +210,7 @@ class LLMService:
             response = self.client.chat.completions.create(**params)
 
             # Check if we got a response
-            if hasattr(response, 'choices') and len(response.choices) > 0:
+            if hasattr(response, "choices") and len(response.choices) > 0:
                 logger.info("Connection test successful")
                 return True
             else:
@@ -191,7 +226,7 @@ class LLMService:
         question: str,
         guide_answer: str,
         submission_answer: str,
-        max_score: int = 10
+        max_score: int = 10,
     ) -> Tuple[float, str]:
         """
         Compare a student's submission answer with the model answer from the marking guide.
@@ -254,10 +289,10 @@ class LLMService:
                 "model": self.model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
                 "temperature": 0.0,
-                "max_tokens": 500
+                "max_tokens": 500,
             }
 
             # Add seed parameter if in deterministic mode
@@ -270,7 +305,7 @@ class LLMService:
             logger.info("Processing LLM response...")
 
             # Parse the response
-            if hasattr(response, 'choices') and len(response.choices) > 0:
+            if hasattr(response, "choices") and len(response.choices) > 0:
                 response_text = response.choices[0].message.content.strip()
 
                 # Log extracting results
@@ -294,10 +329,14 @@ class LLMService:
 
                 except json.JSONDecodeError:
                     # If not valid JSON, extract score and feedback manually
-                    logger.warning("Response not in valid JSON format. Extracting manually.")
+                    logger.warning(
+                        "Response not in valid JSON format. Extracting manually."
+                    )
 
                     # Try to find a numeric score in the response
-                    score_match = re.search(r'score[:\s]+(\d+(?:\.\d+)?)', response_text, re.IGNORECASE)
+                    score_match = re.search(
+                        r"score[:\s]+(\d+(?:\.\d+)?)", response_text, re.IGNORECASE
+                    )
                     score = float(score_match.group(1)) if score_match else 0
 
                     # Ensure score is within bounds
@@ -327,7 +366,7 @@ class LLMService:
         self,
         marking_guide_text: str,
         student_submission_text: str,
-        max_tokens: int = 2048
+        max_tokens: int = 2048,
     ) -> Dict:
         """
         Grade a student submission against a marking guide.
@@ -351,8 +390,7 @@ class LLMService:
 
         # Map the submission to the guide
         mapping_result, mapping_error = mapping_service.map_submission_to_guide(
-            marking_guide_text,
-            student_submission_text
+            marking_guide_text, student_submission_text
         )
 
         if mapping_error:
@@ -360,12 +398,14 @@ class LLMService:
 
         # Create grading service
         from src.services.grading_service import GradingService
-        grading_service = GradingService(llm_service=self, mapping_service=mapping_service)
+
+        grading_service = GradingService(
+            llm_service=self, mapping_service=mapping_service
+        )
 
         # Grade the submission
         grading_result, grading_error = grading_service.grade_submission(
-            marking_guide_text,
-            student_submission_text
+            marking_guide_text, student_submission_text
         )
 
         if grading_error:
@@ -377,7 +417,7 @@ class LLMService:
         self,
         marking_guide_content: str,
         student_submission_content: str,
-        num_questions: int = None
+        num_questions: int = None,
     ) -> Tuple[Dict, Optional[str]]:
         """
         Map a student submission to a marking guide.
@@ -402,10 +442,9 @@ class LLMService:
             return mapping_service.map_submission_to_guide(
                 marking_guide_content,
                 student_submission_content,
-                num_questions=num_questions
+                num_questions=num_questions,
             )
         else:
             return mapping_service.map_submission_to_guide(
-                marking_guide_content,
-                student_submission_content
+                marking_guide_content, student_submission_content
             )

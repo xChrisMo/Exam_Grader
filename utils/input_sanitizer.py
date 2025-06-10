@@ -4,10 +4,9 @@ Enhanced input sanitization utilities for the Exam Grader application.
 import re
 import html
 import urllib.parse
-import json
 import base64
 import unicodedata
-from typing import Any, Dict, List, Optional, Union, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)

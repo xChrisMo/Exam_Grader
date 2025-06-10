@@ -1,20 +1,26 @@
 """
 OCR Service for processing image-based submissions using HandwritingOCR API.
 """
-import os
+
 import json
-import time
-import requests
-from typing import Dict, List, Optional, Tuple, Union, BinaryIO
-from pathlib import Path
 import mimetypes
+import os
+import time
 from datetime import datetime
+from pathlib import Path
+from typing import BinaryIO, Dict, List, Optional, Tuple, Union
+
+import requests
+
 from utils.logger import logger
+
 
 class OCRServiceError(Exception):
     """Exception raised for errors in the OCR service."""
 
-    def __init__(self, message: str, error_code: str = None, original_error: Exception = None):
+    def __init__(
+        self, message: str, error_code: str = None, original_error: Exception = None
+    ):
         """Initialize OCR service error.
 
         Args:
@@ -33,32 +39,64 @@ class OCRServiceError(Exception):
             return f"[{self.error_code}] {self.message}"
         return self.message
 
+
 class OCRService:
     """OCR service that uses HandwritingOCR API for text extraction."""
 
     def __init__(self, api_key=None, base_url=None):
         """Initialize with API key and base URL."""
-        self.api_key = api_key or os.getenv('HANDWRITING_OCR_API_KEY')
+        self.api_key = api_key or os.getenv("HANDWRITING_OCR_API_KEY")
         if not self.api_key:
             raise OCRServiceError("HandwritingOCR API key not configured")
 
-        self.base_url = base_url or os.getenv('HANDWRITING_OCR_API_URL', 'https://www.handwritingocr.com/api/v3')
+        self.base_url = base_url or os.getenv(
+            "HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3"
+        )
         self.headers = {
-            'Authorization': f'Bearer {self.api_key}',
-            'Accept': 'application/json'
+            "Authorization": f"Bearer {self.api_key}",
+            "Accept": "application/json",
         }
         logger.info("OCR service initialized successfully")
 
     def is_available(self) -> bool:
-        """Check if the OCR service is available."""
+        """Check if the OCR service is available by testing API connectivity."""
         try:
-            # Simple availability check - verify API key and base URL are configured
+            # Basic configuration check
             if not self.api_key:
+                logger.debug("OCR service unavailable: No API key configured")
                 return False
             if not self.base_url:
+                logger.debug("OCR service unavailable: No base URL configured")
                 return False
-            # Could add a ping test here if the API supports it
-            return True
+
+            # Test API connectivity with a simple request
+            try:
+                import requests
+                response = requests.get(
+                    f"{self.base_url}/health",  # Try health endpoint first
+                    headers=self.headers,
+                    timeout=5
+                )
+                if response.status_code == 200:
+                    logger.debug("OCR service health check passed")
+                    return True
+            except requests.exceptions.RequestException:
+                # Health endpoint might not exist, try documents endpoint
+                try:
+                    response = requests.get(
+                        f"{self.base_url}/documents",
+                        headers=self.headers,
+                        timeout=5
+                    )
+                    # Any response (even 401/403) means the service is reachable
+                    if response.status_code in [200, 401, 403]:
+                        logger.debug("OCR service connectivity confirmed")
+                        return True
+                except requests.exceptions.RequestException as e:
+                    logger.debug(f"OCR service connectivity test failed: {str(e)}")
+                    return False
+
+            return False
         except Exception as e:
             logger.error(f"OCR service availability check failed: {str(e)}")
             return False
@@ -81,7 +119,7 @@ class OCRService:
             raise OCRServiceError(f"File size ({file_size:.1f}MB) exceeds 20MB limit")
 
         ext = Path(file_path).suffix.lower()
-        supported_formats = ['.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif']
+        supported_formats = [".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".gif"]
         if ext not in supported_formats:
             raise OCRServiceError(f"Unsupported file format: {ext}")
 
@@ -123,7 +161,9 @@ class OCRService:
                     raise OCRServiceError("OCR processing failed")
 
                 # Log progress instead of updating tracker
-                logger.info(f"OCR processing in progress (attempt {attempt+1}/{max_retries})...")
+                logger.info(
+                    f"OCR processing in progress (attempt {attempt+1}/{max_retries})..."
+                )
                 time.sleep(retry_delay)
             else:
                 # Log error instead of updating tracker
@@ -137,7 +177,9 @@ class OCRService:
             text = self._get_document_result(document_id)
 
             # Log completion
-            logger.info(f"OCR processing completed successfully. Extracted {len(text)} characters.")
+            logger.info(
+                f"OCR processing completed successfully. Extracted {len(text)} characters."
+            )
 
             return text
 
@@ -148,7 +190,9 @@ class OCRService:
         except (ValueError, TypeError) as e:
             # Log data handling errors
             logger.error(f"Data handling error during OCR processing: {str(e)}")
-            raise OCRServiceError(f"Data handling error during OCR processing: {str(e)}")
+            raise OCRServiceError(
+                f"Data handling error during OCR processing: {str(e)}"
+            )
         except json.JSONDecodeError as e:
             # Log JSON parsing errors
             logger.error(f"Failed to parse OCR API response: {str(e)}")
@@ -172,15 +216,15 @@ class OCRService:
             # Handle both file paths and file objects
             if isinstance(file, (str, Path)):
                 self._validate_file(file)
-                files = {'file': open(file, 'rb')}
+                files = {"file": open(file, "rb")}
             else:
-                filename = getattr(file, 'name', 'document.jpg')
-                files = {'file': (filename, file)}
+                filename = getattr(file, "name", "document.jpg")
+                files = {"file": (filename, file)}
 
             # Include required processing action
             data = {
-                'action': 'transcribe',  # Per API docs: Extract all text from the document
-                'delete_after': 3600  # Auto-delete after 1 hour
+                "action": "transcribe",  # Per API docs: Extract all text from the document
+                "delete_after": 3600,  # Auto-delete after 1 hour
             }
 
             # Upload the file
@@ -189,7 +233,7 @@ class OCRService:
                 headers=self.headers,
                 files=files,
                 data=data,
-                timeout=30
+                timeout=30,
             )
 
             # Check for errors
@@ -197,7 +241,7 @@ class OCRService:
                 error_msg = f"Failed to upload document: {response.status_code}"
                 try:
                     error_details = response.json()
-                    if isinstance(error_details, dict) and 'error' in error_details:
+                    if isinstance(error_details, dict) and "error" in error_details:
                         error_msg += f" - {error_details['error']}"
                 except json.JSONDecodeError as e:
                     logger.warning(f"Could not parse error response as JSON: {str(e)}")
@@ -206,7 +250,7 @@ class OCRService:
 
             # Get the document ID
             response_data = response.json()
-            document_id = response_data.get('id')
+            document_id = response_data.get("id")
 
             if not document_id:
                 raise OCRServiceError("No document ID returned from API")
@@ -216,8 +260,8 @@ class OCRService:
 
         finally:
             # Close the file if we opened it
-            if isinstance(file, (str, Path)) and 'files' in locals():
-                files['file'].close()
+            if isinstance(file, (str, Path)) and "files" in locals():
+                files["file"].close()
 
     def _get_document_status(self, document_id: str) -> str:
         """
@@ -230,16 +274,16 @@ class OCRService:
             str: Document status (new, processing, processed, failed)
         """
         response = requests.get(
-            f"{self.base_url}/documents/{document_id}",
-            headers=self.headers,
-            timeout=10
+            f"{self.base_url}/documents/{document_id}", headers=self.headers, timeout=10
         )
 
         if response.status_code != 200:
-            raise OCRServiceError(f"Failed to get document status: {response.status_code} - {response.text}")
+            raise OCRServiceError(
+                f"Failed to get document status: {response.status_code} - {response.text}"
+            )
 
         result = response.json()
-        return result.get('status', 'unknown')
+        return result.get("status", "unknown")
 
     def _get_document_result(self, document_id: str) -> str:
         """
@@ -255,21 +299,23 @@ class OCRService:
         response = requests.get(
             f"{self.base_url}/documents/{document_id}.json",
             headers=self.headers,
-            timeout=10
+            timeout=10,
         )
 
         if response.status_code != 200:
-            raise OCRServiceError(f"Failed to get document result: {response.status_code} - {response.text}")
+            raise OCRServiceError(
+                f"Failed to get document result: {response.status_code} - {response.text}"
+            )
 
         result = response.json()
 
         # Extract text from the response based on API format
-        if 'results' in result:
+        if "results" in result:
             # Combine text from all pages
             text = ""
-            for page in result.get('results', []):
-                if 'transcript' in page:
-                    text += page.get('transcript', '') + "\n"
+            for page in result.get("results", []):
+                if "transcript" in page:
+                    text += page.get("transcript", "") + "\n"
             return text.strip()
         else:
             raise OCRServiceError("Unexpected response format from OCR service")

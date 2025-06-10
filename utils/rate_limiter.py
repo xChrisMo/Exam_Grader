@@ -1,321 +1,254 @@
 """
 Rate limiting utilities for the Exam Grader application.
+
+This module provides rate limiting functionality to prevent
+abuse and ensure fair usage of the application.
 """
+
 import time
-import threading
-from typing import Dict, Optional, Tuple
+import logging
 from collections import defaultdict, deque
 from functools import wraps
-from flask import request, jsonify, session
-from utils.logger import setup_logger
+from typing import Dict, List, Optional, Tuple
+from flask import request, jsonify, flash, redirect, url_for
 
-logger = setup_logger(__name__)
+logger = logging.getLogger(__name__)
+
 
 class RateLimiter:
-    """Thread-safe rate limiter with multiple strategies."""
+    """Simple in-memory rate limiter."""
     
     def __init__(self):
-        self._lock = threading.RLock()
-        self._requests = defaultdict(deque)  # IP -> deque of timestamps
-        self._user_requests = defaultdict(deque)  # User session -> deque of timestamps
-        self._global_requests = deque()  # Global request timestamps
-        
-        # Rate limiting rules (requests per time window in seconds)
-        self.rules = {
-            'upload_guide': {'limit': 5, 'window': 300},  # 5 uploads per 5 minutes
-            'upload_submission': {'limit': 20, 'window': 300},  # 20 uploads per 5 minutes
-            'process_mapping': {'limit': 10, 'window': 60},  # 10 mappings per minute
-            'process_grading': {'limit': 10, 'window': 60},  # 10 gradings per minute
-            'api_general': {'limit': 100, 'window': 60},  # 100 API calls per minute
-            'global': {'limit': 1000, 'window': 60},  # 1000 total requests per minute
-        }
-        
-        # Cleanup interval
-        self._last_cleanup = time.time()
-        self._cleanup_interval = 300  # 5 minutes
+        """Initialize rate limiter."""
+        self.requests = defaultdict(deque)
+        self.whitelist = set()
     
-    def _cleanup_old_requests(self, current_time: float) -> None:
-        """Remove old request timestamps to prevent memory leaks."""
-        if current_time - self._last_cleanup < self._cleanup_interval:
-            return
-        
-        with self._lock:
-            # Clean up IP-based requests
-            for ip, requests in list(self._requests.items()):
-                # Remove requests older than the longest window (5 minutes)
-                while requests and current_time - requests[0] > 300:
-                    requests.popleft()
-                # Remove empty deques
-                if not requests:
-                    del self._requests[ip]
-            
-            # Clean up user-based requests
-            for user, requests in list(self._user_requests.items()):
-                while requests and current_time - requests[0] > 300:
-                    requests.popleft()
-                if not requests:
-                    del self._user_requests[user]
-            
-            # Clean up global requests
-            while self._global_requests and current_time - self._global_requests[0] > 60:
-                self._global_requests.popleft()
-            
-            self._last_cleanup = current_time
-            logger.debug("Cleaned up old rate limiting data")
-    
-    def _get_client_identifier(self) -> Tuple[str, str]:
-        """Get client IP and user session identifier."""
-        # Get real IP address (considering proxies)
-        ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
-        if ip and ',' in ip:
-            ip = ip.split(',')[0].strip()
-        
-        # Get user session identifier
-        user_id = session.get('user_id', session.get('session_id', 'anonymous'))
-        
-        return ip or 'unknown', str(user_id)
-    
-    def is_allowed(self, rule_name: str, identifier: Optional[str] = None) -> Tuple[bool, Dict]:
-        """
-        Check if request is allowed under rate limiting rules.
+    def is_rate_limited(self, identifier: str, limit: int, window: int) -> bool:
+        """Check if identifier is rate limited.
         
         Args:
-            rule_name: Name of the rate limiting rule
-            identifier: Optional custom identifier (defaults to IP + session)
+            identifier: Unique identifier (IP, user ID, etc.)
+            limit: Maximum number of requests allowed
+            window: Time window in seconds
             
         Returns:
-            Tuple of (is_allowed, rate_limit_info)
+            True if rate limited, False otherwise
         """
-        current_time = time.time()
-        self._cleanup_old_requests(current_time)
+        now = time.time()
         
-        if rule_name not in self.rules:
-            logger.warning(f"Unknown rate limiting rule: {rule_name}")
-            return True, {}
+        # Clean old requests outside the window
+        while self.requests[identifier] and self.requests[identifier][0] <= now - window:
+            self.requests[identifier].popleft()
         
-        rule = self.rules[rule_name]
-        limit = rule['limit']
-        window = rule['window']
+        # Check if limit exceeded
+        if len(self.requests[identifier]) >= limit:
+            return True
         
-        with self._lock:
-            # Check global rate limit first
-            global_rule = self.rules['global']
-            while (self._global_requests and 
-                   current_time - self._global_requests[0] > global_rule['window']):
-                self._global_requests.popleft()
-            
-            if len(self._global_requests) >= global_rule['limit']:
-                return False, {
-                    'rule': 'global',
-                    'limit': global_rule['limit'],
-                    'window': global_rule['window'],
-                    'current_count': len(self._global_requests),
-                    'reset_time': self._global_requests[0] + global_rule['window']
-                }
-            
-            # Get client identifier
-            if identifier:
-                client_id = identifier
-                requests_deque = self._requests[client_id]
-            else:
-                ip, user_id = self._get_client_identifier()
-                client_id = f"{ip}:{user_id}"
-                requests_deque = self._user_requests[client_id]
-            
-            # Remove old requests outside the window
-            while requests_deque and current_time - requests_deque[0] > window:
-                requests_deque.popleft()
-            
-            # Check if limit is exceeded
-            if len(requests_deque) >= limit:
-                return False, {
-                    'rule': rule_name,
-                    'limit': limit,
-                    'window': window,
-                    'current_count': len(requests_deque),
-                    'reset_time': requests_deque[0] + window,
-                    'client_id': client_id
-                }
-            
-            # Record the request
-            requests_deque.append(current_time)
-            self._global_requests.append(current_time)
-            
-            return True, {
-                'rule': rule_name,
-                'limit': limit,
-                'window': window,
-                'current_count': len(requests_deque),
-                'remaining': limit - len(requests_deque)
-            }
+        # Add current request
+        self.requests[identifier].append(now)
+        return False
     
-    def get_rate_limit_headers(self, rule_name: str, rate_info: Dict) -> Dict[str, str]:
-        """Generate rate limit headers for HTTP responses."""
-        if not rate_info:
-            return {}
+    def add_to_whitelist(self, identifier: str):
+        """Add identifier to whitelist.
         
-        headers = {}
-        if 'limit' in rate_info:
-            headers['X-RateLimit-Limit'] = str(rate_info['limit'])
-        if 'remaining' in rate_info:
-            headers['X-RateLimit-Remaining'] = str(rate_info['remaining'])
-        if 'reset_time' in rate_info:
-            headers['X-RateLimit-Reset'] = str(int(rate_info['reset_time']))
-        if 'window' in rate_info:
-            headers['X-RateLimit-Window'] = str(rate_info['window'])
-        
-        return headers
+        Args:
+            identifier: Identifier to whitelist
+        """
+        self.whitelist.add(identifier)
+        logger.info(f"Added {identifier} to rate limit whitelist")
     
-    def get_stats(self) -> Dict:
-        """Get rate limiting statistics."""
-        current_time = time.time()
+    def remove_from_whitelist(self, identifier: str):
+        """Remove identifier from whitelist.
         
-        with self._lock:
-            return {
-                'active_ips': len(self._requests),
-                'active_users': len(self._user_requests),
-                'global_requests_last_minute': len([
-                    t for t in self._global_requests 
-                    if current_time - t <= 60
-                ]),
-                'total_tracked_requests': sum(len(deq) for deq in self._requests.values()),
-                'rules': self.rules,
-                'last_cleanup': self._last_cleanup
-            }
+        Args:
+            identifier: Identifier to remove from whitelist
+        """
+        self.whitelist.discard(identifier)
+        logger.info(f"Removed {identifier} from rate limit whitelist")
+    
+    def is_whitelisted(self, identifier: str) -> bool:
+        """Check if identifier is whitelisted.
+        
+        Args:
+            identifier: Identifier to check
+            
+        Returns:
+            True if whitelisted, False otherwise
+        """
+        return identifier in self.whitelist
+    
+    def get_remaining_requests(self, identifier: str, limit: int, window: int) -> int:
+        """Get remaining requests for identifier.
+        
+        Args:
+            identifier: Unique identifier
+            limit: Maximum number of requests allowed
+            window: Time window in seconds
+            
+        Returns:
+            Number of remaining requests
+        """
+        now = time.time()
+        
+        # Clean old requests
+        while self.requests[identifier] and self.requests[identifier][0] <= now - window:
+            self.requests[identifier].popleft()
+        
+        return max(0, limit - len(self.requests[identifier]))
+    
+    def get_reset_time(self, identifier: str, window: int) -> Optional[float]:
+        """Get time when rate limit resets.
+        
+        Args:
+            identifier: Unique identifier
+            window: Time window in seconds
+            
+        Returns:
+            Timestamp when rate limit resets, None if no requests
+        """
+        if not self.requests[identifier]:
+            return None
+        
+        return self.requests[identifier][0] + window
+
 
 # Global rate limiter instance
 rate_limiter = RateLimiter()
 
-def rate_limit(rule_name: str, identifier: Optional[str] = None):
-    """
-    Decorator for rate limiting Flask routes.
-    
-    Args:
-        rule_name: Name of the rate limiting rule
-        identifier: Optional custom identifier
-    """
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            allowed, rate_info = rate_limiter.is_allowed(rule_name, identifier)
-            
-            if not allowed:
-                logger.warning(f"Rate limit exceeded for {rule_name}: {rate_info}")
-                
-                # Determine reset time for user-friendly message
-                reset_time = rate_info.get('reset_time', time.time() + rate_info.get('window', 60))
-                wait_time = max(0, int(reset_time - time.time()))
-                
-                response_data = {
-                    'error': 'Rate limit exceeded',
-                    'message': f'Too many requests. Please wait {wait_time} seconds before trying again.',
-                    'rate_limit': {
-                        'rule': rate_info.get('rule'),
-                        'limit': rate_info.get('limit'),
-                        'window': rate_info.get('window'),
-                        'reset_in_seconds': wait_time
-                    }
-                }
-                
-                response = jsonify(response_data)
-                response.status_code = 429  # Too Many Requests
-                
-                # Add rate limit headers
-                headers = rate_limiter.get_rate_limit_headers(rule_name, rate_info)
-                for key, value in headers.items():
-                    response.headers[key] = value
-                
-                return response
-            
-            # Execute the original function
-            result = f(*args, **kwargs)
-            
-            # Add rate limit headers to successful responses
-            if hasattr(result, 'headers'):
-                headers = rate_limiter.get_rate_limit_headers(rule_name, rate_info)
-                for key, value in headers.items():
-                    result.headers[key] = value
-            
-            return result
-        
-        return decorated_function
-    return decorator
 
-def check_rate_limit(rule_name: str, identifier: Optional[str] = None) -> Tuple[bool, Dict]:
+def get_client_identifier() -> str:
+    """Get client identifier for rate limiting.
+    
+    Returns:
+        Client identifier string
     """
-    Check rate limit without recording a request.
+    # Try to get real IP from headers (for reverse proxy setups)
+    real_ip = request.headers.get('X-Real-IP')
+    if real_ip:
+        return real_ip
+    
+    forwarded_for = request.headers.get('X-Forwarded-For')
+    if forwarded_for:
+        # Take the first IP in the chain
+        return forwarded_for.split(',')[0].strip()
+    
+    # Fallback to remote address
+    return request.remote_addr or 'unknown'
+
+
+def rate_limit_with_whitelist(limit: int = 100, window: int = 3600, per: str = 'hour'):
+    """Rate limiting decorator with whitelist support.
     
     Args:
-        rule_name: Name of the rate limiting rule
-        identifier: Optional custom identifier
+        limit: Maximum number of requests
+        window: Time window in seconds
+        per: Human-readable time period (for error messages)
         
     Returns:
-        Tuple of (is_allowed, rate_limit_info)
-    """
-    return rate_limiter.is_allowed(rule_name, identifier)
-
-def get_rate_limit_status() -> Dict:
-    """Get current rate limiting status and statistics."""
-    return rate_limiter.get_stats()
-
-class IPWhitelist:
-    """IP whitelist for bypassing rate limits."""
-    
-    def __init__(self):
-        self._whitelist = set()
-        self._lock = threading.RLock()
-        
-        # Add localhost by default
-        self.add_ip('127.0.0.1')
-        self.add_ip('::1')
-    
-    def add_ip(self, ip: str) -> None:
-        """Add IP to whitelist."""
-        with self._lock:
-            self._whitelist.add(ip)
-            logger.info(f"Added IP to whitelist: {ip}")
-    
-    def remove_ip(self, ip: str) -> None:
-        """Remove IP from whitelist."""
-        with self._lock:
-            self._whitelist.discard(ip)
-            logger.info(f"Removed IP from whitelist: {ip}")
-    
-    def is_whitelisted(self, ip: str) -> bool:
-        """Check if IP is whitelisted."""
-        with self._lock:
-            return ip in self._whitelist
-    
-    def get_whitelist(self) -> set:
-        """Get copy of current whitelist."""
-        with self._lock:
-            return self._whitelist.copy()
-
-# Global IP whitelist instance
-ip_whitelist = IPWhitelist()
-
-def rate_limit_with_whitelist(rule_name: str, identifier: Optional[str] = None):
-    """
-    Rate limiting decorator that respects IP whitelist.
-    
-    Args:
-        rule_name: Name of the rate limiting rule
-        identifier: Optional custom identifier
+        Decorator function
     """
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            # Check if IP is whitelisted
-            ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
-            if ip and ',' in ip:
-                ip = ip.split(',')[0].strip()
+            identifier = get_client_identifier()
             
-            if ip and ip_whitelist.is_whitelisted(ip):
-                logger.debug(f"Request from whitelisted IP {ip}, bypassing rate limit")
+            # Check whitelist first
+            if rate_limiter.is_whitelisted(identifier):
                 return f(*args, **kwargs)
             
-            # Apply normal rate limiting
-            return rate_limit(rule_name, identifier)(f)(*args, **kwargs)
+            # Check rate limit
+            if rate_limiter.is_rate_limited(identifier, limit, window):
+                logger.warning(f"Rate limit exceeded for {identifier}")
+                
+                # Return appropriate response based on request type
+                if request.is_json or request.path.startswith('/api/'):
+                    return jsonify({
+                        'error': 'Rate limit exceeded',
+                        'message': f'Too many requests. Limit: {limit} per {per}',
+                        'limit': limit,
+                        'window': window,
+                        'reset_time': rate_limiter.get_reset_time(identifier, window)
+                    }), 429
+                else:
+                    flash(f'Too many requests. Please wait before trying again. Limit: {limit} per {per}', 'warning')
+                    return redirect(url_for('dashboard'))
+            
+            return f(*args, **kwargs)
         
         return decorated_function
     return decorator
+
+
+def get_rate_limit_status(identifier: Optional[str] = None) -> Dict:
+    """Get rate limit status for identifier.
+    
+    Args:
+        identifier: Client identifier (uses current client if None)
+        
+    Returns:
+        Dictionary with rate limit status
+    """
+    if identifier is None:
+        identifier = get_client_identifier()
+    
+    # Default limits (can be made configurable)
+    default_limit = 100
+    default_window = 3600  # 1 hour
+    
+    remaining = rate_limiter.get_remaining_requests(identifier, default_limit, default_window)
+    reset_time = rate_limiter.get_reset_time(identifier, default_window)
+    is_whitelisted = rate_limiter.is_whitelisted(identifier)
+    
+    return {
+        'identifier': identifier,
+        'limit': default_limit,
+        'remaining': remaining,
+        'reset_time': reset_time,
+        'window': default_window,
+        'is_whitelisted': is_whitelisted
+    }
+
+
+def add_to_whitelist(identifier: str):
+    """Add identifier to rate limit whitelist.
+    
+    Args:
+        identifier: Identifier to whitelist
+    """
+    rate_limiter.add_to_whitelist(identifier)
+
+
+def remove_from_whitelist(identifier: str):
+    """Remove identifier from rate limit whitelist.
+    
+    Args:
+        identifier: Identifier to remove from whitelist
+    """
+    rate_limiter.remove_from_whitelist(identifier)
+
+
+def clear_rate_limit_data():
+    """Clear all rate limit data (for testing/admin purposes)."""
+    rate_limiter.requests.clear()
+    logger.info("Cleared all rate limit data")
+
+
+# Predefined rate limit decorators for common use cases
+def api_rate_limit(f):
+    """Rate limit for API endpoints (stricter)."""
+    return rate_limit_with_whitelist(limit=50, window=3600, per='hour')(f)
+
+
+def upload_rate_limit(f):
+    """Rate limit for file uploads (more restrictive)."""
+    return rate_limit_with_whitelist(limit=20, window=3600, per='hour')(f)
+
+
+def general_rate_limit(f):
+    """General rate limit for web pages."""
+    return rate_limit_with_whitelist(limit=200, window=3600, per='hour')(f)
+
+
+def strict_rate_limit(f):
+    """Strict rate limit for sensitive operations."""
+    return rate_limit_with_whitelist(limit=10, window=3600, per='hour')(f)

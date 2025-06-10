@@ -2,13 +2,16 @@
 Grading Service for grading student submissions.
 This service grades student submissions by comparing their answers to the solutions in the marking guide.
 """
-import os
+
 import json
+import os
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Any, Dict, List, Optional, Tuple
+
 from utils.logger import logger
+
 
 class GradingService:
     """
@@ -21,7 +24,9 @@ class GradingService:
         self.llm_service = llm_service
         self.mapping_service = mapping_service
 
-    def grade_submission(self, marking_guide_content: str, student_submission_content: str) -> Tuple[Dict, Optional[str]]:
+    def grade_submission(
+        self, marking_guide_content: str, student_submission_content: str
+    ) -> Tuple[Dict, Optional[str]]:
         """
         Grade a student submission against a marking guide.
 
@@ -35,26 +40,35 @@ class GradingService:
         try:
             # Use mapping service to match questions and answers
             if self.mapping_service:
-                mapping_result, mapping_error = self.mapping_service.map_submission_to_guide(
-                    marking_guide_content,
-                    student_submission_content
+                mapping_result, mapping_error = (
+                    self.mapping_service.map_submission_to_guide(
+                        marking_guide_content, student_submission_content
+                    )
                 )
 
                 if mapping_error:
-                    return {"status": "error", "message": f"Mapping error: {mapping_error}"}, mapping_error
+                    return {
+                        "status": "error",
+                        "message": f"Mapping error: {mapping_error}",
+                    }, mapping_error
 
                 mappings = mapping_result.get("mappings", [])
             else:
                 # Initialize mapping service if none was provided
                 from src.services.mapping_service import MappingService
+
                 temp_mapping_service = MappingService()
-                mapping_result, mapping_error = temp_mapping_service.map_submission_to_guide(
-                    marking_guide_content,
-                    student_submission_content
+                mapping_result, mapping_error = (
+                    temp_mapping_service.map_submission_to_guide(
+                        marking_guide_content, student_submission_content
+                    )
                 )
 
                 if mapping_error:
-                    return {"status": "error", "message": f"Mapping error: {mapping_error}"}, mapping_error
+                    return {
+                        "status": "error",
+                        "message": f"Mapping error: {mapping_error}",
+                    }, mapping_error
 
                 mappings = mapping_result.get("mappings", [])
 
@@ -82,10 +96,16 @@ class GradingService:
                 # Use default max score if not specified
                 if max_score is None:
                     max_score = 10
-                    logger.warning(f"No max score specified for question, using default: {guide_text[:50]}...")
+                    logger.warning(
+                        f"No max score specified for question, using default: {guide_text[:50]}..."
+                    )
 
                 # For question-based guides, use submission_text as the answer if submission_answer is empty
-                if guide_type == "questions" and not submission_answer and submission_text:
+                if (
+                    guide_type == "questions"
+                    and not submission_answer
+                    and submission_text
+                ):
                     submission_answer = submission_text
 
                 # For answer-based guides, use guide_text as the answer if guide_answer is empty
@@ -93,8 +113,12 @@ class GradingService:
                     guide_answer = guide_text
 
                 # Skip if no guide text/answer or submission text/answer
-                if (not guide_text and not guide_answer) or (not submission_text and not submission_answer):
-                    logger.warning(f"Skipping question due to missing content: {guide_text[:50]}...")
+                if (not guide_text and not guide_answer) or (
+                    not submission_text and not submission_answer
+                ):
+                    logger.warning(
+                        f"Skipping question due to missing content: {guide_text[:50]}..."
+                    )
                     continue
 
                 # Use LLM for comparison if available
@@ -186,34 +210,44 @@ class GradingService:
                         Provide detailed feedback explaining your scoring.
                         """
 
-                        logger.info(f"Sending grading request to LLM for question: {guide_text[:50]}...")
+                        logger.info(
+                            f"Sending grading request to LLM for question: {guide_text[:50]}..."
+                        )
 
                         # Check if the model supports JSON output format
-                        supports_json = "deepseek-reasoner" not in self.llm_service.model.lower()
+                        supports_json = (
+                            "deepseek-reasoner" not in self.llm_service.model.lower()
+                        )
 
                         if supports_json:
                             response = self.llm_service.client.chat.completions.create(
                                 model=self.llm_service.model,
                                 messages=[
                                     {"role": "system", "content": system_prompt},
-                                    {"role": "user", "content": user_prompt}
+                                    {"role": "user", "content": user_prompt},
                                 ],
                                 temperature=0.1,  # Slightly more variability for nuanced judgments
-                                response_format={"type": "json_object"}
+                                response_format={"type": "json_object"},
                             )
                         else:
                             # For models that don't support JSON response format
-                            modified_system_prompt = system_prompt + """
+                            modified_system_prompt = (
+                                system_prompt
+                                + """
                             IMPORTANT: Your response must be valid JSON. Format your entire response as a JSON object.
                             Do not include any text before or after the JSON object.
                             """
+                            )
                             response = self.llm_service.client.chat.completions.create(
                                 model=self.llm_service.model,
                                 messages=[
-                                    {"role": "system", "content": modified_system_prompt},
-                                    {"role": "user", "content": user_prompt}
+                                    {
+                                        "role": "system",
+                                        "content": modified_system_prompt,
+                                    },
+                                    {"role": "user", "content": user_prompt},
                                 ],
-                                temperature=0.1  # Slightly more variability for nuanced judgments
+                                temperature=0.1,  # Slightly more variability for nuanced judgments
                             )
 
                         result = response.choices[0].message.content
@@ -250,23 +284,31 @@ class GradingService:
                             "key_points": {
                                 "matched": matched_points,
                                 "missed": missed_points,
-                                "partially_matched": partial_points
+                                "partially_matched": partial_points,
                             },
-                            "breakdown": grading_breakdown
+                            "breakdown": grading_breakdown,
                         }
 
                         logger.info(f"LLM grading complete. Score: {score}/{max_score}")
 
                     except Exception as e:
-                        logger.warning(f"LLM grading failed, falling back to similarity: {str(e)}")
+                        logger.warning(
+                            f"LLM grading failed, falling back to similarity: {str(e)}"
+                        )
                         # Fall back to similarity scoring
-                        similarity = self._enhanced_similarity_score(guide_answer, submission_answer)
+                        similarity = self._enhanced_similarity_score(
+                            guide_answer, submission_answer
+                        )
                         score = round(similarity * max_score, 1)
-                        feedback = f"Graded based on text similarity (LLM error: {str(e)})"
+                        feedback = (
+                            f"Graded based on text similarity (LLM error: {str(e)})"
+                        )
                         detailed_feedback = {"general": feedback}
                 else:
                     # Use enhanced similarity scoring
-                    similarity = self._enhanced_similarity_score(guide_answer, submission_answer)
+                    similarity = self._enhanced_similarity_score(
+                        guide_answer, submission_answer
+                    )
                     score = round(similarity * max_score, 1)
                     feedback = "Graded based on text similarity"
                     detailed_feedback = {"general": feedback}
@@ -282,30 +324,42 @@ class GradingService:
 
                     # Add match reason to feedback if available
                     if "match_reason" in mapping and mapping["match_reason"]:
-                        feedback = f"{feedback}\n\nMatch details: {mapping['match_reason']}"
+                        feedback = (
+                            f"{feedback}\n\nMatch details: {mapping['match_reason']}"
+                        )
 
                 # Add to criteria scores
-                criteria_scores.append({
-                    "question_id": mapping.get("guide_id", ""),
-                    "description": guide_text,
-                    "points_earned": score,
-                    "points_possible": max_score,
-                    "similarity": score / max_score if max_score > 0 else 0,
-                    "answer_score": mapping.get("answer_score", score / max_score if max_score > 0 else 0),
-                    "keyword_score": mapping.get("keyword_score", 0),
-                    "match_score": mapping.get("match_score", 0),
-                    "feedback": feedback,
-                    "detailed_feedback": detailed_feedback,
-                    "guide_answer": guide_answer,
-                    "student_answer": submission_answer,
-                    "match_reason": mapping.get("match_reason", "")
-                })
+                criteria_scores.append(
+                    {
+                        "question_id": mapping.get("guide_id", ""),
+                        "description": guide_text,
+                        "points_earned": score,
+                        "points_possible": max_score,
+                        "similarity": score / max_score if max_score > 0 else 0,
+                        "answer_score": mapping.get(
+                            "answer_score", score / max_score if max_score > 0 else 0
+                        ),
+                        "keyword_score": mapping.get("keyword_score", 0),
+                        "match_score": mapping.get("match_score", 0),
+                        "feedback": feedback,
+                        "detailed_feedback": detailed_feedback,
+                        "guide_answer": guide_answer,
+                        "student_answer": submission_answer,
+                        "match_reason": mapping.get("match_reason", ""),
+                    }
+                )
 
             # Calculate percentage score
-            percent_score = (overall_score / max_possible_score * 100) if max_possible_score > 0 else 0
+            percent_score = (
+                (overall_score / max_possible_score * 100)
+                if max_possible_score > 0
+                else 0
+            )
 
             # Normalize the overall score to be out of 100
-            normalized_score = percent_score  # This is already the percentage out of 100
+            normalized_score = (
+                percent_score  # This is already the percentage out of 100
+            )
 
             # Assign letter grade based on percentage
             letter_grade = self._get_letter_grade(percent_score)
@@ -313,16 +367,24 @@ class GradingService:
             # Create result
             result = {
                 "status": "success",
-                "overall_score": round(overall_score, 1),  # Original score (sum of all points)
+                "overall_score": round(
+                    overall_score, 1
+                ),  # Original score (sum of all points)
                 "max_possible_score": max_possible_score,  # Original max possible score
-                "normalized_score": round(normalized_score, 1),  # Score normalized to 100
-                "percent_score": round(percent_score, 1),  # Same as normalized_score for backward compatibility
+                "normalized_score": round(
+                    normalized_score, 1
+                ),  # Score normalized to 100
+                "percent_score": round(
+                    percent_score, 1
+                ),  # Same as normalized_score for backward compatibility
                 "letter_grade": letter_grade,
                 "criteria_scores": criteria_scores,
                 "detailed_feedback": {
                     "strengths": list(set(strengths)),  # Remove duplicates
                     "weaknesses": list(set(weaknesses)),  # Remove duplicates
-                    "improvement_suggestions": list(set(improvement_suggestions))  # Remove duplicates
+                    "improvement_suggestions": list(
+                        set(improvement_suggestions)
+                    ),  # Remove duplicates
                 },
                 "metadata": {
                     "total_questions": len(criteria_scores),
@@ -330,9 +392,13 @@ class GradingService:
                     "grading_method": "LLM" if self.llm_service else "Similarity",
                     "guide_type": guide_type,
                     "total_marks_available": max_possible_score,
-                    "unmapped_guide_count": len(mapping_result.get("unmapped_guide_items", [])),
-                    "unmapped_submission_count": len(mapping_result.get("unmapped_submission_items", []))
-                }
+                    "unmapped_guide_count": len(
+                        mapping_result.get("unmapped_guide_items", [])
+                    ),
+                    "unmapped_submission_count": len(
+                        mapping_result.get("unmapped_submission_items", [])
+                    ),
+                },
             }
 
             return result, None
@@ -342,7 +408,9 @@ class GradingService:
             logger.error(error_message)
             return {"status": "error", "message": error_message}, error_message
 
-    def _enhanced_similarity_score(self, guide_answer: str, submission_answer: str) -> float:
+    def _enhanced_similarity_score(
+        self, guide_answer: str, submission_answer: str
+    ) -> float:
         """
         Calculate an enhanced similarity score between the guide answer and submission answer.
         This method uses multiple metrics to get a more accurate similarity.
@@ -354,8 +422,8 @@ class GradingService:
             return 0.0
 
         # Remove punctuation and convert to lowercase for comparison
-        guide_clean = re.sub(r'[^\w\s]', '', guide_answer.lower())
-        submission_clean = re.sub(r'[^\w\s]', '', submission_answer.lower())
+        guide_clean = re.sub(r"[^\w\s]", "", guide_answer.lower())
+        submission_clean = re.sub(r"[^\w\s]", "", submission_answer.lower())
 
         # Split into words
         guide_words = guide_clean.split()
@@ -384,13 +452,15 @@ class GradingService:
 
             guide_sequences = set()
             for j in range(len(guide_words) - i + 1):
-                guide_sequences.add(' '.join(guide_words[j:j+i]))
+                guide_sequences.add(" ".join(guide_words[j : j + i]))
 
             submission_sequences = set()
             for j in range(len(submission_words) - i + 1):
-                submission_sequences.add(' '.join(submission_words[j:j+i]))
+                submission_sequences.add(" ".join(submission_words[j : j + i]))
 
-            sequence_matches += len(guide_sequences.intersection(submission_sequences)) / (i * 2)
+            sequence_matches += len(
+                guide_sequences.intersection(submission_sequences)
+            ) / (i * 2)
 
         sequence_score = sequence_matches / max(len(guide_words), 1)
 
@@ -401,17 +471,29 @@ class GradingService:
         # This is a simple approach; in a real-world scenario, you might extract keywords using NLP
         important_words = set()
         for word in guide_words:
-            if len(word) > 5 or word.lower() not in {'and', 'the', 'is', 'are', 'that', 'this', 'with', 'for', 'from'}:
+            if len(word) > 5 or word.lower() not in {
+                "and",
+                "the",
+                "is",
+                "are",
+                "that",
+                "this",
+                "with",
+                "for",
+                "from",
+            }:
                 important_words.add(word)
 
-        important_word_match = len(important_words.intersection(submission_set)) / max(len(important_words), 1)
+        important_word_match = len(important_words.intersection(submission_set)) / max(
+            len(important_words), 1
+        )
 
         # Combine the scores with appropriate weights
         combined_score = (
-            (0.4 * jaccard_score) +  # Word overlap
-            (0.3 * sequence_score) +  # Word order
-            (0.2 * important_word_match) +  # Important words
-            (0.1 * length_ratio)  # Length penalty
+            (0.4 * jaccard_score)  # Word overlap
+            + (0.3 * sequence_score)  # Word order
+            + (0.2 * important_word_match)  # Important words
+            + (0.1 * length_ratio)  # Length penalty
         )
 
         return min(max(combined_score, 0.0), 1.0)  # Ensure score is between 0 and 1
@@ -453,7 +535,9 @@ class GradingService:
         else:
             return "F"
 
-    def save_grading_result(self, grading_result: Dict, output_path: str, filename: str = None) -> str:
+    def save_grading_result(
+        self, grading_result: Dict, output_path: str, filename: str = None
+    ) -> str:
         """
         Save grading results to a file.
 
@@ -474,14 +558,14 @@ class GradingService:
             filename = f"grading_result_{timestamp}.json"
 
         # Ensure the filename has a .json extension
-        if not filename.endswith('.json'):
-            filename += '.json'
+        if not filename.endswith(".json"):
+            filename += ".json"
 
         # Full path to the output file
         output_file = Path(output_path) / filename
 
         # Save the result as JSON
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(grading_result, f, indent=2)
 
         return str(output_file)

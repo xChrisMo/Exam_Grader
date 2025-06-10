@@ -4,13 +4,15 @@ Exam Grader Application Runner
 Comprehensive startup script for the Flask Exam Grader application.
 """
 
-import os
-import sys
 import argparse
+import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
+
 from dotenv import load_dotenv
+
 
 def check_python_version():
     """Check if Python version is compatible."""
@@ -20,10 +22,11 @@ def check_python_version():
         sys.exit(1)
     print(f"✅ Python version: {sys.version.split()[0]}")
 
+
 def check_virtual_environment():
     """Check if running in a virtual environment."""
-    in_venv = hasattr(sys, 'real_prefix') or (
-        hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix
+    in_venv = hasattr(sys, "real_prefix") or (
+        hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
     )
 
     if in_venv:
@@ -31,6 +34,7 @@ def check_virtual_environment():
     else:
         print("⚠️  Warning: Not running in a virtual environment")
         print("   Consider using: python -m venv venv && source venv/bin/activate")
+
 
 def install_requirements(requirements_file: str = "webapp/requirements.txt"):
     """Install required packages."""
@@ -40,22 +44,19 @@ def install_requirements(requirements_file: str = "webapp/requirements.txt"):
 
     print(f"📦 Installing requirements from {requirements_file}...")
     try:
-        subprocess.check_call([
-            sys.executable, "-m", "pip", "install", "-r", requirements_file
-        ])
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "-r", requirements_file]
+        )
         print("✅ Requirements installed successfully")
         return True
     except subprocess.CalledProcessError as e:
         print(f"❌ Failed to install requirements: {e}")
         return False
 
+
 def check_dependencies():
     """Check if required dependencies are installed."""
-    required_packages = [
-        'flask',
-        'werkzeug',
-        'jinja2'
-    ]
+    required_packages = ["flask", "werkzeug", "jinja2"]
 
     missing_packages = []
     for package in required_packages:
@@ -71,6 +72,7 @@ def check_dependencies():
     print("✅ All required dependencies are installed")
     return True
 
+
 def setup_environment():
     """Set up environment variables and paths."""
     # Add project root to Python path
@@ -79,46 +81,51 @@ def setup_environment():
         sys.path.insert(0, str(project_root))
 
     # Set environment variables
-    os.environ.setdefault('FLASK_APP', 'webapp.exam_grader_app')
-    os.environ.setdefault('FLASK_ENV', 'development')
+    os.environ.setdefault("FLASK_APP", "webapp.exam_grader_app")
+    os.environ.setdefault("FLASK_ENV", "development")
 
     print(f"✅ Project root: {project_root}")
     print(f"✅ FLASK_APP: {os.environ.get('FLASK_APP')}")
 
+
 def create_directories():
     """Create necessary directories."""
-    directories = [
-        'temp',
-        'output',
-        'logs',
-        'webapp/static/uploads'
-    ]
+    directories = ["temp", "output", "logs", "webapp/static/uploads"]
 
     for directory in directories:
         os.makedirs(directory, exist_ok=True)
 
     print("✅ Created necessary directories")
 
+
 def run_application(host: str = None, port: int = None, debug: bool = None):
     """Run the Flask application with configuration from .env file."""
     try:
-        # Load environment variables from .env
-        load_dotenv('.env', override=True)
+        # Load environment variables from instance/.env first, then fallback to root .env
+        project_root = Path(__file__).parent
+        instance_env_path = project_root / "instance" / ".env"
+
+        if instance_env_path.exists():
+            load_dotenv(instance_env_path, override=True)
+            print(f"✅ Loaded environment from: {instance_env_path}")
+        else:
+            load_dotenv(".env", override=True)
+            print("⚠️  Loaded environment from root .env file")
 
         # Use .env values if not provided as arguments
         if host is None:
-            host = os.getenv('HOST', '127.0.0.1')
+            host = os.getenv("HOST", "127.0.0.1")
         if port is None:
-            port = int(os.getenv('PORT', '8501'))
+            port = int(os.getenv("PORT", "8501"))
         if debug is None:
-            debug = os.getenv('DEBUG', 'False').lower() == 'true'
+            debug = os.getenv("DEBUG", "False").lower() == "true"
 
         # Import the Flask app
         from webapp.exam_grader_app import app
 
-        print("\n" + "="*50)
+        print("\n" + "=" * 50)
         print("🚀 Starting Exam Grader Web Application")
-        print("="*50)
+        print("=" * 50)
         print(f"📊 Dashboard: http://{host}:{port}")
         print(f"🔧 Debug mode: {debug}")
         print(f"🌐 Host: {host}")
@@ -127,9 +134,9 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
         print(f"📂 Output Dir: {os.getenv('OUTPUT_DIR', 'output')}")
         print(f"📊 Max File Size: {os.getenv('MAX_FILE_SIZE_MB', '20')}MB")
         print(f"🔑 API Keys: {'✅' if os.getenv('HANDWRITING_OCR_API_KEY') else '❌'}")
-        print("="*50)
+        print("=" * 50)
         print("Press Ctrl+C to stop the server")
-        print("="*50)
+        print("=" * 50)
 
         # Run the application with reloader disabled to prevent double initialization
         app.run(
@@ -137,7 +144,7 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
             port=port,
             debug=debug,
             use_reloader=False,  # Disable reloader to prevent double initialization
-            threaded=True
+            threaded=True,
         )
 
     except ImportError as e:
@@ -158,6 +165,7 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
         print(f"❌ Unexpected error: {e}")
         sys.exit(1)
 
+
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -171,37 +179,39 @@ Examples:
   python run_app.py --no-debug         # Run without debug mode
   python run_app.py --install          # Install requirements first
   python run_app.py --check            # Check setup only
-        """
+        """,
     )
 
-    # Load environment variables to get defaults
-    load_dotenv('.env', override=True)
+    # Load environment variables to get defaults from instance folder
+    project_root = Path(__file__).parent
+    instance_env_path = project_root / "instance" / ".env"
+
+    if instance_env_path.exists():
+        load_dotenv(instance_env_path, override=True)
+    else:
+        load_dotenv(".env", override=True)
 
     parser.add_argument(
-        '--host',
-        default=os.getenv('HOST', '127.0.0.1'),
-        help=f'Host to bind to (default: {os.getenv("HOST", "127.0.0.1")})'
+        "--host",
+        default=os.getenv("HOST", "127.0.0.1"),
+        help=f'Host to bind to (default: {os.getenv("HOST", "127.0.0.1")})',
     )
     parser.add_argument(
-        '--port',
+        "--port",
         type=int,
-        default=int(os.getenv('PORT', '8501')),
-        help=f'Port to bind to (default: {os.getenv("PORT", "8501")})'
+        default=int(os.getenv("PORT", "8501")),
+        help=f'Port to bind to (default: {os.getenv("PORT", "8501")})',
     )
     parser.add_argument(
-        '--no-debug',
-        action='store_true',
-        help=f'Disable debug mode (default debug: {os.getenv("DEBUG", "False")})'
+        "--no-debug",
+        action="store_true",
+        help=f'Disable debug mode (default debug: {os.getenv("DEBUG", "False")})',
     )
     parser.add_argument(
-        '--install',
-        action='store_true',
-        help='Install requirements before running'
+        "--install", action="store_true", help="Install requirements before running"
     )
     parser.add_argument(
-        '--check',
-        action='store_true',
-        help='Check setup and dependencies only'
+        "--check", action="store_true", help="Check setup and dependencies only"
     )
 
     args = parser.parse_args()
@@ -229,6 +239,7 @@ Examples:
 
     # Run the application
     run_application(host=args.host, port=args.port, debug=not args.no_debug)
+
 
 if __name__ == "__main__":
     main()

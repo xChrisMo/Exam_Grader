@@ -3,12 +3,14 @@ Mapping Service for mapping submissions to marking guide criteria.
 This service groups questions and answers from marking guides with corresponding
 questions and answers in student submissions.
 """
-import re
+
 import json
+import re
 from datetime import datetime
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 from utils.logger import logger
+
 
 class MappingService:
     """Mapping service that groups questions and answers between marking guides and submissions."""
@@ -81,35 +83,48 @@ class MappingService:
                     "model": self.llm_service.model,
                     "messages": [
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     "temperature": 0.0,
-                    "response_format": {"type": "json_object"}
+                    "response_format": {"type": "json_object"},
                 }
 
                 # Add seed parameter if in deterministic mode
-                if hasattr(self.llm_service, 'deterministic') and self.llm_service.deterministic and hasattr(self.llm_service, 'seed') and self.llm_service.seed is not None:
+                if (
+                    hasattr(self.llm_service, "deterministic")
+                    and self.llm_service.deterministic
+                    and hasattr(self.llm_service, "seed")
+                    and self.llm_service.seed is not None
+                ):
                     params["seed"] = self.llm_service.seed
 
                 response = self.llm_service.client.chat.completions.create(**params)
             else:
                 # For models that don't support JSON response format
-                modified_system_prompt = system_prompt + """
+                modified_system_prompt = (
+                    system_prompt
+                    + """
                 IMPORTANT: Your response must be valid JSON. Format your entire response as a JSON object.
                 Do not include any text before or after the JSON object.
                 """
+                )
 
                 params = {
                     "model": self.llm_service.model,
                     "messages": [
                         {"role": "system", "content": modified_system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
-                    "temperature": 0.0
+                    "temperature": 0.0,
                 }
 
                 # Add seed parameter if in deterministic mode
-                if hasattr(self.llm_service, 'deterministic') and self.llm_service.deterministic and hasattr(self.llm_service, 'seed') and self.llm_service.seed is not None:
+                if (
+                    hasattr(self.llm_service, "deterministic")
+                    and self.llm_service.deterministic
+                    and hasattr(self.llm_service, "seed")
+                    and self.llm_service.seed is not None
+                ):
                     params["seed"] = self.llm_service.seed
 
                 response = self.llm_service.client.chat.completions.create(**params)
@@ -128,7 +143,9 @@ class MappingService:
             # Log completion
             logger.info(f"Guide type determined: {guide_type}")
 
-            logger.info(f"Determined guide type: {guide_type} (confidence: {confidence})")
+            logger.info(
+                f"Determined guide type: {guide_type} (confidence: {confidence})"
+            )
             logger.info(f"Reasoning: {reasoning}")
 
             return guide_type, confidence
@@ -220,21 +237,25 @@ class MappingService:
                 """
 
                 # Check if the model supports JSON output format
-                supports_json = "deepseek-reasoner" not in self.llm_service.model.lower()
+                supports_json = (
+                    "deepseek-reasoner" not in self.llm_service.model.lower()
+                )
 
                 if supports_json:
                     response = self.llm_service.client.chat.completions.create(
                         model=self.llm_service.model,
                         messages=[
                             {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt}
+                            {"role": "user", "content": user_prompt},
                         ],
                         temperature=0.0,
-                        response_format={"type": "json_object"}
+                        response_format={"type": "json_object"},
                     )
                 else:
                     # For models that don't support JSON response format
-                    modified_system_prompt = system_prompt + """
+                    modified_system_prompt = (
+                        system_prompt
+                        + """
                     IMPORTANT: Your response must be valid JSON. Format your entire response as a JSON object.
                     Do not include any text before or after the JSON object.
 
@@ -250,18 +271,24 @@ class MappingService:
                         ]
                     }
                     """
+                    )
 
                     params = {
                         "model": self.llm_service.model,
                         "messages": [
                             {"role": "system", "content": modified_system_prompt},
-                            {"role": "user", "content": user_prompt}
+                            {"role": "user", "content": user_prompt},
                         ],
-                        "temperature": 0.0
+                        "temperature": 0.0,
                     }
 
                     # Add seed parameter if in deterministic mode
-                    if hasattr(self.llm_service, 'deterministic') and self.llm_service.deterministic and hasattr(self.llm_service, 'seed') and self.llm_service.seed is not None:
+                    if (
+                        hasattr(self.llm_service, "deterministic")
+                        and self.llm_service.deterministic
+                        and hasattr(self.llm_service, "seed")
+                        and self.llm_service.seed is not None
+                    ):
                         params["seed"] = self.llm_service.seed
 
                     response = self.llm_service.client.chat.completions.create(**params)
@@ -274,42 +301,56 @@ class MappingService:
                 # Try to clean up the response for models that don't properly format JSON
                 try:
                     # Find JSON content between curly braces if there's text before/after
-                    json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                    json_match = re.search(r"\{.*\}", result, re.DOTALL)
                     if json_match:
                         result = json_match.group(0)
 
                     parsed = json.loads(result)
 
                     # Log successful extraction
-                    logger.info(f"Successfully extracted {len(parsed.get('items', []))} items from content")
+                    logger.info(
+                        f"Successfully extracted {len(parsed.get('items', []))} items from content"
+                    )
 
                     return parsed.get("items", [])
                 except json.JSONDecodeError as e:
-                    logger.warning(f"JSON parsing error in extract_questions_and_answers: {str(e)}")
+                    logger.warning(
+                        f"JSON parsing error in extract_questions_and_answers: {str(e)}"
+                    )
 
                     # Log JSON parsing error
-                    logger.warning(f"JSON parsing error: {str(e)}. Falling back to regex extraction.")
+                    logger.warning(
+                        f"JSON parsing error: {str(e)}. Falling back to regex extraction."
+                    )
 
                     # Return an empty list to trigger the fallback extraction
                     return []
 
             except Exception as e:
-                logger.warning(f"LLM extraction failed, falling back to regex: {str(e)}")
+                logger.warning(
+                    f"LLM extraction failed, falling back to regex: {str(e)}"
+                )
 
         # Fallback to regex-based extraction
         items = []
-        content = re.sub(r'\n{3,}', '\n\n', content.strip())
-        content = re.sub(r'([^\n])(\s*)(Question|Q)\s+(\d+)', r'\1\n\n\3 \4', content, flags=re.IGNORECASE)
+        content = re.sub(r"\n{3,}", "\n\n", content.strip())
+        content = re.sub(
+            r"([^\n])(\s*)(Question|Q)\s+(\d+)",
+            r"\1\n\n\3 \4",
+            content,
+            flags=re.IGNORECASE,
+        )
 
-        question_matches = list(re.finditer(r'(?:^|\n+)((?:Question|Q)[.\s]*\d+[.\s]*:?[.\s]*)(.*?)(?=(?:\n+(?:Question|Q)[.\s]*\d+[.\s]*:?)|$)',
-                                           content, re.IGNORECASE | re.DOTALL))
+        question_matches = list(
+            re.finditer(
+                r"(?:^|\n+)((?:Question|Q)[.\s]*\d+[.\s]*:?[.\s]*)(.*?)(?=(?:\n+(?:Question|Q)[.\s]*\d+[.\s]*:?)|$)",
+                content,
+                re.IGNORECASE | re.DOTALL,
+            )
+        )
 
         if not question_matches:
-            items.append({
-                "id": "item1",
-                "text": content.strip(),
-                "type": "unknown"
-            })
+            items.append({"id": "item1", "text": content.strip(), "type": "unknown"})
             return items
 
         for i, match in enumerate(question_matches):
@@ -317,11 +358,14 @@ class MappingService:
             # Extract question content from the match
             question_content = match.group(2).strip()
 
-            answer_match = re.search(r'(?:^|\n+)((?:Answer|A|Solution|Sol)[.\s]*:?[.\s]*)(.*)',
-                                    question_content, re.IGNORECASE | re.DOTALL)
+            answer_match = re.search(
+                r"(?:^|\n+)((?:Answer|A|Solution|Sol)[.\s]*:?[.\s]*)(.*)",
+                question_content,
+                re.IGNORECASE | re.DOTALL,
+            )
 
             if answer_match:
-                question_text = question_content[:answer_match.start()].strip()
+                question_text = question_content[: answer_match.start()].strip()
                 answer_text = answer_match.group(2).strip()
             else:
                 question_text = question_content
@@ -330,10 +374,10 @@ class MappingService:
             # Try to extract max score with more patterns
             max_score = None
             score_patterns = [
-                r'(?:max|maximum|total)[.\s]*(?:score|points|marks)[.\s]*:?\s*(\d+)',
-                r'\((\d+)\s*(?:marks|points)\)',
-                r'(\d+)\s*(?:marks|points)\s*(?:each|total|maximum)?',
-                r'(?:worth|total|maximum)\s*(?:of\s*)?(\d+)\s*(?:marks|points)'
+                r"(?:max|maximum|total)[.\s]*(?:score|points|marks)[.\s]*:?\s*(\d+)",
+                r"\((\d+)\s*(?:marks|points)\)",
+                r"(\d+)\s*(?:marks|points)\s*(?:each|total|maximum)?",
+                r"(?:worth|total|maximum)\s*(?:of\s*)?(\d+)\s*(?:marks|points)",
             ]
 
             for pattern in score_patterns:
@@ -342,12 +386,14 @@ class MappingService:
                     max_score = int(max_score_match.group(1))
                     break
 
-                items.append({
-                    "id": f"q{current_id}",
-                    "text": question_text,
-                    "answer": answer_text,
-                "max_score": max_score  # Will be None if no marks found
-                })
+                items.append(
+                    {
+                        "id": f"q{current_id}",
+                        "text": question_text,
+                        "answer": answer_text,
+                        "max_score": max_score,  # Will be None if no marks found
+                    }
+                )
 
         return items
 
@@ -366,11 +412,13 @@ class MappingService:
             - extraction_method: Method used for extraction ('llm' or 'regex')
         """
         if not content or not content.strip():
-            return {'questions': [], 'total_marks': 0, 'extraction_method': 'none'}
+            return {"questions": [], "total_marks": 0, "extraction_method": "none"}
 
         if self.llm_service:
             try:
-                logger.info("Using LLM to extract questions and total marks from marking guide...")
+                logger.info(
+                    "Using LLM to extract questions and total marks from marking guide..."
+                )
 
                 # Enhanced system prompt specifically for marking guide question extraction
                 system_prompt = """
@@ -453,14 +501,19 @@ class MappingService:
                     "model": self.llm_service.model,
                     "messages": [
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     "temperature": 0.0,
-                    "max_tokens": 2048
+                    "max_tokens": 2048,
                 }
 
                 # Add seed parameter if in deterministic mode
-                if hasattr(self.llm_service, 'deterministic') and self.llm_service.deterministic and hasattr(self.llm_service, 'seed') and self.llm_service.seed is not None:
+                if (
+                    hasattr(self.llm_service, "deterministic")
+                    and self.llm_service.deterministic
+                    and hasattr(self.llm_service, "seed")
+                    and self.llm_service.seed is not None
+                ):
                     params["seed"] = self.llm_service.seed
 
                 response = self.llm_service.client.chat.completions.create(**params)
@@ -471,49 +524,57 @@ class MappingService:
                 # Clean up the response
                 try:
                     # Find JSON content between curly braces
-                    json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                    json_match = re.search(r"\{.*\}", result, re.DOTALL)
                     if json_match:
                         result = json_match.group(0)
 
                     # Remove comments
-                    result = re.sub(r'//.*?$', '', result, flags=re.MULTILINE)
-                    result = re.sub(r'/\*.*?\*/', '', result, flags=re.DOTALL)
-                    result = re.sub(r'#.*?$', '', result, flags=re.MULTILINE)
+                    result = re.sub(r"//.*?$", "", result, flags=re.MULTILINE)
+                    result = re.sub(r"/\*.*?\*/", "", result, flags=re.DOTALL)
+                    result = re.sub(r"#.*?$", "", result, flags=re.MULTILINE)
 
                     parsed = json.loads(result)
 
                     # Validate the response structure
-                    if 'questions' in parsed and 'total_marks' in parsed:
-                        questions = parsed['questions']
-                        total_marks = parsed['total_marks']
+                    if "questions" in parsed and "total_marks" in parsed:
+                        questions = parsed["questions"]
+                        total_marks = parsed["total_marks"]
 
                         # Convert to the format expected by the application
                         formatted_questions = []
                         for i, q in enumerate(questions):
                             formatted_q = {
-                                'number': i + 1,
-                                'text': q.get('text', ''),
-                                'marks': q.get('marks', 0),
-                                'criteria': '',  # Can be populated later
-                                'type': 'question'
+                                "number": i + 1,
+                                "text": q.get("text", ""),
+                                "marks": q.get("marks", 0),
+                                "criteria": "",  # Can be populated later
+                                "type": "question",
                             }
                             formatted_questions.append(formatted_q)
 
-                        logger.info(f"LLM successfully extracted {len(formatted_questions)} questions with {total_marks} total marks")
+                        logger.info(
+                            f"LLM successfully extracted {len(formatted_questions)} questions with {total_marks} total marks"
+                        )
 
                         return {
-                            'questions': formatted_questions,
-                            'total_marks': total_marks,
-                            'extraction_method': 'llm'
+                            "questions": formatted_questions,
+                            "total_marks": total_marks,
+                            "extraction_method": "llm",
                         }
                     else:
-                        logger.warning("LLM response missing required fields, falling back to regex")
+                        logger.warning(
+                            "LLM response missing required fields, falling back to regex"
+                        )
 
                 except json.JSONDecodeError as e:
-                    logger.warning(f"JSON parsing error in LLM response: {str(e)}, falling back to regex")
+                    logger.warning(
+                        f"JSON parsing error in LLM response: {str(e)}, falling back to regex"
+                    )
 
             except Exception as e:
-                logger.warning(f"LLM extraction failed: {str(e)}, falling back to regex")
+                logger.warning(
+                    f"LLM extraction failed: {str(e)}, falling back to regex"
+                )
 
         # Fallback to enhanced regex extraction
         logger.info("Using enhanced regex extraction for questions and marks...")
@@ -529,17 +590,19 @@ class MappingService:
         # Enhanced question patterns to match various formats
         question_patterns = [
             # QUESTION 1: ... (25 marks)
-            r'(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^(]*?)\s*\((\d+)\s*marks?\)',
+            r"(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^(]*?)\s*\((\d+)\s*marks?\)",
             # Question 1: ... [10 marks]
-            r'(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^[]*?)\s*\[(\d+)\s*marks?\]',
+            r"(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^[]*?)\s*\[(\d+)\s*marks?\]",
             # a) Define object-oriented programming... (10 marks)
-            r'(?:^|\n)\s*([a-z])\)\s*([^(]*?)\s*\((\d+)\s*marks?\)',
+            r"(?:^|\n)\s*([a-z])\)\s*([^(]*?)\s*\((\d+)\s*marks?\)",
             # Question 1: ... 10 marks
-            r'(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^0-9]*?)(\d+)\s*marks?',
+            r"(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^0-9]*?)(\d+)\s*marks?",
         ]
 
         for pattern in question_patterns:
-            matches = re.findall(pattern, content, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+            matches = re.findall(
+                pattern, content, re.IGNORECASE | re.MULTILINE | re.DOTALL
+            )
             if matches:
                 logger.info(f"Found {len(matches)} questions using regex pattern")
                 for match in matches:
@@ -548,11 +611,11 @@ class MappingService:
                         try:
                             marks = int(marks_str)
                             question_data = {
-                                'number': len(questions) + 1,
-                                'text': f"Question {q_num}: {q_text.strip()}",
-                                'marks': marks,
-                                'criteria': '',
-                                'type': 'question'
+                                "number": len(questions) + 1,
+                                "text": f"Question {q_num}: {q_text.strip()}",
+                                "marks": marks,
+                                "criteria": "",
+                                "type": "question",
                             }
                             questions.append(question_data)
                             total_marks += marks
@@ -562,16 +625,20 @@ class MappingService:
 
         # If no questions found with marks, try general patterns
         if not questions:
-            logger.info("No questions with marks found, trying general question patterns...")
+            logger.info(
+                "No questions with marks found, trying general question patterns..."
+            )
             general_patterns = [
-                r'(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^\n]+)',
-                r'(?:^|\n)\s*([a-z])\)\s*([^\n]+)',
+                r"(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^\n]+)",
+                r"(?:^|\n)\s*([a-z])\)\s*([^\n]+)",
             ]
 
             for pattern in general_patterns:
                 matches = re.findall(pattern, content, re.IGNORECASE | re.MULTILINE)
                 if matches:
-                    logger.info(f"Found {len(matches)} questions without explicit marks")
+                    logger.info(
+                        f"Found {len(matches)} questions without explicit marks"
+                    )
                     for match in matches:
                         q_num, q_text = match
                         # Assign default marks based on question complexity
@@ -583,11 +650,11 @@ class MappingService:
                             marks = 10  # Simple question
 
                         question_data = {
-                            'number': len(questions) + 1,
-                            'text': f"Question {q_num}: {q_text.strip()}",
-                            'marks': marks,
-                            'criteria': '',
-                            'type': 'question'
+                            "number": len(questions) + 1,
+                            "text": f"Question {q_num}: {q_text.strip()}",
+                            "marks": marks,
+                            "criteria": "",
+                            "type": "question",
                         }
                         questions.append(question_data)
                         total_marks += marks
@@ -595,20 +662,29 @@ class MappingService:
 
         # Try to extract total marks from the document
         if not total_marks and questions:
-            total_marks_match = re.search(r'total[:\s]*(\d+)\s*marks?', content, re.IGNORECASE)
+            total_marks_match = re.search(
+                r"total[:\s]*(\d+)\s*marks?", content, re.IGNORECASE
+            )
             if total_marks_match:
                 total_marks = int(total_marks_match.group(1))
                 logger.info(f"Found total marks in document: {total_marks}")
 
-        logger.info(f"Regex extraction complete: {len(questions)} questions, {total_marks} total marks")
+        logger.info(
+            f"Regex extraction complete: {len(questions)} questions, {total_marks} total marks"
+        )
 
         return {
-            'questions': questions,
-            'total_marks': total_marks,
-            'extraction_method': 'regex'
+            "questions": questions,
+            "total_marks": total_marks,
+            "extraction_method": "regex",
         }
 
-    def map_submission_to_guide(self, marking_guide_content: str, student_submission_content: str, num_questions: int = 1) -> Tuple[Dict, Optional[str]]:
+    def map_submission_to_guide(
+        self,
+        marking_guide_content: str,
+        student_submission_content: str,
+        num_questions: int = 1,
+    ) -> Tuple[Dict, Optional[str]]:
         """
         Map a student submission to a marking guide using LLM for intelligent grouping and grading.
 
@@ -636,14 +712,14 @@ class MappingService:
                 logger.error("Marking guide content is empty")
                 return {
                     "status": "error",
-                    "message": "Marking guide content is empty"
+                    "message": "Marking guide content is empty",
                 }, "Empty marking guide"
 
             if not student_submission_content or not student_submission_content.strip():
                 logger.error("Student submission content is empty")
                 return {
                     "status": "error",
-                    "message": "Student submission content is empty"
+                    "message": "Student submission content is empty",
                 }, "Empty student submission"
 
             # Initialize empty mappings list
@@ -652,13 +728,19 @@ class MappingService:
             if self.llm_service:
                 try:
                     # Log the guide type determination
-                    logger.info("Determining if marking guide contains questions or answers...")
+                    logger.info(
+                        "Determining if marking guide contains questions or answers..."
+                    )
 
                     # Determine if the marking guide contains questions or answers
-                    guide_type, confidence = self.determine_guide_type(marking_guide_content)
+                    guide_type, confidence = self.determine_guide_type(
+                        marking_guide_content
+                    )
 
                     # Log the guide type determination result
-                    logger.info(f"Guide type determined: {guide_type} (confidence: {confidence:.2f}). Preparing for mapping...")
+                    logger.info(
+                        f"Guide type determined: {guide_type} (confidence: {confidence:.2f}). Preparing for mapping..."
+                    )
 
                     # Use LLM to map submission to guide based on guide type and perform grading
                     if guide_type == "questions":
@@ -733,7 +815,9 @@ class MappingService:
                         """
 
                     # Log the mapping process
-                    logger.info(f"Using LLM to map submission to guide (finding best {num_questions} answers)...")
+                    logger.info(
+                        f"Using LLM to map submission to guide (finding best {num_questions} answers)..."
+                    )
 
                     # Pass the raw content to the LLM for mapping and grading
                     user_prompt = f"""
@@ -794,7 +878,9 @@ class MappingService:
                     # Modify the system prompt to request a specific format
                     # Remove all the JSON examples with comments from the original system prompt
                     system_prompt = system_prompt.replace("Output in JSON format:", "")
-                    system_prompt = re.sub(r'\{[^}]*\}', '', system_prompt, flags=re.DOTALL)
+                    system_prompt = re.sub(
+                        r"\{[^}]*\}", "", system_prompt, flags=re.DOTALL
+                    )
 
                     modified_system_prompt = """
                     You are an expert at matching and grading exam content.
@@ -851,15 +937,22 @@ class MappingService:
                         "model": self.llm_service.model,
                         "messages": [
                             {"role": "system", "content": modified_system_prompt},
-                            {"role": "user", "content": user_prompt}
+                            {"role": "user", "content": user_prompt},
                         ],
-                        "temperature": 0.0
+                        "temperature": 0.0,
                     }
 
                     # Add seed parameter if in deterministic mode
-                    if hasattr(self.llm_service, 'deterministic') and self.llm_service.deterministic and hasattr(self.llm_service, 'seed') and self.llm_service.seed is not None:
+                    if (
+                        hasattr(self.llm_service, "deterministic")
+                        and self.llm_service.deterministic
+                        and hasattr(self.llm_service, "seed")
+                        and self.llm_service.seed is not None
+                    ):
                         params["seed"] = self.llm_service.seed
-                        logger.info(f"Using deterministic mode with seed: {self.llm_service.seed} for mapping")
+                        logger.info(
+                            f"Using deterministic mode with seed: {self.llm_service.seed} for mapping"
+                        )
 
                     response = self.llm_service.client.chat.completions.create(**params)
 
@@ -874,7 +967,7 @@ class MappingService:
                         logger.info(f"Raw LLM response: {result[:200]}...")
 
                         # Find JSON content between curly braces if there's text before/after
-                        json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                        json_match = re.search(r"\{.*\}", result, re.DOTALL)
                         if json_match:
                             result = json_match.group(0)
                             logger.info(f"Extracted JSON: {result[:200]}...")
@@ -882,36 +975,40 @@ class MappingService:
                         # More aggressive cleaning for deepseek-reasoner model
 
                         # First, try to extract just the JSON part if there's surrounding text
-                        json_pattern = r'(\{[\s\S]*\})'
+                        json_pattern = r"(\{[\s\S]*\})"
                         json_matches = re.findall(json_pattern, result)
                         if json_matches:
                             result = json_matches[0]
                             logger.info(f"Extracted JSON object: {result[:100]}...")
 
                         # Remove any comments in the JSON (deepseek-reasoner sometimes adds these)
-                        result = re.sub(r'//.*?$', '', result, flags=re.MULTILINE)
-                        result = re.sub(r'/\*.*?\*/', '', result, flags=re.DOTALL)
-                        result = re.sub(r'#.*?$', '', result, flags=re.MULTILINE)
+                        result = re.sub(r"//.*?$", "", result, flags=re.MULTILINE)
+                        result = re.sub(r"/\*.*?\*/", "", result, flags=re.DOTALL)
+                        result = re.sub(r"#.*?$", "", result, flags=re.MULTILINE)
 
                         # Remove comments that appear after values (common in deepseek output)
-                        result = re.sub(r'(["}\]])(\s*#[^\n]*)', r'\1', result)
-                        result = re.sub(r'(\d+)(\s*#[^\n]*)(,|\n|})', r'\1\3', result)
+                        result = re.sub(r'(["}\]])(\s*#[^\n]*)', r"\1", result)
+                        result = re.sub(r"(\d+)(\s*#[^\n]*)(,|\n|})", r"\1\3", result)
 
                         # Fix common JSON formatting issues
                         # Replace single quotes with double quotes
                         result = re.sub(r"'([^']*)':", r'"\1":', result)
-                        result = re.sub(r': *\'([^\']*)\'', r': "\1"', result)
+                        result = re.sub(r": *\'([^\']*)\'", r': "\1"', result)
 
                         # Fix trailing commas in arrays and objects
-                        result = re.sub(r',\s*]', ']', result)
-                        result = re.sub(r',\s*}', '}', result)
+                        result = re.sub(r",\s*]", "]", result)
+                        result = re.sub(r",\s*}", "}", result)
 
                         # Handle specific format issues with deepseek-reasoner
                         # Replace any remaining instances of "key": value # comment
-                        result = re.sub(r'("[^"]+"):\s*([^,\n\]}{#]*)(\s*#[^\n]*)(,|\n|}|\])', r'\1: \2\4', result)
+                        result = re.sub(
+                            r'("[^"]+"):\s*([^,\n\]}{#]*)(\s*#[^\n]*)(,|\n|}|\])',
+                            r"\1: \2\4",
+                            result,
+                        )
 
                         # Final pass to remove any remaining comments
-                        result = re.sub(r'#[^\n]*\n', '\n', result)
+                        result = re.sub(r"#[^\n]*\n", "\n", result)
 
                         # Log the cleaned JSON
                         logger.info(f"Cleaned JSON: {result[:200]}...")
@@ -931,57 +1028,87 @@ class MappingService:
 
                             # Extract mappings using regex patterns
                             mapping_pattern = r'"guide_id"\s*:\s*"([^"]+)".*?"guide_text"\s*:\s*"([^"]+)".*?"max_score"\s*:\s*(\d+).*?"submission_id"\s*:\s*"([^"]+)".*?"submission_text"\s*:\s*"([^"]+)".*?"match_score"\s*:\s*([\d\.]+)'
-                            mapping_matches = re.findall(mapping_pattern, result, re.DOTALL)
+                            mapping_matches = re.findall(
+                                mapping_pattern, result, re.DOTALL
+                            )
 
                             if mapping_matches:
-                                logger.info(f"Found {len(mapping_matches)} mappings using regex")
+                                logger.info(
+                                    f"Found {len(mapping_matches)} mappings using regex"
+                                )
 
                                 for i, match in enumerate(mapping_matches):
-                                    guide_id, guide_text, max_score, submission_id, submission_text, match_score = match
+                                    (
+                                        guide_id,
+                                        guide_text,
+                                        max_score,
+                                        submission_id,
+                                        submission_text,
+                                        match_score,
+                                    ) = match
 
                                     # Create a basic mapping
-                                    mappings.append({
-                                        "guide_id": guide_id,
-                                        "guide_text": guide_text,
-                                        "guide_answer": "",
-                                        "max_score": float(max_score),
-                                        "submission_id": submission_id,
-                                        "submission_text": submission_text,
-                                        "match_score": float(match_score),
-                                        "match_reason": f"Mapping extracted from LLM response",
-                                        "grade_score": float(max_score) * 0.8,  # Assume 80% score as default
-                                        "grade_percentage": 80,
-                                        "grade_feedback": "Score estimated due to parsing issues",
-                                        "strengths": [],
-                                        "weaknesses": []
-                                    })
+                                    mappings.append(
+                                        {
+                                            "guide_id": guide_id,
+                                            "guide_text": guide_text,
+                                            "guide_answer": "",
+                                            "max_score": float(max_score),
+                                            "submission_id": submission_id,
+                                            "submission_text": submission_text,
+                                            "match_score": float(match_score),
+                                            "match_reason": f"Mapping extracted from LLM response",
+                                            "grade_score": float(max_score)
+                                            * 0.8,  # Assume 80% score as default
+                                            "grade_percentage": 80,
+                                            "grade_feedback": "Score estimated due to parsing issues",
+                                            "strengths": [],
+                                            "weaknesses": [],
+                                        }
+                                    )
 
                                 # Create a basic result structure
                                 parsed = {
                                     "mappings": mappings,
                                     "overall_grade": {
-                                        "total_score": sum(m["grade_score"] for m in mappings),
-                                        "max_possible_score": sum(m["max_score"] for m in mappings),
+                                        "total_score": sum(
+                                            m["grade_score"] for m in mappings
+                                        ),
+                                        "max_possible_score": sum(
+                                            m["max_score"] for m in mappings
+                                        ),
                                         "percentage": 80,  # Assume 80% as default
-                                        "letter_grade": "B"
-                                    }
+                                        "letter_grade": "B",
+                                    },
                                 }
 
-                                logger.info("Successfully created mappings from regex extraction")
+                                logger.info(
+                                    "Successfully created mappings from regex extraction"
+                                )
                             else:
                                 # If regex extraction fails, create a minimal valid structure
-                                logger.warning("Regex extraction failed, using minimal valid structure")
+                                logger.warning(
+                                    "Regex extraction failed, using minimal valid structure"
+                                )
 
                                 # Log the JSON parsing error with fallback
-                                logger.warning(f"JSON parsing error: {str(e)}. Using fallback mapping.")
+                                logger.warning(
+                                    f"JSON parsing error: {str(e)}. Using fallback mapping."
+                                )
 
                                 # Log the extraction failure
-                                logger.error(f"JSON parsing error: {str(e)}. Unable to extract mappings.")
+                                logger.error(
+                                    f"JSON parsing error: {str(e)}. Unable to extract mappings."
+                                )
 
                                 # Raise the exception to stop processing
-                                raise Exception(f"JSON parsing error: {str(e)}. Unable to extract mappings from LLM response.")
+                                raise Exception(
+                                    f"JSON parsing error: {str(e)}. Unable to extract mappings from LLM response."
+                                )
                         except Exception as fallback_error:
-                            logger.error(f"Fallback extraction also failed: {str(fallback_error)}")
+                            logger.error(
+                                f"Fallback extraction also failed: {str(fallback_error)}"
+                            )
 
                             # Log the fallback extraction failure
                             logger.error(f"JSON parsing error: {str(e)}")
@@ -1019,7 +1146,9 @@ class MappingService:
                             "guide_text": mapping.get("guide_text", ""),
                             "guide_answer": mapping.get("guide_answer", ""),
                             "max_score": max_score,  # No default value
-                            "submission_id": mapping.get("submission_id", f"s{len(mappings)+1}"),
+                            "submission_id": mapping.get(
+                                "submission_id", f"s{len(mappings)+1}"
+                            ),
                             "submission_text": mapping.get("submission_text", ""),
                             "submission_answer": mapping.get("submission_answer", ""),
                             "match_score": mapping.get("match_score", 0.5),
@@ -1030,22 +1159,30 @@ class MappingService:
                             "grade_percentage": grade_percentage,
                             "grade_feedback": grade_feedback,
                             "strengths": strengths,
-                            "weaknesses": weaknesses
+                            "weaknesses": weaknesses,
                         }
 
                         # Add parent_question field if it exists
                         if mapping.get("parent_question"):
-                            mapping_obj["parent_question"] = mapping.get("parent_question")
+                            mapping_obj["parent_question"] = mapping.get(
+                                "parent_question"
+                            )
 
                         mappings.append(mapping_obj)
 
                     # If overall grade wasn't provided by the LLM, calculate it
                     if not overall_grade:
                         # Calculate percentage
-                        percentage = (total_score / max_possible_score * 100) if max_possible_score > 0 else 0
+                        percentage = (
+                            (total_score / max_possible_score * 100)
+                            if max_possible_score > 0
+                            else 0
+                        )
 
                         # Normalize the score to be out of 100
-                        normalized_score = percentage  # This is already the percentage out of 100
+                        normalized_score = (
+                            percentage  # This is already the percentage out of 100
+                        )
 
                         # Determine letter grade
                         letter_grade = self._get_letter_grade(percentage)
@@ -1055,7 +1192,7 @@ class MappingService:
                             "max_possible_score": max_possible_score,
                             "normalized_score": round(normalized_score, 1),
                             "percentage": round(percentage, 1),
-                            "letter_grade": letter_grade
+                            "letter_grade": letter_grade,
                         }
 
                 except Exception as e:
@@ -1076,7 +1213,7 @@ class MappingService:
                             "guide_type": "unknown",
                             "mapping_method": "Failed LLM",
                             "timestamp": datetime.now().isoformat(),
-                            "num_questions": num_questions
+                            "num_questions": num_questions,
                         },
                         "raw_guide_content": marking_guide_content,
                         "raw_submission_content": student_submission_content,
@@ -1084,20 +1221,26 @@ class MappingService:
                             "total_score": 0,
                             "max_possible_score": 0,
                             "percentage": 0,
-                            "letter_grade": "F"
-                        }
+                            "letter_grade": "F",
+                        },
                     }
 
                     return result, f"LLM mapping failed: {str(e)}"
             else:
                 # Log the no LLM service error
-                logger.error("No LLM service available. LLM service is required for mapping.")
+                logger.error(
+                    "No LLM service available. LLM service is required for mapping."
+                )
 
                 # Raise an error since LLM service is required
-                raise Exception("LLM service is required for mapping. No fallback available.")
+                raise Exception(
+                    "LLM service is required for mapping. No fallback available."
+                )
 
             # Get guide type if available (from first mapping)
-            guide_type = mappings[0].get("guide_type", "unknown") if mappings else "unknown"
+            guide_type = (
+                mappings[0].get("guide_type", "unknown") if mappings else "unknown"
+            )
 
             # We're no longer generating unmapped items
             # Just store the raw content for display
@@ -1106,27 +1249,33 @@ class MappingService:
             logger.info("Finalizing mapping results")
 
             # Initialize overall_grade if it doesn't exist
-            if 'overall_grade' not in locals():
+            if "overall_grade" not in locals():
                 # Calculate total score and max possible score
                 total_score = 0
                 max_possible_score = 0
 
                 # Calculate the total points from all mappings
                 for mapping in mappings:
-                    if mapping.get('grade_score') is not None:
-                        total_score += mapping.get('grade_score', 0)
-                    if mapping.get('max_score') is not None:
-                        max_possible_score += mapping.get('max_score', 0)
+                    if mapping.get("grade_score") is not None:
+                        total_score += mapping.get("grade_score", 0)
+                    if mapping.get("max_score") is not None:
+                        max_possible_score += mapping.get("max_score", 0)
 
                 # Ensure max_possible_score is not zero to avoid division by zero
                 if max_possible_score == 0:
                     max_possible_score = 100  # Default to 100 if no max score is found
 
                 # Calculate percentage
-                percentage = (total_score / max_possible_score * 100) if max_possible_score > 0 else 0
+                percentage = (
+                    (total_score / max_possible_score * 100)
+                    if max_possible_score > 0
+                    else 0
+                )
 
                 # Normalize the score to be out of 100
-                normalized_score = percentage  # This is already the percentage out of 100
+                normalized_score = (
+                    percentage  # This is already the percentage out of 100
+                )
 
                 # Determine letter grade
                 letter_grade = self._get_letter_grade(percentage)
@@ -1136,7 +1285,7 @@ class MappingService:
                     "max_possible_score": max_possible_score,
                     "normalized_score": round(normalized_score, 1),
                     "percentage": round(percentage, 1),
-                    "letter_grade": letter_grade
+                    "letter_grade": letter_grade,
                 }
 
             # Create result
@@ -1149,15 +1298,17 @@ class MappingService:
                     "mapping_count": len(mappings),
                     "guide_type": guide_type,
                     "mapping_method": "LLM" if self.llm_service else "Text-based",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
                 },
                 "raw_guide_content": marking_guide_content,
                 "raw_submission_content": student_submission_content,
-                "overall_grade": overall_grade
+                "overall_grade": overall_grade,
             }
 
             # Log completion
-            logger.info(f"Mapping and grading completed successfully. Score: {overall_grade.get('percentage', 0)}%")
+            logger.info(
+                f"Mapping and grading completed successfully. Score: {overall_grade.get('percentage', 0)}%"
+            )
 
             return result, None
 
@@ -1172,7 +1323,7 @@ class MappingService:
                 "status": "error",
                 "message": error_message,
                 "raw_guide_content": marking_guide_content,
-                "raw_submission_content": student_submission_content
+                "raw_submission_content": student_submission_content,
             }, error_message
 
     def _extract_keywords(self, text: str) -> List[str]:
@@ -1189,21 +1340,91 @@ class MappingService:
             return []
 
         # Split text into words
-        words = re.findall(r'\b\w+\b', text.lower())
+        words = re.findall(r"\b\w+\b", text.lower())
 
         # Remove common stop words
         stop_words = {
-            'a', 'an', 'the', 'and', 'or', 'but', 'if', 'because', 'as', 'what', 'when',
-            'where', 'how', 'why', 'which', 'who', 'whom', 'this', 'that', 'these', 'those',
-            'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'having',
-            'do', 'does', 'did', 'doing', 'to', 'from', 'in', 'out', 'on', 'off', 'over', 'under',
-            'again', 'further', 'then', 'once', 'here', 'there', 'all', 'any', 'both', 'each',
-            'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own',
-            'same', 'so', 'than', 'too', 'very', 'can', 'will', 'just', 'should', 'now'
+            "a",
+            "an",
+            "the",
+            "and",
+            "or",
+            "but",
+            "if",
+            "because",
+            "as",
+            "what",
+            "when",
+            "where",
+            "how",
+            "why",
+            "which",
+            "who",
+            "whom",
+            "this",
+            "that",
+            "these",
+            "those",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "having",
+            "do",
+            "does",
+            "did",
+            "doing",
+            "to",
+            "from",
+            "in",
+            "out",
+            "on",
+            "off",
+            "over",
+            "under",
+            "again",
+            "further",
+            "then",
+            "once",
+            "here",
+            "there",
+            "all",
+            "any",
+            "both",
+            "each",
+            "few",
+            "more",
+            "most",
+            "other",
+            "some",
+            "such",
+            "no",
+            "nor",
+            "not",
+            "only",
+            "own",
+            "same",
+            "so",
+            "than",
+            "too",
+            "very",
+            "can",
+            "will",
+            "just",
+            "should",
+            "now",
         }
 
         # Filter out stop words and short words
-        filtered_words = [word for word in words if word not in stop_words and len(word) > 3]
+        filtered_words = [
+            word for word in words if word not in stop_words and len(word) > 3
+        ]
 
         # Count word frequencies
         word_counts = {}
@@ -1214,7 +1435,7 @@ class MappingService:
         phrases = []
         words = text.lower().split()
         for i in range(len(words) - 1):
-            if words[i] not in stop_words and words[i+1] not in stop_words:
+            if words[i] not in stop_words and words[i + 1] not in stop_words:
                 phrases.append(f"{words[i]} {words[i+1]}")
 
         # Get top keywords by frequency
@@ -1225,13 +1446,15 @@ class MappingService:
         keywords.extend(phrases[:5])
 
         # Add any numerical values as they're often important
-        numbers = re.findall(r'\b\d+(?:\.\d+)?\b', text)
+        numbers = re.findall(r"\b\d+(?:\.\d+)?\b", text)
         keywords.extend(numbers)
 
         # Remove duplicates and return
         return list(set(keywords))
 
-    def _text_based_mapping(self, guide_items: List[Dict], submission_items: List[Dict]) -> List[Dict]:
+    def _text_based_mapping(
+        self, guide_items: List[Dict], submission_items: List[Dict]
+    ) -> List[Dict]:
         """Fallback method for text-based question matching with improved accuracy."""
         mappings = []
 
@@ -1242,23 +1465,113 @@ class MappingService:
             # Convert to lowercase
             text = text.lower()
             # Remove special characters and digits
-            text = re.sub(r'[^\w\s]', ' ', text)
-            text = re.sub(r'\d+', ' ', text)
+            text = re.sub(r"[^\w\s]", " ", text)
+            text = re.sub(r"\d+", " ", text)
             # Split into words
             words = text.split()
             # Remove common stopwords
-            common_stopwords = {'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you',
-                              "you're", "you've", "you'll", "you'd", 'your', 'yours', 'yourself',
-                              'yourselves', 'he', 'him', 'his', 'himself', 'she', "she's", 'her',
-                              'hers', 'herself', 'it', "it's", 'its', 'itself', 'they', 'them',
-                              'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom',
-                              'this', 'that', "that'll", 'these', 'those', 'am', 'is', 'are', 'was',
-                              'were', 'be', 'been', 'being', 'have', 'has', 'had', 'having', 'do',
-                              'does', 'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or',
-                              'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with',
-                              'about', 'against', 'between', 'into', 'through', 'during', 'before',
-                              'after', 'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out',
-                              'on', 'off', 'over', 'under', 'again', 'further', 'then', 'once'}
+            common_stopwords = {
+                "i",
+                "me",
+                "my",
+                "myself",
+                "we",
+                "our",
+                "ours",
+                "ourselves",
+                "you",
+                "you're",
+                "you've",
+                "you'll",
+                "you'd",
+                "your",
+                "yours",
+                "yourself",
+                "yourselves",
+                "he",
+                "him",
+                "his",
+                "himself",
+                "she",
+                "she's",
+                "her",
+                "hers",
+                "herself",
+                "it",
+                "it's",
+                "its",
+                "itself",
+                "they",
+                "them",
+                "their",
+                "theirs",
+                "themselves",
+                "what",
+                "which",
+                "who",
+                "whom",
+                "this",
+                "that",
+                "that'll",
+                "these",
+                "those",
+                "am",
+                "is",
+                "are",
+                "was",
+                "were",
+                "be",
+                "been",
+                "being",
+                "have",
+                "has",
+                "had",
+                "having",
+                "do",
+                "does",
+                "did",
+                "doing",
+                "a",
+                "an",
+                "the",
+                "and",
+                "but",
+                "if",
+                "or",
+                "because",
+                "as",
+                "until",
+                "while",
+                "of",
+                "at",
+                "by",
+                "for",
+                "with",
+                "about",
+                "against",
+                "between",
+                "into",
+                "through",
+                "during",
+                "before",
+                "after",
+                "above",
+                "below",
+                "to",
+                "from",
+                "up",
+                "down",
+                "in",
+                "out",
+                "on",
+                "off",
+                "over",
+                "under",
+                "again",
+                "further",
+                "then",
+                "once",
+            }
             return [w for w in words if w not in common_stopwords and len(w) > 1]
 
         # Function to calculate Jaccard similarity
@@ -1296,30 +1609,32 @@ class MappingService:
                 tf1 = counts1.get(term, 0)
                 tf2 = counts2.get(term, 0)
                 dot_product += tf1 * tf2
-                magnitude1 += tf1 ** 2
-                magnitude2 += tf2 ** 2
+                magnitude1 += tf1**2
+                magnitude2 += tf2**2
 
             # Prevent division by zero
             if magnitude1 == 0 or magnitude2 == 0:
                 return 0
 
-            return dot_product / ((magnitude1 ** 0.5) * (magnitude2 ** 0.5))
+            return dot_product / ((magnitude1**0.5) * (magnitude2**0.5))
 
         # Preprocess all guide items and submission items
         guide_tokens = {}
         submission_tokens = {}
 
         for guide_item in guide_items:
-            guide_text = guide_item.get('text', '')
-            guide_tokens[guide_item.get('id')] = preprocess_text(guide_text)
+            guide_text = guide_item.get("text", "")
+            guide_tokens[guide_item.get("id")] = preprocess_text(guide_text)
 
         for submission_item in submission_items:
-            submission_text = submission_item.get('text', '')
-            submission_tokens[submission_item.get('id')] = preprocess_text(submission_text)
+            submission_text = submission_item.get("text", "")
+            submission_tokens[submission_item.get("id")] = preprocess_text(
+                submission_text
+            )
 
         # For each guide item, find the best match in submission items
         for guide_item in guide_items:
-            guide_id = guide_item.get('id')
+            guide_id = guide_item.get("id")
             guide_text_tokens = guide_tokens[guide_id]
 
             best_score = 0
@@ -1327,22 +1642,31 @@ class MappingService:
 
             for submission_item in submission_items:
                 # Skip if already mapped
-                if any(m.get('submission_id') == submission_item.get('id') for m in mappings):
+                if any(
+                    m.get("submission_id") == submission_item.get("id")
+                    for m in mappings
+                ):
                     continue
 
-                submission_id = submission_item.get('id')
+                submission_id = submission_item.get("id")
                 submission_text_tokens = submission_tokens[submission_id]
 
                 # Calculate similarity scores
-                jaccard_score = jaccard_similarity(guide_text_tokens, submission_text_tokens)
-                cosine_score = cosine_similarity_tokens(guide_text_tokens, submission_text_tokens)
+                jaccard_score = jaccard_similarity(
+                    guide_text_tokens, submission_text_tokens
+                )
+                cosine_score = cosine_similarity_tokens(
+                    guide_text_tokens, submission_text_tokens
+                )
 
                 # Combine scores (weighted average favoring cosine similarity)
                 combined_score = (0.3 * jaccard_score) + (0.7 * cosine_score)
 
                 # Check exact ID match (e.g., "Question 1" matching with "1.")
-                guide_id_match = re.search(r'(\d+)', guide_item.get('text', ''))
-                submission_id_match = re.search(r'(\d+)', submission_item.get('text', ''))
+                guide_id_match = re.search(r"(\d+)", guide_item.get("text", ""))
+                submission_id_match = re.search(
+                    r"(\d+)", submission_item.get("text", "")
+                )
 
                 if guide_id_match and submission_id_match:
                     if guide_id_match.group(1) == submission_id_match.group(1):
@@ -1350,23 +1674,44 @@ class MappingService:
                         combined_score = max(combined_score, 0.6)
 
                 # Also match by guide answer and submission answer if available
-                if guide_item.get('answer') and submission_item.get('answer'):
-                    guide_answer_tokens = preprocess_text(guide_item.get('answer', ''))
-                    submission_answer_tokens = preprocess_text(submission_item.get('answer', ''))
+                if guide_item.get("answer") and submission_item.get("answer"):
+                    guide_answer_tokens = preprocess_text(guide_item.get("answer", ""))
+                    submission_answer_tokens = preprocess_text(
+                        submission_item.get("answer", "")
+                    )
 
-                    answer_jaccard = jaccard_similarity(guide_answer_tokens, submission_answer_tokens)
-                    answer_cosine = cosine_similarity_tokens(guide_answer_tokens, submission_answer_tokens)
+                    answer_jaccard = jaccard_similarity(
+                        guide_answer_tokens, submission_answer_tokens
+                    )
+                    answer_cosine = cosine_similarity_tokens(
+                        guide_answer_tokens, submission_answer_tokens
+                    )
 
                     # Calculate a more detailed answer similarity score
                     answer_score = (0.3 * answer_jaccard) + (0.7 * answer_cosine)
 
                     # Calculate keyword match score
-                    guide_keywords = self._extract_keywords(guide_item.get('answer', ''))
-                    submission_keywords = self._extract_keywords(submission_item.get('answer', ''))
+                    guide_keywords = self._extract_keywords(
+                        guide_item.get("answer", "")
+                    )
+                    submission_keywords = self._extract_keywords(
+                        submission_item.get("answer", "")
+                    )
 
                     # Calculate keyword match percentage
-                    keyword_matches = [kw for kw in guide_keywords if any(kw.lower() in sub_kw.lower() for sub_kw in submission_keywords)]
-                    keyword_score = len(keyword_matches) / max(len(guide_keywords), 1) if guide_keywords else 0
+                    keyword_matches = [
+                        kw
+                        for kw in guide_keywords
+                        if any(
+                            kw.lower() in sub_kw.lower()
+                            for sub_kw in submission_keywords
+                        )
+                    ]
+                    keyword_score = (
+                        len(keyword_matches) / max(len(guide_keywords), 1)
+                        if guide_keywords
+                        else 0
+                    )
 
                     # Generate reason for match based on keywords
                     match_reason = f"Matched {len(keyword_matches)} of {len(guide_keywords)} key concepts"
@@ -1376,53 +1721,63 @@ class MappingService:
                             match_reason += f" and {len(keyword_matches) - 3} more"
 
                     # Store the answer score for later use in grading
-                    submission_item['answer_score'] = answer_score
-                    submission_item['keyword_score'] = keyword_score
-                    submission_item['match_reason'] = match_reason
+                    submission_item["answer_score"] = answer_score
+                    submission_item["keyword_score"] = keyword_score
+                    submission_item["match_reason"] = match_reason
 
                     # Consider answer similarity in overall score with higher weight
-                    combined_score = (0.5 * combined_score) + (0.3 * answer_score) + (0.2 * keyword_score)
+                    combined_score = (
+                        (0.5 * combined_score)
+                        + (0.3 * answer_score)
+                        + (0.2 * keyword_score)
+                    )
 
                 if combined_score > best_score:
                     best_score = combined_score
                     best_match = (submission_item, combined_score)
 
-            if best_match and best_score > 0.2:  # Only map if similarity exceeds threshold
+            if (
+                best_match and best_score > 0.2
+            ):  # Only map if similarity exceeds threshold
                 submission_item, match_score = best_match
 
                 # Get the match reason if available
-                match_reason = submission_item.get('match_reason', "")
+                match_reason = submission_item.get("match_reason", "")
                 if not match_reason:
                     match_reason = f"Similarity score: {match_score:.2f}"
 
                 # Get the answer score if available
-                answer_score = submission_item.get('answer_score', 0)
-                keyword_score = submission_item.get('keyword_score', 0)
+                answer_score = submission_item.get("answer_score", 0)
+                keyword_score = submission_item.get("keyword_score", 0)
 
                 # Calculate a grade based on similarity
                 grade_score = 0
-                if guide_item.get('max_score'):
+                if guide_item.get("max_score"):
                     # Use answer_score with higher weight if available
                     if answer_score > 0:
-                        grade_score = (0.6 * answer_score + 0.4 * keyword_score) * float(guide_item.get('max_score'))
+                        grade_score = (
+                            0.6 * answer_score + 0.4 * keyword_score
+                        ) * float(guide_item.get("max_score"))
                     else:
-                        grade_score = match_score * float(guide_item.get('max_score'))
+                        grade_score = match_score * float(guide_item.get("max_score"))
                     grade_score = round(grade_score, 1)
 
-                mappings.append({
-                    "guide_id": guide_item.get('id'),
-                    "guide_text": guide_item.get('text'),
-                    "guide_answer": guide_item.get('answer', ''),
-                    "max_score": guide_item.get('max_score'),  # No default value
-                    "submission_id": submission_item.get('id'),
-                    "submission_text": submission_item.get('text'),
-                    "submission_answer": submission_item.get('answer', ''),
-                    "match_score": match_score,
-                    "answer_score": answer_score,
-                    "keyword_score": keyword_score,
-                    "grade_score": grade_score,
-                    "match_reason": match_reason
-                })
+                mappings.append(
+                    {
+                        "guide_id": guide_item.get("id"),
+                        "guide_text": guide_item.get("text"),
+                        "guide_answer": guide_item.get("answer", ""),
+                        "max_score": guide_item.get("max_score"),  # No default value
+                        "submission_id": submission_item.get("id"),
+                        "submission_text": submission_item.get("text"),
+                        "submission_answer": submission_item.get("answer", ""),
+                        "match_score": match_score,
+                        "answer_score": answer_score,
+                        "keyword_score": keyword_score,
+                        "grade_score": grade_score,
+                        "match_reason": match_reason,
+                    }
+                )
 
         return mappings
 

@@ -5,6 +5,7 @@ This module provides functionality to extract raw text content from marking guid
 It supports DOCX and TXT formats and focuses solely on extracting the raw text without
 any additional parsing or analysis.
 """
+
 import os
 from pathlib import Path
 from typing import Optional, Tuple
@@ -13,6 +14,7 @@ import docx
 from docx.document import Document
 
 from utils.logger import logger
+
 
 class MarkingGuide:
     """
@@ -33,6 +35,7 @@ class MarkingGuide:
     def set_raw_content(self, content: str) -> None:
         """Set the raw content of the guide."""
         self.raw_content = content
+
 
 def parse_marking_guide(file_path: str) -> Tuple[Optional[MarkingGuide], Optional[str]]:
     """
@@ -61,18 +64,24 @@ def parse_marking_guide(file_path: str) -> Tuple[Optional[MarkingGuide], Optiona
         file_ext = Path(file_path).suffix.lower()
         logger.info(f"Processing marking guide with extension: {file_ext}")
 
-        if file_ext == '.docx':
+        if file_ext == ".docx":
             return _parse_docx_guide(file_path, guide)
-        elif file_ext == '.txt':
+        elif file_ext == ".txt":
             return _parse_txt_guide(file_path, guide)
         else:
-            return None, f"Unsupported file format: {file_ext}. Only .docx and .txt are supported."
+            return (
+                None,
+                f"Unsupported file format: {file_ext}. Only .docx and .txt are supported.",
+            )
 
     except Exception as e:
         logger.error(f"Error extracting text from marking guide: {str(e)}")
         return None, f"Failed to extract text from marking guide: {str(e)}"
 
-def _parse_docx_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[MarkingGuide], Optional[str]]:
+
+def _parse_docx_guide(
+    file_path: str, guide: MarkingGuide
+) -> Tuple[Optional[MarkingGuide], Optional[str]]:
     """
     Extract raw text content from a .docx marking guide.
 
@@ -85,7 +94,7 @@ def _parse_docx_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[Mar
 
         # Extract all paragraphs as plain text
         paragraphs = [para.text for para in doc.paragraphs]
-        raw_content = '\n'.join(paragraphs)
+        raw_content = "\n".join(paragraphs)
 
         # Check if document has content
         if not raw_content.strip():
@@ -94,14 +103,19 @@ def _parse_docx_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[Mar
         # Set the raw content in the guide object
         guide.set_raw_content(raw_content)
 
-        logger.info(f"Successfully extracted {len(raw_content)} characters from DOCX guide")
+        logger.info(
+            f"Successfully extracted {len(raw_content)} characters from DOCX guide"
+        )
         return guide, None
 
     except Exception as e:
         logger.error(f"Error extracting text from DOCX marking guide: {str(e)}")
         return None, f"Failed to extract text from DOCX guide: {str(e)}"
 
-def _parse_txt_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[MarkingGuide], Optional[str]]:
+
+def _parse_txt_guide(
+    file_path: str, guide: MarkingGuide
+) -> Tuple[Optional[MarkingGuide], Optional[str]]:
     """
     Extract raw text content from a .txt marking guide.
 
@@ -119,15 +133,19 @@ def _parse_txt_guide(file_path: str, guide: MarkingGuide) -> Tuple[Optional[Mark
 
         # Try UTF-8 first (most common encoding)
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
-                logger.debug(f"Successfully read file with UTF-8 encoding: {len(content)} characters")
+                logger.debug(
+                    f"Successfully read file with UTF-8 encoding: {len(content)} characters"
+                )
         except UnicodeDecodeError:
             # Fall back to Latin-1 (should handle most Western text)
             try:
-                with open(file_path, 'r', encoding='latin-1') as f:
+                with open(file_path, "r", encoding="latin-1") as f:
                     content = f.read()
-                    logger.debug(f"Successfully read file with Latin-1 encoding: {len(content)} characters")
+                    logger.debug(
+                        f"Successfully read file with Latin-1 encoding: {len(content)} characters"
+                    )
             except Exception as e:
                 return None, f"Failed to read file with fallback encoding: {str(e)}"
         except Exception as e:

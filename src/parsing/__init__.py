@@ -15,7 +15,7 @@ detects file types and uses appropriate parsing strategies.
 Example:
     ```python
     from src.parsing import parse_student_submission
-    
+
     answers, raw_text, error = parse_student_submission("student_exam.pdf")
     if not error:
         print(f"Successfully parsed {len(answers)} questions")
@@ -24,4 +24,4 @@ Example:
 
 from .parse_submission import parse_student_submission
 
-__all__ = ['parse_student_submission'] 
+__all__ = ["parse_student_submission"]

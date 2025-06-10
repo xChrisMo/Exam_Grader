@@ -62,7 +62,7 @@
       </div>
       <form method="POST" enctype="multipart/form-data" id="uploadForm">
         {% if csrf_token %}
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         {% endif %}
         <div class="form-group">
           <label for="submissionFile">Select Answer Sheet:</label>

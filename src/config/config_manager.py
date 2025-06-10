@@ -1,16 +1,19 @@
 import os
 from dataclasses import dataclass
-from typing import List
 from pathlib import Path
+from typing import List
+
 from dotenv import load_dotenv
 
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+
 @dataclass
 class Config:
     """Configuration settings for the application."""
+
     # Core settings
     debug: bool
     log_level: str
@@ -37,6 +40,7 @@ class Config:
         if not self.handwriting_ocr_api_key:
             raise ValueError("HandwritingOCR API key not configured")
 
+
 class ConfigManager:
     """Manages application configuration."""
 
@@ -55,33 +59,37 @@ class ConfigManager:
             return
 
         # Load environment variables from root .env file
-        load_dotenv('.env', override=True)
+        load_dotenv(".env", override=True)
 
         # Create configuration object
         self.config = Config(
             # Core settings
-            debug=os.getenv('DEBUG', 'False').lower() == 'true',
-            log_level=os.getenv('LOG_LEVEL', 'INFO'),
-            secret_key=os.getenv('SECRET_KEY', os.urandom(24).hex()),
-            host=os.getenv('HOST', '127.0.0.1'),
-            port=int(os.getenv('PORT', '8501').split('#')[0].strip()),
-
+            debug=os.getenv("DEBUG", "False").lower() == "true",
+            log_level=os.getenv("LOG_LEVEL", "INFO"),
+            secret_key=os.getenv("SECRET_KEY", os.urandom(24).hex()),
+            host=os.getenv("HOST", "127.0.0.1"),
+            port=int(os.getenv("PORT", "8501").split("#")[0].strip()),
             # Directory settings
-            temp_dir=os.getenv('TEMP_DIR', 'temp'),
-            output_dir=os.getenv('OUTPUT_DIR', 'output'),
-
+            temp_dir=os.getenv("TEMP_DIR", "temp"),
+            output_dir=os.getenv("OUTPUT_DIR", "output"),
             # File processing settings
-            max_file_size_mb=int(os.getenv('MAX_FILE_SIZE_MB', '20').split('#')[0].strip()),
-            supported_formats=os.getenv('SUPPORTED_FORMATS',
-                '.pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.bmp,.tiff,.gif').split(','),
-
+            max_file_size_mb=int(
+                os.getenv("MAX_FILE_SIZE_MB", "20").split("#")[0].strip()
+            ),
+            supported_formats=os.getenv(
+                "SUPPORTED_FORMATS",
+                ".pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.bmp,.tiff,.gif",
+            ).split(","),
             # OCR settings
-            ocr_confidence_threshold=float(os.getenv('OCR_CONFIDENCE_THRESHOLD', '0.7').split('#')[0].strip()),
-            ocr_language=os.getenv('OCR_LANGUAGE', 'en'),
-
+            ocr_confidence_threshold=float(
+                os.getenv("OCR_CONFIDENCE_THRESHOLD", "0.7").split("#")[0].strip()
+            ),
+            ocr_language=os.getenv("OCR_LANGUAGE", "en"),
             # API settings
-            handwriting_ocr_api_key=os.getenv('HANDWRITING_OCR_API_KEY', ''),
-            handwriting_ocr_delete_after=int(os.getenv('HANDWRITING_OCR_DELETE_AFTER', '86400').split('#')[0].strip())
+            handwriting_ocr_api_key=os.getenv("HANDWRITING_OCR_API_KEY", ""),
+            handwriting_ocr_delete_after=int(
+                os.getenv("HANDWRITING_OCR_DELETE_AFTER", "86400").split("#")[0].strip()
+            ),
         )
 
         # Create necessary directories
@@ -112,7 +120,15 @@ class ConfigManager:
         if not self.config.supported_formats:
             logger.warning("No supported formats specified, using defaults")
             self.config.supported_formats = [
-                '.txt', '.docx', '.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif'
+                ".txt",
+                ".docx",
+                ".pdf",
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".tiff",
+                ".bmp",
+                ".gif",
             ]
 
     def get_supported_formats(self) -> List[str]:

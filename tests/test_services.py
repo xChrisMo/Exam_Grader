@@ -6,10 +6,11 @@ This script tests both services to ensure they're working correctly.
 
 import os
 import sys
-import unittest
-from unittest.mock import patch, MagicMock
-from pathlib import Path
 import time
+import unittest
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -22,10 +23,11 @@ sys.path.insert(0, project_root)
 from src.services.llm_service import LLMService, LLMServiceError
 from src.services.ocr_service import OCRService, OCRServiceError
 
+
 class TestLLMService(unittest.TestCase):
     """Test cases for the LLMService class."""
 
-    @patch('openai.OpenAI')
+    @patch("openai.OpenAI")
     def setUp(self, mock_openai):
         """Set up test fixtures."""
         # Mock the OpenAI client
@@ -41,7 +43,7 @@ class TestLLMService(unittest.TestCase):
         self.assertEqual(self.llm_service.model, "deepseek-reasoner")
         self.assertEqual(self.llm_service.temperature, 0.0)
 
-    @patch('openai.OpenAI')
+    @patch("openai.OpenAI")
     def test_test_connection(self, mock_openai):
         """Test the connection test functionality."""
         # Mock the chat completions create method
@@ -56,7 +58,7 @@ class TestLLMService(unittest.TestCase):
         # Verify the API was called correctly
         self.mock_client.chat.completions.create.assert_called_once()
 
-    @patch('openai.OpenAI')
+    @patch("openai.OpenAI")
     def test_compare_answers(self, mock_openai):
         """Test the answer comparison functionality."""
         # Mock the chat completions create method
@@ -71,7 +73,7 @@ class TestLLMService(unittest.TestCase):
             "What is the capital of France?",
             "The capital of France is Paris.",
             "Paris is the capital of France.",
-            10
+            10,
         )
 
         # Verify results
@@ -80,6 +82,7 @@ class TestLLMService(unittest.TestCase):
 
         # Verify the API was called correctly
         self.mock_client.chat.completions.create.assert_called_once()
+
 
 class TestOCRService(unittest.TestCase):
     """Test cases for the OCRService class."""
@@ -92,10 +95,10 @@ class TestOCRService(unittest.TestCase):
     def test_initialization(self):
         """Test OCR service initialization."""
         self.assertEqual(self.ocr_service.api_key, "test_api_key")
-        self.assertTrue(self.ocr_service.base_url.endswith('/api/v3'))
+        self.assertTrue(self.ocr_service.base_url.endswith("/api/v3"))
 
-    @patch('requests.get')
-    @patch('requests.post')
+    @patch("requests.get")
+    @patch("requests.post")
     def test_extract_text_from_image(self, mock_post, mock_get):
         """Test the image text extraction functionality."""
         # Mock the upload response (POST)
@@ -112,9 +115,7 @@ class TestOCRService(unittest.TestCase):
         # Mock the result response (GET)
         mock_result_response = MagicMock()
         mock_result_response.json.return_value = {
-            "results": [
-                {"transcript": "Sample extracted text"}
-            ]
+            "results": [{"transcript": "Sample extracted text"}]
         }
         mock_result_response.status_code = 200
 
@@ -123,7 +124,7 @@ class TestOCRService(unittest.TestCase):
 
         # Create a temporary test file
         test_file = "test_image.jpg"
-        with open(test_file, 'w') as f:
+        with open(test_file, "w") as f:
             f.write("dummy content")
 
         try:
@@ -141,21 +142,18 @@ class TestOCRService(unittest.TestCase):
             if os.path.exists(test_file):
                 os.remove(test_file)
 
-    @patch('requests.post')
+    @patch("requests.post")
     def test_extract_text_error_handling(self, mock_post):
         """Test error handling in text extraction."""
         # Mock the requests.post method to return an error
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "status": "error",
-            "message": "API error"
-        }
+        mock_response.json.return_value = {"status": "error", "message": "API error"}
         mock_response.status_code = 400
         mock_post.return_value = mock_response
 
         # Create a temporary test file
         test_file = "test_image.jpg"
-        with open(test_file, 'w') as f:
+        with open(test_file, "w") as f:
             f.write("dummy content")
 
         try:
@@ -166,6 +164,7 @@ class TestOCRService(unittest.TestCase):
             # Clean up the test file
             if os.path.exists(test_file):
                 os.remove(test_file)
+
 
 if __name__ == "__main__":
     unittest.main()

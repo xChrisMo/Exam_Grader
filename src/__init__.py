@@ -8,8 +8,9 @@ This package provides functionality for:
 """
 
 import os
-from typing import Optional
 from pathlib import Path
+from typing import Optional
+
 from dotenv import load_dotenv
 
 __version__ = "0.1.0"
@@ -17,18 +18,14 @@ __author__ = "Exam Grader Team"
 __license__ = "MIT"
 
 from src.config.config_manager import ConfigManager
-from src.services.ocr_service import OCRService
 from src.parsing.parse_submission import parse_student_submission
+from src.services.ocr_service import OCRService
 from utils.logger import logger
 
 # Load environment variables
-load_dotenv('.env', override=True)
+load_dotenv(".env", override=True)
 
 # Configuration will be initialized by the Flask app when needed
 
 # Export public interface
-__all__ = [
-    'parse_student_submission',
-    'OCRService',
-    'ConfigManager'
-]
+__all__ = ["parse_student_submission", "OCRService", "ConfigManager"]
