@@ -3,6 +3,8 @@ Database utilities for the Exam Grader application.
 """
 
 import logging
+import secrets
+import string
 from datetime import datetime
 from typing import Any, Dict
 from werkzeug.security import generate_password_hash
@@ -18,26 +20,38 @@ class DatabaseUtils:
         """Create default admin user if it doesn't exist."""
         try:
             from .models import User, db
-            
+
             admin_user = User.query.filter_by(username='admin').first()
-            
+
             if admin_user:
                 logger.info("Default admin user already exists")
                 return True
-            
+
+            # Generate secure random password
+            alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+            random_password = ''.join(secrets.choice(alphabet) for _ in range(16))
+
             admin_user = User(
                 username='admin',
                 email='admin@examgrader.local',
-                password_hash=generate_password_hash('admin123'),
+                password_hash=generate_password_hash(random_password),
                 is_active=True
             )
-            
+
             db.session.add(admin_user)
             db.session.commit()
-            
+
             logger.info("Default admin user created successfully")
+            logger.warning(f"IMPORTANT: Default admin password is: {random_password}")
+            logger.warning("Please change this password immediately after first login!")
+            print(f"\n{'='*60}")
+            print("IMPORTANT SECURITY NOTICE:")
+            print(f"Default admin username: admin")
+            print(f"Default admin password: {random_password}")
+            print("Please change this password immediately after first login!")
+            print(f"{'='*60}\n")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to create default user: {str(e)}")
             try:

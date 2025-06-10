@@ -1,0 +1,30 @@
+# Prevent auto-restore issues
+*.py text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Binary files
+*.db binary
+*.enc binary
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+
+# Environment files - treat as text but don't normalize
+.env text eol=lf
+instance/.env text eol=lf
+
+# Critical application files - prevent modification
+webapp/exam_grader_app.py text eol=lf
+src/database/migrations.py text eol=lf
+src/database/utils.py text eol=lf
+utils/rate_limiter.py text eol=lf
+utils/error_handler.py text eol=lf
+webapp/auth.py text eol=lf

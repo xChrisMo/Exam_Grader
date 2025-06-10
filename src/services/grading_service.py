@@ -8,9 +8,13 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from utils.logger import logger
+
+if TYPE_CHECKING:
+    from src.services.llm_service import LLMService
+    from src.services.mapping_service import MappingService
 
 
 class GradingService:
@@ -19,8 +23,17 @@ class GradingService:
     The score is determined by how closely the submission answers match the marking guide answers.
     """
 
-    def __init__(self, llm_service=None, mapping_service=None):
-        """Initialize with optional LLM and mapping services."""
+    def __init__(
+        self,
+        llm_service: Optional["LLMService"] = None,
+        mapping_service: Optional["MappingService"] = None
+    ) -> None:
+        """Initialize with optional LLM and mapping services.
+
+        Args:
+            llm_service: Optional LLM service for AI-powered grading
+            mapping_service: Optional mapping service for question-answer alignment
+        """
         self.llm_service = llm_service
         self.mapping_service = mapping_service
 

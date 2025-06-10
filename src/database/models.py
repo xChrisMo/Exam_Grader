@@ -17,6 +17,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     String,
@@ -113,11 +114,15 @@ class User(db.Model, TimestampMixin):
 
 class MarkingGuide(db.Model, TimestampMixin):
     """Marking guide model for storing grading criteria."""
-
+    
     __tablename__ = "marking_guides"
-
+    __table_args__ = (
+        Index('idx_guide_user_title', 'user_id', 'title'),
+        Index('idx_guide_created', 'created_at'),
+    )
+    
     id = get_uuid_column()
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     title = Column(String(200), nullable=False)
     description = Column(Text)
     filename = Column(String(255), nullable=False)

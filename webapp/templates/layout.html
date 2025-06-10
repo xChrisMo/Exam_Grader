@@ -115,6 +115,9 @@
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="X-XSS-Protection" content="1; mode=block">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    
+    <!-- DOMPurify XSS Protection -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 
     <!-- CSRF Token for JavaScript -->
     {% if csrf_token %}
@@ -608,7 +611,7 @@
     <script>
       // Initialize ExamGrader config from server data
       if (typeof ExamGrader !== 'undefined') {
-        ExamGrader.config.maxFileSize = {{ (config.max_file_size_mb if config and config.max_file_size_mb else 20) * 1024 * 1024 }};
+        ExamGrader.config.maxFileSize = "{{ (config.max_file_size_mb if config and config.max_file_size_mb else 20) * 1024 * 1024 }}";
         ExamGrader.config.allowedFileTypes = {{ (config.supported_formats if config and config.supported_formats else ['.pdf', '.docx', '.doc', '.txt', '.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.gif']) | tojson }};
       }
     </script>

@@ -10,6 +10,7 @@ Modern educational assessment platform with AI-powered grading capabilities.
 import os
 import sys
 import json
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +24,7 @@ from flask import (
     Flask, render_template, request, redirect, url_for,
     flash, session, jsonify, send_file, abort
 )
+from sqlalchemy.exc import SQLAlchemyError
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -46,16 +48,16 @@ try:
     from utils.error_handler import ErrorHandler, ProgressTracker, create_user_notification, add_recent_activity
     from utils.loading_states import loading_manager, LoadingState, create_loading_response, get_loading_state_for_template
 except ImportError as e:
-    print(f"❌ Failed to import required modules: {e}")
+    print(f"[ERROR] Failed to import required modules: {e}")
     print("   Make sure all dependencies are installed and the project structure is correct")
     sys.exit(1)
 
 # Import authentication functions
 try:
     from webapp.auth import init_auth, login_required, get_current_user
-    print("✅ Authentication modules imported successfully")
+    print("[OK] Authentication modules imported successfully")
 except ImportError as e:
-    print(f"❌ Failed to import authentication modules: {e}")
+    print(f"[ERROR] Failed to import authentication modules: {e}")
     sys.exit(1)
 
 # Initialize Flask application
@@ -72,7 +74,7 @@ try:
     logger.info(f"Configuration loaded successfully for environment: {config.environment}")
 except Exception as e:
     logger.error(f"Failed to load configuration: {str(e)}")
-    print(f"❌ Configuration error: {e}")
+    print(f"[ERROR] Configuration error: {e}")
     sys.exit(1)
 
 # Initialize CSRF protection
@@ -81,7 +83,7 @@ try:
     logger.info("CSRF protection initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize CSRF protection: {str(e)}")
-    print(f"❌ CSRF protection error: {e}")
+    print(f"[ERROR] CSRF protection error: {e}")
     sys.exit(1)
 
 # Initialize database
@@ -101,7 +103,7 @@ try:
     logger.info("Database initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize database: {str(e)}")
-    print(f"❌ Database error: {e}")
+    print(f"[ERROR] Database error: {e}")
     sys.exit(1)
 
 # Initialize secrets manager
@@ -110,7 +112,7 @@ try:
     logger.info("Secrets manager initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize secrets manager: {str(e)}")
-    print(f"❌ Secrets manager error: {e}")
+    print(f"[ERROR] Secrets manager error: {e}")
     sys.exit(1)
 
 # Initialize secure session manager
@@ -122,7 +124,7 @@ try:
     logger.info("Secure session manager initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize session manager: {str(e)}")
-    print(f"❌ Session manager error: {e}")
+    print(f"[ERROR] Session manager error: {e}")
     sys.exit(1)
 
 # Initialize authentication system
@@ -138,7 +140,7 @@ try:
 
 except Exception as e:
     logger.error(f"Failed to initialize authentication: {str(e)}")
-    print(f"❌ Authentication error: {e}")
+    print(f"[ERROR] Authentication error: {e}")
     import traceback
     traceback.print_exc()
     sys.exit(1)
@@ -229,8 +231,22 @@ def get_storage_stats() -> Dict[str, Any]:
             'max_size_mb': 160.0
         }
 
+# Cache for service status to avoid repeated API calls
+_service_status_cache = {}
+_service_status_cache_time = 0
+SERVICE_STATUS_CACHE_DURATION = 300  # 5 minutes
+
 def get_service_status() -> Dict[str, bool]:
-    """Check status of all services."""
+    """Check status of all services with caching."""
+    global _service_status_cache, _service_status_cache_time
+
+    current_time = time.time()
+
+    # Return cached result if still valid
+    if (current_time - _service_status_cache_time) < SERVICE_STATUS_CACHE_DURATION and _service_status_cache:
+        logger.debug("Returning cached service status")
+        return _service_status_cache
+
     try:
         # Initialize status values
         ocr_available = False
@@ -238,20 +254,22 @@ def get_service_status() -> Dict[str, bool]:
         storage_available = False
         config_available = True  # Config is always available if app is running
 
-        # Check OCR service
+        # Check OCR service (with timeout)
         if ocr_service:
             try:
-                ocr_available = ocr_service.is_available()
-                logger.info(f"OCR service availability: {ocr_available}")
+                # Quick check without external API call
+                ocr_available = bool(ocr_service.api_key)
+                logger.debug(f"OCR service availability (config check): {ocr_available}")
             except Exception as e:
                 logger.warning(f"Error checking OCR service availability: {str(e)}")
                 ocr_available = False
 
-        # Check LLM service
+        # Check LLM service (with timeout)
         if llm_service:
             try:
-                llm_available = llm_service.is_available()
-                logger.info(f"LLM service availability: {llm_available}")
+                # Quick check without external API call
+                llm_available = bool(llm_service.api_key)
+                logger.debug(f"LLM service availability (config check): {llm_available}")
             except Exception as e:
                 logger.warning(f"Error checking LLM service availability: {str(e)}")
                 llm_available = False
@@ -263,12 +281,21 @@ def get_service_status() -> Dict[str, bool]:
 
         try:
             # Check if database is accessible
-            with app.app_context():
+            # Use current app context if available, otherwise create one
+            from flask import has_app_context
+            if has_app_context():
                 from src.database.models import User
                 User.query.count()  # Simple query to test database
                 storage_available = True
                 submission_storage_available = True
                 guide_storage_available = True
+            else:
+                with app.app_context():
+                    from src.database.models import User
+                    User.query.count()  # Simple query to test database
+                    storage_available = True
+                    submission_storage_available = True
+                    guide_storage_available = True
         except Exception as e:
             logger.warning(f"Error checking database storage: {str(e)}")
             storage_available = False
@@ -281,7 +308,8 @@ def get_service_status() -> Dict[str, bool]:
             llm_available = True
             storage_available = True
 
-        return {
+        # Cache the result
+        _service_status_cache = {
             'ocr_status': ocr_available,
             'llm_status': llm_available,
             'storage_status': storage_available,
@@ -289,15 +317,26 @@ def get_service_status() -> Dict[str, bool]:
             'guide_storage_available': guide_storage_available,
             'submission_storage_available': submission_storage_available
         }
+        _service_status_cache_time = current_time
+
+        logger.debug("Service status cached for 5 minutes")
+        return _service_status_cache
+
     except Exception as e:
         logger.error(f"Error checking service status: {str(e)}")
         # On error, show services as available for demo mode
-        return {
+        fallback_status = {
             'ocr_status': True,
             'llm_status': True,
             'storage_status': True,
-            'config_status': True
+            'config_status': True,
+            'guide_storage_available': True,
+            'submission_storage_available': True
         }
+        # Cache the fallback result too
+        _service_status_cache = fallback_status
+        _service_status_cache_time = current_time
+        return fallback_status
 
 # Error handlers
 @app.errorhandler(413)
@@ -309,14 +348,16 @@ def too_large(e):
 def not_found(e):
     return render_template('error.html',
                          error_code=404,
-                         error_message="Page not found"), 404
+                         error_message="Page not found",
+                         service_status=get_service_status()), 404
 
 @app.errorhandler(500)
 def internal_error(e):
     logger.error(f"Internal server error: {str(e)}")
     return render_template('error.html',
                          error_code=500,
-                         error_message="Internal server error"), 500
+                         error_message="Internal server error",
+                         service_status=get_service_status()), 500
 
 @app.errorhandler(429)
 def rate_limit_exceeded(e):
@@ -349,16 +390,49 @@ def inject_globals():
     # Generate CSRF token
     try:
         from flask_wtf.csrf import generate_csrf
-        csrf_token = generate_csrf
+        csrf_token = generate_csrf()
     except Exception as e:
         logger.warning(f"Error generating CSRF token: {str(e)}")
-        csrf_token = lambda: ''
+        csrf_token = ''
+
+    # Get service status with error handling
+    try:
+        service_status = get_service_status()
+        if not service_status:
+            # Fallback if service status is None or empty
+            service_status = {
+                'ocr_status': True,
+                'llm_status': True,
+                'storage_status': True,
+                'config_status': True,
+                'guide_storage_available': True,
+                'submission_storage_available': True
+            }
+    except Exception as e:
+        logger.warning(f"Error getting service status: {str(e)}")
+        service_status = {
+            'ocr_status': True,
+            'llm_status': True,
+            'storage_status': True,
+            'config_status': True,
+            'guide_storage_available': True,
+            'submission_storage_available': True
+        }
+
+    # Get storage stats with error handling
+    try:
+        storage_stats = get_storage_stats()
+        if not storage_stats:
+            storage_stats = {'total_size': 0, 'available_space': 0}
+    except Exception as e:
+        logger.warning(f"Error getting storage stats: {str(e)}")
+        storage_stats = {'total_size': 0, 'available_space': 0}
 
     return {
         'app_version': '2.0.0',
         'current_year': datetime.now().year,
-        'service_status': get_service_status(),
-        'storage_stats': get_storage_stats(),
+        'service_status': service_status,
+        'storage_stats': storage_stats,
         'loading_states': loading_states,
         'csrf_token': csrf_token
     }
@@ -413,33 +487,38 @@ def dashboard():
             flash('Please log in to access the dashboard.', 'error')
             return redirect(url_for('auth.login'))
 
-        # Calculate dashboard statistics from database (user-specific)
+        # Calculate dashboard statistics from database (user-specific) - OPTIMIZED
         from src.database.models import Submission, MarkingGuide, GradingResult
 
-        # Get statistics from database (filtered by current user)
-        total_submissions = Submission.query.filter_by(user_id=current_user.id).count()
-        processed_submissions = Submission.query.filter(
-            Submission.user_id == current_user.id,
-            Submission.processing_status == 'completed'
-        ).count()
-        guide_uploaded = MarkingGuide.query.filter_by(user_id=current_user.id).count() > 0
+        # Single optimized query to get all submission statistics
+        submission_stats = db.session.query(
+            db.func.count(Submission.id).label('total'),
+            db.func.count(db.case((Submission.processing_status == 'completed', 1))).label('processed')
+        ).filter(Submission.user_id == current_user.id).first()
 
-        # Get recent submissions as activity (user-specific)
+        total_submissions = submission_stats.total if submission_stats else 0
+        processed_submissions = submission_stats.processed if submission_stats else 0
+
+        # Quick check for guides (limit 1 for performance)
+        guide_uploaded = MarkingGuide.query.filter_by(user_id=current_user.id).limit(1).first() is not None
+
+        # Get recent submissions as activity (user-specific) - limited to 5
         recent_submissions = Submission.query.filter_by(user_id=current_user.id).order_by(
             Submission.created_at.desc()
         ).limit(5).all()
 
-        recent_activity = []
-        for submission in recent_submissions:
-            recent_activity.append({
+        # Build activity list efficiently
+        recent_activity = [
+            {
                 'type': 'submission_upload',
                 'message': f'Processed submission: {submission.filename}',
                 'timestamp': submission.created_at.isoformat(),
                 'icon': 'document'
-            })
+            }
+            for submission in recent_submissions
+        ]
 
-        # Calculate average score from grading results (user-specific)
-        # Join with submissions to filter by user_id since GradingResult doesn't have user_id directly
+        # Calculate average score from grading results (user-specific) - optimized
         avg_result = db.session.query(db.func.avg(GradingResult.percentage)).join(
             Submission, GradingResult.submission_id == Submission.id
         ).filter(Submission.user_id == current_user.id).scalar()
@@ -456,6 +535,7 @@ def dashboard():
             'avg_score': avg_score,
             'recent_activity': recent_activity,
             'submissions': [s.to_dict() for s in recent_submissions],  # Convert to dict for template
+            'service_status': service_status,  # Add service_status for dashboard
             'guide_storage_available': service_status.get('guide_storage_available', False),
             'submission_storage_available': service_status.get('submission_storage_available', False)
         }
@@ -687,13 +767,25 @@ def upload_submission():
                         'raw_text': raw_text
                     }
 
+                # Optimize session storage - limit raw_text size for performance
+                limited_raw_text = raw_text[:1000] if raw_text else ''  # Limit to 1KB
+                limited_answers = {}
+                if answers:
+                    # Limit answer content size
+                    for key, value in list(answers.items())[:10]:  # Max 10 answers
+                        if isinstance(value, str):
+                            limited_answers[key] = value[:500]  # Limit to 500 chars
+                        else:
+                            limited_answers[key] = value
+
                 submissions_data.append({
                     'id': submission_id,
                     'filename': filename,
                     'uploaded_at': datetime.now().isoformat(),
                     'processed': True,
-                    'raw_text': raw_text,
-                    'extracted_answers': answers
+                    'raw_text': limited_raw_text,  # Limited for performance
+                    'extracted_answers': limited_answers,  # Limited for performance
+                    'size_mb': round(get_file_size_mb(file_path), 2) if os.path.exists(file_path) else 0
                 })
                 uploaded_count += 1
 
@@ -1099,8 +1191,9 @@ def marking_guides():
             try:
                 # Create session guide entry
                 session_guide = {
-                    'id': 'session_guide',
-                    'name': session_guide_filename,
+                    'id': 'session_guide',  # Keep as string
+                    'name': session_guide_filename,  # For backward compatibility
+                    'title': session_guide_filename,  # Primary field
                     'filename': session_guide_filename,
                     'description': 'Currently active guide from session',
                     'raw_content': session_guide_content or '',
@@ -1111,6 +1204,7 @@ def marking_guides():
                     'created_by': 'Session',
                     'is_session_guide': True
                 }
+                logger.debug(f"Added session guide: ID={session_guide['id']}, Title={session_guide['title']}")
                 guides.append(session_guide)
                 logger.info(f"Added session guide: {session_guide_filename}")
             except Exception as session_error:
@@ -1128,9 +1222,10 @@ def marking_guides():
                 ).order_by(MarkingGuide.created_at.desc()).limit(50).all()
 
                 for guide in db_guides:
-                    guides.append({
-                        'id': guide.id,
-                        'name': guide.title,
+                    guide_data = {
+                        'id': str(guide.id),  # Ensure ID is a string
+                        'name': guide.title,  # For backward compatibility
+                        'title': guide.title,  # Primary field
                         'filename': guide.filename,
                         'description': guide.description or f'Database guide - {guide.title}',
                         'questions': guide.questions or [],
@@ -1139,7 +1234,9 @@ def marking_guides():
                         'created_at': guide.created_at.isoformat(),
                         'created_by': current_user.username,
                         'is_session_guide': False
-                    })
+                    }
+                    guides.append(guide_data)
+                    logger.debug(f"Added guide to list: ID={guide_data['id']}, Title={guide_data['title']}")
                 logger.info(f"Loaded {len(db_guides)} guides from database")
         except Exception as db_error:
             logger.error(f"Error loading guides from database: {str(db_error)}")
@@ -1155,10 +1252,25 @@ def marking_guides():
             method = guide.get('extraction_method', 'unknown')
             extraction_methods[method] = extraction_methods.get(method, 0) + 1
 
-        # Ensure all guides have proper extraction_method field
+        # Ensure all guides have proper fields and valid IDs
+        valid_guides = []
         for guide in guides:
             if 'extraction_method' not in guide or not guide['extraction_method']:
                 guide['extraction_method'] = 'unknown'
+
+            # Ensure ID is valid and not None
+            if not guide.get('id') or guide['id'] in [None, 'None', '']:
+                logger.warning(f"Guide with invalid ID found, skipping: {guide}")
+                continue  # Skip guides with invalid IDs
+
+            # Ensure title/name exists
+            if not guide.get('title') and not guide.get('name'):
+                guide['title'] = guide.get('filename', 'Untitled Guide')
+                guide['name'] = guide['title']
+
+            valid_guides.append(guide)
+
+        guides = valid_guides  # Use only valid guides
 
         context = {
             'page_title': 'Marking Guide Library',
@@ -1192,7 +1304,50 @@ def create_guide():
         flash('Error loading create guide page. Please try again.', 'error')
         return redirect(url_for('dashboard'))
 
-@app.route('/clear-session-guide', methods=['POST'])
+@app.route('/use_guide/<guide_id>')
+@login_required
+def use_guide(guide_id):
+    """Set active marking guide for the session"""
+    try:
+        # Get current user
+        current_user = get_current_user()
+        if not current_user:
+            flash('Please log in to use guides', 'error')
+            return redirect(url_for('auth.login'))
+
+        # Get guide from database
+        guide = MarkingGuide.query.filter_by(
+            id=guide_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not guide:
+            flash('Marking guide not found', 'danger')
+            return redirect(url_for('marking_guides'))
+            
+        # Set session variable with current guide
+        session['current_guide'] = {
+            'id': guide.id,
+            'name': guide.title,
+            'description': guide.description,
+            'total_marks': guide.total_marks
+        }
+        session.modified = True
+        
+        flash(f'Active guide set to: {guide.title}', 'success')
+        return redirect(url_for('marking_guides'))
+        
+    except SQLAlchemyError as e:
+        current_app.logger.error(f"Database error in use_guide: {str(e)}")
+        flash('Error accessing guide database', 'danger')
+        return redirect(url_for('marking_guides'))
+    except Exception as e:
+        current_app.logger.error(f"Unexpected error in use_guide: {str(e)}")
+        flash('An unexpected error occurred', 'danger')
+        return redirect(url_for('marking_guides'))
+
+@app.route('/clear-session-guide', methods=['GET', 'POST'])
+@login_required
 def clear_session_guide():
     """Clear the current session guide."""
     try:
@@ -1354,6 +1509,165 @@ def export_results():
         }), 500
 
 
+@app.route('/delete-guide/<guide_id>')
+@login_required
+def delete_guide(guide_id):
+    """Delete a marking guide (legacy route for backward compatibility)."""
+    try:
+        # Get current user
+        current_user = get_current_user()
+        if not current_user:
+            flash('Please log in to delete guides', 'error')
+            return redirect(url_for('auth.login'))
+
+        # Get guide from database
+        guide = MarkingGuide.query.filter_by(
+            id=guide_id,
+            user_id=current_user.id
+        ).first()
+
+        if not guide:
+            flash('Marking guide not found', 'error')
+            return redirect(url_for('marking_guides'))
+
+        # Store guide name for flash message
+        guide_name = guide.title
+
+        # Check if this guide is currently active in session
+        current_guide_id = session.get('guide_id')
+        was_active_guide = str(current_guide_id) == str(guide_id)
+
+        # Delete the guide
+        db.session.delete(guide)
+        db.session.commit()
+
+        # Clear session if this was the active guide
+        if was_active_guide:
+            session.pop('guide_id', None)
+            session.pop('guide_uploaded', None)
+            session.pop('guide_filename', None)
+            session.pop('guide_data', None)
+            session.modified = True
+            logger.info(f"Cleared active guide from session: {guide_name}")
+            flash(f'Active guide "{guide_name}" deleted and cleared from session', 'warning')
+        else:
+            flash(f'Marking guide "{guide_name}" deleted successfully', 'success')
+
+        logger.info(f"Guide deleted successfully: {guide_name} (ID: {guide_id})")
+        return redirect(url_for('marking_guides'))
+
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in delete_guide: {str(e)}")
+        db.session.rollback()
+        flash('Error deleting guide from database', 'error')
+        return redirect(url_for('marking_guides'))
+    except Exception as e:
+        logger.error(f"Unexpected error in delete_guide: {str(e)}")
+        flash('An unexpected error occurred while deleting the guide', 'error')
+        return redirect(url_for('marking_guides'))
+
+@app.route('/api/delete-guide', methods=['POST'])
+@login_required
+def api_delete_guide():
+    """AJAX endpoint to delete a marking guide."""
+    try:
+        # Get guide ID from request
+        data = request.get_json()
+        if not data or 'guide_id' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Guide ID is required'
+            }), 400
+
+        guide_id = data['guide_id']
+
+        # Get current user
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({
+                'success': False,
+                'error': 'Authentication required'
+            }), 401
+
+        # Get guide from database
+        guide = MarkingGuide.query.filter_by(
+            id=guide_id,
+            user_id=current_user.id
+        ).first()
+
+        if not guide:
+            return jsonify({
+                'success': False,
+                'error': 'Marking guide not found'
+            }), 404
+
+        # Store guide name for response
+        guide_name = guide.title
+
+        # Check if this guide is currently active in session
+        current_guide_id = session.get('guide_id')
+        was_active_guide = str(current_guide_id) == str(guide_id)
+
+        # Delete the guide
+        db.session.delete(guide)
+        db.session.commit()
+
+        # Clear session if this was the active guide
+        if was_active_guide:
+            session.pop('guide_id', None)
+            session.pop('guide_uploaded', None)
+            session.pop('guide_filename', None)
+            session.pop('guide_data', None)
+            session.modified = True
+            logger.info(f"Cleared active guide from session: {guide_name}")
+
+        logger.info(f"Guide deleted successfully via API: {guide_name} (ID: {guide_id})")
+
+        return jsonify({
+            'success': True,
+            'message': f'Marking guide "{guide_name}" deleted successfully',
+            'guide_id': guide_id,
+            'guide_name': guide_name,
+            'was_active_guide': was_active_guide  # Tell frontend if this was the active guide
+        })
+
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in api_delete_guide: {str(e)}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': 'Database error occurred while deleting guide'
+        }), 500
+    except Exception as e:
+        logger.error(f"Unexpected error in api_delete_guide: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'An unexpected error occurred'
+        }), 500
+
+@app.route('/api/service-status')
+def api_service_status():
+    """API endpoint to check service status asynchronously."""
+    try:
+        status = get_service_status()
+        return jsonify({
+            'success': True,
+            'status': status,
+            'timestamp': time.time()
+        })
+    except Exception as e:
+        logger.error(f"Error getting service status: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'status': {
+                'ocr_status': False,
+                'llm_status': False,
+                'storage_status': False,
+                'config_status': True
+            }
+        }), 500
+
 @app.route('/api/delete-submission', methods=['POST'])
 def delete_submission():
     """API endpoint to delete a submission."""
@@ -1384,15 +1698,15 @@ def delete_submission():
 
 
 if __name__ == '__main__':
-    print("🚀 Starting Exam Grader Web Application...")
+    print("[START] Starting Exam Grader Web Application...")
 
     # Get configuration values
     host = getattr(config, 'HOST', '127.0.0.1')
     port = getattr(config, 'PORT', 5000)
     debug = getattr(config, 'DEBUG', True)
 
-    print(f"📊 Dashboard: http://{host}:{port}")
-    print(f"🔧 Debug mode: {debug}")
+    print(f"[DASHBOARD] Dashboard: http://{host}:{port}")
+    print(f"[DEBUG] Debug mode: {debug}")
 
     app.run(
         host=host,

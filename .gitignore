@@ -74,3 +74,29 @@ Desktop.ini
 *.temp
 ~*
 *~ 
+# File protection system
+file_backups/
+*.backup_*
+
+# IDE auto-restore prevention
+.vscode/settings.json
+.idea/workspace.xml
+*.swp
+*.swo
+*~
+
+# Temporary files that might trigger restores
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python cache that might cause issues
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Smart Protection System (non-intrusive)
+.file_protection_state
+emergency_backups/

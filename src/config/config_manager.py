@@ -37,8 +37,9 @@ class Config:
 
     def __post_init__(self):
         """Validate configuration after initialization."""
+        # API key is optional - app can run without OCR service
         if not self.handwriting_ocr_api_key:
-            raise ValueError("HandwritingOCR API key not configured")
+            logger.warning("HandwritingOCR API key not configured - OCR service will be disabled")
 
 
 class ConfigManager:

@@ -17,10 +17,10 @@ from dotenv import load_dotenv
 def check_python_version():
     """Check if Python version is compatible."""
     if sys.version_info < (3, 8):
-        print("❌ Error: Python 3.8 or higher is required.")
+        print("[ERROR] Error: Python 3.8 or higher is required.")
         print(f"   Current version: {sys.version}")
         sys.exit(1)
-    print(f"✅ Python version: {sys.version.split()[0]}")
+    print(f"[OK] Python version: {sys.version.split()[0]}")
 
 
 def check_virtual_environment():
@@ -30,27 +30,27 @@ def check_virtual_environment():
     )
 
     if in_venv:
-        print(f"✅ Virtual environment: {sys.prefix}")
+        print(f"[OK] Virtual environment: {sys.prefix}")
     else:
-        print("⚠️  Warning: Not running in a virtual environment")
+        print("[WARNING]  Warning: Not running in a virtual environment")
         print("   Consider using: python -m venv venv && source venv/bin/activate")
 
 
 def install_requirements(requirements_file: str = "webapp/requirements.txt"):
     """Install required packages."""
     if not os.path.exists(requirements_file):
-        print(f"❌ Requirements file not found: {requirements_file}")
+        print(f"[ERROR] Requirements file not found: {requirements_file}")
         return False
 
-    print(f"📦 Installing requirements from {requirements_file}...")
+    print(f"[PACKAGE] Installing requirements from {requirements_file}...")
     try:
         subprocess.check_call(
             [sys.executable, "-m", "pip", "install", "-r", requirements_file]
         )
-        print("✅ Requirements installed successfully")
+        print("[OK] Requirements installed successfully")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ Failed to install requirements: {e}")
+        print(f"[ERROR] Failed to install requirements: {e}")
         return False
 
 
@@ -66,10 +66,10 @@ def check_dependencies():
             missing_packages.append(package)
 
     if missing_packages:
-        print(f"❌ Missing required packages: {', '.join(missing_packages)}")
+        print(f"[ERROR] Missing required packages: {', '.join(missing_packages)}")
         return False
 
-    print("✅ All required dependencies are installed")
+    print("[OK] All required dependencies are installed")
     return True
 
 
@@ -84,8 +84,8 @@ def setup_environment():
     os.environ.setdefault("FLASK_APP", "webapp.exam_grader_app")
     os.environ.setdefault("FLASK_ENV", "development")
 
-    print(f"✅ Project root: {project_root}")
-    print(f"✅ FLASK_APP: {os.environ.get('FLASK_APP')}")
+    print(f"[OK] Project root: {project_root}")
+    print(f"[OK] FLASK_APP: {os.environ.get('FLASK_APP')}")
 
 
 def create_directories():
@@ -95,7 +95,7 @@ def create_directories():
     for directory in directories:
         os.makedirs(directory, exist_ok=True)
 
-    print("✅ Created necessary directories")
+    print("[OK] Created necessary directories")
 
 
 def run_application(host: str = None, port: int = None, debug: bool = None):
@@ -107,10 +107,10 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
 
         if instance_env_path.exists():
             load_dotenv(instance_env_path, override=True)
-            print(f"✅ Loaded environment from: {instance_env_path}")
+            print(f"[OK] Loaded environment from: {instance_env_path}")
         else:
             load_dotenv(".env", override=True)
-            print("⚠️  Loaded environment from root .env file")
+            print("[WARNING]  Loaded environment from root .env file")
 
         # Use .env values if not provided as arguments
         if host is None:
@@ -124,16 +124,16 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
         from webapp.exam_grader_app import app
 
         print("\n" + "=" * 50)
-        print("🚀 Starting Exam Grader Web Application")
+        print("[START] Starting Exam Grader Web Application")
         print("=" * 50)
-        print(f"📊 Dashboard: http://{host}:{port}")
-        print(f"🔧 Debug mode: {debug}")
-        print(f"🌐 Host: {host}")
-        print(f"🔌 Port: {port}")
-        print(f"📁 Temp Dir: {os.getenv('TEMP_DIR', 'temp')}")
-        print(f"📂 Output Dir: {os.getenv('OUTPUT_DIR', 'output')}")
-        print(f"📊 Max File Size: {os.getenv('MAX_FILE_SIZE_MB', '20')}MB")
-        print(f"🔑 API Keys: {'✅' if os.getenv('HANDWRITING_OCR_API_KEY') else '❌'}")
+        print(f"[DASHBOARD] Dashboard: http://{host}:{port}")
+        print(f"[DEBUG] Debug mode: {debug}")
+        print(f"[HOST] Host: {host}")
+        print(f"[PORT] Port: {port}")
+        print(f"[TEMP] Temp Dir: {os.getenv('TEMP_DIR', 'temp')}")
+        print(f"[OUTPUT] Output Dir: {os.getenv('OUTPUT_DIR', 'output')}")
+        print(f"[DASHBOARD] Max File Size: {os.getenv('MAX_FILE_SIZE_MB', '20')}MB")
+        print(f"[API] API Keys: {'[OK]' if os.getenv('HANDWRITING_OCR_API_KEY') else '[ERROR]'}")
         print("=" * 50)
         print("Press Ctrl+C to stop the server")
         print("=" * 50)
@@ -148,21 +148,21 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
         )
 
     except ImportError as e:
-        print(f"❌ Failed to import Flask application: {e}")
+        print(f"[ERROR] Failed to import Flask application: {e}")
         print("   Make sure all dependencies are installed")
         sys.exit(1)
     except OSError as e:
         if "Address already in use" in str(e):
-            print(f"❌ Port {port} is already in use")
+            print(f"[ERROR] Port {port} is already in use")
             print(f"   Try a different port: python run_app.py --port {port + 1}")
         else:
-            print(f"❌ Failed to start server: {e}")
+            print(f"[ERROR] Failed to start server: {e}")
         sys.exit(1)
     except KeyboardInterrupt:
-        print("\n👋 Application stopped by user")
+        print("\n[STOP] Application stopped by user")
         sys.exit(0)
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        print(f"[ERROR] Unexpected error: {e}")
         sys.exit(1)
 
 
@@ -216,7 +216,7 @@ Examples:
 
     args = parser.parse_args()
 
-    print("🔍 Checking system requirements...")
+    print("Checking system requirements...")
 
     # Check Python version
     check_python_version()
@@ -234,7 +234,7 @@ Examples:
     if args.check:
         if not check_dependencies():
             sys.exit(1)
-        print("\n✅ Setup check complete. You can now run the application.")
+        print("\nSetup check complete. You can now run the application.")
         sys.exit(0)
 
     # Run the application

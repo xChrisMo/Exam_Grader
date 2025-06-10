@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "description": "Smart File Protection - Non-intrusive monitoring",
+  "critical_files": [
+    "webapp/exam_grader_app.py",
+    "src/database/migrations.py",
+    "src/database/utils.py",
+    "utils/rate_limiter.py",
+    "utils/error_handler.py",
+    "webapp/auth.py",
+    "instance/.env"
+  ],
+  "monitoring_interval": 3,
+  "session_timeout_hours": 24,
+  "create_emergency_backups": true,
+  "preserve_ide_settings": true,
+  "preserve_git_settings": true
+}

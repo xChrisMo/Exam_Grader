@@ -1,5 +1,109 @@
 {% extends "layout.html" %}
 
+{% block extra_css %}
+<style>
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Enhanced animations and transitions */
+.guide-card {
+    transition: all 0.3s ease;
+    transform: translateY(0);
+}
+.guide-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.btn-loading {
+    position: relative;
+    pointer-events: none;
+}
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    top: 50%;
+    left: 50%;
+    margin-left: -8px;
+    margin-top: -8px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.fade-out {
+    opacity: 0;
+    transform: scale(0.95);
+    transition: all 0.3s ease;
+}
+
+/* Toast notifications */
+.toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    min-width: 300px;
+    padding: 16px;
+    border-radius: 8px;
+    color: white;
+    font-weight: 500;
+    transform: translateX(400px);
+    transition: transform 0.3s ease;
+}
+.toast.show {
+    transform: translateX(0);
+}
+.toast.success {
+    background-color: #10b981;
+}
+.toast.error {
+    background-color: #ef4444;
+}
+
+/* Modal improvements */
+.modal-backdrop {
+    backdrop-filter: blur(4px);
+    transition: all 0.3s ease;
+}
+
+/* Responsive improvements */
+@media (max-width: 640px) {
+    .guide-card {
+        margin-bottom: 1rem;
+    }
+    .guide-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    .guide-actions button {
+        width: 100%;
+        justify-content: center;
+    }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="max-w-7xl mx-auto">
     <!-- Page Header -->
@@ -30,7 +134,7 @@
 
     <!-- Current Guide Status -->
     {% if current_guide %}
-    <div class="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+    <div class="current-guide-section mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
         <div class="flex items-start justify-between">
             <div class="flex">
                 <div class="flex-shrink-0">
@@ -41,7 +145,7 @@
                 <div class="ml-3">
                     <h3 class="text-sm font-medium text-green-800">Current Active Guide</h3>
                     <div class="mt-2 text-sm text-green-700">
-                        <p><strong>{{ current_guide }}</strong> is currently being used for grading.</p>
+                        <p><strong>{{ current_guide.name }}</strong> is currently being used for grading.</p>
                     </div>
                 </div>
             </div>
@@ -68,29 +172,29 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {% for guide in saved_guides %}
-                <div class="bg-gray-50 rounded-lg p-6 hover:bg-gray-100 transition-colors duration-200">
-                    <div class="flex items-start justify-between">
+                <div class="guide-card bg-white rounded-xl p-6 border border-gray-200 shadow-sm" data-guide-id="{{ guide.id }}">
+                    <div class="flex items-start justify-between mb-4">
                         <div class="flex-1">
-                            <h4 class="text-lg font-medium text-gray-900 mb-2">{{ guide.name }}</h4>
+                            <h4 class="text-lg font-semibold text-gray-900 mb-2">{{ guide.title or guide.name }}</h4>
                             {% if guide.description %}
-                            <p class="text-sm text-gray-600 mb-3">{{ guide.description }}</p>
+                            <p class="text-sm text-gray-600 mb-3 line-clamp-2">{{ guide.description }}</p>
                             {% endif %}
 
                             <div class="space-y-2 text-sm text-gray-500">
                                 <div class="flex items-center">
-                                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="h-4 w-4 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                     </svg>
                                     {{ guide.questions|length }} questions
                                 </div>
                                 <div class="flex items-center">
-                                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="h-4 w-4 mr-2 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
                                     </svg>
                                     {{ guide.total_marks }} total marks
                                 </div>
                                 <div class="flex items-center">
-                                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="h-4 w-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                     </svg>
                                     Created {{ guide.created_at[:10] }}
@@ -99,9 +203,12 @@
                         </div>
 
                         <!-- Current Guide Indicator -->
-                        {% if current_guide == guide.name %}
+                        {% if current_guide == (guide.title or guide.name) %}
                         <div class="ml-3">
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
                                 Active
                             </span>
                         </div>
@@ -109,25 +216,35 @@
                     </div>
 
                     <!-- Actions -->
-                    <div class="mt-4 flex space-x-2">
-                        {% if guide.id and guide.id|string|length > 0 and guide.id != 'session_guide' and guide.id != '' and guide.id != 'None' and current_guide != guide.name %}
+                    <div class="guide-actions flex space-x-2">
+                        {% if guide.id and guide.id|string|length > 0 and guide.id != 'session_guide' and guide.id != '' and guide.id != 'None' and current_guide != (guide.title or guide.name) %}
                         <a href="{{ url_for('use_guide', guide_id=guide.id) }}"
-                           class="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                           class="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
                             Use Guide
                         </a>
                         {% else %}
-                        <div class="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed">
+                        <div class="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-lg text-gray-500 bg-gray-100 cursor-not-allowed">
                             {% if guide.id == 'session_guide' %}Active Guide{% else %}In Use{% endif %}
                         </div>
                         {% endif %}
 
                         <button type="button" onclick="viewGuide('{{ guide.id }}')"
-                                class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                            </svg>
                             View
                         </button>
 
-                        <button type="button" onclick="deleteGuide('{{ guide.id }}', '{{ guide.name }}')"
-                                class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-danger-700 bg-white hover:bg-danger-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-danger-500">
+                        <button type="button" onclick="confirmDeleteGuide('{{ guide.id }}', '{{ guide.title or guide.name }}')"
+                                class="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-lg text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
                             Delete
                         </button>
                     </div>
@@ -189,10 +306,6 @@
             <div class="bg-white px-6 py-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
                 <div id="guide-details" class="text-sm text-gray-500">
                     <!-- Guide details will be loaded here -->
-                    <div class="flex items-center justify-center py-12">
-                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-                        <span class="ml-3 text-gray-600">Loading guide details...</span>
-                    </div>
                 </div>
             </div>
 
@@ -208,21 +321,132 @@
         </div>
     </div>
 </div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-confirmation-modal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="delete-modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity modal-backdrop" aria-hidden="true"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+        <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <!-- Modal Header -->
+            <div class="bg-red-50 px-6 py-4 border-b border-red-200">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-lg font-semibold text-red-900" id="delete-modal-title">
+                            Confirm Deletion
+                        </h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="bg-white px-6 py-4">
+                <div class="text-sm text-gray-700">
+                    <p class="mb-3">Are you sure you want to delete <strong id="delete-guide-name"></strong>?</p>
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                        <div class="flex">
+                            <svg class="h-5 w-5 text-yellow-400 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                            </svg>
+                            <div class="text-sm">
+                                <p class="font-medium text-yellow-800">This action cannot be undone!</p>
+                                <p class="text-yellow-700 mt-1">This will permanently remove:</p>
+                                <ul class="list-disc list-inside text-yellow-700 mt-1 space-y-1">
+                                    <li>All grading criteria and questions</li>
+                                    <li>Mark allocations and rubrics</li>
+                                    <li>Historical references to this guide</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                <button type="button" onclick="closeDeleteModal()" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    Cancel
+                </button>
+                <button type="button" id="confirm-delete-btn" onclick="executeDelete()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                    <span id="delete-btn-text">Delete Guide</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 // Store guides data for JavaScript access
-const guidesData = {{ saved_guides | tojson }};
+const guidesData = JSON.parse(`{{ saved_guides | tojson | safe }}`);
 
+// Global variables for delete functionality
+let currentDeleteGuideId = null;
+let currentDeleteGuideName = null;
+
+// Toast notification system
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+        <div class="flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                ${type === 'success' ?
+                    '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>' :
+                    '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>'
+                }
+            </svg>
+            <span>${message}</span>
+        </div>
+    `;
+
+    document.getElementById('toast-container').appendChild(toast);
+
+    // Show toast
+    setTimeout(() => toast.classList.add('show'), 100);
+
+    // Hide and remove toast
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+// View guide functionality
 function viewGuide(guideId) {
     const guide = guidesData.find(g => g.id === guideId);
-    if (!guide) return;
+    if (!guide) {
+        document.getElementById('guide-details').innerHTML = `
+            <div class="text-center py-8 text-red-600">
+                <svg class="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <h3 class="mt-4 text-lg font-medium">Guide Not Found</h3>
+                <p class="mt-2 text-sm text-gray-600">The requested marking guide could not be found in your library.</p>
+            </div>`;
+        return;
+    }
 
-    const detailsHtml = `
+    // Create guide details HTML
+    const guideHTML = `
         <div class="space-y-4">
             <div>
-                <h4 class="font-medium text-gray-900">${guide.name}</h4>
+                <h4 class="font-medium text-gray-900">${guide.title || guide.name}</h4>
                 ${guide.description ? `<p class="text-gray-600 mt-1">${guide.description}</p>` : ''}
             </div>
 
@@ -259,18 +483,140 @@ function viewGuide(guideId) {
         </div>
     `;
 
-    document.getElementById('guide-details').innerHTML = detailsHtml;
+    document.getElementById('guide-details').innerHTML = guideHTML;
     document.getElementById('view-guide-modal').classList.remove('hidden');
 }
 
-function deleteGuide(guideId, guideName) {
-    if (confirm(`Are you sure you want to delete the marking guide "${guideName}"? This action cannot be undone.`)) {
-        window.location.href = `{{ url_for('delete_guide', guide_id='GUIDE_ID') }}`.replace('GUIDE_ID', guideId);
+// Delete guide functionality
+function confirmDeleteGuide(guideId, guideName) {
+    currentDeleteGuideId = guideId;
+    currentDeleteGuideName = guideName;
+
+    document.getElementById('delete-guide-name').textContent = guideName;
+    document.getElementById('delete-confirmation-modal').classList.remove('hidden');
+}
+
+async function executeDelete() {
+    if (!currentDeleteGuideId) return;
+
+    const deleteBtn = document.getElementById('confirm-delete-btn');
+    const deleteBtnText = document.getElementById('delete-btn-text');
+
+    // Show loading state
+    deleteBtn.classList.add('btn-loading');
+    deleteBtnText.textContent = 'Deleting...';
+    deleteBtn.disabled = true;
+
+    try {
+        // Get CSRF token from multiple sources
+        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+                         document.querySelector('input[name=csrf_token]')?.value ||
+                         '{{ csrf_token }}';
+
+        console.log('Delete request details:', {
+            guide_id: currentDeleteGuideId,
+            csrf_token: csrfToken ? csrfToken.substring(0, 10) + '...' : 'none'
+        });
+
+        const headers = {
+            'Content-Type': 'application/json',
+        };
+
+        // Add CSRF token if available
+        if (csrfToken) {
+            headers['X-CSRFToken'] = csrfToken;
+        }
+
+        const response = await fetch('/api/delete-guide', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+                guide_id: currentDeleteGuideId
+            })
+        });
+
+        console.log('Delete response status:', response.status);
+
+        const result = await response.json();
+        console.log('Delete response data:', result);
+
+        if (result.success) {
+            // Remove guide card from UI with animation
+            const guideCard = document.querySelector(`[data-guide-id="${currentDeleteGuideId}"]`);
+            if (guideCard) {
+                guideCard.classList.add('fade-out');
+                setTimeout(() => {
+                    guideCard.remove();
+
+                    // Check if no guides left and show empty state
+                    const remainingCards = document.querySelectorAll('.guide-card');
+                    if (remainingCards.length === 0) {
+                        location.reload(); // Reload to show empty state
+                    }
+                }, 300);
+            }
+
+            // If this was the active guide, hide the current guide section
+            if (result.was_active_guide) {
+                const currentGuideSection = document.querySelector('.current-guide-section');
+                if (currentGuideSection) {
+                    currentGuideSection.style.display = 'none';
+                    console.log('Hidden current guide section - active guide was deleted');
+                }
+
+                // Show a notification that the active guide was cleared
+                showToast('Active guide cleared - please select a new guide for grading', 'warning');
+            }
+
+            // Close modal and show success message
+            closeDeleteModal();
+            showToast(result.message, 'success');
+
+        } else {
+            throw new Error(result.error || 'Failed to delete guide');
+        }
+
+    } catch (error) {
+        console.error('Delete error:', error);
+        showToast(`Error deleting guide: ${error.message}`, 'error');
+    } finally {
+        // Reset button state
+        deleteBtn.classList.remove('btn-loading');
+        deleteBtnText.textContent = 'Delete Guide';
+        deleteBtn.disabled = false;
     }
 }
 
+// Modal control functions
 function closeModal() {
     document.getElementById('view-guide-modal').classList.add('hidden');
 }
+
+function closeDeleteModal() {
+    document.getElementById('delete-confirmation-modal').classList.add('hidden');
+    currentDeleteGuideId = null;
+    currentDeleteGuideName = null;
+}
+
+// Close modals when clicking outside
+document.addEventListener('click', function(event) {
+    const viewModal = document.getElementById('view-guide-modal');
+    const deleteModal = document.getElementById('delete-confirmation-modal');
+
+    if (event.target === viewModal) {
+        closeModal();
+    }
+    if (event.target === deleteModal) {
+        closeDeleteModal();
+    }
+});
+
+// Keyboard navigation
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeModal();
+        closeDeleteModal();
+    }
+});
 </script>
 {% endblock %}

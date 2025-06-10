@@ -197,6 +197,47 @@
     max-width: 400px;
 }
 
+/* Toast notification styles */
+#toast-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 9999;
+    max-width: 400px;
+}
+
+.toast {
+    background: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+    border-left: 4px solid #10b981;
+    opacity: 0;
+    transform: translateX(100%);
+    transition: all 0.3s ease-in-out;
+}
+
+.toast.success {
+    border-left-color: #10b981;
+    color: #065f46;
+}
+
+.toast.error {
+    border-left-color: #ef4444;
+    color: #7f1d1d;
+}
+
+.toast.warning {
+    border-left-color: #f59e0b;
+    color: #78350f;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
 /* Enhanced mobile responsiveness */
 @media (max-width: 640px) {
     .text-responsive-lg {
@@ -359,6 +400,20 @@
 .guide-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Fade-out animation for guide deletion */
+.guide-card.fade-out {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+    transition: all 0.3s ease-in-out;
+}
+
+/* Current guide section fade-out */
+.current-guide-section.fade-out {
+    opacity: 0;
+    transform: translateY(-5px);
+    transition: all 0.3s ease-in-out;
 }
 
 /* Line clamp utility for text truncation */

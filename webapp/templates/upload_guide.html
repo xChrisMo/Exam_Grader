@@ -15,7 +15,7 @@
         <div class="px-4 py-5 sm:p-6">
             <form method="POST" enctype="multipart/form-data" id="upload-form">
                 {% if csrf_token %}
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                 {% endif %}
                 <!-- File Upload Area -->
                 <div class="mb-6">
