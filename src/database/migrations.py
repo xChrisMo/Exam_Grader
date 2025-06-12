@@ -65,9 +65,26 @@ class MigrationManager:
     
     def _create_tables(self):
         """Create all database tables."""
-        from .models import db
-        db.metadata.create_all(self.engine)
-        logger.info("Database tables created successfully")
+        try:
+            # Import models to ensure they are registered with SQLAlchemy
+            from .models import (
+                db, User, MarkingGuide, Submission,
+                Mapping, GradingResult, Session
+            )
+
+            # Create all tables using the engine directly
+            db.metadata.create_all(self.engine)
+
+            # Verify tables were created
+            inspector = inspect(self.engine)
+            created_tables = inspector.get_table_names()
+            logger.info(f"Database tables created successfully: {created_tables}")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to create tables: {str(e)}")
+            raise
     
     def get_migration_status(self) -> Dict[str, any]:
         """Get current migration status."""

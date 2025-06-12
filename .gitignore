@@ -52,6 +52,20 @@ migration_backup/
 *.backup
 *.backup2
 
+# Database files (should not be in repository)
+*.db
+*.sqlite
+*.sqlite3
+instance/*.db
+instance/*.sqlite
+instance/*.sqlite3
+
+# Sensitive files
+secrets.enc
+instance/secrets.enc
+*.key
+*.pem
+
 # Test coverage and cache
 .coverage
 htmlcov/
@@ -77,6 +91,8 @@ Desktop.ini
 # File protection system
 file_backups/
 *.backup_*
+.file_protection/
+.version_lock.json
 
 # IDE auto-restore prevention
 .vscode/settings.json

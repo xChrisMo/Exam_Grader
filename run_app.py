@@ -9,7 +9,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -120,20 +119,33 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
         if debug is None:
             debug = os.getenv("DEBUG", "False").lower() == "true"
 
-        # Import the Flask app
+        # Suppress verbose logging during startup
+        import logging
+        logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+        logging.getLogger('werkzeug').setLevel(logging.WARNING)
+
+        # Set environment variable to suppress verbose startup messages
+        os.environ['SUPPRESS_STARTUP_LOGS'] = 'true'
+
+        print("\n🚀 Initializing Exam Grader...")
+
+        # Import the Flask app (this will trigger initialization)
         from webapp.exam_grader_app import app
 
         print("\n" + "=" * 50)
-        print("[START] Starting Exam Grader Web Application")
+        print("🎓 EXAM GRADER - AI-POWERED ASSESSMENT PLATFORM")
         print("=" * 50)
-        print(f"[DASHBOARD] Dashboard: http://{host}:{port}")
-        print(f"[DEBUG] Debug mode: {debug}")
-        print(f"[HOST] Host: {host}")
-        print(f"[PORT] Port: {port}")
-        print(f"[TEMP] Temp Dir: {os.getenv('TEMP_DIR', 'temp')}")
-        print(f"[OUTPUT] Output Dir: {os.getenv('OUTPUT_DIR', 'output')}")
-        print(f"[DASHBOARD] Max File Size: {os.getenv('MAX_FILE_SIZE_MB', '20')}MB")
-        print(f"[API] API Keys: {'[OK]' if os.getenv('HANDWRITING_OCR_API_KEY') else '[ERROR]'}")
+        print(f"🌐 Dashboard: http://{host}:{port}")
+        print(f"🔧 Debug mode: {'ON' if debug else 'OFF'}")
+        print("📁 Storage: temp/ & output/")
+        print(f"📊 Max file size: {os.getenv('MAX_FILE_SIZE_MB', '20')}MB")
+
+        # Check API keys status
+        ocr_key = os.getenv('HANDWRITING_OCR_API_KEY')
+        llm_key = os.getenv('DEEPSEEK_API_KEY')
+        api_status = "✅ READY" if (ocr_key and llm_key) else "⚠️  LIMITED"
+        print(f"🔑 API Services: {api_status}")
+
         print("=" * 50)
         print("Press Ctrl+C to stop the server")
         print("=" * 50)

@@ -317,7 +317,7 @@ class SecretsManager:
             value = os.getenv(var_name)
             if value:
                 if self.set_secret(
-                    var_name, value, f"Imported from environment variable"
+                    var_name, value, "Imported from environment variable"
                 ):
                     imported += 1
 

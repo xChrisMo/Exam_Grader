@@ -37,17 +37,22 @@ config = ConfigManager()
 ocr_service_instance = None
 try:
     api_key = os.getenv("HANDWRITING_OCR_API_KEY")
+    api_url = os.getenv(
+        "HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3"
+    )
+
+    # Always try to initialize OCR service, allowing graceful degradation
+    ocr_service_instance = OCRService(api_key=api_key, base_url=api_url, allow_no_key=True)
+
     if api_key:
-        api_url = os.getenv(
-            "HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3"
-        )
-        ocr_service_instance = OCRService(api_key=api_key, base_url=api_url)
-        logger.info("OCR service initialized successfully")
+        logger.info("OCR service initialized successfully with API key")
     else:
-        logger.warning("HandwritingOCR API key not configured - OCR functionality will be disabled")
+        logger.warning("OCR service initialized without API key - functionality will be limited")
+
 except Exception as e:
     logger.error(f"OCR Service Error: Failed to initialize OCR service: {str(e)}")
     logger.warning("OCR service will be disabled")
+    ocr_service_instance = None
 
 
 class DocumentParser:

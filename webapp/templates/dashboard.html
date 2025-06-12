@@ -296,19 +296,14 @@
       <div class="mt-5">
         {% if guide_uploaded and total_submissions > 0 %}
         <button
-          id="process-mapping"
-          class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-warning-600 hover:bg-warning-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-warning-500 mb-2"
+          id="process-unified-ai"
+          class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
         >
-          Process Mapping
-        </button>
-        {% if session.get('mapping_completed') %}
-        <button
-          id="process-grading"
-          class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-warning-600 hover:bg-warning-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-warning-500"
-        >
-          Process Grading
-        </button>
-        {% endif %} {% else %}
+          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+          </svg>
+          AI Processing
+        </button> {% else %}
         <div class="text-center">
           <div class="text-sm text-gray-500 mb-2">
             {% if not guide_uploaded %} Need guide & submissions {% elif
@@ -498,47 +493,54 @@
 {% endif %} {% endblock %} {% block extra_js %}
 <script>
   document.addEventListener("DOMContentLoaded", function () {
-    // Process Mapping Button
-    const processMappingBtn = document.getElementById("process-mapping");
-    if (processMappingBtn) {
-      processMappingBtn.addEventListener("click", async function () {
+    // Unified AI Processing Button
+    const processUnifiedAIBtn = document.getElementById("process-unified-ai");
+    if (processUnifiedAIBtn) {
+      processUnifiedAIBtn.addEventListener("click", async function () {
         ExamGrader.utils.showButtonLoading(this, "Processing...");
         this.disabled = true;
 
         try {
-          const success = await ExamGrader.api.processMapping();
-          if (success) {
-            ExamGrader.utils.showToast("Mapping completed successfully!", "success");
-            setTimeout(() => location.reload(), 1500);
+          console.log("Starting unified AI processing...");
+
+          // Start the unified AI processing
+          const response = await fetch('/api/process-unified-ai', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          });
+
+          console.log("Response status:", response.status);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Response error text:", errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+          }
+
+          const data = await response.json();
+          console.log("Processing result:", data);
+
+          if (data.success) {
+            const summary = data.summary || {};
+            const avgPercentage = summary.average_percentage || 0;
+            const processingTime = summary.processing_time || 0;
+
+            ExamGrader.utils.showToast(
+              `AI processing completed! Average score: ${avgPercentage}% (${processingTime}s)`,
+              "success"
+            );
+
+            setTimeout(() => location.reload(), 2000);
+          } else {
+            throw new Error(data.error || "AI processing failed");
           }
         } catch (error) {
           console.error("Error:", error);
-          ExamGrader.utils.showToast("An error occurred while processing mapping", "error");
+          ExamGrader.utils.showToast(`AI processing failed: ${error.message}`, "error");
         } finally {
-          ExamGrader.utils.hideButtonLoading(this, "Process Mapping");
-          this.disabled = false;
-        }
-      });
-    }
-
-    // Process Grading Button
-    const processGradingBtn = document.getElementById("process-grading");
-    if (processGradingBtn) {
-      processGradingBtn.addEventListener("click", async function () {
-        ExamGrader.utils.showButtonLoading(this, "Processing...");
-        this.disabled = true;
-
-        try {
-          const result = await ExamGrader.api.processGrading();
-          if (result && result.success) {
-            ExamGrader.utils.showToast(`Grading completed! Score: ${result.score}%`, "success");
-            setTimeout(() => location.reload(), 1500);
-          }
-        } catch (error) {
-          console.error("Error:", error);
-          ExamGrader.utils.showToast("An error occurred while processing grading", "error");
-        } finally {
-          ExamGrader.utils.hideButtonLoading(this, "Process Grading");
+          ExamGrader.utils.hideButtonLoading(this, "AI Processing");
           this.disabled = false;
         }
       });

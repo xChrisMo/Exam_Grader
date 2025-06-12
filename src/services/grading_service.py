@@ -8,13 +8,9 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple
 
 from utils.logger import logger
-
-if TYPE_CHECKING:
-    from src.services.llm_service import LLMService
-    from src.services.mapping_service import MappingService
 
 
 class GradingService:
@@ -23,17 +19,8 @@ class GradingService:
     The score is determined by how closely the submission answers match the marking guide answers.
     """
 
-    def __init__(
-        self,
-        llm_service: Optional["LLMService"] = None,
-        mapping_service: Optional["MappingService"] = None
-    ) -> None:
-        """Initialize with optional LLM and mapping services.
-
-        Args:
-            llm_service: Optional LLM service for AI-powered grading
-            mapping_service: Optional mapping service for question-answer alignment
-        """
+    def __init__(self, llm_service=None, mapping_service=None):
+        """Initialize with optional LLM and mapping services."""
         self.llm_service = llm_service
         self.mapping_service = mapping_service
 
@@ -263,10 +250,55 @@ class GradingService:
                                 temperature=0.1,  # Slightly more variability for nuanced judgments
                             )
 
-                        result = response.choices[0].message.content
-                        parsed = json.loads(result)
+                        # Validate response structure first
+                        if not hasattr(response, 'choices') or len(response.choices) == 0:
+                            logger.error("No response choices received from LLM")
+                            raise Exception("No response choices received from LLM")
 
-                        # Extract detailed grading information
+                        result = response.choices[0].message.content
+
+                        # Validate response content
+                        if not result or not result.strip():
+                            logger.error("Empty response received from LLM")
+                            raise Exception("Empty response received from LLM")
+
+                        logger.debug(f"Raw LLM response: {result[:200]}...")
+
+                        # Enhanced JSON parsing with fallback
+                        try:
+                            # Try direct JSON parsing first
+                            parsed = json.loads(result)
+                        except json.JSONDecodeError as json_error:
+                            logger.warning(f"Direct JSON parsing failed: {str(json_error)}")
+
+                            # Try to extract JSON from the response
+                            json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                            if json_match:
+                                try:
+                                    parsed = json.loads(json_match.group(0))
+                                    logger.info("Successfully extracted JSON from response")
+                                except json.JSONDecodeError:
+                                    logger.warning("JSON extraction also failed, using manual extraction")
+                                    # Manual extraction fallback
+                                    score_match = re.search(r'(?:score|points?)[:\s]*(\d+(?:\.\d+)?)', result, re.IGNORECASE)
+                                    score = float(score_match.group(1)) if score_match else 0
+                                    parsed = {
+                                        "score": score,
+                                        "feedback": result.strip(),
+                                        "extraction_method": "manual"
+                                    }
+                            else:
+                                logger.warning("No JSON found in response, using manual extraction")
+                                # Manual extraction fallback
+                                score_match = re.search(r'(?:score|points?)[:\s]*(\d+(?:\.\d+)?)', result, re.IGNORECASE)
+                                score = float(score_match.group(1)) if score_match else 0
+                                parsed = {
+                                    "score": score,
+                                    "feedback": result.strip(),
+                                    "extraction_method": "manual"
+                                }
+
+                        # Extract detailed grading information with safe defaults
                         score = float(parsed.get("score", 0))
 
                         # Ensure score doesn't exceed max_score
@@ -285,6 +317,10 @@ class GradingService:
 
                         # Get detailed breakdown
                         grading_breakdown = parsed.get("grading_breakdown", {})
+
+                        # Add extraction method info if manual extraction was used
+                        if parsed.get("extraction_method") == "manual":
+                            feedback = f"[Manual extraction] {feedback}"
 
                         # Add to overall strengths and weaknesses
                         strengths.extend(question_strengths)
@@ -582,3 +618,63 @@ class GradingService:
             json.dump(grading_result, f, indent=2)
 
         return str(output_file)
+
+    def grade_multiple_submissions(
+        self,
+        marking_guide_content: str,
+        submissions: List[Dict[str, str]],
+        batch_size: int = 5
+    ) -> List[Tuple[Dict, Optional[str]]]:
+        """
+        Grade multiple submissions with optimized batch processing.
+
+        Args:
+            marking_guide_content: The marking guide content
+            submissions: List of submission dictionaries with 'content' key
+            batch_size: Number of submissions to process in parallel
+
+        Returns:
+            List of (grading_result, error_message) tuples
+        """
+        results = []
+
+        logger.info(f"Starting batch grading of {len(submissions)} submissions")
+
+        # Process submissions in batches for better performance
+        for i in range(0, len(submissions), batch_size):
+            batch = submissions[i:i + batch_size]
+            logger.info(f"Processing batch {i // batch_size + 1}/{(len(submissions) + batch_size - 1) // batch_size}")
+
+            batch_results = []
+            for submission in batch:
+                try:
+                    result, error = self.grade_submission(
+                        marking_guide_content,
+                        submission.get('content', '')
+                    )
+                    batch_results.append((result, error))
+                except Exception as e:
+                    logger.error(f"Error grading submission: {str(e)}")
+                    batch_results.append((
+                        {"status": "error", "message": str(e)},
+                        str(e)
+                    ))
+
+            results.extend(batch_results)
+
+            # Small delay between batches to avoid overwhelming the API
+            if i + batch_size < len(submissions):
+                import time
+                time.sleep(0.5)
+
+        logger.info(f"Completed batch grading of {len(submissions)} submissions")
+        return results
+
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """Get performance statistics from the LLM service."""
+        if self.llm_service and hasattr(self.llm_service, 'get_cache_stats'):
+            return {
+                "llm_cache_stats": self.llm_service.get_cache_stats(),
+                "grading_service": "active"
+            }
+        return {"grading_service": "active", "llm_cache_stats": "not_available"}

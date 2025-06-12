@@ -63,10 +63,10 @@ class LLMService:
         self,
         api_key: Optional[str] = None,
         base_url: str = "https://api.deepseek.com/v1",
-        model: str = "deepseek-reasoner",
+        model: str = "deepseek-chat",
         temperature: float = 0.0,
         max_retries: int = 3,
-        retry_delay: float = 2.0,
+        retry_delay: float = 1.0,
         seed: Optional[int] = 42,
         deterministic: bool = True,
     ):
@@ -230,6 +230,7 @@ class LLMService:
     ) -> Tuple[float, str]:
         """
         Compare a student's submission answer with the model answer from the marking guide.
+        Enhanced with caching, retry logic, and better error handling.
 
         Args:
             question: The question being answered
@@ -241,122 +242,114 @@ class LLMService:
             Tuple[float, str]: (Score, Feedback)
 
         Raises:
-            LLMServiceError: If the API call fails
+            LLMServiceError: If the API call fails after all retries
         """
         try:
             # Log the start of answer comparison
             logger.info("Preparing to compare answers...")
 
-            # Construct a prompt for the LLM to compare the answers
-            system_prompt = """
-            You are an educational grading assistant. Your task is to compare a student's answer
-            to a model answer from a marking guide and assign a score based on how well the student's
-            answer matches the key points and understanding demonstrated in the model answer.
+            # Optimize prompt length for performance
+            max_content_length = 1000  # Limit content length for faster processing
 
-            Follow these guidelines:
-            - Assign a score from 0 to the maximum score
-            - Consider how well the student's answer addresses the key points in the model answer
-            - Be objective and consistent in your evaluation
-            - Focus on content accuracy rather than writing style or formatting
-            - Provide a brief explanation for your score
+            # Truncate long content while preserving key information
+            question_truncated = question[:max_content_length] if len(question) > max_content_length else question
+            guide_answer_truncated = guide_answer[:max_content_length] if len(guide_answer) > max_content_length else guide_answer
+            submission_answer_truncated = submission_answer[:max_content_length] if len(submission_answer) > max_content_length else submission_answer
 
-            Your response should be in this JSON format:
-            {
-                "score": <numeric_score>,
-                "feedback": "<brief_explanation>",
-                "key_points_matched": ["<point1>", "<point2>", ...],
-                "key_points_missed": ["<point1>", "<point2>", ...]
-            }
-            """
+            # Construct optimized prompt for faster processing
+            system_prompt = """You are an educational grading assistant. Compare a student's answer to a model answer and assign a score.
 
-            user_prompt = f"""
-            Question: {question}
+Guidelines:
+- Score: 0 to maximum score
+- Focus on content accuracy and key points
+- Be objective and consistent
 
-            Model Answer from Marking Guide: {guide_answer}
+Response format (JSON only):
+{
+    "score": <numeric_score>,
+    "feedback": "<brief_explanation>"
+}"""
 
-            Student's Answer: {submission_answer}
+            user_prompt = f"""Question: {question_truncated}
 
-            Maximum Possible Score: {max_score}
+Model Answer: {guide_answer_truncated}
 
-            Please evaluate the student's answer and provide a score and feedback.
-            """
+Student Answer: {submission_answer_truncated}
 
-            # Log sending request
-            logger.info("Sending request to LLM service...")
+Max Score: {max_score}
 
-            # Make the API call
-            params = {
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": 0.0,
-                "max_tokens": 500,
-            }
+Evaluate and provide score with feedback."""
 
-            # Add seed parameter if in deterministic mode
-            if self.deterministic and self.seed is not None:
-                params["seed"] = self.seed
+            # Create messages for caching
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
 
-            response = self.client.chat.completions.create(**params)
+            # Check cache first
+            cache_key = self._generate_cache_key(messages, max_tokens=self.max_tokens_default)
+            cached_response = self._get_cached_response(cache_key)
 
-            # Log processing response
-            logger.info("Processing LLM response...")
+            if cached_response:
+                logger.info("Using cached response for answer comparison")
+                response_text = cached_response
+            else:
+                logger.info("Making API call for answer comparison...")
 
-            # Parse the response
-            if hasattr(response, "choices") and len(response.choices) > 0:
+                # Prepare optimized API parameters
+                params = {
+                    "model": self.model,
+                    "messages": messages,
+                    "temperature": 0.0,  # Deterministic for consistency
+                    "max_tokens": self.max_tokens_default,  # Optimized token limit
+                }
+
+                # Force JSON format for all models
+                params["response_format"] = {"type": "json_object"}
+
+                # Add seed parameter if in deterministic mode
+                if self.deterministic and self.seed is not None:
+                    params["seed"] = self.seed
+
+                # Make API call with retry logic
+                response = self._make_api_call_with_retry(params)
                 response_text = response.choices[0].message.content.strip()
 
-                # Log extracting results
-                logger.info("Extracting score and feedback...")
+                # Cache the response
+                self._cache_response(cache_key, response_text)
 
-                try:
-                    # Attempt to parse as JSON
-                    result = json.loads(response_text)
+            # Parse and validate the response
+            logger.info("Processing LLM response...")
 
-                    # Extract score and feedback
-                    score = float(result.get("score", 0))
-                    feedback = result.get("feedback", "No feedback provided")
+            try:
+                # Parse JSON response directly - no fallbacks
+                import json
+                result = json.loads(response_text.strip())
 
-                    # Ensure score is within bounds
-                    score = max(0, min(score, max_score))
+                # Extract score and feedback with validation
+                score = float(result.get("score", 0))
+                feedback = result.get("feedback", "No feedback provided")
 
-                    # Log completion
-                    logger.info("Answer comparison completed successfully")
+                # Ensure score is within bounds
+                score = max(0, min(score, max_score))
 
-                    return score, feedback
+                # Add extraction method info if manual extraction was used
+                if result.get("extraction_method") == "manual":
+                    feedback = f"[Manual extraction] {feedback}"
 
-                except json.JSONDecodeError:
-                    # If not valid JSON, extract score and feedback manually
-                    logger.warning(
-                        "Response not in valid JSON format. Extracting manually."
-                    )
+                logger.info(f"Answer comparison completed. Score: {score}/{max_score}")
+                return score, feedback
 
-                    # Try to find a numeric score in the response
-                    score_match = re.search(
-                        r"score[:\s]+(\d+(?:\.\d+)?)", response_text, re.IGNORECASE
-                    )
-                    score = float(score_match.group(1)) if score_match else 0
+            except Exception as parse_error:
+                logger.error(f"Failed to parse response: {str(parse_error)}")
+                logger.error(f"Raw response: {response_text}")
 
-                    # Ensure score is within bounds
-                    score = max(0, min(score, max_score))
+                # Final fallback: return zero score with error message
+                return 0, f"Error processing response: {str(parse_error)}"
 
-                    # Log completion with manual extraction
-                    logger.info("Answer comparison completed with manual extraction")
-
-                    return score, response_text
-            else:
-                # Log error
-                logger.error("No valid response received from API")
-                raise LLMServiceError("No valid response received from API")
-
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse LLM response as JSON: {str(e)}")
-            return 0, f"Error parsing response: {str(e)}"
-        except (AttributeError, IndexError) as e:
-            logger.error(f"Invalid response structure from LLM API: {str(e)}")
-            return 0, f"Error processing response: {str(e)}"
+        except LLMServiceError:
+            # Re-raise LLM service errors
+            raise
         except Exception as e:
             logger.error(f"Answer comparison failed: {str(e)}")
             # Return a default score and error message

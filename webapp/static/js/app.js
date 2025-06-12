@@ -388,6 +388,220 @@ const ExamGrader = {
         return false;
       }
     },
+
+    /**
+     * Process unified AI grading with real-time progress tracking
+     */
+    processUnifiedAI: async function () {
+      try {
+        // Show progress modal
+        ExamGrader.ui.showProgressModal();
+
+        const data = await ExamGrader.utils.apiRequest(
+          "/api/process-unified-ai",
+          {
+            method: "POST",
+          }
+        );
+
+        if (data.success) {
+          const summary = data.summary || {};
+          const avgPercentage = summary.average_percentage || 0;
+          const processingTime = summary.processing_time || 0;
+
+          ExamGrader.utils.showToast(
+            `Unified AI processing completed! Average score: ${avgPercentage}% (${processingTime}s)`,
+            "success"
+          );
+
+          // Hide progress modal
+          ExamGrader.ui.hideProgressModal();
+
+          return data;
+        } else {
+          throw new Error(data.error || "Unified AI processing failed");
+        }
+      } catch (error) {
+        ExamGrader.ui.hideProgressModal();
+        ExamGrader.utils.showToast(`Unified AI processing failed: ${error.message}`, "error");
+        return false;
+      }
+    },
+
+    /**
+     * Get progress updates for a progress ID
+     */
+    getProgress: async function (progressId) {
+      try {
+        const data = await ExamGrader.utils.apiRequest(
+          `/api/progress/${progressId}`,
+          { method: "GET" }
+        );
+
+        if (data.success) {
+          return data.progress;
+        } else {
+          throw new Error(data.error || "Failed to get progress");
+        }
+      } catch (error) {
+        console.error("Error getting progress:", error);
+        return null;
+      }
+    },
+
+    /**
+     * Get progress history for a progress ID
+     */
+    getProgressHistory: async function (progressId) {
+      try {
+        const data = await ExamGrader.utils.apiRequest(
+          `/api/progress/${progressId}/history`,
+          { method: "GET" }
+        );
+
+        if (data.success) {
+          return data.history;
+        } else {
+          throw new Error(data.error || "Failed to get progress history");
+        }
+      } catch (error) {
+        console.error("Error getting progress history:", error);
+        return null;
+      }
+    },
+  },
+
+  // UI components for progress tracking
+  ui: {
+    /**
+     * Show progress modal with real-time updates
+     */
+    showProgressModal: function () {
+      // Create progress modal if it doesn't exist
+      if (!document.getElementById('progress-modal')) {
+        const modalHTML = `
+          <div id="progress-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+              <div class="mt-3 text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+                  <svg class="animate-spin h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </div>
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mt-2" id="progress-title">
+                  AI Processing in Progress
+                </h3>
+                <div class="mt-4">
+                  <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                  </div>
+                  <p class="text-sm text-gray-500 mt-2" id="progress-text">Initializing...</p>
+                  <p class="text-xs text-gray-400 mt-1" id="progress-details"></p>
+                  <p class="text-xs text-gray-400 mt-1" id="progress-eta"></p>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+      }
+
+      document.getElementById('progress-modal').style.display = 'block';
+    },
+
+    /**
+     * Hide progress modal
+     */
+    hideProgressModal: function () {
+      const modal = document.getElementById('progress-modal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    },
+
+    /**
+     * Update progress modal with current progress
+     */
+    updateProgress: function (progress) {
+      const progressBar = document.getElementById('progress-bar');
+      const progressText = document.getElementById('progress-text');
+      const progressDetails = document.getElementById('progress-details');
+      const progressEta = document.getElementById('progress-eta');
+
+      if (progressBar) {
+        progressBar.style.width = `${progress.percentage}%`;
+      }
+
+      if (progressText) {
+        progressText.textContent = progress.current_operation || 'Processing...';
+      }
+
+      if (progressDetails) {
+        const details = progress.details ||
+          `Step ${progress.current_step}/${progress.total_steps} - Submission ${progress.submission_index}/${progress.total_submissions}`;
+        progressDetails.textContent = details;
+      }
+
+      if (progressEta && progress.estimated_time_remaining) {
+        const eta = Math.round(progress.estimated_time_remaining);
+        progressEta.textContent = `Estimated time remaining: ${eta}s`;
+      }
+
+      // Update status color based on progress status
+      if (progress.status === 'completed') {
+        progressBar.classList.remove('bg-blue-600');
+        progressBar.classList.add('bg-green-600');
+      } else if (progress.status === 'error') {
+        progressBar.classList.remove('bg-blue-600');
+        progressBar.classList.add('bg-red-600');
+      }
+    },
+
+    /**
+     * Start progress polling for a progress ID
+     */
+    startProgressPolling: function (progressId, interval = 1000) {
+      const pollProgress = async () => {
+        try {
+          const progress = await ExamGrader.api.getProgress(progressId);
+          if (progress) {
+            ExamGrader.ui.updateProgress(progress);
+
+            // Stop polling if completed or error
+            if (progress.status === 'completed' || progress.status === 'error') {
+              clearInterval(ExamGrader.ui.progressInterval);
+
+              // Auto-hide modal after a delay if completed successfully
+              if (progress.status === 'completed') {
+                setTimeout(() => {
+                  ExamGrader.ui.hideProgressModal();
+                }, 2000);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error polling progress:', error);
+          clearInterval(ExamGrader.ui.progressInterval);
+        }
+      };
+
+      // Start polling
+      ExamGrader.ui.progressInterval = setInterval(pollProgress, interval);
+
+      // Initial poll
+      pollProgress();
+    },
+
+    /**
+     * Stop progress polling
+     */
+    stopProgressPolling: function () {
+      if (ExamGrader.ui.progressInterval) {
+        clearInterval(ExamGrader.ui.progressInterval);
+        ExamGrader.ui.progressInterval = null;
+      }
+    },
   },
 
   // Initialize application
@@ -468,11 +682,11 @@ async function deleteSubmission(submissionId) {
         const response = await apiRequest('/api/delete-submission', {
             method: 'POST',
             body: {
-                submissionId: submissionId
+                submission_id: submissionId
             }
         });
 
-        if(response.status === 'success') {
+        if(response.success) {
             // Remove DOM element
             document.querySelector(`tr[data-id='${submissionId}']`).remove();
         }

@@ -190,6 +190,14 @@ class Submission(db.Model, TimestampMixin):
         "GradingResult", back_populates="submission", cascade="all, delete-orphan"
     )
 
+    # Composite indexes for performance optimization
+    __table_args__ = (
+        db.Index('idx_user_status', 'user_id', 'processing_status'),
+        db.Index('idx_user_created', 'user_id', 'created_at'),
+        db.Index('idx_status_created', 'processing_status', 'created_at'),
+        db.Index('idx_guide_status', 'marking_guide_id', 'processing_status'),
+    )
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -275,6 +283,13 @@ class GradingResult(db.Model, TimestampMixin):
     # Relationships
     submission = relationship("Submission", back_populates="grading_results")
     mapping = relationship("Mapping", back_populates="grading_results")
+
+    # Composite indexes for performance optimization
+    __table_args__ = (
+        db.Index('idx_submission_mapping', 'submission_id', 'mapping_id'),
+        db.Index('idx_submission_score', 'submission_id', 'score'),
+        db.Index('idx_method_created', 'grading_method', 'created_at'),
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""

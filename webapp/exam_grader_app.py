@@ -1,6 +1,3 @@
-from dotenv import load_dotenv
-load_dotenv()
-
 #!/usr/bin/env python3
 """
 Exam Grader Flask Web Application
@@ -16,23 +13,27 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any
 
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
+
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+# Flask imports
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, session, jsonify, send_file, abort
+    flash, session, jsonify, abort
 )
 from sqlalchemy.exc import SQLAlchemyError
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
-from werkzeug.exceptions import RequestEntityTooLarge
 
-# Import project modules
+# Project imports
 try:
     from src.config.unified_config import config
-    from src.database import db, User, MarkingGuide, Submission, Mapping, GradingResult, MigrationManager, DatabaseUtils
+    from src.database import db, User, MarkingGuide, Submission, MigrationManager, DatabaseUtils
     from src.security.session_manager import SecureSessionManager
     from src.security.secrets_manager import secrets_manager, initialize_secrets
     from src.services.ocr_service import OCRService
@@ -43,106 +44,65 @@ try:
     from src.parsing.parse_submission import parse_student_submission
     from src.parsing.parse_guide import parse_marking_guide
     from utils.logger import logger
-    from utils.rate_limiter import rate_limit_with_whitelist, get_rate_limit_status
-    from utils.input_sanitizer import InputSanitizer, sanitize_form_data, validate_file_upload
-    from utils.error_handler import ErrorHandler, ProgressTracker, create_user_notification, add_recent_activity
-    from utils.loading_states import loading_manager, LoadingState, create_loading_response, get_loading_state_for_template
+    from utils.input_sanitizer import sanitize_form_data, validate_file_upload
+    from utils.loading_states import loading_manager, get_loading_state_for_template
+    from webapp.auth import init_auth, login_required, get_current_user
 except ImportError as e:
     print(f"[ERROR] Failed to import required modules: {e}")
-    print("   Make sure all dependencies are installed and the project structure is correct")
-    sys.exit(1)
-
-# Import authentication functions
-try:
-    from webapp.auth import init_auth, login_required, get_current_user
-    print("[OK] Authentication modules imported successfully")
-except ImportError as e:
-    print(f"[ERROR] Failed to import authentication modules: {e}")
     sys.exit(1)
 
 # Initialize Flask application
 app = Flask(__name__)
 
-# Load unified configuration
+# Load and validate configuration
 try:
-    # Validate configuration
     config.validate()
-
-    # Configure Flask app with unified config
     app.config.update(config.get_flask_config())
-
-    logger.info(f"Configuration loaded successfully for environment: {config.environment}")
+    logger.info(f"Configuration loaded for environment: {config.environment}")
 except Exception as e:
     logger.error(f"Failed to load configuration: {str(e)}")
-    print(f"[ERROR] Configuration error: {e}")
     sys.exit(1)
 
 # Initialize CSRF protection
 try:
     csrf = CSRFProtect(app)
-    logger.info("CSRF protection initialized successfully")
+    logger.info("CSRF protection initialized")
 except Exception as e:
     logger.error(f"Failed to initialize CSRF protection: {str(e)}")
-    print(f"[ERROR] CSRF protection error: {e}")
     sys.exit(1)
 
 # Initialize database
 try:
     db.init_app(app)
-
     with app.app_context():
-        # Run migrations
         migration_manager = MigrationManager(config.database.database_url)
         if not migration_manager.migrate():
             logger.error("Database migration failed")
             sys.exit(1)
-
-        # Create default user if needed
         DatabaseUtils.create_default_user()
-
-    logger.info("Database initialized successfully")
+    logger.info("Database initialized")
 except Exception as e:
     logger.error(f"Failed to initialize database: {str(e)}")
-    print(f"[ERROR] Database error: {e}")
     sys.exit(1)
 
-# Initialize secrets manager
+# Initialize security components
 try:
     initialize_secrets()
-    logger.info("Secrets manager initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize secrets manager: {str(e)}")
-    print(f"[ERROR] Secrets manager error: {e}")
-    sys.exit(1)
-
-# Initialize secure session manager
-try:
     session_manager = SecureSessionManager(
         config.security.secret_key,
         config.security.session_timeout
     )
-    logger.info("Secure session manager initialized successfully")
+    logger.info("Security components initialized")
 except Exception as e:
-    logger.error(f"Failed to initialize session manager: {str(e)}")
-    print(f"[ERROR] Session manager error: {e}")
+    logger.error(f"Failed to initialize security: {str(e)}")
     sys.exit(1)
 
 # Initialize authentication system
 try:
     init_auth(app, session_manager)
-    logger.info("Authentication system initialized successfully")
-
-    # Test that login_required is available
-    @login_required
-    def test_decorator():
-        pass
-    logger.info("login_required decorator is working")
-
+    logger.info("Authentication system initialized")
 except Exception as e:
     logger.error(f"Failed to initialize authentication: {str(e)}")
-    print(f"[ERROR] Authentication error: {e}")
-    import traceback
-    traceback.print_exc()
     sys.exit(1)
 
 def allowed_file(filename):
@@ -152,26 +112,22 @@ def allowed_file(filename):
     ext = '.' + filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
     return ext in config.files.supported_formats
 
-# Initialize services with secure API key handling
+# Initialize services
 try:
-    # Get API keys from secrets manager
     ocr_api_key = secrets_manager.get_secret('HANDWRITING_OCR_API_KEY')
     llm_api_key = secrets_manager.get_secret('DEEPSEEK_API_KEY')
 
-    # Initialize services with retry mechanisms
     ocr_service = OCRService(api_key=ocr_api_key) if ocr_api_key else None
     llm_service = LLMService(api_key=llm_api_key) if llm_api_key else None
     mapping_service = MappingService(llm_service=llm_service)
     grading_service = GradingService(llm_service=llm_service, mapping_service=mapping_service)
 
-    # Initialize file cleanup service
     file_cleanup_service = FileCleanupService(config)
     file_cleanup_service.start_scheduled_cleanup()
 
-    logger.info("All services initialized successfully")
+    logger.info("Services initialized")
 except Exception as e:
     logger.error(f"Failed to initialize services: {str(e)}")
-    # Continue with limited functionality
     ocr_service = None
     llm_service = None
     mapping_service = None
@@ -231,7 +187,7 @@ def get_storage_stats() -> Dict[str, Any]:
             'max_size_mb': 160.0
         }
 
-# Cache for service status to avoid repeated API calls
+# Service status cache
 _service_status_cache = {}
 _service_status_cache_time = 0
 SERVICE_STATUS_CACHE_DURATION = 300  # 5 minutes
@@ -241,102 +197,50 @@ def get_service_status() -> Dict[str, bool]:
     global _service_status_cache, _service_status_cache_time
 
     current_time = time.time()
-
-    # Return cached result if still valid
     if (current_time - _service_status_cache_time) < SERVICE_STATUS_CACHE_DURATION and _service_status_cache:
-        logger.debug("Returning cached service status")
         return _service_status_cache
 
     try:
-        # Initialize status values
-        ocr_available = False
-        llm_available = False
+        # Check service availability
+        ocr_available = bool(ocr_service and ocr_service.api_key)
+        llm_available = bool(llm_service and llm_service.api_key)
+
+        # Check database
         storage_available = False
-        config_available = True  # Config is always available if app is running
-
-        # Check OCR service (with timeout)
-        if ocr_service:
-            try:
-                # Quick check without external API call
-                ocr_available = bool(ocr_service.api_key)
-                logger.debug(f"OCR service availability (config check): {ocr_available}")
-            except Exception as e:
-                logger.warning(f"Error checking OCR service availability: {str(e)}")
-                ocr_available = False
-
-        # Check LLM service (with timeout)
-        if llm_service:
-            try:
-                # Quick check without external API call
-                llm_available = bool(llm_service.api_key)
-                logger.debug(f"LLM service availability (config check): {llm_available}")
-            except Exception as e:
-                logger.warning(f"Error checking LLM service availability: {str(e)}")
-                llm_available = False
-
-        # Check database storage (new system)
-        storage_available = False
-        submission_storage_available = False
-        guide_storage_available = False
-
         try:
-            # Check if database is accessible
-            # Use current app context if available, otherwise create one
             from flask import has_app_context
             if has_app_context():
-                from src.database.models import User
-                User.query.count()  # Simple query to test database
+                User.query.count()
                 storage_available = True
-                submission_storage_available = True
-                guide_storage_available = True
             else:
                 with app.app_context():
-                    from src.database.models import User
-                    User.query.count()  # Simple query to test database
+                    User.query.count()
                     storage_available = True
-                    submission_storage_available = True
-                    guide_storage_available = True
-        except Exception as e:
-            logger.warning(f"Error checking database storage: {str(e)}")
+        except Exception:
             storage_available = False
 
-        # For development/demo purposes, if no services are available, show them as available
-        # This allows the app to function in demo mode
-        if not any([ocr_available, llm_available, storage_available]):
-            logger.warning("No services available, falling back to demo mode")
-            ocr_available = True
-            llm_available = True
-            storage_available = True
-
-        # Cache the result
+        # Cache result
         _service_status_cache = {
             'ocr_status': ocr_available,
             'llm_status': llm_available,
             'storage_status': storage_available,
-            'config_status': config_available,
-            'guide_storage_available': guide_storage_available,
-            'submission_storage_available': submission_storage_available
+            'config_status': True,
+            'guide_storage_available': storage_available,
+            'submission_storage_available': storage_available
         }
         _service_status_cache_time = current_time
-
-        logger.debug("Service status cached for 5 minutes")
         return _service_status_cache
 
     except Exception as e:
         logger.error(f"Error checking service status: {str(e)}")
-        # On error, show services as available for demo mode
-        fallback_status = {
-            'ocr_status': True,
-            'llm_status': True,
-            'storage_status': True,
+        return {
+            'ocr_status': False,
+            'llm_status': False,
+            'storage_status': False,
             'config_status': True,
-            'guide_storage_available': True,
-            'submission_storage_available': True
+            'guide_storage_available': False,
+            'submission_storage_available': False
         }
-        # Cache the fallback result too
-        _service_status_cache = fallback_status
-        _service_status_cache_time = current_time
-        return fallback_status
 
 # Error handlers
 @app.errorhandler(413)
@@ -375,64 +279,27 @@ def rate_limit_exceeded(e):
                              error_code=429,
                              error_message="Rate limit exceeded. Please wait before trying again."), 429
 
-# Template context processors
+# Template context processor
 @app.context_processor
 def inject_globals():
     """Inject global variables into all templates."""
-    # Auto-cleanup old loading operations
     try:
         loading_manager.auto_cleanup()
         loading_states = get_loading_state_for_template()
-    except Exception as e:
-        logger.warning(f"Error getting loading states: {str(e)}")
+    except Exception:
         loading_states = {'loading_operations': {}, 'has_active_operations': False, 'total_active_operations': 0}
 
-    # Generate CSRF token
     try:
         from flask_wtf.csrf import generate_csrf
         csrf_token = generate_csrf()
-    except Exception as e:
-        logger.warning(f"Error generating CSRF token: {str(e)}")
+    except Exception:
         csrf_token = ''
-
-    # Get service status with error handling
-    try:
-        service_status = get_service_status()
-        if not service_status:
-            # Fallback if service status is None or empty
-            service_status = {
-                'ocr_status': True,
-                'llm_status': True,
-                'storage_status': True,
-                'config_status': True,
-                'guide_storage_available': True,
-                'submission_storage_available': True
-            }
-    except Exception as e:
-        logger.warning(f"Error getting service status: {str(e)}")
-        service_status = {
-            'ocr_status': True,
-            'llm_status': True,
-            'storage_status': True,
-            'config_status': True,
-            'guide_storage_available': True,
-            'submission_storage_available': True
-        }
-
-    # Get storage stats with error handling
-    try:
-        storage_stats = get_storage_stats()
-        if not storage_stats:
-            storage_stats = {'total_size': 0, 'available_space': 0}
-    except Exception as e:
-        logger.warning(f"Error getting storage stats: {str(e)}")
-        storage_stats = {'total_size': 0, 'available_space': 0}
 
     return {
         'app_version': '2.0.0',
         'current_year': datetime.now().year,
-        'service_status': service_status,
-        'storage_stats': storage_stats,
+        'service_status': get_service_status(),
+        'storage_stats': get_storage_stats(),
         'loading_states': loading_states,
         'csrf_token': csrf_token
     }
@@ -487,7 +354,7 @@ def dashboard():
             flash('Please log in to access the dashboard.', 'error')
             return redirect(url_for('auth.login'))
 
-        # Calculate dashboard statistics from database (user-specific) - OPTIMIZED
+        # Calculate dashboard statistics from database (user-specific) with session fallback
         from src.database.models import Submission, MarkingGuide, GradingResult
 
         # Single optimized query to get all submission statistics
@@ -499,15 +366,26 @@ def dashboard():
         total_submissions = submission_stats.total if submission_stats else 0
         processed_submissions = submission_stats.processed if submission_stats else 0
 
-        # Quick check for guides (limit 1 for performance)
-        guide_uploaded = MarkingGuide.query.filter_by(user_id=current_user.id).limit(1).first() is not None
+        # If no database submissions, check session data as fallback
+        if total_submissions == 0:
+            session_submissions = session.get('submissions', [])
+            total_submissions = len(session_submissions)
+            processed_submissions = len([s for s in session_submissions if s.get('processed', False)])
+            logger.info(f"Using session data: {total_submissions} submissions, {processed_submissions} processed")
+
+        # Check if a guide is currently loaded in session (primary check)
+        guide_uploaded = session.get('guide_uploaded', False)
+
+        # Fallback: check if any guide exists in database
+        if not guide_uploaded:
+            guide_uploaded = MarkingGuide.query.filter_by(user_id=current_user.id).limit(1).first() is not None
 
         # Get recent submissions as activity (user-specific) - limited to 5
         recent_submissions = Submission.query.filter_by(user_id=current_user.id).order_by(
             Submission.created_at.desc()
         ).limit(5).all()
 
-        # Build activity list efficiently
+        # Build activity list efficiently from database
         recent_activity = [
             {
                 'type': 'submission_upload',
@@ -517,6 +395,12 @@ def dashboard():
             }
             for submission in recent_submissions
         ]
+
+        # If no database submissions, use session activity as fallback
+        if not recent_activity:
+            session_activity = session.get('recent_activity', [])
+            recent_activity = session_activity[:5]  # Limit to 5 most recent
+            logger.info(f"Using session activity: {len(recent_activity)} items")
 
         # Calculate average score from grading results (user-specific) - optimized
         avg_result = db.session.query(db.func.avg(GradingResult.percentage)).join(
@@ -560,6 +444,11 @@ def upload_guide():
     if request.method == 'GET':
         return render_template('upload_guide.html', page_title='Upload Marking Guide')
 
+    # CRITICAL DEBUG: This should appear in logs if route is being called
+    logger.info("=== UPLOAD GUIDE ROUTE CALLED ===")
+    logger.info(f"Request method: {request.method}")
+    logger.info(f"Request files: {list(request.files.keys())}")
+
     try:
         if 'guide_file' not in request.files:
             flash('No file selected.', 'error')
@@ -583,20 +472,63 @@ def upload_guide():
         file_path = os.path.join(temp_dir, f"guide_{uuid.uuid4().hex}_{filename}")
         file.save(file_path)
 
-        # Process guide (simplified for now)
+        # Process guide with LLM extraction
         try:
+            # Debug: Check if parse_marking_guide is available
+            logger.info(f"Debug: parse_marking_guide in globals: {'parse_marking_guide' in globals()}")
+            logger.info(f"Debug: parse_marking_guide function: {globals().get('parse_marking_guide', 'NOT FOUND')}")
+
             if 'parse_marking_guide' in globals():
+                logger.info("Debug: Calling parse_marking_guide function")
                 guide, error_message = parse_marking_guide(file_path)
                 if error_message:
                     flash(f'Error processing guide: {error_message}', 'error')
                     os.remove(file_path)
                     return redirect(request.url)
                 if guide:
+                    # Extract questions and marks using LLM service
+                    questions = []
+                    total_marks = 0
+                    extraction_method = 'none'
+
+                    try:
+                        # Debug logging for LLM extraction conditions
+                        logger.info(f"LLM extraction debug - mapping_service available: {mapping_service is not None}")
+                        logger.info(f"LLM extraction debug - guide.raw_content length: {len(guide.raw_content) if guide.raw_content else 0}")
+
+                        # Import and use the mapping service for LLM extraction
+                        if mapping_service and guide.raw_content:
+                            logger.info("Using LLM service to extract questions and marks from guide content")
+                            logger.info(f"Guide content preview: {guide.raw_content[:200]}...")
+
+                            extraction_result = mapping_service.extract_questions_and_total_marks(guide.raw_content)
+                            logger.info(f"LLM extraction result: {extraction_result}")
+
+                            if extraction_result:
+                                questions = extraction_result.get('questions', [])
+                                total_marks = extraction_result.get('total_marks', 0)
+                                extraction_method = extraction_result.get('extraction_method', 'llm')
+
+                                logger.info(f"LLM extraction successful: {len(questions)} questions, {total_marks} total marks")
+                            else:
+                                logger.warning("LLM extraction returned empty result")
+                        else:
+                            if not mapping_service:
+                                logger.warning("LLM service not available - mapping_service is None")
+                            if not guide.raw_content:
+                                logger.warning("No content to extract from - guide.raw_content is empty")
+
+                    except Exception as llm_error:
+                        logger.error(f"LLM extraction failed: {str(llm_error)}")
+                        logger.error(f"LLM extraction error traceback: ", exc_info=True)
+                        # Continue with empty questions/marks rather than failing completely
+
                     guide_data = {
                         'raw_content': guide.raw_content,
                         'filename': filename,
-                        'questions': [], # Placeholder, as parse_guide only extracts raw text
-                        'total_marks': 0, # Placeholder
+                        'questions': questions,
+                        'total_marks': total_marks,
+                        'extraction_method': extraction_method,
                         'processed_at': datetime.now().isoformat()
                     }
                 else:
@@ -605,10 +537,13 @@ def upload_guide():
                     return redirect(request.url)
             else:
                 # Create basic guide data structure if parse_marking_guide is not available
+                logger.warning("Debug: parse_marking_guide NOT found in globals - using fallback")
+                logger.warning(f"Debug: Available globals keys: {list(globals().keys())[:20]}...")  # Show first 20 keys
                 guide_data = {
                     'filename': filename,
                     'questions': [],
                     'total_marks': 0,
+                    'extraction_method': 'none',
                     'processed_at': datetime.now().isoformat()
                 }
         except Exception as parse_error:
@@ -631,18 +566,30 @@ def upload_guide():
                 os.remove(file_path)
                 return redirect(url_for('auth.login'))
 
+            # Create enhanced description with extraction information
+            questions_count = len(guide_data.get('questions', []))
+            total_marks = guide_data.get('total_marks', 0.0)
+            extraction_method = guide_data.get('extraction_method', 'none')
+
+            if extraction_method == 'llm' and questions_count > 0:
+                description = f"Uploaded guide: {filename} | LLM-extracted {questions_count} questions | Total marks: {total_marks}"
+            elif extraction_method == 'regex' and questions_count > 0:
+                description = f"Uploaded guide: {filename} | Regex-extracted {questions_count} questions | Total marks: {total_marks}"
+            else:
+                description = f"Uploaded guide: {filename} | No questions extracted"
+
             # Create marking guide record
             marking_guide = MarkingGuide(
                 user_id=current_user.id,
                 title=guide_data.get('title', filename),
-                description=f"Uploaded guide: {filename}",
+                description=description,
                 filename=filename,
                 file_path=file_path,  # Keep the file path for now
                 file_size=os.path.getsize(file_path),
                 file_type=filename.split('.')[-1].lower(),
                 content_text=guide_data.get('raw_content', ''),
                 questions=guide_data.get('questions', []),
-                total_marks=guide_data.get('total_marks', 0.0)
+                total_marks=total_marks
             )
 
             db.session.add(marking_guide)
@@ -704,9 +651,9 @@ def upload_submission():
             flash('Please upload a marking guide first.', 'warning')
             return redirect(url_for('upload_guide'))
 
-        files = request.files.getlist('submission_file')
+        files = request.files.getlist('file')
         if not files or all(f.filename == '' for f in files):
-            if request.is_xhr:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
                 return jsonify({'success': False, 'error': 'No files selected.'}), 400
             flash('No files selected.', 'error')
             return redirect(request.url)
@@ -723,7 +670,7 @@ def upload_submission():
                 continue
 
             if not allowed_file(file.filename):
-                if request.is_xhr:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
                     return jsonify({'success': False, 'error': f'File type not supported for {file.filename}. Skipping.'}), 400
                 flash(f'File type not supported for {file.filename}. Skipping.', 'error')
                 failed_count += 1
@@ -742,7 +689,7 @@ def upload_submission():
                     answers, raw_text, error = parse_student_submission(file_path)
 
                 if error:
-                    if request.is_xhr:
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
                         return jsonify({'success': False, 'error': f'Error processing {filename}: {error}'}), 400
                     flash(f'Error processing {filename}: {error}', 'error')
                     failed_count += 1
@@ -756,11 +703,52 @@ def upload_submission():
                 logger.info(f"Before storing in session - filename: {filename}, raw_text length: {len(raw_text) if raw_text else 0}, answers keys: {list(answers.keys()) if answers else 'None'}")
 
                 submission_id = str(uuid.uuid4())
-                if submission_storage:
-                    with open(file_path, 'rb') as f_content:
-                        file_content = f_content.read()
-                    submission_id = submission_storage.store_results(file_content, filename, answers, raw_text)
-                else:
+
+                # Try to store in database first, fallback to session
+                try:
+                    from src.database.models import Submission
+                    from flask import current_app
+
+                    current_user = get_current_user()
+                    if current_user:
+                        # Get file info for database storage
+                        file_size = get_file_size_mb(file_path) * 1024 * 1024  # Convert to bytes
+                        file_type = Path(filename).suffix.lower()
+
+                        # Store in database with all required fields
+                        submission = Submission(
+                            user_id=current_user.id,
+                            filename=filename,
+                            file_path=file_path,  # Store the path
+                            file_size=int(file_size),
+                            file_type=file_type,
+                            content_text=raw_text,
+                            answers=answers,
+                            processing_status='completed'
+                        )
+                        db.session.add(submission)
+                        db.session.commit()
+                        submission_id = str(submission.id)
+                        logger.info(f"Stored submission in database with ID: {submission_id}")
+
+                        # Also store in session for compatibility with existing code
+                        session[f'submission_{submission_id}'] = {
+                            'filename': filename,
+                            'answers': answers,
+                            'raw_text': raw_text
+                        }
+                    else:
+                        # Fallback to session storage only
+                        session[f'submission_{submission_id}'] = {
+                            'filename': filename,
+                            'answers': answers,
+                            'raw_text': raw_text
+                        }
+                        logger.info(f"Stored submission in session with ID: {submission_id}")
+
+                except Exception as storage_error:
+                    logger.warning(f"Database storage failed, using session: {str(storage_error)}")
+                    # Fallback to session storage
                     session[f'submission_{submission_id}'] = {
                         'filename': filename,
                         'answers': answers,
@@ -812,7 +800,7 @@ def upload_submission():
         session['submissions'] = submissions_data
         session.modified = True
 
-        if request.is_xhr:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
             if uploaded_count > 0 and failed_count == 0:
                 return jsonify({'success': True, 'message': f'{uploaded_count} submission(s) uploaded and processed successfully!', 'uploaded_count': uploaded_count, 'failed_count': failed_count})
             elif uploaded_count > 0 and failed_count > 0:
@@ -829,13 +817,13 @@ def upload_submission():
             return redirect(url_for('dashboard'))
 
     except RequestEntityTooLarge:
-        if request.is_xhr:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
             return jsonify({'success': False, 'error': f'File too large. Max size is {config.max_file_size_mb}MB.'}), 413
         flash(f'File too large. Max size is {config.max_file_size_mb}MB.', 'error')
         return redirect(request.url)
     except Exception as e:
         logger.error(f"Error uploading submission: {str(e)}")
-        if request.is_xhr:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
             return jsonify({'success': False, 'error': 'Internal server error'}), 500
         flash('Error uploading submission. Please try again.', 'error')
         return redirect(request.url)
@@ -843,9 +831,45 @@ def upload_submission():
 @app.route('/submissions')
 @login_required
 def view_submissions():
-    """View all submissions."""
+    """View all submissions from both database and session."""
     try:
-        submissions = session.get('submissions', [])
+        submissions = []
+
+        # Get current user
+        current_user = get_current_user()
+
+        # Get submissions from database first
+        if current_user:
+            try:
+                from src.database.models import Submission
+                db_submissions = Submission.query.filter_by(user_id=current_user.id).order_by(
+                    Submission.created_at.desc()
+                ).all()
+
+                for submission in db_submissions:
+                    submissions.append({
+                        'id': str(submission.id),
+                        'filename': submission.filename,
+                        'uploaded_at': submission.created_at.isoformat(),
+                        'processed': submission.processing_status == 'completed',
+                        'size_mb': round(submission.file_size / (1024 * 1024), 2) if submission.file_size else 0,
+                        'source': 'database'
+                    })
+                logger.info(f"Loaded {len(db_submissions)} submissions from database")
+            except Exception as db_error:
+                logger.warning(f"Error loading database submissions: {str(db_error)}")
+
+        # Get submissions from session as fallback or additional data
+        session_submissions = session.get('submissions', [])
+        for submission in session_submissions:
+            # Avoid duplicates by checking if ID already exists
+            existing_ids = [s['id'] for s in submissions]
+            if submission.get('id') not in existing_ids:
+                submission['source'] = 'session'
+                submissions.append(submission)
+
+        logger.info(f"Total submissions to display: {len(submissions)}")
+
         context = {
             'page_title': 'Submissions',
             'submissions': submissions
@@ -918,9 +942,10 @@ def view_results():
         flash('Error loading results. Please try again.', 'error')
         return redirect(url_for('dashboard'))
 
-@app.route('/api/process-mapping', methods=['POST'])
-def process_mapping():
-    """API endpoint to process answer mapping."""
+@app.route('/api/process-ai-grading', methods=['POST'])
+@csrf.exempt
+def process_ai_grading():
+    """API endpoint to process unified AI-powered mapping and grading with progress tracking."""
     try:
         if not session.get('guide_uploaded') or not session.get('submissions'):
             return jsonify({'error': 'Missing guide or submissions'}), 400
@@ -932,112 +957,134 @@ def process_mapping():
         if not guide_id or not submissions:
             return jsonify({'error': 'Missing guide or submissions data'}), 400
 
-        # Process mapping using real service if available
-        mapping_results = {}
-        successful_mappings = 0
-        failed_mappings = 0
+        # Check if services are available
+        if not mapping_service:
+            return jsonify({'error': 'AI services not available'}), 503
 
-        if mapping_service:
+        # Process AI grading (mapping + grading combined)
+        grading_results = {}
+        successful_gradings = 0
+        failed_gradings = 0
+
+        # Get guide content from multiple sources
+        guide_content = session.get('guide_content', '')
+        if not guide_content:
+            guide_content = session.get('guide_raw_content', '')
+        if not guide_content and guide_id:
             try:
-                # Get guide content from database or session
-                guide_data = None
-                try:
-                    from src.database.models import MarkingGuide
-                    guide = MarkingGuide.query.get(guide_id)
-                    if guide:
-                        guide_data = {
-                            'questions': guide.questions or [],
-                            'content': guide.content_text,
-                            'total_marks': guide.total_marks
-                        }
-                except Exception:
-                    # Fallback to session data
-                    guide_data = session.get('guide_data', {})
-
-                if not guide_data:
-                    return jsonify({'error': 'Guide data not found'}), 404
-
-                # Process each submission
-                for submission in submissions:
-                    submission_id = submission.get('id')
-                    if not submission_id:
-                        continue
-
-                    try:
-                        # Get submission content from database or session
-                        submission_data = None
-                        try:
-                            from src.database.models import Submission
-                            db_submission = Submission.query.get(int(submission_id))
-                            if db_submission:
-                                submission_data = {
-                                    'answers': db_submission.answers,
-                                    'content': db_submission.content_text,
-                                    'filename': db_submission.filename
-                                }
-                        except (ValueError, TypeError):
-                            # Try session storage as fallback
-                            session_key = f'submission_{submission_id}'
-                            if session_key in session:
-                                submission_data = session[session_key]
-
-                        if not submission_data:
-                            failed_mappings += 1
-                            continue
-
-                        # Map answers using the mapping service
-                        mappings, mapping_error = mapping_service.map_answers(
-                            submission_data.get('answers', {}),
-                            guide_data.get('questions', [])
-                        )
-
-                        if mapping_error:
-                            logger.error(f"Mapping failed for submission {submission_id}: {mapping_error}")
-                            failed_mappings += 1
-                            continue
-
-                        # Store mapping results
-                        mapping_results[submission_id] = {
-                            'filename': submission.get('filename', 'Unknown'),
-                            'mappings': mappings,
-                            'status': 'completed',
-                            'timestamp': datetime.now().isoformat()
-                        }
-                        successful_mappings += 1
-
-                    except Exception as e:
-                        logger.error(f"Error mapping submission {submission_id}: {str(e)}")
-                        failed_mappings += 1
-
+                guide = MarkingGuide.query.get(guide_id)
+                if guide:
+                    guide_content = guide.content_text or ''
             except Exception as e:
-                logger.error(f"Error in mapping process: {str(e)}")
-                return jsonify({'error': f'Mapping process error: {str(e)}'}), 500
-        else:
-            # Fallback to basic mapping if services not available
-            for submission in submissions:
-                submission_id = submission.get('id')
-                if not submission_id:
+                logger.warning(f"Could not retrieve guide from database: {str(e)}")
+
+        if not guide_content:
+            return jsonify({'error': 'Guide content not available'}), 400
+
+        # Process each submission with combined AI mapping and grading
+        for submission in submissions:
+            submission_id = submission.get('id')
+            if not submission_id:
+                continue
+
+            try:
+                # Get submission data from session or database
+                submission_data = session.get(f'submission_{submission_id}', {})
+
+                if not submission_data:
+                    try:
+                        db_submission = Submission.query.get(submission_id)
+                        if db_submission:
+                            submission_data = {
+                                'filename': db_submission.filename,
+                                'content': db_submission.content_text,
+                                'answers': db_submission.answers
+                            }
+                    except Exception as e:
+                        logger.warning(f"Could not retrieve submission from database: {str(e)}")
+
+                if not submission_data:
+                    logger.warning(f"No data found for submission {submission_id}")
+                    failed_gradings += 1
                     continue
 
-                # Create basic mapping structure
-                mapping_results[submission_id] = {
-                    'filename': submission.get('filename', 'Unknown'),
-                    'mappings': [],  # Empty mappings
-                    'status': 'completed',
-                    'timestamp': datetime.now().isoformat()
-                }
-                successful_mappings += 1
+                # Get submission content
+                submission_content = submission_data.get('content', '')
+                if not submission_content and submission_data.get('answers'):
+                    submission_content = '\n'.join([
+                        f"Answer {i+1}: {answer}"
+                        for i, answer in enumerate(submission_data.get('answers', {}).values())
+                    ])
 
-        # Store mapping results in session
-        session['mapping_completed'] = True
-        session['mapping_results'] = mapping_results
-        session['last_mapping_result'] = str(uuid.uuid4())
+                if not submission_content:
+                    logger.warning(f"No content found for submission {submission_id}")
+                    failed_gradings += 1
+                    continue
+
+                # Use grading service for combined mapping and grading
+                try:
+                    logger.info(f"Starting AI processing for submission {submission_id}")
+
+                    # The grading service internally handles mapping and grading
+                    grading_result, grading_error = grading_service.grade_submission(
+                        guide_content,
+                        submission_content
+                    )
+
+                    if grading_error:
+                        logger.error(f"AI grading failed for submission {submission_id}: {grading_error}")
+                        failed_gradings += 1
+                        continue
+
+                    if grading_result and grading_result.get('status') == 'success':
+                        # Store comprehensive grading results
+                        grading_results[submission_id] = {
+                            'filename': submission.get('filename', 'Unknown'),
+                            'status': 'completed',
+                            'timestamp': datetime.now().isoformat(),
+                            'score': grading_result.get('score', 0),
+                            'percentage': grading_result.get('percentage', 0),
+                            'max_score': grading_result.get('max_score', 0),
+                            'feedback': grading_result.get('feedback', ''),
+                            'criteria_scores': grading_result.get('criteria_scores', []),
+                            'mappings': grading_result.get('mappings', []),
+                            'metadata': grading_result.get('metadata', {})
+                        }
+                        successful_gradings += 1
+                        logger.info(f"AI processing completed for {submission_id}: {grading_result.get('percentage', 0)}%")
+                    else:
+                        logger.error(f"Invalid grading result for submission {submission_id}")
+                        failed_gradings += 1
+
+                except Exception as e:
+                    logger.error(f"Error in AI processing for submission {submission_id}: {str(e)}")
+                    failed_gradings += 1
+                    continue
+
+            except Exception as e:
+                logger.error(f"Error processing submission {submission_id}: {str(e)}")
+                failed_gradings += 1
+                continue
+
+        # Store results in session
+        session['grading_results'] = grading_results
+        session['last_grading_result'] = {
+            'successful': successful_gradings,
+            'failed': failed_gradings,
+            'total': len(submissions),
+            'timestamp': datetime.now().isoformat()
+        }
+
+        # Calculate overall statistics
+        total_score = sum(result.get('score', 0) for result in grading_results.values())
+        total_max_score = sum(result.get('max_score', 0) for result in grading_results.values())
+        average_percentage = sum(result.get('percentage', 0) for result in grading_results.values()) / len(grading_results) if grading_results else 0
 
         # Add to recent activity
         activity = session.get('recent_activity', [])
         activity.insert(0, {
-            'type': 'mapping_complete',
-            'message': f'Answer mapping completed: {successful_mappings} successful, {failed_mappings} failed',
+            'type': 'ai_grading_complete',
+            'message': f'AI processing completed: {successful_gradings} successful, {failed_gradings} failed',
             'timestamp': datetime.now().isoformat(),
             'icon': 'check'
         })
@@ -1045,14 +1092,270 @@ def process_mapping():
 
         return jsonify({
             'success': True,
-            'message': f'Mapping completed: {successful_mappings} successful, {failed_mappings} failed',
-            'mapped_count': successful_mappings,
-            'failed_count': failed_mappings
+            'message': f'AI processing completed: {successful_gradings} successful, {failed_gradings} failed',
+            'results': grading_results,
+            'summary': {
+                'successful': successful_gradings,
+                'failed': failed_gradings,
+                'total': len(submissions),
+                'total_score': total_score,
+                'total_max_score': total_max_score,
+                'average_percentage': round(average_percentage, 1)
+            }
         })
 
     except Exception as e:
-        logger.error(f"Error processing mapping: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
+        logger.error(f"Error in process_ai_grading: {str(e)}")
+        return jsonify({'error': f'AI processing failed: {str(e)}'}), 500
+
+
+@app.route('/api/test-unified', methods=['GET', 'POST'])
+@csrf.exempt
+def test_unified_api():
+    """Test endpoint to verify unified AI API is working."""
+    try:
+        # Get detailed session information
+        guide_uploaded = session.get('guide_uploaded', False)
+        submissions = session.get('submissions', [])
+        guide_data = session.get('guide_data')
+        guide_content = session.get('guide_raw_content', '')
+        guide_filename = session.get('guide_filename', '')
+
+        # Check what data is available
+        has_guide_content = bool(guide_content or (guide_data and guide_data.get('questions')))
+        has_submissions = len(submissions) > 0
+
+        return jsonify({
+            'success': True,
+            'message': 'Unified AI API is working',
+            'session_data': {
+                'guide_uploaded': guide_uploaded,
+                'submissions_count': len(submissions),
+                'guide_id': session.get('guide_id'),
+                'guide_filename': guide_filename,
+                'has_guide_content': has_guide_content,
+                'has_submissions': has_submissions,
+                'guide_content_length': len(guide_content),
+                'guide_data_available': guide_data is not None
+            },
+            'ready_for_processing': has_guide_content and has_submissions,
+            'missing_requirements': [
+                'marking guide' if not has_guide_content else None,
+                'submissions' if not has_submissions else None
+            ]
+        })
+    except Exception as e:
+        logger.error(f"Error in test_unified_api: {str(e)}")
+        return jsonify({'error': f'Test failed: {str(e)}'}), 500
+
+
+@app.route('/api/process-unified-ai', methods=['POST'])
+@csrf.exempt
+def process_unified_ai():
+    """API endpoint for unified AI processing with real-time progress tracking."""
+    try:
+        logger.info("Starting unified AI processing endpoint")
+
+        # Check session data with detailed logging
+        guide_uploaded = session.get('guide_uploaded', False)
+        submissions = session.get('submissions', [])
+        guide_data = session.get('guide_data')
+        guide_content = session.get('guide_raw_content', '')
+
+        logger.info(f"Session data check:")
+        logger.info(f"  - guide_uploaded: {guide_uploaded}")
+        logger.info(f"  - submissions count: {len(submissions)}")
+        logger.info(f"  - guide_data available: {guide_data is not None}")
+        logger.info(f"  - guide_content length: {len(guide_content)}")
+
+        # Check if we have the minimum required data
+        if not guide_uploaded and not guide_data:
+            logger.warning("No guide uploaded or available in session")
+            return jsonify({
+                'error': 'No marking guide available. Please upload a marking guide first.',
+                'details': 'guide_not_uploaded'
+            }), 400
+
+        if not submissions or len(submissions) == 0:
+            logger.warning("No submissions available in session")
+            return jsonify({
+                'error': 'No submissions available. Please upload submissions first.',
+                'details': 'no_submissions'
+            }), 400
+
+        # Get guide and submissions from session or storage
+        guide_id = session.get('guide_id')
+        submissions = session.get('submissions', [])
+
+        if not guide_id or not submissions:
+            return jsonify({'error': 'Missing guide or submissions data'}), 400
+
+        # Check if services are available
+        if not mapping_service:
+            return jsonify({'error': 'AI services not available'}), 503
+
+        # Get guide content with fallbacks
+        if not guide_content:
+            # Try alternative sources for guide content
+            guide_content = session.get('guide_content', '')
+            if not guide_content and guide_data:
+                # If we have guide_data but no raw content, try to reconstruct
+                questions = guide_data.get('questions', [])
+                if questions:
+                    guide_content = "\n".join([f"Question {i+1}: {q.get('text', q)}" for i, q in enumerate(questions)])
+                    logger.info(f"Reconstructed guide content from questions: {len(guide_content)} chars")
+
+        if not guide_content:
+            return jsonify({
+                'error': 'Guide content not available. Please re-upload your marking guide.',
+                'details': 'guide_content_missing'
+            }), 400
+
+        logger.info(f"Starting unified AI processing for {len(submissions)} submissions")
+
+        # Initialize unified AI service with error handling
+        try:
+            logger.info("Importing unified AI services...")
+            from src.services.unified_ai_service import UnifiedAIService
+            from src.services.progress_tracker import progress_tracker
+            logger.info("Services imported successfully")
+
+            unified_ai_service = UnifiedAIService(
+                mapping_service=mapping_service,
+                grading_service=grading_service if 'grading_service' in globals() else None,
+                llm_service=llm_service if 'llm_service' in globals() else None
+            )
+            logger.info("Unified AI service created successfully")
+        except ImportError as e:
+            logger.error(f"Failed to import unified AI services: {str(e)}")
+            return jsonify({'error': f'Service import failed: {str(e)}'}), 500
+        except Exception as e:
+            logger.error(f"Failed to create unified AI service: {str(e)}")
+            return jsonify({'error': f'Service creation failed: {str(e)}'}), 500
+
+        # Create progress tracking session with error handling
+        try:
+            session_id = session.get('session_id', f"session_{int(time.time())}")
+            logger.info(f"Creating progress session for {len(submissions)} submissions")
+            progress_id = progress_tracker.create_session(session_id, len(submissions))
+            logger.info(f"Progress session created: {progress_id}")
+
+            # Store progress ID in session for frontend polling
+            session['current_progress_id'] = progress_id
+
+            # Create progress callback
+            progress_callback = progress_tracker.create_progress_callback(progress_id)
+            logger.info("Progress callback created")
+        except Exception as e:
+            logger.error(f"Failed to create progress tracking: {str(e)}")
+            return jsonify({'error': f'Progress tracking failed: {str(e)}'}), 500
+
+        # Process with unified AI service with detailed error handling
+        try:
+            logger.info("Starting unified AI processing...")
+            result, error = unified_ai_service.process_unified_ai_grading(
+                marking_guide_content=guide_content,
+                submissions=submissions,
+                progress_callback=progress_callback
+            )
+            logger.info("Unified AI processing completed")
+
+            if error:
+                logger.error(f"Unified AI processing returned error: {error}")
+                progress_tracker.complete_session(progress_id, success=False, message=error)
+                return jsonify({'error': error}), 500
+        except Exception as e:
+            logger.error(f"Exception during unified AI processing: {str(e)}")
+            progress_tracker.complete_session(progress_id, success=False, message=str(e))
+            return jsonify({'error': f'Processing failed: {str(e)}'}), 500
+
+        # Mark progress as completed
+        progress_tracker.complete_session(progress_id, success=True, message="Processing completed successfully")
+
+        # Extract results for session storage
+        grading_results = result.get('results', [])
+        summary = result.get('summary', {})
+
+        # Update session with results
+        session['grading_results'] = grading_results
+        session['last_grading_summary'] = summary
+
+        # Update recent activity
+        activity = session.get('recent_activity', [])
+        activity.insert(0, {
+            'action': 'Unified AI Processing',
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'details': f'Processed {len(submissions)} submissions in {summary.get("processing_time", 0):.1f}s'
+        })
+        session['recent_activity'] = activity[:10]
+
+        logger.info(f"Unified AI processing completed: {summary.get('average_percentage', 0):.1f}% average")
+
+        return jsonify({
+            'success': True,
+            'message': result.get('message', 'Processing completed'),
+            'results': grading_results,
+            'summary': summary,
+            'progress_id': progress_id,
+            'metadata': result.get('metadata', {})
+        })
+
+    except Exception as e:
+        logger.error(f"Error in process_unified_ai: {str(e)}")
+        return jsonify({'error': f'Unified AI processing failed: {str(e)}'}), 500
+
+
+@app.route('/api/progress/<progress_id>', methods=['GET'])
+@csrf.exempt
+def get_progress(progress_id):
+    """API endpoint to get real-time progress updates."""
+    try:
+        from src.services.progress_tracker import progress_tracker
+
+        progress_update = progress_tracker.get_progress(progress_id)
+
+        if not progress_update:
+            return jsonify({'error': 'Progress ID not found'}), 404
+
+        # Convert progress update to dictionary
+        from dataclasses import asdict
+        progress_data = asdict(progress_update)
+
+        return jsonify({
+            'success': True,
+            'progress': progress_data
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting progress: {str(e)}")
+        return jsonify({'error': f'Failed to get progress: {str(e)}'}), 500
+
+
+@app.route('/api/progress/<progress_id>/history', methods=['GET'])
+@csrf.exempt
+def get_progress_history(progress_id):
+    """API endpoint to get full progress history."""
+    try:
+        from src.services.progress_tracker import progress_tracker
+
+        history = progress_tracker.get_progress_history(progress_id)
+
+        if not history:
+            return jsonify({'error': 'Progress ID not found'}), 404
+
+        # Convert progress updates to dictionaries
+        from dataclasses import asdict
+        history_data = [asdict(update) for update in history]
+
+        return jsonify({
+            'success': True,
+            'history': history_data,
+            'total_updates': len(history_data)
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting progress history: {str(e)}")
+        return jsonify({'error': f'Failed to get progress history: {str(e)}'}), 500
 
 def get_letter_grade(score):
     """Convert numeric score to letter grade."""
@@ -1070,109 +1373,19 @@ def get_letter_grade(score):
     elif score >= 60: return "D-"
     else: return "F"
 
+@app.route('/api/process-mapping', methods=['POST'])
+@csrf.exempt
+def process_mapping():
+    """Legacy API endpoint - redirects to AI processing."""
+    logger.info("Legacy mapping endpoint called - redirecting to AI processing")
+    return process_ai_grading()
+
 @app.route('/api/process-grading', methods=['POST'])
+@csrf.exempt
 def process_grading():
-    """API endpoint to process grading using real backend services."""
-    try:
-        if not session.get('last_mapping_result'):
-            return jsonify({'error': 'No mapping result available'}), 400
-
-        if not grading_service:
-            return jsonify({'error': 'Grading service not available'}), 503
-
-        mapping_results = session.get('mapping_results', {})
-        guide_content = session.get('guide_content', '')
-
-        if not mapping_results:
-            return jsonify({'error': 'No mapping results available'}), 400
-
-        # Process grading for each mapped submission using real service
-        grading_results = {}
-        successful_gradings = 0
-        failed_gradings = 0
-        total_scores = []
-
-        for submission_id, mapping_data in mapping_results.items():
-            try:
-                # Use real grading service
-                grading_result, grading_error = grading_service.grade_submission(
-                    mapping_data.get('mappings', []),
-                    guide_content
-                )
-
-                if grading_error:
-                    logger.error(f"Grading failed for submission {submission_id}: {grading_error}")
-                    failed_gradings += 1
-                    continue
-
-                score = grading_result.get('total_score', 0)
-                total_scores.append(score)
-
-                grading_results[submission_id] = {
-                    'filename': mapping_data.get('filename'),
-                    'status': 'completed',
-                    'score': score,
-                    'letter_grade': get_letter_grade(score),
-                    'feedback': grading_result.get('feedback', ''),
-                    'strengths': grading_result.get('strengths', []),
-                    'weaknesses': grading_result.get('weaknesses', []),
-                    'question_scores': grading_result.get('question_scores', []),
-                    'timestamp': datetime.now().isoformat()
-                }
-                successful_gradings += 1
-
-            except Exception as e:
-                logger.error(f"Error grading submission {submission_id}: {str(e)}")
-                failed_gradings += 1
-
-        # Calculate batch statistics
-        average_score = sum(total_scores) / len(total_scores) if total_scores else 0
-        highest_score = max(total_scores) if total_scores else 0
-        lowest_score = min(total_scores) if total_scores else 0
-
-        # Grade distribution
-        grade_distribution = {'A': 0, 'B': 0, 'C': 0, 'D': 0, 'F': 0}
-        for score in total_scores:
-            letter = get_letter_grade(score)[0]  # Get first character (A, B, C, D, F)
-            if letter in grade_distribution:
-                grade_distribution[letter] += 1
-
-        # Store grading results
-        session['grading_completed'] = True
-        session['grading_results'] = grading_results
-        session['last_grading_result'] = str(uuid.uuid4())
-        session['last_score'] = average_score
-
-        # Add to recent activity
-        activity = session.get('recent_activity', [])
-        activity.insert(0, {
-            'type': 'grading_complete',
-            'message': f'Grading completed: {successful_gradings} successful (avg: {average_score:.1f}%)',
-            'timestamp': datetime.now().isoformat(),
-            'icon': 'star'
-        })
-        session['recent_activity'] = activity[:10]
-
-        return jsonify({
-            'success': True,
-            'message': f'Grading completed: {successful_gradings} successful (avg: {average_score:.1f}%)',
-            'graded_count': successful_gradings,
-            'failed_count': failed_gradings,
-            'average_score': average_score,
-            'batch_summary': {
-                'total_submissions': len(mapping_results),
-                'graded_count': successful_gradings,
-                'average_score': average_score,
-                'highest_score': highest_score,
-                'lowest_score': lowest_score,
-                'score_distribution': grade_distribution
-            },
-            'results': grading_results
-        })
-
-    except Exception as e:
-        logger.error(f"Error processing grading: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
+    """Legacy API endpoint - redirects to AI processing."""
+    logger.info("Legacy grading endpoint called - redirecting to AI processing")
+    return process_ai_grading()
 
 # Additional routes for enhanced functionality
 @app.route('/marking-guides')
@@ -1268,6 +1481,31 @@ def marking_guides():
                 guide['title'] = guide.get('filename', 'Untitled Guide')
                 guide['name'] = guide['title']
 
+            # Sanitize text fields to prevent JSON parsing issues
+            def sanitize_text(text):
+                if not text:
+                    return text
+                # Remove control characters that can break JSON
+                import re
+                # Remove control characters except tab, newline, and carriage return
+                text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', str(text))
+                return text
+
+            # Sanitize all text fields
+            guide['title'] = sanitize_text(guide.get('title', ''))
+            guide['name'] = sanitize_text(guide.get('name', ''))
+            guide['filename'] = sanitize_text(guide.get('filename', ''))
+            guide['description'] = sanitize_text(guide.get('description', ''))
+            guide['created_by'] = sanitize_text(guide.get('created_by', ''))
+
+            # Sanitize questions if they exist
+            if guide.get('questions'):
+                for question in guide['questions']:
+                    if isinstance(question, dict):
+                        for key, value in question.items():
+                            if isinstance(value, str):
+                                question[key] = sanitize_text(value)
+
             valid_guides.append(guide)
 
         guides = valid_guides  # Use only valid guides
@@ -1304,10 +1542,49 @@ def create_guide():
         flash('Error loading create guide page. Please try again.', 'error')
         return redirect(url_for('dashboard'))
 
+@app.route('/guide/<guide_id>')
+@login_required
+def view_guide_content(guide_id):
+    """View detailed content of a specific marking guide"""
+    try:
+        # Get current user
+        current_user = get_current_user()
+        if not current_user:
+            flash('Please log in to view guides', 'error')
+            return redirect(url_for('auth.login'))
+
+        # Get guide from database
+        guide = MarkingGuide.query.filter_by(
+            id=guide_id,
+            user_id=current_user.id
+        ).first()
+
+        if not guide:
+            flash('Marking guide not found', 'error')
+            return redirect(url_for('marking_guides'))
+
+        # Prepare context for template
+        context = {
+            'page_title': f'Guide: {guide.title}',
+            'guide': guide,
+            'filename': guide.filename,
+            'raw_content': guide.content_text or 'No content available',
+            'questions': guide.questions or [],
+            'total_marks': guide.total_marks or 0,
+            'created_at': guide.created_at.isoformat() if guide.created_at else None
+        }
+
+        return render_template('guide_content.html', **context)
+
+    except Exception as e:
+        logger.error(f"Error viewing guide content: {str(e)}")
+        flash('Error loading guide content. Please try again.', 'error')
+        return redirect(url_for('marking_guides'))
+
 @app.route('/use_guide/<guide_id>')
 @login_required
 def use_guide(guide_id):
-    """Set active marking guide for the session"""
+    """Set active marking guide for the session and enable dashboard components"""
     try:
         # Get current user
         current_user = get_current_user()
@@ -1320,30 +1597,58 @@ def use_guide(guide_id):
             id=guide_id,
             user_id=current_user.id
         ).first()
-        
+
         if not guide:
-            flash('Marking guide not found', 'danger')
+            flash('Marking guide not found', 'error')
             return redirect(url_for('marking_guides'))
-            
-        # Set session variable with current guide
+
+        # Set comprehensive session data for dashboard activation
+        session['guide_id'] = guide.id
+        session['guide_uploaded'] = True  # Critical for dashboard component activation
+        session['guide_filename'] = guide.filename or guide.title
+        session['guide_content'] = guide.content_text or ''
+        session['guide_raw_content'] = guide.content_text or ''
+
+        # Set guide data structure for AI processing
+        session['guide_data'] = {
+            'filename': guide.filename or guide.title,
+            'questions': guide.questions or [],
+            'total_marks': guide.total_marks or 0,
+            'extraction_method': 'database',
+            'processed_at': guide.created_at.isoformat() if guide.created_at else datetime.now().isoformat()
+        }
+
+        # Set current guide for backward compatibility
         session['current_guide'] = {
             'id': guide.id,
             'name': guide.title,
             'description': guide.description,
             'total_marks': guide.total_marks
         }
+
         session.modified = True
-        
-        flash(f'Active guide set to: {guide.title}', 'success')
-        return redirect(url_for('marking_guides'))
-        
+
+        # Add to recent activity
+        activity = session.get('recent_activity', [])
+        activity.insert(0, {
+            'type': 'guide_loaded',
+            'message': f'Loaded marking guide: {guide.title}',
+            'timestamp': datetime.now().isoformat(),
+            'icon': 'check'
+        })
+        session['recent_activity'] = activity[:10]
+
+        logger.info(f"Guide loaded successfully: {guide.title} (ID: {guide.id})")
+        flash(f'Marking guide "{guide.title}" loaded successfully! Dashboard components are now active.', 'success')
+        return redirect(url_for('dashboard'))
+
     except SQLAlchemyError as e:
-        current_app.logger.error(f"Database error in use_guide: {str(e)}")
-        flash('Error accessing guide database', 'danger')
+        logger.error(f"Database error in use_guide: {str(e)}")
+        flash('Error accessing guide database', 'error')
         return redirect(url_for('marking_guides'))
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in use_guide: {str(e)}")
-        flash('An unexpected error occurred', 'danger')
+        logger.error(f"Unexpected error in use_guide: {str(e)}")
+        flash('An unexpected error occurred', 'error')
         return redirect(url_for('marking_guides'))
 
 @app.route('/clear-session-guide', methods=['GET', 'POST'])
@@ -1449,6 +1754,7 @@ def settings():
         return redirect(url_for('dashboard'))
 
 @app.route('/api/export-results')
+@csrf.exempt
 def export_results():
     """API endpoint to export grading results."""
     try:
@@ -1567,6 +1873,7 @@ def delete_guide(guide_id):
         return redirect(url_for('marking_guides'))
 
 @app.route('/api/delete-guide', methods=['POST'])
+@csrf.exempt
 @login_required
 def api_delete_guide():
     """AJAX endpoint to delete a marking guide."""
@@ -1646,6 +1953,7 @@ def api_delete_guide():
         }), 500
 
 @app.route('/api/service-status')
+@csrf.exempt
 def api_service_status():
     """API endpoint to check service status asynchronously."""
     try:
@@ -1669,6 +1977,7 @@ def api_service_status():
         }), 500
 
 @app.route('/api/delete-submission', methods=['POST'])
+@csrf.exempt
 def delete_submission():
     """API endpoint to delete a submission."""
     try:
@@ -1695,6 +2004,62 @@ def delete_submission():
         logger.error(f"Error deleting submission: {str(e)}")
         return jsonify({'success': False, 'message': 'Internal server error.'}), 500
 
+
+@app.route('/api/clear-cache', methods=['POST'])
+@csrf.exempt
+def clear_cache():
+    """API endpoint to clear application cache."""
+    try:
+        from utils.cache import cache_clear, cache_stats
+
+        # Get cache stats before clearing
+        stats_before = cache_stats()
+
+        # Clear the cache
+        cache_clear()
+
+        # Get stats after clearing
+        stats_after = cache_stats()
+
+        logger.info(f"Cache cleared successfully. Entries before: {stats_before.get('total_entries', 0)}, after: {stats_after.get('total_entries', 0)}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Cache cleared successfully',
+            'stats': {
+                'entries_cleared': stats_before.get('total_entries', 0),
+                'cache_size_before': stats_before.get('total_entries', 0),
+                'cache_size_after': stats_after.get('total_entries', 0)
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error clearing cache: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error clearing cache: {str(e)}'
+        }), 500
+
+
+@app.route('/api/cache/stats', methods=['GET'])
+def get_cache_stats():
+    """API endpoint to get cache statistics."""
+    try:
+        from utils.cache import cache_stats
+
+        stats = cache_stats()
+
+        return jsonify({
+            'status': 'ok',
+            'cache_stats': stats
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting cache stats: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error getting cache stats: {str(e)}'
+        }), 500
 
 
 if __name__ == '__main__':

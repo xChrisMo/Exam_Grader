@@ -7,10 +7,6 @@ This package provides functionality for:
 - Generating detailed feedback and scores
 """
 
-import os
-from pathlib import Path
-from typing import Optional
-
 from dotenv import load_dotenv
 
 __version__ = "0.1.0"
@@ -20,7 +16,6 @@ __license__ = "MIT"
 from src.config.config_manager import ConfigManager
 from src.parsing.parse_submission import parse_student_submission
 from src.services.ocr_service import OCRService
-from utils.logger import logger
 
 # Load environment variables
 load_dotenv(".env", override=True)

@@ -1,8 +1,7 @@
 """
 File Cleanup Service for Exam Grader Application.
 
-This module provides automated cleanup of temporary files, old uploads,
-and orphaned files to prevent disk space issues and maintain security.
+Provides automated cleanup of temporary files, old uploads, and orphaned files.
 """
 
 import os
@@ -11,7 +10,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 from src.database.models import MarkingGuide, Submission, db
 from utils.logger import logger
@@ -151,7 +150,14 @@ class FileCleanupService:
 
         total_stats.duration_seconds = time.time() - start_time
 
-        logger.info(f"Comprehensive cleanup completed: {total_stats.to_dict()}")
+        # Only log if there's something meaningful to report
+        if total_stats.files_deleted > 0 or total_stats.errors > 0:
+            logger.info(f"Cleanup completed: {total_stats.files_deleted} files deleted, "
+                       f"{total_stats.bytes_freed_mb:.1f}MB freed"
+                       f"{', ' + str(total_stats.errors) + ' errors' if total_stats.errors > 0 else ''}")
+        else:
+            logger.debug(f"Cleanup completed: no files to clean (scanned {total_stats.files_scanned} files)")
+
         return total_stats
 
     def cleanup_temp_files(self) -> CleanupStats:

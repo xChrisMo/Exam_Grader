@@ -44,12 +44,12 @@ class DatabaseUtils:
             logger.info("Default admin user created successfully")
             logger.warning(f"IMPORTANT: Default admin password is: {random_password}")
             logger.warning("Please change this password immediately after first login!")
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print("IMPORTANT SECURITY NOTICE:")
-            print(f"Default admin username: admin")
+            print("Default admin username: admin")
             print(f"Default admin password: {random_password}")
             print("Please change this password immediately after first login!")
-            print(f"{'='*60}\n")
+            print(f"{'=' * 60}\n")
             return True
 
         except Exception as e:

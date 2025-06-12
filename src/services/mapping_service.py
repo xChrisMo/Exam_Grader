@@ -6,6 +6,7 @@ questions and answers in student submissions.
 
 import json
 import re
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -132,23 +133,54 @@ class MappingService:
             # Log the response processing
             logger.info("Processing LLM response...")
 
-            # Parse the response
+            # Validate response structure
+            if not hasattr(response, 'choices') or len(response.choices) == 0:
+                logger.error("No response choices received from LLM")
+                return "questions", 0.5
+
+            # Get the response content
             result = response.choices[0].message.content
-            parsed = json.loads(result)
 
-            guide_type = parsed.get("guide_type", "questions")
-            confidence = parsed.get("confidence", 0.5)
-            reasoning = parsed.get("reasoning", "No reasoning provided")
+            # Validate response content
+            if not result or not result.strip():
+                logger.error("Empty response received from LLM")
+                return "questions", 0.5
 
-            # Log completion
-            logger.info(f"Guide type determined: {guide_type}")
+            logger.debug(f"Raw LLM response: {result[:200]}...")
 
-            logger.info(
-                f"Determined guide type: {guide_type} (confidence: {confidence})"
-            )
-            logger.info(f"Reasoning: {reasoning}")
+            # Parse the response with error handling
+            try:
+                # Clean up the response for models that don't properly format JSON
+                json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                if json_match:
+                    result = json_match.group(0)
 
-            return guide_type, confidence
+                parsed = json.loads(result)
+
+                guide_type = parsed.get("guide_type", "questions")
+                confidence = parsed.get("confidence", 0.5)
+                reasoning = parsed.get("reasoning", "No reasoning provided")
+
+                # Validate guide_type
+                if guide_type not in ["questions", "answers"]:
+                    logger.warning(f"Invalid guide_type '{guide_type}', defaulting to 'questions'")
+                    guide_type = "questions"
+
+                # Validate confidence
+                if not isinstance(confidence, (int, float)) or confidence < 0 or confidence > 1:
+                    logger.warning(f"Invalid confidence '{confidence}', defaulting to 0.5")
+                    confidence = 0.5
+
+                # Log completion
+                logger.info(f"Guide type determined: {guide_type} (confidence: {confidence})")
+                logger.info(f"Reasoning: {reasoning}")
+
+                return guide_type, confidence
+
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON parsing failed: {str(e)}")
+                logger.error(f"Raw response that failed to parse: {result}")
+                return "questions", 0.5
 
         except Exception as e:
             logger.error(f"Error determining guide type: {str(e)}")
@@ -420,80 +452,166 @@ class MappingService:
                     "Using LLM to extract questions and total marks from marking guide..."
                 )
 
-                # Enhanced system prompt specifically for marking guide question extraction
+                # Comprehensive multi-disciplinary question extraction system
                 system_prompt = """
-                You are an expert at analyzing marking guides for educational assessments. Your task is to extract ALL questions and their mark allocations from a marking guide document.
+                You are an expert educational assessment analyst with deep knowledge across all academic disciplines. Your task is to intelligently identify questions in marking guides using sophisticated reasoning, regardless of format, discipline, or question type.
 
-                CRITICAL REQUIREMENTS:
-                1. Extract EVERY question from the document, including sub-questions
-                2. Find the exact mark allocation for each question/sub-question
-                3. Calculate the total marks for the entire assessment
-                4. Preserve the original question numbering and structure
+                CORE REASONING FRAMEWORK:
 
-                Question Identification Guidelines:
-                - Look for patterns like: "QUESTION 1", "Question 1:", "Q1", "1.", "1)", etc.
-                - Include sub-questions like: "a)", "i)", "1.1", "Part A", etc.
-                - Questions may span multiple paragraphs
-                - Some questions may have multiple parts with individual mark allocations
+                1. QUESTION IDENTIFICATION PRINCIPLE:
+                   A QUESTION is any task, prompt, or instruction that requires a student to produce a response, demonstrate knowledge, solve a problem, or complete an assignment.
 
-                Mark Allocation Guidelines:
-                - Look for marks in formats like:
-                  * "(25 marks)", "[25 marks]", "25 marks", "25 points"
-                  * "Total: 25 marks", "Maximum: 25 marks"
-                  * "25% of total", "Worth 25 marks"
-                  * Sub-question marks: "a) 10 marks", "Part i: 5 marks"
-                - If a question has sub-parts, sum up all sub-part marks for the total
-                - If no marks are explicitly stated, set marks to null
-                - Pay attention to mark distributions across question parts
+                2. MULTI-DISCIPLINARY QUESTION TYPES:
 
-                Total Marks Calculation:
-                - Sum all individual question marks to get total marks
-                - Look for explicit total marks statements like "Total marks: 100"
-                - Verify that individual marks sum to any stated total
+                   COMPUTER SCIENCE:
+                   - Programming tasks: "Write a function to...", "Implement an algorithm for...", "Debug the following code..."
+                   - Analysis: "Explain the time complexity...", "Compare these data structures...", "Trace through this algorithm..."
+                   - Design: "Design a system that...", "Create a database schema for...", "Architect a solution for..."
 
-                Output Format:
-                Respond with ONLY a valid JSON object in this exact format:
+                   MATHEMATICS:
+                   - Problem solving: "Solve for x...", "Find the derivative of...", "Calculate the probability..."
+                   - Proofs: "Prove that...", "Show that...", "Demonstrate why..."
+                   - Applications: "Use the theorem to...", "Apply the formula to...", "Model the situation using..."
+
+                   LITERATURE/HUMANITIES:
+                   - Analysis: "Analyze the theme of...", "Discuss the significance of...", "Interpret the meaning of..."
+                   - Essays: "Write an essay on...", "Argue for or against...", "Compare and contrast..."
+                   - Critical thinking: "Evaluate the author's argument...", "Assess the historical impact..."
+
+                   SCIENCE:
+                   - Experiments: "Design an experiment to...", "Test the hypothesis that...", "Analyze the data from..."
+                   - Explanations: "Explain why...", "Describe the process of...", "Predict what would happen if..."
+                   - Applications: "Apply the principle to...", "Use the formula to calculate...", "Identify the variables in..."
+
+                   BUSINESS:
+                   - Case studies: "Analyze the case of...", "Recommend a strategy for...", "Evaluate the decision to..."
+                   - Calculations: "Calculate the ROI...", "Determine the break-even point...", "Forecast the revenue..."
+                   - Strategy: "Develop a plan for...", "Assess the market opportunity...", "Design a business model..."
+
+                   ENGINEERING:
+                   - Design: "Design a bridge that...", "Create a circuit to...", "Engineer a solution for..."
+                   - Analysis: "Calculate the load capacity...", "Determine the stress factors...", "Analyze the efficiency of..."
+                   - Problem-solving: "Troubleshoot the system...", "Optimize the design for...", "Solve the engineering problem..."
+
+                3. INTELLIGENT CONTENT DISTINCTION:
+
+                   QUESTIONS (Extract these):
+                   - Task instructions that require student action
+                   - Problems to be solved
+                   - Analysis prompts
+                   - Design challenges
+                   - Calculation requests
+                   - Explanation demands
+                   - Evaluation tasks
+                   - Creative assignments
+
+                   SUPPORTING CONTENT (Do NOT extract as separate questions):
+                   - Reference materials, data sets, code snippets, text passages
+                   - Background information, context, examples
+                   - Tables, charts, diagrams provided for analysis
+                   - Sample outputs, expected formats
+                   - Grading rubrics, criteria descriptions
+
+                4. CONTEXTUAL REASONING RULES:
+
+                   CLASSIFICATION/CATEGORIZATION TASKS:
+                   - Instruction + Items = ONE question about classification
+                   - Example: "Classify each text into A, B, or C: [10 text items]" = ONE classification question
+
+                   MULTI-PART QUESTIONS:
+                   - Related sub-tasks under one umbrella = ONE coherent question
+                   - Example: "Explain inheritance: a) Definition b) Benefits c) Example" = ONE question with parts
+
+                   CASE STUDY ANALYSIS:
+                   - Case description + Analysis prompts = Questions are the analysis prompts
+                   - The case itself is supporting content
+
+                   PROGRAMMING ASSIGNMENTS:
+                   - Code snippets + Tasks = Tasks are questions, code is supporting material
+                   - Example: "[Code snippet] Debug this code and explain the errors" = ONE debugging question
+
+                   DATA ANALYSIS TASKS:
+                   - Dataset + Analysis instructions = Analysis instructions are questions
+                   - The dataset is supporting content
+
+                5. MARK ALLOCATION INTELLIGENCE:
+                   - Analyze mark distribution patterns to validate question identification
+                   - Equal marks often indicate separate questions of similar complexity
+                   - Unequal marks may indicate main questions vs. sub-questions
+                   - Total marks should align with identified question structure
+
+                OUTPUT FORMAT:
+                Respond with ONLY valid JSON:
                 {
                     "questions": [
                         {
-                            "id": "q1",
                             "number": "1",
-                            "text": "Complete question text including all parts",
+                            "text": "Complete exact question text as it appears",
                             "marks": 25,
-                            "sub_questions": [
-                                {
-                                    "id": "q1a",
-                                    "number": "1a",
-                                    "text": "Sub-question text",
-                                    "marks": 10
-                                }
-                            ]
+                            "discipline": "Computer Science",
+                            "question_type": "Programming Task",
+                            "reasoning": "Brief explanation of why this constitutes a question"
                         }
                     ],
                     "total_marks": 100,
-                    "extraction_summary": {
-                        "total_questions": 4,
-                        "questions_with_marks": 4,
-                        "questions_without_marks": 0,
-                        "total_sub_questions": 8
+                    "analysis": {
+                        "document_type": "Traditional Exam/Assignment/Case Study",
+                        "primary_discipline": "Computer Science",
+                        "question_format": "Mixed/Traditional/Case-based",
+                        "extraction_confidence": "High/Medium/Low"
                     }
                 }
                 """
 
                 user_prompt = f"""
-                Please analyze this marking guide document and extract ALL questions with their mark allocations.
+                Apply sophisticated multi-disciplinary reasoning to analyze this marking guide and extract all questions that require student responses.
 
-                IMPORTANT INSTRUCTIONS:
-                1. Extract every single question from the document
-                2. Find the exact marks for each question (look carefully for mark allocations)
-                3. Include sub-questions and their individual marks
-                4. Calculate the total marks for the entire assessment
-                5. Preserve original question numbering
+                INTELLIGENT ANALYSIS REQUIRED:
 
-                Marking Guide Content:
+                1. IDENTIFY THE ACADEMIC DISCIPLINE:
+                   - Computer Science, Mathematics, Literature, Science, Business, Engineering, or other
+                   - This will inform the types of questions to expect
+
+                2. DETERMINE DOCUMENT STRUCTURE:
+                   - Traditional exam with numbered questions
+                   - Assignment with task descriptions
+                   - Case study with analysis prompts
+                   - Laboratory exercise with procedures and questions
+                   - Programming assignment with coding tasks
+
+                3. APPLY CONTEXTUAL REASONING:
+                   - What tasks must students actually PERFORM?
+                   - What materials are provided FOR ANALYSIS vs. what requires RESPONSE?
+                   - Are there implicit questions within instructions?
+                   - How do mark allocations validate question boundaries?
+
+                4. DISTINGUISH CONTENT TYPES:
+                   EXTRACT as questions:
+                   - Task instructions requiring student action
+                   - Problems to solve, analyses to perform
+                   - Design challenges, calculations to complete
+                   - Essays to write, arguments to make
+                   - Code to write, algorithms to implement
+                   - Experiments to design, data to interpret
+
+                   DO NOT EXTRACT as separate questions:
+                   - Reference materials, data sets, code snippets
+                   - Background information, examples, context
+                   - Items in lists that are content to be analyzed
+                   - Sample outputs, formatting instructions
+
+                5. HANDLE COMPLEX SCENARIOS:
+                   - Classification tasks: Instruction = question, items = content
+                   - Case studies: Case description = content, analysis prompts = questions
+                   - Programming: Code snippets = content, tasks = questions
+                   - Multi-part questions: Group related sub-tasks appropriately
+
+                DOCUMENT TO ANALYZE:
                 {content}
 
-                Remember: Respond with ONLY valid JSON. No comments, no explanations, just the JSON object.
+                Use your expertise across all academic disciplines to intelligently identify the actual questions students must answer. Consider the educational context, mark distribution, and underlying learning objectives.
+
+                Respond with ONLY valid JSON including your reasoning and analysis.
                 """
 
                 # Use the LLM service to extract questions
@@ -520,18 +638,27 @@ class MappingService:
                 result = response.choices[0].message.content
 
                 logger.info("Processing LLM response for question extraction...")
+                logger.info(f"Raw LLM response: {result}")
+                logger.info(f"Content sent to LLM (first 1000 chars): {content[:1000]}...")
+                logger.info(f"Content sent to LLM (last 500 chars): ...{content[-500:]}")
 
-                # Clean up the response
+                # Debug: Check if the response contains the expected fields
+                if "discipline" in result:
+                    logger.info("Enhanced response detected - contains discipline field")
+                else:
+                    logger.info("Basic response detected - missing enhanced fields")
+
+                # Simple cleanup for markdown code blocks
                 try:
-                    # Find JSON content between curly braces
-                    json_match = re.search(r"\{.*\}", result, re.DOTALL)
-                    if json_match:
-                        result = json_match.group(0)
-
-                    # Remove comments
-                    result = re.sub(r"//.*?$", "", result, flags=re.MULTILINE)
-                    result = re.sub(r"/\*.*?\*/", "", result, flags=re.DOTALL)
-                    result = re.sub(r"#.*?$", "", result, flags=re.MULTILINE)
+                    # Remove markdown code blocks if present
+                    if result.strip().startswith("```"):
+                        lines = result.strip().split('\n')
+                        if lines[0].startswith("```"):
+                            lines = lines[1:]  # Remove first line
+                        if lines and lines[-1].strip().startswith("```"):
+                            lines = lines[:-1]  # Remove last line
+                        result = '\n'.join(lines)
+                        logger.info(f"Cleaned markdown: {result}")
 
                     parsed = json.loads(result)
 
@@ -544,10 +671,12 @@ class MappingService:
                         formatted_questions = []
                         for i, q in enumerate(questions):
                             formatted_q = {
-                                "number": i + 1,
+                                "number": q.get("number", str(i + 1)),
                                 "text": q.get("text", ""),
                                 "marks": q.get("marks", 0),
-                                "criteria": "",  # Can be populated later
+                                "reasoning": q.get("reasoning", ""),
+                                "discipline": q.get("discipline", ""),
+                                "question_type": q.get("question_type", ""),
                                 "type": "question",
                             }
                             formatted_questions.append(formatted_q)
@@ -556,29 +685,51 @@ class MappingService:
                             f"LLM successfully extracted {len(formatted_questions)} questions with {total_marks} total marks"
                         )
 
-                        return {
+                        # Log detailed analysis if available
+                        analysis = parsed.get("analysis", {})
+                        if analysis:
+                            logger.info(f"Document analysis:")
+                            logger.info(f"  - Document type: {analysis.get('document_type', 'Unknown')}")
+                            logger.info(f"  - Primary discipline: {analysis.get('primary_discipline', 'Unknown')}")
+                            logger.info(f"  - Question format: {analysis.get('question_format', 'Unknown')}")
+                            logger.info(f"  - Extraction confidence: {analysis.get('extraction_confidence', 'Unknown')}")
+
+                        # Log detailed information for each question
+                        for i, q in enumerate(formatted_questions, 1):
+                            logger.info(f"Question {i}:")
+                            logger.info(f"  - Text: {q.get('text', 'No text')[:100]}...")
+                            logger.info(f"  - Marks: {q.get('marks', 0)}")
+                            logger.info(f"  - Discipline: {q.get('discipline', 'Unknown')}")
+                            logger.info(f"  - Type: {q.get('question_type', 'Unknown')}")
+                            if q.get("reasoning"):
+                                logger.info(f"  - Reasoning: {q['reasoning']}")
+
+                        result = {
                             "questions": formatted_questions,
                             "total_marks": total_marks,
                             "extraction_method": "llm",
                         }
+
+                        # Include analysis in result if available
+                        if analysis:
+                            result["analysis"] = analysis
+
+                        return result
                     else:
-                        logger.warning(
-                            "LLM response missing required fields, falling back to regex"
-                        )
+                        logger.error("LLM response missing required fields")
+                        return {"questions": [], "total_marks": 0, "extraction_method": "llm_failed"}
 
                 except json.JSONDecodeError as e:
-                    logger.warning(
-                        f"JSON parsing error in LLM response: {str(e)}, falling back to regex"
-                    )
+                    logger.error(f"JSON parsing error: {str(e)}")
+                    return {"questions": [], "total_marks": 0, "extraction_method": "json_error"}
 
             except Exception as e:
-                logger.warning(
-                    f"LLM extraction failed: {str(e)}, falling back to regex"
-                )
+                logger.error(f"LLM extraction failed: {str(e)}")
+                return {"questions": [], "total_marks": 0, "extraction_method": "llm_error"}
 
-        # Fallback to enhanced regex extraction
-        logger.info("Using enhanced regex extraction for questions and marks...")
-        return self._extract_questions_regex_enhanced(content)
+        # No fallback - LLM only
+        logger.error("No LLM service available")
+        return {"questions": [], "total_marks": 0, "extraction_method": "no_llm"}
 
     def _extract_questions_regex_enhanced(self, content: str) -> Dict:
         """

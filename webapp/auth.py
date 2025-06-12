@@ -6,7 +6,7 @@ with enhanced security features.
 """
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from flask import (
     Blueprint,
@@ -18,8 +18,6 @@ from flask import (
     session,
     url_for,
 )
-from werkzeug.security import check_password_hash, generate_password_hash
-
 from src.database.models import User, db
 from src.security.session_manager import SecureSessionManager
 from utils.input_sanitizer import InputSanitizer

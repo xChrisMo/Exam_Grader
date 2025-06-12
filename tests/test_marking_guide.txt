@@ -1,0 +1,37 @@
+COMPUTER SCIENCE EXAM - MARKING GUIDE
+
+QUESTION 1: Define object-oriented programming and explain its main principles. (25 marks)
+
+Expected Answer: Object-oriented programming (OOP) is a programming paradigm based on the concept of "objects" which contain data and code. Main principles include:
+- Encapsulation: Bundling data and methods together
+- Inheritance: Creating new classes based on existing ones
+- Polymorphism: Objects of different types responding to the same interface
+- Abstraction: Hiding complex implementation details
+
+QUESTION 2: 
+a) What is inheritance in object-oriented programming? (10 marks)
+b) Provide an example of polymorphism in Java or Python. (15 marks)
+
+Expected Answers:
+a) Inheritance is a mechanism where a new class inherits properties and methods from an existing class. The new class is called a subclass or derived class, and the existing class is called a superclass or base class.
+
+b) Example of polymorphism:
+```python
+class Animal:
+    def make_sound(self):
+        pass
+
+class Dog(Animal):
+    def make_sound(self):
+        return "Woof!"
+
+class Cat(Animal):
+    def make_sound(self):
+        return "Meow!"
+```
+
+QUESTION 3: Explain the difference between a class and an object in OOP. (20 marks)
+
+Expected Answer: A class is a blueprint or template that defines the structure and behavior of objects. It specifies what attributes and methods objects of that type will have. An object is an instance of a class - it's a concrete realization of the class with actual values for its attributes.
+
+Total marks: 70

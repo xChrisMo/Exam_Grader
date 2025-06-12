@@ -17,6 +17,13 @@ from typing import Any, Dict, Optional, Tuple
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+# Import Flask request with fallback
+try:
+    from flask import request, has_request_context
+except ImportError:
+    request = None
+    has_request_context = lambda: False
 from flask import g, request
 from sqlalchemy.orm import sessionmaker
 
@@ -370,20 +377,26 @@ class SecureSessionManager:
 
     def _get_client_ip(self) -> str:
         """Get client IP address."""
-        if request:
-            # Handle proxy headers
-            if request.headers.get("X-Forwarded-For"):
-                return request.headers.get("X-Forwarded-For").split(",")[0].strip()
-            elif request.headers.get("X-Real-IP"):
-                return request.headers.get("X-Real-IP")
-            else:
-                return request.remote_addr or "unknown"
+        try:
+            if request and has_request_context():
+                # Handle proxy headers
+                if request.headers.get("X-Forwarded-For"):
+                    return request.headers.get("X-Forwarded-For").split(",")[0].strip()
+                elif request.headers.get("X-Real-IP"):
+                    return request.headers.get("X-Real-IP")
+                else:
+                    return request.remote_addr or "unknown"
+        except Exception as e:
+            logger.warning(f"Error getting client IP: {str(e)}")
         return "unknown"
 
     def _get_user_agent(self) -> str:
         """Get client user agent."""
-        if request:
-            return request.headers.get("User-Agent", "unknown")[:500]  # Limit length
+        try:
+            if request and has_request_context():
+                return request.headers.get("User-Agent", "unknown")[:500]  # Limit length
+        except Exception as e:
+            logger.warning(f"Error getting user agent: {str(e)}")
         return "unknown"
 
     def _validate_client_info(self, session: SessionModel) -> bool:

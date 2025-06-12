@@ -114,6 +114,12 @@ class APIConfig:
     api_retry_attempts: int = 3
     api_retry_delay: float = 2.0
 
+    # LLM-Only Mode Configuration
+    llm_only_mode: bool = False  # When True, disables all regex fallbacks
+    llm_strict_mode: bool = False  # When True, fails completely if LLM fails
+    llm_retry_attempts: int = 3  # Number of retry attempts for LLM operations
+    llm_retry_delay: float = 2.0  # Delay between retry attempts in seconds
+
     def __post_init__(self):
         """Validate API configuration."""
         if not self.handwriting_ocr_api_key:
@@ -209,7 +215,7 @@ class UnifiedConfig:
         # Database configuration
         self.database = DatabaseConfig(
             database_url=os.getenv("DATABASE_URL", "sqlite:///exam_grader.db"),
-            database_echo=self.environment == "development",
+            database_echo=os.getenv("DATABASE_ECHO", "False").lower() == "true",
         )
 
         # File configuration
@@ -230,6 +236,11 @@ class UnifiedConfig:
             deepseek_api_url=os.getenv(
                 "DEEPSEEK_API_URL", "https://api.deepseek.com/v1"
             ),
+            # LLM-Only Mode Configuration
+            llm_only_mode=os.getenv("LLM_ONLY_MODE", "False").lower() == "true",
+            llm_strict_mode=os.getenv("LLM_STRICT_MODE", "False").lower() == "true",
+            llm_retry_attempts=int(os.getenv("LLM_RETRY_ATTEMPTS", "3")),
+            llm_retry_delay=float(os.getenv("LLM_RETRY_DELAY", "2.0")),
         )
 
         # Cache configuration

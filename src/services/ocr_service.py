@@ -43,20 +43,33 @@ class OCRServiceError(Exception):
 class OCRService:
     """OCR service that uses HandwritingOCR API for text extraction."""
 
-    def __init__(self, api_key=None, base_url=None):
-        """Initialize with API key and base URL."""
+    def __init__(self, api_key=None, base_url=None, allow_no_key=False):
+        """
+        Initialize with API key and base URL.
+
+        Args:
+            api_key: HandwritingOCR API key
+            base_url: API base URL
+            allow_no_key: If True, allows initialization without API key (for graceful degradation)
+        """
         self.api_key = api_key or os.getenv("HANDWRITING_OCR_API_KEY")
-        if not self.api_key:
+
+        if not self.api_key and not allow_no_key:
             raise OCRServiceError("HandwritingOCR API key not configured")
 
         self.base_url = base_url or os.getenv(
             "HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3"
         )
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Accept": "application/json",
-        }
-        logger.info("OCR service initialized successfully")
+
+        if self.api_key:
+            self.headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Accept": "application/json",
+            }
+            logger.info("OCR service initialized successfully")
+        else:
+            self.headers = {"Accept": "application/json"}
+            logger.warning("OCR service initialized without API key - service will be disabled")
 
     def is_available(self) -> bool:
         """Check if the OCR service is available by testing API connectivity."""
@@ -125,7 +138,7 @@ class OCRService:
 
     def extract_text_from_image(self, file: Union[str, Path, BinaryIO]) -> str:
         """
-        Extract text from an image using OCR.
+        Extract text from an image using OCR with enhanced timeout handling.
 
         Args:
             file: Path to the image file or file object
@@ -136,69 +149,69 @@ class OCRService:
         Raises:
             OCRServiceError: If OCR processing fails
         """
-        # Log the start of OCR processing
+        if not self.api_key:
+            raise OCRServiceError("OCR service not available - API key not configured")
+
         logger.info("Starting OCR text extraction...")
 
         try:
-            # Step 1: Upload the document to process
+            # Validate file if it's a path
+            if isinstance(file, (str, Path)):
+                self._validate_file(file)
+
+            # Step 1: Upload document
             document_id = self._upload_document(file)
+            logger.info(f"Document uploaded with ID: {document_id}")
 
-            # Log progress instead of updating tracker
-            logger.info("Uploading document for OCR processing...")
-
-            # Step 2: Wait for processing to complete
-            max_retries = 10
-            retry_delay = 2  # seconds
+            # Step 2: Wait for processing with improved timeout handling
+            max_retries = 15
+            retry_delay = 3
+            max_wait_time = 60
+            start_time = time.time()
 
             for attempt in range(max_retries):
-                status = self._get_document_status(document_id)
+                elapsed_time = time.time() - start_time
+                if elapsed_time > max_wait_time:
+                    logger.error(f"OCR processing timed out after {elapsed_time:.1f}s")
+                    raise OCRServiceError(f"OCR processing timed out after {elapsed_time:.1f}s")
 
-                if status == "processed":
-                    break
-                elif status == "failed":
-                    # Log error instead of updating tracker
-                    logger.error("OCR processing failed on the server")
-                    raise OCRServiceError("OCR processing failed")
+                try:
+                    status = self._get_document_status(document_id)
 
-                # Log progress instead of updating tracker
-                logger.info(
-                    f"OCR processing in progress (attempt {attempt+1}/{max_retries})..."
-                )
-                time.sleep(retry_delay)
+                    if status == "processed":
+                        logger.info(f"OCR processing completed after {elapsed_time:.1f}s")
+                        break
+                    elif status == "failed":
+                        logger.error("OCR processing failed on server")
+                        raise OCRServiceError("OCR processing failed on server")
+
+                    logger.info(f"OCR processing in progress (attempt {attempt+1}/{max_retries}) - Elapsed: {elapsed_time:.0f}s")
+
+                    # Exponential backoff
+                    actual_delay = min(retry_delay * (1.2 ** attempt), 10)
+                    time.sleep(actual_delay)
+
+                except requests.exceptions.RequestException as e:
+                    logger.warning(f"Network error checking status (attempt {attempt+1}): {str(e)}")
+                    if attempt == max_retries - 1:
+                        raise OCRServiceError(f"Network error during status check: {str(e)}")
+                    time.sleep(retry_delay)
             else:
-                # Log error instead of updating tracker
-                logger.error("OCR processing timed out after multiple attempts")
-                raise OCRServiceError("OCR processing timed out")
+                elapsed_time = time.time() - start_time
+                logger.error(f"OCR processing timed out after {max_retries} attempts ({elapsed_time:.1f}s)")
+                raise OCRServiceError(f"OCR processing timed out after {max_retries} attempts")
 
-            # Log progress instead of updating tracker
-            logger.info("Retrieving OCR results...")
-
-            # Step 3: Get the results
+            # Step 3: Get results
             text = self._get_document_result(document_id)
-
-            # Log completion
-            logger.info(
-                f"OCR processing completed successfully. Extracted {len(text)} characters."
-            )
-
+            logger.info(f"OCR completed successfully. Extracted {len(text)} characters.")
             return text
 
+        except OCRServiceError:
+            raise
         except requests.exceptions.RequestException as e:
-            # Log network error
-            logger.error(f"Network error during OCR request: {str(e)}")
-            raise OCRServiceError(f"Network error during OCR request: {str(e)}")
-        except (ValueError, TypeError) as e:
-            # Log data handling errors
-            logger.error(f"Data handling error during OCR processing: {str(e)}")
-            raise OCRServiceError(
-                f"Data handling error during OCR processing: {str(e)}"
-            )
-        except json.JSONDecodeError as e:
-            # Log JSON parsing errors
-            logger.error(f"Failed to parse OCR API response: {str(e)}")
-            raise OCRServiceError(f"Failed to parse OCR API response: {str(e)}")
+            logger.error(f"Network error during OCR: {str(e)}")
+            raise OCRServiceError(f"Network error during OCR: {str(e)}")
         except Exception as e:
-            # Log general error
             logger.error(f"OCR processing failed: {str(e)}")
             raise OCRServiceError(f"OCR processing failed: {str(e)}")
 
