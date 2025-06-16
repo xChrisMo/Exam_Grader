@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Create Admin User Script for Exam Grader Application.
 
@@ -25,7 +24,8 @@ def create_admin_user():
         # Import required modules
         from flask import Flask
         from src.config.unified_config import config
-        from src.database import db, User, DatabaseUtils
+        from src.database.models import db, User
+        from webapp.exam_grader_app import app
         from werkzeug.security import generate_password_hash
         import secrets
         import string
@@ -36,7 +36,7 @@ def create_admin_user():
         db.init_app(app)
         
         with app.app_context():
-            # Check if admin user already exists
+            db.create_all()  # Create database tables first
             admin_user = User.query.filter_by(username='admin').first()
             
             if admin_user:
@@ -139,7 +139,6 @@ def main():
     else:
         print("❌ Failed to create admin user")
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

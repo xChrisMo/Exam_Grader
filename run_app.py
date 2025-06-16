@@ -9,6 +9,11 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+import codecs
+
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer)
+sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer)
 
 from dotenv import load_dotenv
 
@@ -131,6 +136,32 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
 
         # Import the Flask app (this will trigger initialization)
         from webapp.exam_grader_app import app
+        from src.database.migrations import MigrationManager
+        from src.config.unified_config import UnifiedConfig
+
+        # Initialize and run database migrations
+        config = UnifiedConfig()
+        db_url = config.database.database_url
+        if db_url:
+            # Ensure app context is available for database operations
+            # Add before migration_manager.migrate()
+            from src.database.models import db  # Add proper DB import
+            
+            def run_application():
+                app = Flask(__name__)
+                db.init_app(app)  # Initialize before context
+                
+                with app.app_context():
+                    db.create_all()  # Create tables first
+                    MigrationManager(db.engine.url).migrate()
+        else:
+            print("[ERROR] Database URL not found in configuration. Exiting.")
+            sys.exit(1)
+
+
+
+
+
 
         print("\n" + "=" * 50)
         print("🎓 EXAM GRADER - AI-POWERED ASSESSMENT PLATFORM")

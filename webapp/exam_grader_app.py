@@ -33,7 +33,7 @@ from werkzeug.utils import secure_filename
 # Project imports
 try:
     from src.config.unified_config import config
-    from src.database import db, User, MarkingGuide, Submission, MigrationManager, DatabaseUtils
+    from src.database import db, User, MarkingGuide, Submission, DatabaseUtils
     from src.security.session_manager import SecureSessionManager
     from src.security.secrets_manager import secrets_manager, initialize_secrets
     from src.services.ocr_service import OCRService
@@ -74,12 +74,6 @@ except Exception as e:
 # Initialize database
 try:
     db.init_app(app)
-    with app.app_context():
-        migration_manager = MigrationManager(config.database.database_url)
-        if not migration_manager.migrate():
-            logger.error("Database migration failed")
-            sys.exit(1)
-        DatabaseUtils.create_default_user()
     logger.info("Database initialized")
 except Exception as e:
     logger.error(f"Failed to initialize database: {str(e)}")
