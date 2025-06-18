@@ -147,13 +147,9 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
             # Add before migration_manager.migrate()
             from src.database.models import db  # Add proper DB import
             
-            def run_application():
-                app = Flask(__name__)
-                db.init_app(app)  # Initialize before context
-                
-                with app.app_context():
-                    db.create_all()  # Create tables first
-                    MigrationManager(db.engine.url).migrate()
+            with app.app_context():
+                db.create_all()  # Create tables first
+                MigrationManager(db.engine.url).migrate()
         else:
             print("[ERROR] Database URL not found in configuration. Exiting.")
             sys.exit(1)

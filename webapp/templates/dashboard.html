@@ -1,11 +1,12 @@
-{% extends "layout.html" %} {% block content %}
+{% extends "layout.html" %}
+{% block content %}
 <!-- Dashboard Statistics Cards -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
   <!-- Guide Status Card -->
-  <div class="bg-white overflow-hidden shadow rounded-lg" role="region" aria-labelledby="guide-status-heading">
+  <div class="bg-white overflow-hidden shadow rounded-lg transform transition duration-300 hover:scale-105 hover:shadow-xl" role="region" aria-labelledby="guide-status-heading">
     <div class="p-5 text-center">
       <div
-        class="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mx-auto mb-3"
+        class="w-14 h-14 bg-primary-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md"
       >
         <svg
           class="w-6 h-6 text-white"
@@ -23,8 +24,8 @@
         </svg>
       </div>
       <dl>
-        <dt id="guide-status-heading" class="text-sm font-medium text-gray-500 mb-1">Guide Status</dt>
-        <dd class="text-lg font-medium text-gray-900" aria-describedby="guide-status-heading">
+        <dt id="guide-status-heading" class="text-md font-semibold text-gray-600 mb-1">Guide Status</dt>
+        <dd class="text-2xl font-bold text-gray-900" aria-describedby="guide-status-heading">
           {% if guide_uploaded %}
           <span class="text-success-600">Uploaded</span>
           {% else %}
@@ -33,7 +34,7 @@
         </dd>
       </dl>
     </div>
-    <div class="bg-gray-50 px-5 py-3 text-center">
+    <div class="bg-gray-100 px-5 py-3 text-center">
       <div class="text-sm">
         {% if guide_uploaded %}
         <span class="text-success-600 font-medium">Ready to grade</span>
@@ -49,10 +50,10 @@
   </div>
 
   <!-- Submissions Card -->
-  <div class="bg-white overflow-hidden shadow rounded-lg">
+  <div class="bg-white overflow-hidden shadow rounded-lg transform transition duration-300 hover:scale-105 hover:shadow-xl">
     <div class="p-5 text-center">
       <div
-        class="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mx-auto mb-3"
+        class="w-14 h-14 bg-primary-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md"
       >
         <svg
           class="w-6 h-6 text-white"
@@ -70,13 +71,13 @@
         </svg>
       </div>
       <dl>
-        <dt class="text-sm font-medium text-gray-500 mb-1">Submissions</dt>
-        <dd class="text-lg font-medium text-gray-900">
+        <dt class="text-md font-semibold text-gray-600 mb-1">Submissions</dt>
+        <dd class="text-2xl font-bold text-gray-900">
           {{ total_submissions }}
         </dd>
       </dl>
     </div>
-    <div class="bg-gray-50 px-5 py-3 text-center">
+    <div class="bg-gray-100 px-5 py-3 text-center">
       <div class="text-sm">
         <span class="text-gray-600 font-medium"
           >{{ processed_submissions }} processed</span
@@ -86,10 +87,10 @@
   </div>
 
   <!-- Last Score Card -->
-  <div class="bg-white overflow-hidden shadow rounded-lg">
+  <div class="bg-white overflow-hidden shadow rounded-lg transform transition duration-300 hover:scale-105 hover:shadow-xl">
     <div class="p-5 text-center">
       <div
-        class="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mx-auto mb-3"
+        class="w-14 h-14 bg-primary-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md"
       >
         <svg
           class="w-6 h-6 text-white"
@@ -106,13 +107,13 @@
         </svg>
       </div>
       <dl>
-        <dt class="text-sm font-medium text-gray-500 mb-1">Last Score</dt>
-        <dd class="text-lg font-medium text-gray-900">
+        <dt class="text-md font-semibold text-gray-600 mb-1">Last Score</dt>
+        <dd class="text-2xl font-bold text-gray-900">
           {% if last_score > 0 %} {{ last_score }}% {% else %} -- {% endif %}
         </dd>
       </dl>
     </div>
-    <div class="bg-gray-50 px-5 py-3 text-center">
+    <div class="bg-gray-100 px-5 py-3 text-center">
       <div class="text-sm">
         {% if last_score > 0 %}
         <span class="text-gray-600 font-medium">Latest result</span>
@@ -124,10 +125,10 @@
   </div>
 
   <!-- System Status Card -->
-  <div class="bg-white overflow-hidden shadow rounded-lg">
+  <div class="bg-white overflow-hidden shadow rounded-lg transform transition duration-300 hover:scale-105 hover:shadow-xl">
     <div class="p-5 text-center">
       <div
-        class="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mx-auto mb-3"
+        class="w-14 h-14 bg-primary-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md"
       >
         <svg
           class="w-6 h-6 text-white"
@@ -144,8 +145,8 @@
         </svg>
       </div>
       <dl>
-        <dt class="text-sm font-medium text-gray-500 mb-1">System Status</dt>
-        <dd class="text-lg font-medium text-gray-900">
+        <dt class="text-md font-semibold text-gray-600 mb-1">System Status</dt>
+        <dd class="text-2xl font-bold text-gray-900">
           {% if service_status.ocr_status and service_status.llm_status %}
           <span class="text-success-600">Online</span>
           {% else %}
@@ -154,7 +155,7 @@
         </dd>
       </dl>
     </div>
-    <div class="bg-gray-50 px-5 py-3 text-center">
+    <div class="bg-gray-100 px-5 py-3 text-center">
       <div class="text-sm">
         {% if service_status.ocr_status and service_status.llm_status %}
         <span class="text-success-600 font-medium">All services ready</span>
@@ -169,7 +170,7 @@
 <!-- Main Action Cards -->
 <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
   <!-- Upload Marking Guide Card -->
-  <div class="bg-white overflow-hidden shadow rounded-lg">
+  <div class="bg-white overflow-hidden shadow rounded-lg transform transition duration-300 hover:scale-105 hover:shadow-xl">
     <div class="px-4 py-5 sm:p-6">
       <div class="flex items-center">
         <div class="flex-shrink-0">
@@ -490,7 +491,9 @@
     </div>
   </div>
 </div>
-{% endif %} {% endblock %} {% block extra_js %}
+{% endif %}
+{% endblock %}
+{% block extra_js %}
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     // Unified AI Processing Button

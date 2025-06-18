@@ -131,57 +131,33 @@ document.addEventListener('DOMContentLoaded', function() {
     const submitBtn = document.getElementById('submit-btn');
     const uploadForm = document.getElementById('upload-form');
 
-    // Drag and drop functionality
-    dropZone.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        dropZone.classList.add('border-primary-500', 'bg-primary-50');
-    });
-
-    dropZone.addEventListener('dragleave', function(e) {
-        e.preventDefault();
-        dropZone.classList.remove('border-primary-500', 'bg-primary-50');
-    });
-
-    dropZone.addEventListener('drop', function(e) {
-        e.preventDefault();
-        dropZone.classList.remove('border-primary-500', 'bg-primary-50');
-        
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            fileInput.files = files;
-            handleFileSelect(files[0]);
-        }
-    });
-
-    // File input change
-    fileInput.addEventListener('change', function(e) {
-        if (e.target.files.length > 0) {
-            handleFileSelect(e.target.files[0]);
-        }
-    });
+    // Initialize drag and drop and file input using ExamGrader utilities
+    ExamGrader.fileUpload.initDragAndDrop(dropZone, fileInput, handleFileSelect);
 
     // Remove file
     removeFileBtn.addEventListener('click', function() {
         fileInput.value = '';
         filePreview.classList.add('hidden');
         dropZone.classList.remove('hidden');
+        ExamGrader.utils.showToast('File removed.', 'info');
     });
 
-    // Handle file selection
+    // Handle file selection and validation
     function handleFileSelect(file) {
+        const errors = ExamGrader.fileUpload.validateFile(file);
+        if (errors.length > 0) {
+            errors.forEach(error => ExamGrader.utils.showToast(error, 'error'));
+            fileInput.value = ''; // Clear the input
+            filePreview.classList.add('hidden');
+            dropZone.classList.remove('hidden');
+            return;
+        }
+
+        console.log('File selected:', file);
         fileName.textContent = file.name;
-        fileSize.textContent = formatFileSize(file.size);
+        fileSize.textContent = ExamGrader.utils.formatFileSize(file.size);
         filePreview.classList.remove('hidden');
         dropZone.classList.add('hidden');
-    }
-
-    // Format file size
-    function formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
     // Form submission with progress
@@ -189,7 +165,7 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         
         if (!fileInput.files.length) {
-            alert('Please select a file to upload.');
+            ExamGrader.utils.showToast('Please select a file to upload.', 'error');
             return;
         }
 
@@ -222,6 +198,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     window.location.href = response.url || '{{ url_for("dashboard") }}';
                 }, 500);
             } else {
+                // Attempt to parse error message from response
+                response.json().then(errorData => {
+                    const errorMessage = errorData.error || 'Upload failed. Please try again.';
+                    ExamGrader.utils.showToast(errorMessage, 'error');
+                }).catch(() => {
+                    ExamGrader.utils.showToast('Upload failed. Please try again.', 'error');
+                });
                 throw new Error('Upload failed');
             }
         })
@@ -230,7 +213,7 @@ document.addEventListener('DOMContentLoaded', function() {
             uploadProgress.classList.add('hidden');
             submitBtn.disabled = false;
             ExamGrader.utils.hideButtonLoading(submitBtn, 'Upload Guide');
-            alert('Upload failed. Please try again.');
+            ExamGrader.utils.showToast('Upload failed. Please try again.', 'error');
         });
     });
 });

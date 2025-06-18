@@ -21,7 +21,7 @@ Example Usage:
 import mimetypes
 import os
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Any
 
 import fitz  # PyMuPDF
 from docx import Document
@@ -29,30 +29,21 @@ from docx import Document
 from src.config.config_manager import ConfigManager
 from src.services.ocr_service import OCRService, OCRServiceError
 from utils.logger import logger
+from src.database.models import MarkingGuide
 
 # Initialize configuration
 config = ConfigManager()
 
 # Initialize OCR service (optional)
-ocr_service_instance = None
-try:
-    api_key = os.getenv("HANDWRITING_OCR_API_KEY")
-    api_url = os.getenv(
-        "HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3"
-    )
-
-    # Always try to initialize OCR service, allowing graceful degradation
-    ocr_service_instance = OCRService(api_key=api_key, base_url=api_url, allow_no_key=True)
-
-    if api_key:
-        logger.info("OCR service initialized successfully with API key")
-    else:
-        logger.warning("OCR service initialized without API key - functionality will be limited")
-
-except Exception as e:
-    logger.error(f"OCR Service Error: Failed to initialize OCR service: {str(e)}")
-    logger.warning("OCR service will be disabled")
+api_key = os.getenv("HANDWRITING_OCR_API_KEY")
+api_url = os.getenv(
+    "HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3"
+)
+if not api_key:
+    logger.warning("OCR API key missing - image processing disabled")
     ocr_service_instance = None
+else:
+    ocr_service_instance = OCRService(api_key=api_key, base_url=api_url)
 
 
 class DocumentParser:
@@ -169,7 +160,7 @@ class DocumentParser:
             logger.debug(f"Extracting text from DOCX: {file_path}")
             doc = Document(file_path)
             text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
-            logger.info(f"Successfully extracted {len(text)} characters from DOCX")
+            logger.debug(f"Extracted {len(text)} characters from DOCX: {file_path}")
             return text
         except Exception as e:
             logger.error(f"DOCX Error: Error extracting text from DOCX: {str(e)}")
@@ -258,9 +249,7 @@ class DocumentParser:
                 logger.debug(f"Starting OCR processing for image: {file_path}")
                 if ocr_service_instance:
                     text = ocr_service_instance.extract_text_from_image(file_path)
-                    logger.info(
-                        f"Successfully extracted {len(text)} characters from image"
-                    )
+                    logger.debug(f"Extracted {len(text)} characters from image: {file_path}")
                     return text
                 else:
                     logger.error("OCR service not available for image processing")
@@ -290,7 +279,7 @@ class DocumentParser:
             logger.debug(f"Reading text file: {file_path}")
             with open(file_path, "r", encoding="utf-8") as f:
                 text = f.read()
-            logger.info(f"Successfully read {len(text)} characters from text file")
+            logger.debug(f"Extracted {len(text)} characters from text file: {file_path}")
             return text
         except Exception as e:
             logger.error(f"File Error: Error reading text file: {str(e)}")
@@ -299,109 +288,79 @@ class DocumentParser:
 
 def parse_student_submission(
     file_path: str,
-) -> Tuple[Dict[str, str], Optional[str], Optional[str]]:
-    """
-    Extract raw text content from a student's exam submission file.
-
-    This function serves as the main entry point for processing student submissions.
-    It handles multiple file formats and uses appropriate extractors based on the file type.
-    If direct text extraction fails, it will attempt to use OCR as a fallback.
+    ocr_service: Optional[OCRService] = None,
+    marking_guide: Optional[MarkingGuide] = None
+) -> Tuple[Dict[str, Any], Optional[str]]:
+    """Parses a student submission file and extracts its raw text content.
 
     Args:
-        file_path: Path to the submission file (PDF, DOCX, image, or text)
+        file_path: The path to the student submission file.
+        ocr_service: An optional OCRService instance for image-based PDFs or images.
+        marking_guide: The MarkingGuide object containing questions to extract answers for.
 
     Returns:
-        Tuple containing:
-        - Dict[str, str]: Contains a single entry with raw text content
-        - Optional[str]: Raw text content of the submission (same as in the dict)
-        - Optional[str]: Error message if processing failed, None otherwise
-
-    Example:
-        ```python
-        result, raw_text, error = parse_student_submission("exam.pdf")
-        if error:
-            print(f"Failed to extract text: {error}")
-        else:
-            print(f"Raw text: {raw_text}")
-        ```
-
-    Note:
-        - For image files, OCR will be used to extract text
-        - OCR will be used as a fallback for PDFs if direct text extraction fails
-        - The function attempts to handle various common errors gracefully
-        - Returns empty dict and error message if extraction fails
+        A tuple containing:
+        - A dictionary with 'raw_text' and 'answers' (extracted based on marking guide).
+        - An error message string if an error occurred, otherwise None.
     """
+    logger.info(f"Attempting to parse submission: {file_path}")
+    raw_text = ""
+    error_message = None
+    extracted_answers = {}
+
     try:
-        # Check if file exists
-        if not os.path.exists(file_path):
-            return {}, None, f"File not found: {file_path}"
-
-        # Get file type
         file_type = DocumentParser.get_file_type(file_path)
-        logger.debug(f"Processing file type: {file_type}")
+        logger.debug(f"Detected file type: {file_type}")
 
-        # Extract raw text based on file type
-        raw_text = None
-        ocr_used = False
-
-        # Try direct text extraction first
-        try:
-            if file_type == "application/pdf":
-                raw_text = DocumentParser.extract_text_from_pdf(file_path)
-            elif (
-                file_type
-                == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            ):
-                raw_text = DocumentParser.extract_text_from_docx(file_path)
-            elif file_type.startswith("image/"):
-                raw_text = DocumentParser.extract_text_from_image(file_path)
-                ocr_used = True
-                logger.info("OCR processing completed")
-            elif file_type == "text/plain":
-                raw_text = DocumentParser.extract_text_from_txt(file_path)
+        if file_type == "application/pdf":
+            # Try to extract text directly from PDF first
+            extracted_pdf_text = DocumentParser.extract_text_from_pdf(file_path)
+            if extracted_pdf_text:
+                raw_text = extracted_pdf_text
+            elif ocr_service and config.ocr.enabled:
+                logger.info("PDF text extraction failed or yielded no content, attempting OCR...")
+                try:
+                    raw_text = ocr_service.extract_text_from_image(file_path)
+                except OCRServiceError as e:
+                    error_message = f"OCR processing failed for PDF: {str(e)}"
+                    logger.error(error_message)
             else:
-                return {}, None, f"Unsupported file type: {file_type}"
-        except Exception as e:
-            logger.warning(
-                f"Direct text extraction failed: {str(e)}. Attempting OCR fallback."
-            )
-            raw_text = None
+                error_message = "Could not extract text from PDF. OCR service not available or enabled."
+                logger.error(error_message)
 
-        # If direct extraction failed and OCR wasn't already used, try OCR as fallback
-        if (
-            (not raw_text or not raw_text.strip())
-            and not ocr_used
-            and file_type != "text/plain"
-            and ocr_service_instance  # Only try OCR if service is available
-        ):
-            try:
-                logger.info("Attempting OCR as fallback for text extraction")
-                raw_text = DocumentParser.extract_text_from_image(file_path)
-                logger.info(
-                    f"OCR fallback successful, extracted {len(raw_text)} characters"
-                )
-            except Exception as ocr_error:
-                logger.error(f"OCR fallback also failed: {str(ocr_error)}")
-                return (
-                    {},
-                    None,
-                    f"Text extraction failed and OCR fallback also failed: {str(ocr_error)}",
-                )
+        elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            raw_text = DocumentParser.extract_text_from_docx(file_path)
 
-        # Check if we have any text
-        if not raw_text or not raw_text.strip():
-            return {}, "", "No text could be extracted from the document"
+        elif file_type.startswith("image/"):
+            if ocr_service and config.ocr.enabled:
+                raw_text = ocr_service.extract_text_from_image(file_path)
+            else:
+                error_message = "OCR service not available or enabled for image processing."
+                logger.error(error_message)
 
-        # Return the raw text without any further processing
-        logger.info(
-            f"Successfully extracted {len(raw_text)} characters of raw text"
-        )
+        elif file_type == "text/plain":
+            with open(file_path, 'r', encoding='utf-8') as f:
+                raw_text = f.read()
 
-        # Create result dictionary
-        result = {"raw": raw_text}
+        else:
+            error_message = f"Unsupported file type: {file_type}"
+            logger.warning(error_message)
 
-        return result, raw_text, None
+        # If raw_text is successfully extracted and a marking_guide is provided, attempt to extract answers
+        if raw_text and marking_guide and marking_guide.questions:
+            logger.info("Attempting to extract answers based on marking guide questions.")
+            # This is a placeholder for actual answer extraction logic.
+            # In a real scenario, you would use an LLM or regex to find answers
+            # to each question from the raw_text.
+            for i, question_obj in enumerate(marking_guide.questions):
+                question_text = question_obj.get('question', f'Question {i+1}')
+                # Simple placeholder: assume the answer is just the raw text for now
+                # In a real application, this would involve LLM calls or more complex parsing
+                extracted_answers[question_text] = f"[Placeholder Answer for {question_text}]"
+            logger.info(f"Extracted placeholder answers for {len(marking_guide.questions)} questions.")
 
     except Exception as e:
-        logger.error(f"Text Extraction Error: Error extracting text from submission: {str(e)}")
-        return {}, None, str(e)
+        error_message = f"Error processing file {file_path}: {str(e)}"
+        logger.error(error_message)
+
+    return {'raw_text': raw_text, 'answers': extracted_answers}, error_message

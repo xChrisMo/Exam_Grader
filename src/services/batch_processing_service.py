@@ -17,17 +17,19 @@ from utils.logger import logger
 class BatchProcessingService:
     """Service for batch processing multiple submissions with OCR support."""
 
-    def __init__(self, parse_function=None, ocr_service=None, max_workers=3):
+    def __init__(self, parse_function=None, ocr_service=None, marking_guide=None, max_workers=3):
         """
         Initialize batch processing service.
 
         Args:
             parse_function: Function to parse individual submissions
             ocr_service: OCR service for image processing
+            marking_guide: The marking guide object to be used for parsing
             max_workers: Maximum number of parallel workers
         """
         self.parse_function = parse_function
         self.ocr_service = ocr_service
+        self.marking_guide = marking_guide
         self.max_workers = max_workers
 
     def process_files_batch(
@@ -182,96 +184,89 @@ class BatchProcessingService:
             'answers': {},
             'raw_text': '',
             'error': None,
-            'processing_time': None
+            'processing_time': None,
+            'file_path': None,
+            'file_size': 0,
+            'file_type': ''
         }
 
         start_time = datetime.now()
+        file_path = None
 
         try:
-            # Generate unique filename
             filename = f"submission_{uuid.uuid4().hex}_{file.filename}"
             file_path = os.path.join(temp_dir, filename)
-
-            # Save file
             file.save(file_path)
             logger.info(f"Saved file: {file_path}")
 
-            # Determine if file needs OCR processing
             file_ext = file.filename.lower().split('.')[-1] if '.' in file.filename else ''
             is_image = file_ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'webp']
 
-            # Process file with OCR if needed
-            if is_image and self.ocr_service:
-                logger.info(f"Processing image file with OCR: {file.filename}")
+            parsed_data = {}
+            raw_text = ''
+            error_message = None
+            processing_method = 'none'
+
+            if self.parse_function:
+                logger.info(f"Attempting to parse {file.filename} with parse_function.")
                 try:
-                    # Use OCR service to extract text from image
+                    # Assuming parse_function returns (parsed_content_dict, error_message)
+                    parsed_content, parse_error = self.parse_function(
+                        file_path=file_path,
+                        ocr_service=self.ocr_service,
+                        marking_guide=self.marking_guide
+                    )
+                    if parse_error:
+                        error_message = parse_error
+                    else:
+                        parsed_data = parsed_content
+                        raw_text = parsed_content.get('raw_text', '')
+                        processing_method = 'parse_function'
+                except Exception as e:
+                    error_message = f"Parse function execution failed: {str(e)}"
+                    logger.error(f"Error during parse_function for {file.filename}: {e}", exc_info=True)
+
+            if error_message and self.ocr_service and (is_image or file_ext == 'pdf'):
+                logger.info(f"Parse function failed or not applicable, attempting OCR for {file.filename}.")
+                try:
                     raw_text = self.ocr_service.extract_text_from_image(file_path)
+                    parsed_data = {'raw_content': raw_text} # Store raw OCR text in answers for consistency
+                    error_message = None # Clear error if OCR succeeds
+                    processing_method = 'ocr'
                     logger.info(f"OCR extracted {len(raw_text)} characters from {file.filename}")
-
-                    result.update({
-                        'success': True,
-                        'answers': {'raw_content': raw_text},
-                        'raw_text': raw_text,
-                        'error': None,
-                        'submission_id': f"sub_{uuid.uuid4().hex[:8]}",
-                        'file_path': file_path,
-                        'processing_method': 'ocr'
-                    })
-                    logger.info(f"Successfully processed image {file.filename} with OCR")
-
                 except Exception as ocr_error:
-                    logger.error(f"OCR processing failed for {file.filename}: {str(ocr_error)}")
-                    result.update({
-                        'success': False,
-                        'error': f"OCR processing failed: {str(ocr_error)}",
-                        'processing_method': 'ocr_failed'
-                    })
+                    error_message = f"OCR processing failed: {str(ocr_error)}"
+                    logger.error(f"OCR processing failed for {file.filename}: {ocr_error}", exc_info=True)
+            
+            if error_message:
+                raise Exception(error_message)
+            elif not self.parse_function and not (self.ocr_service and (is_image or file_ext == 'pdf')):
+                raise Exception("No suitable processing method available for this file type.")
 
-            # Process file with parse function if available
-            elif self.parse_function:
-                logger.debug(f"Calling parse function: {self.parse_function.__name__}")
-                try:
-                    answers, raw_text, error = self.parse_function(file_path)
-                    logger.debug(f"Parse results: {len(answers) if answers else 0} answers, {len(raw_text) if raw_text else 0} chars")
-                except Exception as parse_error:
-                    logger.error(f"Parse function failed: {str(parse_error)}")
-                    answers, raw_text, error = {}, '', str(parse_error)
-
-                result.update({
-                    'success': error is None,
-                    'answers': answers or {},
-                    'raw_text': raw_text or '',
-                    'error': error,
-                    'submission_id': f"sub_{uuid.uuid4().hex[:8]}",
-                    'file_path': file_path,
-                    'processing_method': 'parse_function'
-                })
-
-                if error:
-                    logger.warning(f"Processing error for {file.filename}: {error}")
-                else:
-                    logger.info(f"Successfully processed {file.filename}")
-            else:
-                # No processing available, just save the file
-                logger.warning("No processing method available - file saved only")
-                result.update({
-                    'success': True,
-                    'submission_id': f"sub_{uuid.uuid4().hex[:8]}",
-                    'file_path': file_path,
-                    'processing_method': 'file_only'
-                })
-                logger.info(f"File saved successfully: {file.filename}")
+            result['success'] = True
+            result['raw_text'] = raw_text
+            result['answers'] = parsed_data.get('answers', {}) if processing_method == 'parse_function' else parsed_data
+            result['submission_id'] = str(uuid.uuid4())
+            result['file_path'] = file_path
+            result['file_size'] = os.path.getsize(file_path)
+            result['file_type'] = file_ext
+            result['processing_method'] = processing_method
+            logger.info(f"Successfully processed {file.filename} with {processing_method}")
 
         except Exception as e:
-            logger.error(f"Error processing file {file.filename}: {str(e)}")
             result['error'] = str(e)
-
+            result['success'] = False
+            logger.error(f"Exception during _process_single_file for {file.filename}: {e}", exc_info=True)
         finally:
-            end_time = datetime.now()
-            result['processing_time'] = (end_time - start_time).total_seconds()
-            logger.debug(f"File processing completed in {result['processing_time']:.2f} seconds")
+            if file_path and os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                    logger.info(f"Cleaned up temporary file: {file_path}")
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to clean up temp file {file_path}: {str(cleanup_error)}")
 
-        return result
+            result['processing_time'] = (datetime.now() - start_time).total_seconds()
+            return result
 
     def cleanup_temp_files(self, results: Dict[str, Any]) -> None:
         """Clean up temporary files after processing."""

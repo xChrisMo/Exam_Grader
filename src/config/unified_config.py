@@ -173,6 +173,8 @@ class ServerConfig:
     debug: bool = False
     testing: bool = False
     threaded: bool = True
+    max_batch_processing_workers: int = 5
+    batch_processing_size: int = 5
 
     def __post_init__(self):
         """Validate server configuration."""

@@ -41,6 +41,7 @@ try:
     from src.services.mapping_service import MappingService
     from src.services.grading_service import GradingService
     from src.services.file_cleanup_service import FileCleanupService
+    from src.services.batch_processing_service import BatchProcessingService
     from src.parsing.parse_submission import parse_student_submission
     from src.parsing.parse_guide import parse_marking_guide
     from utils.logger import logger
@@ -421,15 +422,8 @@ def dashboard():
     except Exception as e:
         logger.error(f"Error loading dashboard: {str(e)}")
         flash('Error loading dashboard. Please try again.', 'error')
-        return render_template('dashboard.html',
-                             page_title='Dashboard',
-                             total_submissions=0,
-                             processed_submissions=0,
-                             guide_uploaded=False,
-                             last_score=0,
-                             avg_score=0,
-                             recent_activity=[],
-                             submissions=[])
+        # Render a generic error page or redirect to avoid re-rendering dashboard.html
+        return render_template('error.html', message='Error loading dashboard. Please try again.')
 
 @app.route('/upload-guide', methods=['GET', 'POST'])
 @login_required
@@ -638,189 +632,288 @@ def upload_guide():
 def upload_submission():
     """Upload and process student submission."""
     if request.method == 'GET':
-        return render_template('upload_submission.html', page_title='Upload Submission')
+        # Fetch available marking guides for the dropdown
+        marking_guides = []
+        current_user = get_current_user()
+        if current_user:
+            try:
+                from src.database.models import MarkingGuide
+                marking_guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
+            except Exception as e:
+                logger.error(f"Error fetching marking guides: {str(e)}")
+                flash('Error loading marking guides.', 'error')
+        return render_template('upload_submission.html', page_title='Upload Submission', marking_guides=marking_guides)
 
     try:
-        if not session.get('guide_uploaded'):
-            flash('Please upload a marking guide first.', 'warning')
-            return redirect(url_for('upload_guide'))
+        # Get form data
+        marking_guide_id = request.form.get('marking_guide_id')
+        processing_mode = request.form.get('processing_mode', 'sequential') # 'sequential' or 'parallel'
+        batch_size = int(request.form.get('batch_size', 5)) # Default batch size
 
-        files = request.files.getlist('file')
+        # Validate marking guide selection
+        if not marking_guide_id:
+            flash('Please select a marking guide.', 'warning')
+            return jsonify({'status': 'error', 'error': 'No marking guide selected'}), 400
+
+        # Retrieve marking guide from DB
+        from src.database.models import MarkingGuide
+        marking_guide = MarkingGuide.query.get(marking_guide_id)
+        if not marking_guide or marking_guide.user_id != get_current_user().id:
+            flash('Invalid marking guide selected.', 'error')
+            return jsonify({'status': 'error', 'error': 'Invalid marking guide'}), 400
+
+        files = request.files.getlist('files[]') # Changed from 'file' to 'files[]' for multiple files
         if not files or all(f.filename == '' for f in files):
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
-                return jsonify({'success': False, 'error': 'No files selected.'}), 400
+            logger.warning("No files selected for upload.")
             flash('No files selected.', 'error')
-            return redirect(request.url)
+            return jsonify({'status': 'error', 'error': 'No files selected'}), 400
+
+        logger.info(f"Received {len(files)} files for upload.")
+        for f in files:
+            logger.debug(f"File received: {f.filename}, Content-Type: {f.content_type}, Size: {f.content_length}")
 
         temp_dir = str(config.files.temp_dir)
         os.makedirs(temp_dir, exist_ok=True)
 
-        uploaded_count = 0
-        failed_count = 0
-        submissions_data = session.get('submissions', [])
+        # Initialize batch processing service
+        batch_service = BatchProcessingService(
+            parse_function=parse_student_submission,
+            ocr_service=ocr_service,
+            marking_guide=marking_guide # Pass the selected marking guide
+        )
+        logger.info(f"Batch processing initialized with OCR {'ENABLED' if config.ocr.enabled else 'DISABLED'}")
 
-        for file in files:
-            if file.filename == '':
-                continue
+        # Process files in batch
+        try:
+            logger.info("Starting batch processing...")
+            if not batch_service.parse_function:
+                logger.error("Parse function not configured in BatchProcessingService")
+                flash('Submission processing configuration error', 'error')
+                return jsonify({'status': 'error', 'error': 'Submission parser not initialized'}), 500
 
-            if not allowed_file(file.filename):
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
-                    return jsonify({'success': False, 'error': f'File type not supported for {file.filename}. Skipping.'}), 400
-                flash(f'File type not supported for {file.filename}. Skipping.', 'error')
-                failed_count += 1
-                continue
+            start_time = time.time()
+            results = batch_service.process_files_batch(
+                files=files,
+                temp_dir=temp_dir,
+                parallel=(processing_mode == 'parallel'), # Use processing_mode
+                batch_size=batch_size, # Use batch_size
+                progress_callback=lambda current, total: logger.info(f"Processed {current}/{total} files")
+            )
+            total_processing_time = time.time() - start_time
 
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(temp_dir, f"submission_{uuid.uuid4().hex}_{filename}")
-            try:
-                file.save(file_path)
+            logger.info(f"Batch processing completed. Successful: {len(results.get('successful', []))}, Failed: {len(results.get('failed', []))}")
+            logger.debug(f"Batch processing results: {json.dumps(results, indent=2)}")
 
-                answers = {}
-                raw_text = ''
-                error = None
-
-                if 'parse_student_submission' in globals():
-                    answers, raw_text, error = parse_student_submission(file_path)
-
-                if error:
-                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
-                        return jsonify({'success': False, 'error': f'Error processing {filename}: {error}'}), 400
-                    flash(f'Error processing {filename}: {error}', 'error')
-                    failed_count += 1
-                    os.remove(file_path)
-                    continue
-                elif not answers and not raw_text:
-                    # Fallback if parsing fails or returns empty, but no explicit error
-                    answers = {'extracted_text': f'Sample text from {filename}'}
-                    raw_text = f'Raw text content from {filename}'
-
-                logger.info(f"Before storing in session - filename: {filename}, raw_text length: {len(raw_text) if raw_text else 0}, answers keys: {list(answers.keys()) if answers else 'None'}")
-
-                submission_id = str(uuid.uuid4())
-
-                # Try to store in database first, fallback to session
+            # Store successful submissions in the database
+            from src.database.models import Submission
+            current_user = get_current_user()
+            for res in results.get('successful', []):
                 try:
-                    from src.database.models import Submission
-                    from flask import current_app
+                    submission = Submission(
+                        user_id=current_user.id,
+                        marking_guide_id=marking_guide.id,
+                        filename=res['filename'],
+                        file_path=res['file_path'],
+                        file_size=res['file_size'],
+                        file_type=res['file_type'],
+                        content_text=res['raw_text'],
+                        answers=res['answers'],
+                        processing_status='completed'
+                    )
+                    db.session.add(submission)
+                    db.session.commit()
+                    logger.info(f"Submission {res['filename']} saved to DB with ID {submission.id}")
+                except Exception as db_err:
+                    logger.error(f"Error saving submission {res['filename']} to DB: {str(db_err)}")
+                    db.session.rollback()
+                    # Add to failed results if DB save fails
+                    results['failed'].append({
+                        'filename': res['filename'],
+                        'success': False,
+                        'error': f'Failed to save to database: {str(db_err)}'
+                    })
+                    results['successful'].remove(res)
 
-                    current_user = get_current_user()
-                    if current_user:
-                        # Get file info for database storage
-                        file_size = get_file_size_mb(file_path) * 1024 * 1024  # Convert to bytes
-                        file_type = Path(filename).suffix.lower()
+            total_files = len(files)
+            successful_files = len(results.get('successful', []))
+            failed_files = len(results.get('failed', []))
+            success_rate = (successful_files / total_files * 100) if total_files > 0 else 0
+            average_time_per_file = (total_processing_time / total_files) if total_files > 0 else 0
 
-                        # Store in database with all required fields
-                        submission = Submission(
-                            user_id=current_user.id,
-                            filename=filename,
-                            file_path=file_path,  # Store the path
-                            file_size=int(file_size),
-                            file_type=file_type,
-                            content_text=raw_text,
-                            answers=answers,
-                            processing_status='completed'
-                        )
-                        db.session.add(submission)
-                        db.session.commit()
-                        submission_id = str(submission.id)
-                        logger.info(f"Stored submission in database with ID: {submission_id}")
+            summary = {
+                'total_files': total_files,
+                'successful_files': successful_files,
+                'failed_files': failed_files,
+                'success_rate': round(success_rate, 2),
+                'total_processing_time': round(total_processing_time, 2),
+                'average_time_per_file': round(average_time_per_file, 2)
+            }
 
-                        # Also store in session for compatibility with existing code
-                        session[f'submission_{submission_id}'] = {
-                            'filename': filename,
-                            'answers': answers,
-                            'raw_text': raw_text
-                        }
-                    else:
-                        # Fallback to session storage only
-                        session[f'submission_{submission_id}'] = {
-                            'filename': filename,
-                            'answers': answers,
-                            'raw_text': raw_text
-                        }
-                        logger.info(f"Stored submission in session with ID: {submission_id}")
+            # Return a summary of results for batch upload
+            return jsonify({'status': 'batch_completed', 'results': results, 'summary': summary}), 200
 
-                except Exception as storage_error:
-                    logger.warning(f"Database storage failed, using session: {str(storage_error)}")
-                    # Fallback to session storage
-                    session[f'submission_{submission_id}'] = {
-                        'filename': filename,
-                        'answers': answers,
-                        'raw_text': raw_text
-                    }
-
-                # Optimize session storage - limit raw_text size for performance
-                limited_raw_text = raw_text[:1000] if raw_text else ''  # Limit to 1KB
-                limited_answers = {}
-                if answers:
-                    # Limit answer content size
-                    for key, value in list(answers.items())[:10]:  # Max 10 answers
-                        if isinstance(value, str):
-                            limited_answers[key] = value[:500]  # Limit to 500 chars
-                        else:
-                            limited_answers[key] = value
-
-                submissions_data.append({
-                    'id': submission_id,
-                    'filename': filename,
-                    'uploaded_at': datetime.now().isoformat(),
-                    'processed': True,
-                    'raw_text': limited_raw_text,  # Limited for performance
-                    'extracted_answers': limited_answers,  # Limited for performance
-                    'size_mb': round(get_file_size_mb(file_path), 2) if os.path.exists(file_path) else 0
-                })
-                uploaded_count += 1
-
-                activity = session.get('recent_activity', [])
-                activity.insert(0, {
-                    'type': 'submission_upload',
-                    'message': f'Uploaded submission: {filename}',
-                    'timestamp': datetime.now().isoformat(),
-                    'icon': 'upload'
-                })
-                session['recent_activity'] = activity[:10]
-
-            except Exception as e:
-                logger.error(f"Error processing file {filename}: {str(e)}")
-                flash(f'Error processing {filename}: {str(e)}', 'error')
-                failed_count += 1
-            finally:
-                if os.path.exists(file_path):
-                    try:
-                        os.remove(file_path)
-                    except OSError as e:
-                        logger.warning(f"Could not remove temporary file {file_path}: {str(e)}")
-
-        session['submissions'] = submissions_data
-        session.modified = True
-
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
-            if uploaded_count > 0 and failed_count == 0:
-                return jsonify({'success': True, 'message': f'{uploaded_count} submission(s) uploaded and processed successfully!', 'uploaded_count': uploaded_count, 'failed_count': failed_count})
-            elif uploaded_count > 0 and failed_count > 0:
-                return jsonify({'success': True, 'message': f'{uploaded_count} submission(s) uploaded, but {failed_count} failed. Check logs for details.', 'uploaded_count': uploaded_count, 'failed_count': failed_count})
+        except Exception as e:
+            logger.exception("Exception during batch processing:") # Use logger.exception to get traceback
+            return jsonify({'status': 'error', 'error': f'An error occurred during file processing: {str(e)}'}), 500
+        finally:
+            # Clean up temporary files created during processing
+            # Ensure results is defined even if an exception occurred before its assignment
+            if 'results' in locals():
+                for file_data in results.get('successful', []) + results.get('failed', []):
+                    file_path = file_data.get('file_path')
+                    if file_path and os.path.exists(file_path):
+                        try:
+                            os.remove(file_path)
+                            logger.debug(f"Cleaned up temporary file: {file_path}")
+                        except OSError as e:
+                            logger.warning(f"Could not remove temporary file {file_path}: {str(e)}")
             else:
-                return jsonify({'success': False, 'error': f'Failed to upload any submissions. {failed_count} failed. Check logs for details.', 'uploaded_count': uploaded_count, 'failed_count': failed_count}), 400
-        else:
-            if uploaded_count > 0:
-                flash(f'{uploaded_count} submission(s) uploaded and processed successfully!', 'success')
-                logger.info(f'{uploaded_count} submission(s) uploaded successfully.')
-            if failed_count > 0:
-                flash(f'{failed_count} submission(s) failed to upload or process. Check logs for details.', 'error')
+                logger.warning("Results variable not defined in finally block, skipping file cleanup.")
 
-            return redirect(url_for('dashboard'))
-
-    except RequestEntityTooLarge:
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
-            return jsonify({'success': False, 'error': f'File too large. Max size is {config.max_file_size_mb}MB.'}), 413
-        flash(f'File too large. Max size is {config.max_file_size_mb}MB.', 'error')
-        return redirect(request.url)
     except Exception as e:
         logger.error(f"Error uploading submission: {str(e)}")
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
-            return jsonify({'success': False, 'error': 'Internal server error'}), 500
-        flash('Error uploading submission. Please try again.', 'error')
-        return redirect(request.url)
+        return jsonify({'status': 'error', 'error': f'Error uploading submission: {str(e)}'}), 500
+
+@app.route('/api/marking-guides', methods=['GET'])
+@login_required
+def api_get_marking_guides():
+    """API endpoint to fetch available marking guides for the current user."""
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        from src.database.models import MarkingGuide
+        guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
+        guide_list = [{
+            'id': str(guide.id),
+            'title': guide.title,
+            'filename': guide.filename,
+            'uploaded_at': guide.created_at.isoformat()
+        } for guide in guides]
+        return jsonify(guide_list), 200
+    except Exception as e:
+        logger.error(f"Error fetching marking guides via API: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+
+
+
+@app.route('/view-submission/<submission_id>')
+@login_required
+def view_submission(submission_id):
+    """View a specific submission."""
+    submission_data = session.get(f'submission_{submission_id}')
+    if not submission_data:
+        # Try to load from DB if not in session
+        from src.database.models import Submission
+        submission = Submission.query.get(submission_id)
+        if submission and submission.user_id == get_current_user().id:
+            submission_data = {
+                'filename': submission.filename,
+                'answers': submission.answers,
+                'raw_text': submission.content_text,
+                'db_stored': True
+            }
+            session[f'submission_{submission_id}'] = submission_data # Cache in session
+        else:
+            flash('Submission not found or you do not have permission to view it.', 'error')
+            return redirect(url_for('dashboard'))
+
+    return render_template('view_submission.html', submission=submission_data, page_title='View Submission')
+
+
+@app.route('/grade-submission/<submission_id>')
+@login_required
+def grade_submission(submission_id):
+    """Grade a specific submission."""
+    submission_data = session.get(f'submission_{submission_id}')
+    if not submission_data:
+        # Try to load from DB if not in session
+        from src.database.models import Submission
+        submission = Submission.query.get(submission_id)
+        if submission and submission.user_id == get_current_user().id:
+            submission_data = {
+                'filename': submission.filename,
+                'answers': submission.answers,
+                'raw_text': submission.content_text,
+                'db_stored': True
+            }
+            session[f'submission_{submission_id}'] = submission_data # Cache in session
+        else:
+            flash('Submission not found or you do not have permission to grade it.', 'error')
+            return redirect(url_for('dashboard'))
+
+    # For now, just display the extracted answers
+    return render_template('grade_submission.html', submission=submission_data, page_title='Grade Submission')
+
+
+@app.route('/recent-activity')
+@login_required
+def recent_activity():
+    """Recent activity page."""
+    activity = session.get('recent_activity', [])
+    return render_template('recent_activity.html', page_title='Recent Activity', activity=activity)
+
+
+
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    """Log user out."""
+    logout_user()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('login'))
+
+
+@app.errorhandler(401)
+def unauthorized(error):
+    """Handle unauthorized access."""
+    flash('You need to be logged in to access this page.', 'warning')
+    return redirect(url_for('login'))
+
+
+@app.errorhandler(404)
+def page_not_found(error):
+    """Handle page not found errors."""
+    return render_template('404.html', page_title='Page Not Found'), 404
+
+
+@app.errorhandler(500)
+def internal_server_error(error):
+    """Handle internal server errors."""
+    db.session.rollback()
+    return render_template('500.html', page_title='Internal Server Error'), 500
+
+
+@app.context_processor
+def inject_user():
+    """Inject current user into all templates."""
+    return dict(current_user=get_current_user())
+
+
+@app.before_request
+def check_user_session():
+    """Ensure user session is valid before each request."""
+    user = get_current_user()
+    if user and user.is_authenticated and 'user_id' not in session:
+        logout_user()
+        flash('Your session has expired. Please log in again.', 'warning')
+        return redirect(url_for('login'))
+
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True, port=5000)
+
+
+
+
+
 
 @app.route('/submissions')
 @login_required
@@ -1382,146 +1475,23 @@ def process_grading():
     return process_ai_grading()
 
 # Additional routes for enhanced functionality
-@app.route('/marking-guides')
+@app.route('/marking-guides', endpoint='view_marking_guides')
 @login_required
-def marking_guides():
+def view_marking_guides():
     """View marking guide library with optimized performance and authentication."""
-    try:
-        guides = []
-
-        # Get session guide data with safe conversion
-        session_guide_data = session.get('guide_data')
-        session_guide_filename = session.get('guide_filename')
-        session_guide_content = session.get('guide_raw_content')
-
-        if session_guide_data and session_guide_filename:
-            try:
-                # Create session guide entry
-                session_guide = {
-                    'id': 'session_guide',  # Keep as string
-                    'name': session_guide_filename,  # For backward compatibility
-                    'title': session_guide_filename,  # Primary field
-                    'filename': session_guide_filename,
-                    'description': 'Currently active guide from session',
-                    'raw_content': session_guide_content or '',
-                    'questions': session_guide_data.get('questions', []),
-                    'total_marks': session_guide_data.get('total_marks', 0),
-                    'extraction_method': session_guide_data.get('extraction_method', 'unknown'),
-                    'created_at': session_guide_data.get('processed_at', datetime.now().isoformat()),
-                    'created_by': 'Session',
-                    'is_session_guide': True
-                }
-                logger.debug(f"Added session guide: ID={session_guide['id']}, Title={session_guide['title']}")
-                guides.append(session_guide)
-                logger.info(f"Added session guide: {session_guide_filename}")
-            except Exception as session_error:
-                logger.error(f"Error processing session guide: {str(session_error)}")
-
-        # Get stored guides from database (optimized)
-        try:
-            from src.database.models import MarkingGuide
-            current_user = get_current_user()
-            if current_user:
-                # Use efficient database query
-                db_guides = MarkingGuide.query.filter_by(
-                    user_id=current_user.id,
-                    is_active=True
-                ).order_by(MarkingGuide.created_at.desc()).limit(50).all()
-
-                for guide in db_guides:
-                    guide_data = {
-                        'id': str(guide.id),  # Ensure ID is a string
-                        'name': guide.title,  # For backward compatibility
-                        'title': guide.title,  # Primary field
-                        'filename': guide.filename,
-                        'description': guide.description or f'Database guide - {guide.title}',
-                        'questions': guide.questions or [],
-                        'total_marks': guide.total_marks or 0,
-                        'extraction_method': 'database',
-                        'created_at': guide.created_at.isoformat(),
-                        'created_by': current_user.username,
-                        'is_session_guide': False
-                    }
-                    guides.append(guide_data)
-                    logger.debug(f"Added guide to list: ID={guide_data['id']}, Title={guide_data['title']}")
-                logger.info(f"Loaded {len(db_guides)} guides from database")
-        except Exception as db_error:
-            logger.error(f"Error loading guides from database: {str(db_error)}")
-
-        # Calculate statistics
-        total_guides = len(guides)
-        total_questions = sum(len(guide.get('questions', [])) for guide in guides)
-        total_marks_all = sum(guide.get('total_marks', 0) for guide in guides)
-
-        # Get extraction method statistics
-        extraction_methods = {}
-        for guide in guides:
-            method = guide.get('extraction_method', 'unknown')
-            extraction_methods[method] = extraction_methods.get(method, 0) + 1
-
-        # Ensure all guides have proper fields and valid IDs
-        valid_guides = []
-        for guide in guides:
-            if 'extraction_method' not in guide or not guide['extraction_method']:
-                guide['extraction_method'] = 'unknown'
-
-            # Ensure ID is valid and not None
-            if not guide.get('id') or guide['id'] in [None, 'None', '']:
-                logger.warning(f"Guide with invalid ID found, skipping: {guide}")
-                continue  # Skip guides with invalid IDs
-
-            # Ensure title/name exists
-            if not guide.get('title') and not guide.get('name'):
-                guide['title'] = guide.get('filename', 'Untitled Guide')
-                guide['name'] = guide['title']
-
-            # Sanitize text fields to prevent JSON parsing issues
-            def sanitize_text(text):
-                if not text:
-                    return text
-                # Remove control characters that can break JSON
-                import re
-                # Remove control characters except tab, newline, and carriage return
-                text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', str(text))
-                return text
-
-            # Sanitize all text fields
-            guide['title'] = sanitize_text(guide.get('title', ''))
-            guide['name'] = sanitize_text(guide.get('name', ''))
-            guide['filename'] = sanitize_text(guide.get('filename', ''))
-            guide['description'] = sanitize_text(guide.get('description', ''))
-            guide['created_by'] = sanitize_text(guide.get('created_by', ''))
-
-            # Sanitize questions if they exist
-            if guide.get('questions'):
-                for question in guide['questions']:
-                    if isinstance(question, dict):
-                        for key, value in question.items():
-                            if isinstance(value, str):
-                                question[key] = sanitize_text(value)
-
-            valid_guides.append(guide)
-
-        guides = valid_guides  # Use only valid guides
-
-        context = {
-            'page_title': 'Marking Guide Library',
-            'guides': guides,
-            'saved_guides': guides,  # Template expects this variable
-            'current_guide': session.get('guide_filename', None),
-            'statistics': {
-                'total_guides': total_guides,
-                'total_questions': total_questions,
-                'total_marks': total_marks_all,
-                'extraction_methods': extraction_methods
-            }
+    context = {
+        'page_title': 'Marking Guide Library',
+        'guides': [],
+        'saved_guides': [],
+        'current_guide': None,
+        'statistics': {
+            'total_guides': 0,
+            'total_questions': 0,
+            'total_marks': 0,
+            'extraction_methods': {}
         }
-
-        return render_template('marking_guides.html', **context)
-    except Exception as e:
-        logger.error(f"Error loading guide library: {str(e)}")
-        flash('Error loading guide library. Please try again.', 'error')
-        return redirect(url_for('dashboard'))
+    }
+    return render_template('marking_guides.html', **context)
 
 @app.route('/create-guide')
 def create_guide():
@@ -1555,7 +1525,7 @@ def view_guide_content(guide_id):
 
         if not guide:
             flash('Marking guide not found', 'error')
-            return redirect(url_for('marking_guides'))
+            return redirect(url_for('view_marking_guides'))
 
         # Prepare context for template
         context = {
@@ -1573,7 +1543,7 @@ def view_guide_content(guide_id):
     except Exception as e:
         logger.error(f"Error viewing guide content: {str(e)}")
         flash('Error loading guide content. Please try again.', 'error')
-        return redirect(url_for('marking_guides'))
+        return redirect(url_for('view_marking_guides'))
 
 @app.route('/use_guide/<guide_id>')
 @login_required
@@ -1594,7 +1564,7 @@ def use_guide(guide_id):
 
         if not guide:
             flash('Marking guide not found', 'error')
-            return redirect(url_for('marking_guides'))
+            return redirect(url_for('view_marking_guides'))
 
         # Set comprehensive session data for dashboard activation
         session['guide_id'] = guide.id
@@ -1639,11 +1609,11 @@ def use_guide(guide_id):
     except SQLAlchemyError as e:
         logger.error(f"Database error in use_guide: {str(e)}")
         flash('Error accessing guide database', 'error')
-        return redirect(url_for('marking_guides'))
+        return redirect(url_for('view_marking_guides'))
     except Exception as e:
         logger.error(f"Unexpected error in use_guide: {str(e)}")
         flash('An unexpected error occurred', 'error')
-        return redirect(url_for('marking_guides'))
+        return redirect(url_for('view_marking_guides'))
 
 @app.route('/clear-session-guide', methods=['GET', 'POST'])
 @login_required
@@ -1657,11 +1627,11 @@ def clear_session_guide():
         session.pop('guide_id', None)
         session.modified = True
         flash('Session guide cleared successfully.', 'success')
-        return redirect(url_for('marking_guides'))
+        return redirect(url_for('view_marking_guides'))
     except Exception as e:
         logger.error(f"Error clearing session guide: {str(e)}")
         flash('Error clearing session guide. Please try again.', 'error')
-        return redirect(url_for('marking_guides'))
+        return redirect(url_for('view_marking_guides'))
 
 @app.route('/view-submission/<submission_id>')
 def view_submission_content(submission_id):
@@ -1828,7 +1798,7 @@ def delete_guide(guide_id):
 
         if not guide:
             flash('Marking guide not found', 'error')
-            return redirect(url_for('marking_guides'))
+            return redirect(url_for('view_marking_guides'))
 
         # Store guide name for flash message
         guide_name = guide.title
@@ -1854,17 +1824,17 @@ def delete_guide(guide_id):
             flash(f'Marking guide "{guide_name}" deleted successfully', 'success')
 
         logger.info(f"Guide deleted successfully: {guide_name} (ID: {guide_id})")
-        return redirect(url_for('marking_guides'))
+        return redirect(url_for('view_marking_guides'))
 
     except SQLAlchemyError as e:
         logger.error(f"Database error in delete_guide: {str(e)}")
         db.session.rollback()
         flash('Error deleting guide from database', 'error')
-        return redirect(url_for('marking_guides'))
+        return redirect(url_for('view_marking_guides'))
     except Exception as e:
         logger.error(f"Unexpected error in delete_guide: {str(e)}")
         flash('An unexpected error occurred while deleting the guide', 'error')
-        return redirect(url_for('marking_guides'))
+        return redirect(url_for('view_marking_guides'))
 
 @app.route('/api/delete-guide', methods=['POST'])
 @csrf.exempt
