@@ -33,9 +33,10 @@ from werkzeug.utils import secure_filename
 # Project imports
 try:
     from src.config.unified_config import config
-    from src.database import db, User, MarkingGuide, Submission, DatabaseUtils
+    from src.database import db, User, MarkingGuide, Submission, GradingResult, DatabaseUtils
     from src.security.session_manager import SecureSessionManager
     from src.security.secrets_manager import secrets_manager, initialize_secrets
+    from src.security.flask_session_interface import SecureSessionInterface
     from src.services.ocr_service import OCRService
     from src.services.llm_service import LLMService
     from src.services.mapping_service import MappingService
@@ -48,7 +49,7 @@ try:
     from utils.loading_states import loading_manager, get_loading_state_for_template
     from webapp.auth import init_auth, login_required, get_current_user
 except ImportError as e:
-    print(f"[ERROR] Failed to import required modules: {e}")
+    print(f"[ERROR] Failed to import required modules: {e}", file=sys.stderr)
     sys.exit(1)
 
 # Initialize Flask application
@@ -58,9 +59,11 @@ app = Flask(__name__)
 try:
     config.validate()
     app.config.update(config.get_flask_config())
+    app.config['SECRET_KEY'] = config.security.secret_key
     logger.info(f"Configuration loaded for environment: {config.environment}")
 except Exception as e:
     logger.error(f"Failed to load configuration: {str(e)}")
+    print(f"[CRITICAL ERROR] Failed to load configuration: {e}", file=sys.stderr)
     sys.exit(1)
 
 # Initialize CSRF protection
@@ -69,6 +72,7 @@ try:
     logger.info("CSRF protection initialized")
 except Exception as e:
     logger.error(f"Failed to initialize CSRF protection: {str(e)}")
+    print(f"[CRITICAL ERROR] Failed to initialize CSRF protection: {e}", file=sys.stderr)
     sys.exit(1)
 
 # Initialize database
@@ -77,6 +81,7 @@ try:
     logger.info("Database initialized")
 except Exception as e:
     logger.error(f"Failed to initialize database: {str(e)}")
+    print(f"[CRITICAL ERROR] Failed to initialize database: {e}", file=sys.stderr)
     sys.exit(1)
 
 # Initialize security components
@@ -86,9 +91,12 @@ try:
         config.security.secret_key,
         config.security.session_timeout
     )
+    # Set the custom session interface for Flask
+    app.session_interface = SecureSessionInterface(session_manager, app.config['SECRET_KEY'])
     logger.info("Security components initialized")
 except Exception as e:
     logger.error(f"Failed to initialize security: {str(e)}")
+    print(f"[CRITICAL ERROR] Failed to initialize security: {e}", file=sys.stderr)
     sys.exit(1)
 
 # Initialize authentication system
@@ -97,6 +105,7 @@ try:
     logger.info("Authentication system initialized")
 except Exception as e:
     logger.error(f"Failed to initialize authentication: {str(e)}")
+    print(f"[CRITICAL ERROR] Failed to initialize authentication: {e}", file=sys.stderr)
     sys.exit(1)
 
 def allowed_file(filename):
@@ -122,11 +131,13 @@ try:
     logger.info("Services initialized")
 except Exception as e:
     logger.error(f"Failed to initialize services: {str(e)}")
+    print(f"[CRITICAL ERROR] Failed to initialize services: {e}", file=sys.stderr)
     ocr_service = None
     llm_service = None
     mapping_service = None
     grading_service = None
     file_cleanup_service = None
+    sys.exit(1)
 
 # Utility functions
 
@@ -365,7 +376,10 @@ def dashboard():
             session_submissions = session.get('submissions', [])
             total_submissions = len(session_submissions)
             processed_submissions = len([s for s in session_submissions if s.get('processed', False)])
-            logger.info(f"Using session data: {total_submissions} submissions, {processed_submissions} processed")
+            logger.info(f"Dashboard: Using session data fallback. Total: {total_submissions}, Processed: {processed_submissions}")
+            logger.info(f"Dashboard: Raw session['submissions']: {session_submissions}")
+
+        logger.info(f"Dashboard: Calculated total_submissions: {total_submissions}, processed_submissions: {processed_submissions}")
 
         # Check if a guide is currently loaded in session (primary check)
         guide_uploaded = session.get('guide_uploaded', False)
@@ -764,7 +778,7 @@ def upload_submission():
                     'id': submission_id,
                     'filename': filename,
                     'uploaded_at': datetime.now().isoformat(),
-                    'processed': True,
+                    'processed': False,
                     'raw_text': limited_raw_text,  # Limited for performance
                     'extracted_answers': limited_answers,  # Limited for performance
                     'size_mb': round(get_file_size_mb(file_path), 2) if os.path.exists(file_path) else 0
@@ -882,9 +896,31 @@ def view_results():
             flash('No grading results available.', 'warning')
             return redirect(url_for('dashboard'))
 
-        # Get grading results from session
+        # Get grading results from database
+        # Assuming we want to display results for the last processed batch
+        # This might need a more robust way to identify the 'current' batch
+        # For now, let's fetch all grading results and filter/group them as needed
+        # Or, if we store a batch_id in session, we can use that to query.
+        # For simplicity, let's fetch all and process.
+        all_grading_results = GradingResult.query.all()
+        if not all_grading_results:
+            flash('No grading results available in the database.', 'warning')
+            return redirect(url_for('dashboard'))
 
-        grading_results = session.get('grading_results', {})
+        grading_results = {}
+        for res in all_grading_results:
+            grading_results[res.submission_id] = {
+                'filename': res.submission.filename if res.submission else 'Unknown',
+                'status': 'completed',
+                'timestamp': res.created_at.isoformat() if res.created_at else '',
+                'score': res.score,
+                'percentage': res.percentage,
+                'max_score': res.max_score,
+                'feedback': res.feedback,
+                'criteria_scores': res.detailed_feedback,
+                'mappings': [], # Mappings are part of the Mapping model, not directly in GradingResult
+                'metadata': {}
+            }
 
         # Calculate batch summary
         total_submissions = len(grading_results)
@@ -939,6 +975,7 @@ def view_results():
 @app.route('/api/process-ai-grading', methods=['POST'])
 @csrf.exempt
 def process_ai_grading():
+    max_questions = request.json.get('max_questions', None)
     """API endpoint to process unified AI-powered mapping and grading with progress tracking."""
     try:
         if not session.get('guide_uploaded') or not session.get('submissions'):
@@ -1022,7 +1059,8 @@ def process_ai_grading():
                     # The grading service internally handles mapping and grading
                     grading_result, grading_error = grading_service.grade_submission(
                         guide_content,
-                        submission_content
+                        submission_content,
+                        max_questions=max_questions
                     )
 
                     if grading_error:
@@ -1044,8 +1082,26 @@ def process_ai_grading():
                             'mappings': grading_result.get('mappings', []),
                             'metadata': grading_result.get('metadata', {})
                         }
-                        successful_gradings += 1
-                        logger.info(f"AI processing completed for {submission_id}: {grading_result.get('percentage', 0)}%")
+                        # Save grading result to database
+                        try:
+                            new_grading_result = GradingResult(
+                                submission_id=submission_id,
+                                mapping_id=grading_result.get('mapping_id'), # Assuming mapping_id is returned
+                                score=grading_result.get('score', 0),
+                                max_score=grading_result.get('max_score', 0),
+                                percentage=grading_result.get('percentage', 0),
+                                feedback=grading_result.get('feedback', ''),
+                                detailed_feedback=grading_result.get('criteria_scores', []) # Or a more appropriate field
+                            )
+                            db.session.add(new_grading_result)
+                            db.session.commit()
+                            successful_gradings += 1
+                            logger.info(f"AI processing completed for {submission_id}: {grading_result.get('percentage', 0)}%")
+                        except Exception as db_e:
+                            db.session.rollback()
+                            logger.error(f"Database error saving grading result for {submission_id}: {str(db_e)}")
+                            failed_gradings += 1
+                            continue
                     else:
                         logger.error(f"Invalid grading result for submission {submission_id}")
                         failed_gradings += 1
@@ -1060,14 +1116,15 @@ def process_ai_grading():
                 failed_gradings += 1
                 continue
 
-        # Store results in session
-        session['grading_results'] = grading_results
+        # Update last grading result in session for display purposes
         session['last_grading_result'] = {
             'successful': successful_gradings,
             'failed': failed_gradings,
             'total': len(submissions),
             'timestamp': datetime.now().isoformat()
         }
+        # Clear session grading_results as they are now in DB
+        session.pop('grading_results', None)
 
         # Calculate overall statistics
         total_score = sum(result.get('score', 0) for result in grading_results.values())
@@ -1149,6 +1206,11 @@ def process_unified_ai():
     """API endpoint for unified AI processing with real-time progress tracking."""
     try:
         logger.info("Starting unified AI processing endpoint")
+
+        # Get max_questions from request, default to None if not provided
+        data = request.get_json()
+        max_questions = data.get('max_questions')
+        logger.info(f"Received max_questions: {max_questions}")
 
         # Check session data with detailed logging
         guide_uploaded = session.get('guide_uploaded', False)
@@ -1250,7 +1312,8 @@ def process_unified_ai():
             result, error = unified_ai_service.process_unified_ai_grading(
                 marking_guide_content=guide_content,
                 submissions=submissions,
-                progress_callback=progress_callback
+                progress_callback=progress_callback,
+                max_questions=max_questions
             )
             logger.info("Unified AI processing completed")
 
@@ -1270,9 +1333,69 @@ def process_unified_ai():
         grading_results = result.get('results', [])
         summary = result.get('summary', {})
 
+        # Save grading results to database
+        logger.info(f"Grading results received: {grading_results}")
+        for res in grading_results:
+            try:
+                # Ensure submission_id is a string
+                submission_id_str = str(res.get('submission_id'))
+                
+                # Fetch the submission from the database
+                submission = Submission.query.get(submission_id_str)
+
+                if submission:
+                    # Update submission status
+                    submission.processing_status = 'completed'
+                    db.session.add(submission)
+
+                    # Create and save GradingResult
+                    grading_result_db = GradingResult(
+                        submission_id=submission_id_str,
+                        guide_id=guide_id,
+                        overall_score=res.get('score', 0),
+                        max_score=res.get('max_score', 0),
+                        percentage=res.get('percentage', 0),
+                        letter_grade=res.get('letter_grade', 'N/A'),
+                        feedback=res.get('feedback', 'No feedback provided'),
+                        detailed_results=res.get('detailed_results', {})
+                    )
+                    db.session.add(grading_result_db)
+                    db.session.commit()
+                    logger.info(f"Grading result for submission {submission_id_str} saved to DB.")
+                else:
+                    logger.warning(f"Submission {submission_id_str} not found in DB. Skipping DB save for this result.")
+            except Exception as db_e:
+                db.session.rollback()
+                logger.error(f"Database error saving grading result for {res.get('filename', 'Unknown')}: {str(db_e)}")
+
         # Update session with results
         session['grading_results'] = grading_results
         session['last_grading_summary'] = summary
+
+        # Update the 'processed' status for submissions in the session and database
+        session_submissions = session.get('submissions', [])
+        updated_session_submissions = []
+        for s in session_submissions:
+            submission_id = s.get('id')
+            logger.info(f"Processing session submission {submission_id}. Current processed status: {s.get('processed', False)}")
+            matching_result = next((res for res in grading_results if res.get('submission_id') == submission_id and res.get('status') != 'error'), None)
+            logger.info(f"Matching result for {submission_id}: {matching_result is not None}. Status in grading_results: {next((res.get('status') for res in grading_results if res.get('submission_id') == submission_id), 'N/A')}")
+
+            if matching_result:
+                s['processed'] = True
+                # Also update in database if it exists there
+                try:
+                    db_submission = Submission.query.get(submission_id)
+                    if db_submission:
+                        db_submission.processing_status = 'completed'
+                        db.session.add(db_submission)
+                        db.session.commit()
+                        logger.info(f"Submission {submission_id} status updated to 'completed' in DB.")
+                except Exception as db_e:
+                    db.session.rollback()
+                    logger.error(f"Error updating submission {submission_id} status in DB: {str(db_e)}")
+            updated_session_submissions.append(s)
+        session['submissions'] = updated_session_submissions
 
         # Update recent activity
         activity = session.get('recent_activity', [])
@@ -1980,22 +2103,57 @@ def delete_submission():
             logger.warning("Delete submission: No submission_id provided.")
             return jsonify({'success': False, 'message': 'No submission ID provided.'}), 400
 
-        submissions = session.get('submissions', [])
-        initial_len = len(submissions)
-        submissions = [s for s in submissions if s.get('id') != submission_id]
-        session['submissions'] = submissions
-
-        if len(submissions) < initial_len:
-            logger.info(f"Submission {submission_id} deleted successfully from session.")
-            # Add to recent activity
+        # Try to delete from database first
+        submission = Submission.query.get(submission_id)
+        if submission:
+            db.session.delete(submission)
+            db.session.commit()
+            logger.info(f"Submission {submission_id} deleted successfully from database.")
             add_recent_activity('submission_deleted', f'Submission {submission_id[:8]}... deleted.', 'trash')
             return jsonify({'success': True, 'message': 'Submission deleted successfully.'})
         else:
-            logger.warning(f"Submission {submission_id} not found for deletion.")
-            return jsonify({'success': False, 'message': 'Submission not found.'}), 404
+            # Fallback to session if not found in DB (e.g., old session data)
+            submissions = session.get('submissions', [])
+            initial_len = len(submissions)
+            submissions = [s for s in submissions if s.get('id') != submission_id]
+            session['submissions'] = submissions
+
+            if len(submissions) < initial_len:
+                logger.info(f"Submission {submission_id} deleted successfully from session.")
+                add_recent_activity('submission_deleted', f'Submission {submission_id[:8]}... deleted.', 'trash')
+                return jsonify({'success': True, 'message': 'Submission deleted successfully.'})
+            else:
+                logger.warning(f"Submission {submission_id} not found for deletion.")
+                return jsonify({'success': False, 'message': 'Submission not found.'}), 404
 
     except Exception as e:
         logger.error(f"Error deleting submission: {str(e)}")
+        return jsonify({'success': False, 'message': 'Internal server error.'}), 500
+
+
+@app.route('/api/delete-grading-result', methods=['POST'])
+@csrf.exempt
+def delete_grading_result():
+    """API endpoint to delete a grading result."""
+    try:
+        grading_result_id = request.json.get('grading_result_id')
+        if not grading_result_id:
+            logger.warning("Delete grading result: No grading_result_id provided.")
+            return jsonify({'success': False, 'message': 'No grading result ID provided.'}), 400
+
+        grading_result = GradingResult.query.get(grading_result_id)
+        if grading_result:
+            db.session.delete(grading_result)
+            db.session.commit()
+            logger.info(f"Grading result {grading_result_id} deleted successfully from database.")
+            add_recent_activity('grading_result_deleted', f'Grading result {grading_result_id[:8]}... deleted.', 'trash')
+            return jsonify({'success': True, 'message': 'Grading result deleted successfully.'})
+        else:
+            logger.warning(f"Grading result {grading_result_id} not found for deletion.")
+            return jsonify({'success': False, 'message': 'Grading result not found.'}), 404
+
+    except Exception as e:
+        logger.error(f"Error deleting grading result: {str(e)}")
         return jsonify({'success': False, 'message': 'Internal server error.'}), 500
 
 

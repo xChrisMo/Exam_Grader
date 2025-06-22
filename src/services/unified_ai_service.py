@@ -80,7 +80,8 @@ class UnifiedAIService:
         self,
         marking_guide_content: str,
         submissions: List[Dict],
-        progress_callback: Optional[Callable[[ProcessingProgress], None]] = None
+        progress_callback: Optional[Callable[[ProcessingProgress], None]] = None,
+        max_questions: Optional[int] = None
     ) -> Tuple[Dict, Optional[str]]:
         """
         Process unified AI grading with mapping and grading combined.
@@ -143,6 +144,32 @@ class UnifiedAIService:
                 submission_content = submission.get('content_text', submission.get('content', ''))
                 submission_filename = submission.get('filename', f'submission_{i+1}')
                 
+                if not submission_content:
+                    logger.warning(f"No content found for submission {submission_filename}. Skipping.")
+                    failed_gradings += 1
+                    all_results.append({
+                        'submission_id': submission.get('id', f'sub_{i}'),
+                        'filename': submission_filename,
+                        'status': 'error',
+                        'error': 'Empty submission content',
+                        'score': 0,
+                        'max_score': 0,
+                        'percentage': 0,
+                        'letter_grade': 'F',
+                        'details': 'No text could be extracted from the submission file. Please ensure the file contains readable text or images.'
+                    })
+                    self._update_progress(ProcessingProgress(
+                        current_step=current_step,
+                        total_steps=total_steps,
+                        current_operation=f"Skipping empty submission {submission_filename}",
+                        submission_index=i + 1,
+                        total_submissions=len(submissions),
+                        percentage=(current_step / total_steps) * 100,
+                        estimated_time_remaining=self._estimate_time_remaining(current_step, total_steps),
+                        details="No content found for this submission. It will be marked as failed."
+                    ))
+                    continue
+                
                 self._update_progress(ProcessingProgress(
                     current_step=current_step,
                     total_steps=total_steps,
@@ -158,7 +185,7 @@ class UnifiedAIService:
                     # Use mapping service for unified processing (it already combines mapping + grading)
                     if self.mapping_service:
                         mapping_result, mapping_error = self.mapping_service.map_submission_to_guide(
-                            marking_guide_content, submission_content, num_questions=1
+                            marking_guide_content, submission_content, num_questions=max_questions
                         )
                         
                         if mapping_error:

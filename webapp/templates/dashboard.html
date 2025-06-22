@@ -303,7 +303,19 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
           </svg>
           AI Processing
-        </button> {% else %}
+        </button>
+        <div class="mt-4">
+          <label for="max_questions" class="block text-sm font-medium text-gray-700">Max Questions to Answer (Optional):</label>
+          <input
+            type="number"
+            id="max_questions"
+            name="max_questions"
+            min="1"
+            placeholder="All questions"
+            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+          />
+        </div>
+        {% else %}
         <div class="text-center">
           <div class="text-sm text-gray-500 mb-2">
             {% if not guide_uploaded %} Need guide & submissions {% elif
@@ -481,6 +493,20 @@
                     >{{ activity.timestamp[:10] }}</time
                   >
                 </div>
+                {% if activity.type == 'submission_deleted' or activity.type == 'grading_result_deleted' %}
+                <div class="flex-shrink-0 ml-2">
+                  <button
+                    type="button"
+                    class="delete-activity-btn inline-flex items-center p-1 border border-transparent rounded-full shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    data-id="{{ activity.id }}"
+                    data-type="{{ activity.type }}"
+                  >
+                    <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                      <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+                {% endif %}
               </div>
             </div>
           </div>
@@ -503,12 +529,16 @@
         try {
           console.log("Starting unified AI processing...");
 
+          const maxQuestionsInput = document.getElementById('max_questions');
+          const maxQuestions = maxQuestionsInput ? parseInt(maxQuestionsInput.value) : null;
+
           // Start the unified AI processing
           const response = await fetch('/api/process-unified-ai', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-            }
+            },
+            body: JSON.stringify({ max_questions: maxQuestions })
           });
 
           console.log("Response status:", response.status);
@@ -545,6 +575,50 @@
         }
       });
     }
+
+    // Delete Activity Button
+    document.querySelectorAll('.delete-activity-btn').forEach(button => {
+      button.addEventListener('click', async function() {
+        const id = this.dataset.id;
+        const type = this.dataset.type;
+        let endpoint = '';
+
+        if (type === 'submission_deleted') {
+          endpoint = '/api/delete-submission';
+        } else if (type === 'grading_result_deleted') {
+          endpoint = '/api/delete-grading-result';
+        } else {
+          console.error('Unknown activity type for deletion:', type);
+          return;
+        }
+
+        if (!confirm('Are you sure you want to delete this item?')) {
+          return;
+        }
+
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ [type.includes('submission') ? 'submission_id' : 'grading_result_id']: id })
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            ExamGrader.utils.showToast(data.message, 'success');
+            setTimeout(() => location.reload(), 1000);
+          } else {
+            ExamGrader.utils.showToast(data.message, 'error');
+          }
+        } catch (error) {
+          console.error('Error deleting item:', error);
+          ExamGrader.utils.showToast('Error deleting item: ' + error.message, 'error');
+        }
+      });
+    });
   });
 </script>
 {% endblock %}

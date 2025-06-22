@@ -607,7 +607,7 @@
                       if (response.redirected) {
                           window.location.href = response.url;
                       } else {
-                          window.location.href = '{{ url_for("dashboard") }}';
+                          window.location.href = '{{ url_for("view_results") }}';
                       }
                   }, 500);
               } else {
@@ -737,11 +737,13 @@
               formData.append('parallel_processing', document.getElementById('parallel-processing').checked);
               formData.append('batch_size', document.getElementById('batch-size').value);
 
+              const csrfToken = document.querySelector('input[name="csrf_token"]').value;
               const response = await fetch('/upload-submission', {
                   method: 'POST',
                   body: formData,
                   headers: {
-                      'X-Requested-With': 'XMLHttpRequest'
+                      'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRFToken': csrfToken
                   }
               });
 

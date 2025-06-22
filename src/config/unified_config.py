@@ -15,11 +15,13 @@ from dotenv import load_dotenv
 
 # Import logger with fallback
 try:
-    from utils.logger import logger
+    from utils.logger import Logger
 except ImportError:
     import logging
 
     logger = logging.getLogger(__name__)
+
+logger = Logger().get_logger()
 
 # Load environment variables
 load_dotenv()
@@ -36,7 +38,7 @@ class SecurityConfig:
     max_requests_per_hour: int = 1000
     secure_cookies: bool = True
     session_cookie_httponly: bool = True
-    session_cookie_secure: bool = True
+    session_cookie_secure: bool = False # Changed to False for local HTTP development
     session_cookie_samesite: str = "Lax"
 
     def __post_init__(self):
@@ -109,7 +111,7 @@ class APIConfig:
     handwriting_ocr_api_url: str = "https://www.handwritingocr.com/api/v3"
     handwriting_ocr_delete_after: int = 3600
     deepseek_api_url: str = "https://api.deepseek.com/v1"
-    deepseek_model: str = "deepseek-reasoner"
+    deepseek_model: str = field(default_factory=lambda: os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner"))
     api_timeout: int = 30
     api_retry_attempts: int = 3
     api_retry_delay: float = 2.0
@@ -236,6 +238,7 @@ class UnifiedConfig:
             deepseek_api_url=os.getenv(
                 "DEEPSEEK_API_URL", "https://api.deepseek.com/v1"
             ),
+            deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner"),
             # LLM-Only Mode Configuration
             llm_only_mode=os.getenv("LLM_ONLY_MODE", "False").lower() == "true",
             llm_strict_mode=os.getenv("LLM_STRICT_MODE", "False").lower() == "true",
@@ -251,19 +254,26 @@ class UnifiedConfig:
 
         # Logging configuration
         self.logging = LoggingConfig(
-            log_level=os.getenv("LOG_LEVEL", "INFO"), log_file=os.getenv("LOG_FILE")
+            log_level="DEBUG" if self.environment == "development" else os.getenv("LOG_LEVEL", "INFO"),
+            log_file=os.getenv("LOG_FILE"),
         )
 
         # Server configuration
-        self.server = ServerConfig(
+        self.server: ServerConfig = ServerConfig(
             host=os.getenv("HOST", "127.0.0.1"),
             port=int(os.getenv("PORT", "5000")),
             debug=self.environment == "development",
             testing=self.environment == "testing",
         )
 
+        # Adjust secure cookie setting based on environment
+        if self.environment in ["development", "testing"] or self.server.debug:
+            self.security.session_cookie_secure = False
+            logger.info("Session cookies set to non-secure for development/testing environment.")
+
     def _get_secret_key(self) -> str:
         """Get or generate a secure secret key."""
+        logger.debug("Attempting to retrieve SECRET_KEY.")
         secret_key = os.getenv("SECRET_KEY")
         if not secret_key:
             if self.environment == "production":
@@ -273,6 +283,7 @@ class UnifiedConfig:
             logger.warning(
                 "Using generated SECRET_KEY for development. Set SECRET_KEY environment variable for production."
             )
+            logger.debug(f"Using SECRET_KEY (first 5 chars): {secret_key[:5]}...")
         return secret_key
 
     def get_flask_config(self) -> Dict[str, Any]:

@@ -909,9 +909,10 @@ class MappingService:
                         6. Provide a high confidence score (0.8-1.0) only for very clear matches
                         7. For partial matches, provide a lower score (0.5-0.7) and explain why
                         8. If a question has no matching answer, do not include it in the mappings
-                        9. IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide
-                        10. Find the best {num_questions} answers in the student submission and map them to the corresponding questions
-                        11. If there are more potential answers, select only the best {num_questions} based on quality and completeness
+                        9. IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide.
+                        10. Find the best {num_questions} answers in the student submission and map them to the corresponding questions.
+                        11. If there are more potential answers, select only the best {num_questions} based on quality and completeness.
+                        12. Ensure that the final output reflects the mapping and grading for precisely {num_questions} questions.
 
                         Grading guidelines:
                         1. For each matched question-answer pair, grade the answer based on how well it addresses the question
@@ -944,9 +945,10 @@ class MappingService:
                         6. Provide a high confidence score (0.8-1.0) only for very clear matches
                         7. For partial matches, provide a lower score (0.5-0.7) and explain why
                         8. If a student answer has no matching guide answer, do not include it in the mappings
-                        9. IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide
-                        10. Find the best {num_questions} answers in the student submission and map them to the corresponding model answers
-                        11. If there are more potential answers, select only the best {num_questions} based on quality and completeness
+                        9. IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide.
+                        10. Find the best {num_questions} answers in the student submission and map them to the corresponding model answers.
+                        11. If there are more potential answers, select only the best {num_questions} based on quality and completeness.
+                        12. Ensure that the final output reflects the mapping and grading for precisely {num_questions} questions.
 
                         Grading guidelines:
                         1. For each matched answer pair, grade the student answer based on how well it matches the model answer

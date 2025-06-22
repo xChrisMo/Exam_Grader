@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from dotenv import load_dotenv
 from packaging import version
 
+from src.config.unified_config import config
 from utils.logger import logger
 
 # Load environment variables
@@ -63,7 +64,7 @@ class LLMService:
         self,
         api_key: Optional[str] = None,
         base_url: str = "https://api.deepseek.com/v1",
-        model: str = "deepseek-chat",
+        model: str = config.api.deepseek_model,
         temperature: float = 0.0,
         max_retries: int = 3,
         retry_delay: float = 1.0,

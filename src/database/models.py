@@ -122,7 +122,7 @@ class MarkingGuide(db.Model, TimestampMixin):
     )
     
     id = get_uuid_column()
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     title = Column(String(200), nullable=False)
     description = Column(Text)
     filename = Column(String(255), nullable=False)
@@ -162,7 +162,7 @@ class Submission(db.Model, TimestampMixin):
     __tablename__ = "submissions"
 
     id = get_uuid_column()
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     marking_guide_id = Column(
         String(36), ForeignKey("marking_guides.id"), nullable=True, index=True
     )
@@ -315,7 +315,7 @@ class Session(db.Model):
     __tablename__ = "sessions"
 
     id = Column(String(255), primary_key=True)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     data = Column(LargeBinary)  # Encrypted session data
     expires_at = Column(DateTime, nullable=False, index=True)
     ip_address = Column(String(45))  # IPv6 compatible

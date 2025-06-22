@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from flask import Flask
 import codecs
 
 os.environ['PYTHONIOENCODING'] = 'utf-8'
@@ -87,9 +88,12 @@ def setup_environment():
     # Set environment variables
     os.environ.setdefault("FLASK_APP", "webapp.exam_grader_app")
     os.environ.setdefault("FLASK_ENV", "development")
+    if os.environ.get("FLASK_ENV") == "development":
+        os.environ["LOG_LEVEL"] = "DEBUG"
 
     print(f"[OK] Project root: {project_root}")
     print(f"[OK] FLASK_APP: {os.environ.get('FLASK_APP')}")
+    print(f"[DEBUG] LOG_LEVEL environment variable: {os.getenv('LOG_LEVEL')}")
 
 
 def create_directories():
@@ -147,13 +151,8 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
             # Add before migration_manager.migrate()
             from src.database.models import db  # Add proper DB import
             
-            def run_application():
-                app = Flask(__name__)
-                db.init_app(app)  # Initialize before context
-                
-                with app.app_context():
-                    db.create_all()  # Create tables first
-                    MigrationManager(db.engine.url).migrate()
+            with app.app_context():
+                MigrationManager(db.engine.url).migrate()
         else:
             print("[ERROR] Database URL not found in configuration. Exiting.")
             sys.exit(1)
