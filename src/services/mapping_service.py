@@ -76,59 +76,31 @@ class MappingService:
             logger.info("Sending request to LLM service...")
 
             # Check if the model supports JSON output format
-            supports_json = "deepseek-reasoner" not in self.llm_service.model.lower()
+            # DeepSeek models support JSON output, so we explicitly set supports_json to True if it's a deepseek model.
+            supports_json = "deepseek-reasoner" in self.llm_service.model.lower()
 
-            if supports_json:
-                # Make the API call with JSON response format
-                params = {
-                    "model": self.llm_service.model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0.0,
-                    "response_format": {"type": "json_object"},
-                }
+            # Make the API call with JSON response format
+            params = {
+                "model": self.llm_service.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": 0.0,
+                "response_format": {"type": "json_object"},
+            }
 
-                # Add seed parameter if in deterministic mode
-                if (
-                    hasattr(self.llm_service, "deterministic")
-                    and self.llm_service.deterministic
-                    and hasattr(self.llm_service, "seed")
-                    and self.llm_service.seed is not None
-                ):
-                    params["seed"] = self.llm_service.seed
+            # Add seed parameter if in deterministic mode
+            if (
+                hasattr(self.llm_service, "deterministic")
+                and self.llm_service.deterministic
+                and hasattr(self.llm_service, "seed")
+                and self.llm_service.seed is not None
+            ):
+                params["seed"] = self.llm_service.seed
 
-                response = self.llm_service.client.chat.completions.create(**params)
-            else:
-                # For models that don't support JSON response format
-                modified_system_prompt = (
-                    system_prompt
-                    + """
-                IMPORTANT: Your response must be valid JSON. Format your entire response as a JSON object.
-                Do not include any text before or after the JSON object.
-                """
-                )
+            response = self.llm_service.client.chat.completions.create(**params)
 
-                params = {
-                    "model": self.llm_service.model,
-                    "messages": [
-                        {"role": "system", "content": modified_system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0.0,
-                }
-
-                # Add seed parameter if in deterministic mode
-                if (
-                    hasattr(self.llm_service, "deterministic")
-                    and self.llm_service.deterministic
-                    and hasattr(self.llm_service, "seed")
-                    and self.llm_service.seed is not None
-                ):
-                    params["seed"] = self.llm_service.seed
-
-                response = self.llm_service.client.chat.completions.create(**params)
 
             # Log the response processing
             logger.info("Processing LLM response...")
@@ -179,7 +151,7 @@ class MappingService:
 
             except json.JSONDecodeError as e:
                 logger.error(f"JSON parsing failed: {str(e)}")
-                logger.error(f"Raw response that failed to parse: {result}")
+                logger.error(f"Raw LLM response that failed to parse: {result}")
                 return "questions", 0.5
 
         except Exception as e:
@@ -270,60 +242,33 @@ class MappingService:
 
                 # Check if the model supports JSON output format
                 supports_json = (
-                    "deepseek-reasoner" not in self.llm_service.model.lower()
+                    "deepseek-reasoner" in self.llm_service.model.lower()
                 )
 
+                params = {
+                    "model": self.llm_service.model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0.0,
+                }
+
                 if supports_json:
-                    response = self.llm_service.client.chat.completions.create(
-                        model=self.llm_service.model,
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        temperature=0.0,
-                        response_format={"type": "json_object"},
-                    )
-                else:
-                    # For models that don't support JSON response format
-                    modified_system_prompt = (
-                        system_prompt
-                        + """
-                    IMPORTANT: Your response must be valid JSON. Format your entire response as a JSON object.
-                    Do not include any text before or after the JSON object.
+                    params["response_format"] = {"type": "json_object"}
 
-                    Example of valid JSON format:
-                    {
-                        "items": [
-                            {
-                                "id": "q1",
-                                "text": "question text",
-                                "answer": "answer text",
-                                "max_score": 5
-                            }
-                        ]
-                    }
-                    """
-                    )
+                # Add seed parameter if in deterministic mode
+                if (
+                    hasattr(self.llm_service, "deterministic")
+                    and self.llm_service.deterministic
+                    and hasattr(self.llm_service, "seed")
+                    and self.llm_service.seed is not None
+                ):
+                    params["seed"] = self.llm_service.seed
 
-                    params = {
-                        "model": self.llm_service.model,
-                        "messages": [
-                            {"role": "system", "content": modified_system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        "temperature": 0.0,
-                    }
+                response = self.llm_service.client.chat.completions.create(**params)
 
-                    # Add seed parameter if in deterministic mode
-                    if (
-                        hasattr(self.llm_service, "deterministic")
-                        and self.llm_service.deterministic
-                        and hasattr(self.llm_service, "seed")
-                        and self.llm_service.seed is not None
-                    ):
-                        params["seed"] = self.llm_service.seed
 
-                    response = self.llm_service.client.chat.completions.create(**params)
 
                 result = response.choices[0].message.content
 
@@ -541,7 +486,7 @@ class MappingService:
                    - Total marks should align with identified question structure
 
                 OUTPUT FORMAT:
-                Respond with ONLY valid JSON:
+                Respond with ONLY valid JSON. Do not include any other text, explanations, or markdown formatting outside the JSON object. Your entire response must be a single, valid JSON object.
                 {
                     "questions": [
                         {
@@ -615,6 +560,10 @@ class MappingService:
                 """
 
                 # Use the LLM service to extract questions
+                # Check if the model supports JSON output format
+                # DeepSeek models support json_object response format
+                supports_json = True
+
                 params = {
                     "model": self.llm_service.model,
                     "messages": [
@@ -624,6 +573,9 @@ class MappingService:
                     "temperature": 0.0,
                     "max_tokens": 2048,
                 }
+
+                if supports_json:
+                    params["response_format"] = {"type": "json_object"}
 
                 # Add seed parameter if in deterministic mode
                 if (
@@ -642,23 +594,16 @@ class MappingService:
                 logger.info(f"Content sent to LLM (first 1000 chars): {content[:1000]}...")
                 logger.info(f"Content sent to LLM (last 500 chars): ...{content[-500:]}")
 
-                # Debug: Check if the response contains the expected fields
-                if "discipline" in result:
-                    logger.info("Enhanced response detected - contains discipline field")
-                else:
-                    logger.info("Basic response detected - missing enhanced fields")
-
-                # Simple cleanup for markdown code blocks
                 try:
-                    # Remove markdown code blocks if present
-                    if result.strip().startswith("```"):
-                        lines = result.strip().split('\n')
-                        if lines[0].startswith("```"):
-                            lines = lines[1:]  # Remove first line
-                        if lines and lines[-1].strip().startswith("```"):
-                            lines = lines[:-1]  # Remove last line
-                        result = '\n'.join(lines)
-                        logger.info(f"Cleaned markdown: {result}")
+                    # Clean up the response for models that don't properly format JSON
+                    json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                    if json_match:
+                        result = json_match.group(0)
+                        logger.info(f"Extracted JSON string: {result[:500]}...")
+                    else:
+                        logger.warning("No JSON object found in LLM response.")
+                        logger.error(f"Raw LLM response that failed JSON extraction: {result}")
+                        raise ValueError("No JSON object found in LLM response.")
 
                     parsed = json.loads(result)
 
@@ -717,10 +662,11 @@ class MappingService:
                         return result
                     else:
                         logger.error("LLM response missing required fields")
-                        return {"questions": [], "total_marks": 0, "extraction_method": "llm_failed"}
+                    return {"questions": [], "total_marks": 0, "extraction_method": "llm_failed"}
 
                 except json.JSONDecodeError as e:
                     logger.error(f"JSON parsing error: {str(e)}")
+                    logger.error(f"Raw LLM response that caused JSON error: {result}")
                     return {"questions": [], "total_marks": 0, "extraction_method": "json_error"}
 
             except Exception as e:
