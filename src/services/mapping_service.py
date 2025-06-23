@@ -619,9 +619,12 @@ class MappingService:
 
                 try:
                     # Clean up the response for models that don't properly format JSON
-                    json_match = re.search(r"\{.*\}", result, re.DOTALL)
-                    if json_match:
-                        result = json_match.group(0)
+                    # Attempt to find the start and end of the JSON object
+                    json_start = result.find('{')
+                    json_end = result.rfind('}')
+
+                    if json_start != -1 and json_end != -1 and json_end > json_start:
+                        result = result[json_start : json_end + 1]
                         logger.info(f"Extracted JSON string: {result[:500]}...")
                     else:
                         logger.warning("No JSON object found in LLM response.")
