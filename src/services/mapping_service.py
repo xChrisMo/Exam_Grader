@@ -42,20 +42,33 @@ class MappingService:
 
             # Use LLM to determine guide type
             system_prompt = """
-            You are an expert at analyzing exam documents. Your task is to determine if a marking guide
-            contains questions or answers.
+            You are an expert in analyzing academic and exam-related documents across all disciplines. Your task is to determine whether a given marking guide primarily contains questions or answers, regardless of the academic department or subject matter.
 
-            A marking guide with questions typically:
-            - Contains questions without detailed answers
-            - May have brief answer guidelines or marking criteria
-            - Is structured as a list of questions for students to answer
+            Definitions:
+            Marking guide with questions:
 
-            A marking guide with answers typically:
-            - Contains detailed model answers to questions
-            - May include marking criteria alongside answers
-            - Is structured as a reference for graders to evaluate student responses
+            Primarily lists exam or assignment questions.
 
-            Analyze the document carefully and determine its primary type.
+            May include brief answer guidelines, marks allocation, or marking criteria.
+
+            Does not contain detailed model answers.
+
+            Intended for students or to accompany an exam for instructors.
+
+            Marking guide with answers:
+
+            Primarily provides detailed model answers to specific questions.
+
+            May include assessment rubrics or marking criteria.
+
+            Structured for use by instructors or graders for evaluating student responses.
+
+            Instructions:
+            Analyze the structure, content, and wording of the document.
+
+            Consider that different departments may phrase questions and answers differently (e.g., mathematical proofs, essays, multiple-choice responses).
+
+            Use contextual clues to assess whether the document is primarily asking questions or providing answers..
 
             Output in JSON format:
             {
@@ -69,7 +82,7 @@ class MappingService:
             Please analyze this marking guide and determine if it primarily contains questions or answers.
 
             Marking guide content:
-            {marking_guide_content[:2000]}  # Limit to first 2000 chars for efficiency
+            {marking_guide_content[:10000]}  # Limit to first 10000 chars for efficiency
             """
 
             # Log the request
@@ -101,12 +114,11 @@ class MappingService:
 
             response = self.llm_service.client.chat.completions.create(**params)
 
-
             # Log the response processing
             logger.info("Processing LLM response...")
 
             # Validate response structure
-            if not hasattr(response, 'choices') or len(response.choices) == 0:
+            if not hasattr(response, "choices") or len(response.choices) == 0:
                 logger.error("No response choices received from LLM")
                 return "questions", 0.5
 
@@ -123,7 +135,7 @@ class MappingService:
             # Parse the response with error handling
             try:
                 # Clean up the response for models that don't properly format JSON
-                json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                json_match = re.search(r"\{.*\}", result, re.DOTALL)
                 if json_match:
                     result = json_match.group(0)
 
@@ -135,16 +147,26 @@ class MappingService:
 
                 # Validate guide_type
                 if guide_type not in ["questions", "answers"]:
-                    logger.warning(f"Invalid guide_type '{guide_type}', defaulting to 'questions'")
+                    logger.warning(
+                        f"Invalid guide_type '{guide_type}', defaulting to 'questions'"
+                    )
                     guide_type = "questions"
 
                 # Validate confidence
-                if not isinstance(confidence, (int, float)) or confidence < 0 or confidence > 1:
-                    logger.warning(f"Invalid confidence '{confidence}', defaulting to 0.5")
+                if (
+                    not isinstance(confidence, (int, float))
+                    or confidence < 0
+                    or confidence > 1
+                ):
+                    logger.warning(
+                        f"Invalid confidence '{confidence}', defaulting to 0.5"
+                    )
                     confidence = 0.5
 
                 # Log completion
-                logger.info(f"Guide type determined: {guide_type} (confidence: {confidence})")
+                logger.info(
+                    f"Guide type determined: {guide_type} (confidence: {confidence})"
+                )
                 logger.info(f"Reasoning: {reasoning}")
 
                 return guide_type, confidence
@@ -187,6 +209,7 @@ class MappingService:
 
                 Important guidelines:
                 - Questions may be numbered in different ways (e.g., "QUESTION ONE", "Question 1", "1.")
+                - Quesion may be under one main quesion
                 - Answers may be structured in different ways (e.g., bullet points, paragraphs, numbered lists)
                 - Look for key phrases that indicate the start of questions (e.g., "QUESTION", "Q", "Question")
                 - Look for key phrases that indicate answers (e.g., "Answer:", "Solution:", or content after the question)
@@ -241,9 +264,7 @@ class MappingService:
                 """
 
                 # Check if the model supports JSON output format
-                supports_json = (
-                    "deepseek-reasoner" in self.llm_service.model.lower()
-                )
+                supports_json = "deepseek-reasoner" in self.llm_service.model.lower()
 
                 params = {
                     "model": self.llm_service.model,
@@ -267,8 +288,6 @@ class MappingService:
                     params["seed"] = self.llm_service.seed
 
                 response = self.llm_service.client.chat.completions.create(**params)
-
-
 
                 result = response.choices[0].message.content
 
@@ -591,18 +610,24 @@ class MappingService:
 
                 logger.info("Processing LLM response for question extraction...")
                 logger.info(f"Raw LLM response: {result}")
-                logger.info(f"Content sent to LLM (first 1000 chars): {content[:1000]}...")
-                logger.info(f"Content sent to LLM (last 500 chars): ...{content[-500:]}")
+                logger.info(
+                    f"Content sent to LLM (first 1000 chars): {content[:1000]}..."
+                )
+                logger.info(
+                    f"Content sent to LLM (last 500 chars): ...{content[-500:]}"
+                )
 
                 try:
                     # Clean up the response for models that don't properly format JSON
-                    json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                    json_match = re.search(r"\{.*\}", result, re.DOTALL)
                     if json_match:
                         result = json_match.group(0)
                         logger.info(f"Extracted JSON string: {result[:500]}...")
                     else:
                         logger.warning("No JSON object found in LLM response.")
-                        logger.error(f"Raw LLM response that failed JSON extraction: {result}")
+                        logger.error(
+                            f"Raw LLM response that failed JSON extraction: {result}"
+                        )
                         raise ValueError("No JSON object found in LLM response.")
 
                     parsed = json.loads(result)
@@ -634,18 +659,32 @@ class MappingService:
                         analysis = parsed.get("analysis", {})
                         if analysis:
                             logger.info(f"Document analysis:")
-                            logger.info(f"  - Document type: {analysis.get('document_type', 'Unknown')}")
-                            logger.info(f"  - Primary discipline: {analysis.get('primary_discipline', 'Unknown')}")
-                            logger.info(f"  - Question format: {analysis.get('question_format', 'Unknown')}")
-                            logger.info(f"  - Extraction confidence: {analysis.get('extraction_confidence', 'Unknown')}")
+                            logger.info(
+                                f"  - Document type: {analysis.get('document_type', 'Unknown')}"
+                            )
+                            logger.info(
+                                f"  - Primary discipline: {analysis.get('primary_discipline', 'Unknown')}"
+                            )
+                            logger.info(
+                                f"  - Question format: {analysis.get('question_format', 'Unknown')}"
+                            )
+                            logger.info(
+                                f"  - Extraction confidence: {analysis.get('extraction_confidence', 'Unknown')}"
+                            )
 
                         # Log detailed information for each question
                         for i, q in enumerate(formatted_questions, 1):
                             logger.info(f"Question {i}:")
-                            logger.info(f"  - Text: {q.get('text', 'No text')[:100]}...")
+                            logger.info(
+                                f"  - Text: {q.get('text', 'No text')[:100]}..."
+                            )
                             logger.info(f"  - Marks: {q.get('marks', 0)}")
-                            logger.info(f"  - Discipline: {q.get('discipline', 'Unknown')}")
-                            logger.info(f"  - Type: {q.get('question_type', 'Unknown')}")
+                            logger.info(
+                                f"  - Discipline: {q.get('discipline', 'Unknown')}"
+                            )
+                            logger.info(
+                                f"  - Type: {q.get('question_type', 'Unknown')}"
+                            )
                             if q.get("reasoning"):
                                 logger.info(f"  - Reasoning: {q['reasoning']}")
 
@@ -662,16 +701,28 @@ class MappingService:
                         return result
                     else:
                         logger.error("LLM response missing required fields")
-                    return {"questions": [], "total_marks": 0, "extraction_method": "llm_failed"}
+                    return {
+                        "questions": [],
+                        "total_marks": 0,
+                        "extraction_method": "llm_failed",
+                    }
 
                 except json.JSONDecodeError as e:
                     logger.error(f"JSON parsing error: {str(e)}")
                     logger.error(f"Raw LLM response that caused JSON error: {result}")
-                    return {"questions": [], "total_marks": 0, "extraction_method": "json_error"}
+                    return {
+                        "questions": [],
+                        "total_marks": 0,
+                        "extraction_method": "json_error",
+                    }
 
             except Exception as e:
                 logger.error(f"LLM extraction failed: {str(e)}")
-                return {"questions": [], "total_marks": 0, "extraction_method": "llm_error"}
+                return {
+                    "questions": [],
+                    "total_marks": 0,
+                    "extraction_method": "llm_error",
+                }
 
         # No fallback - LLM only
         logger.error("No LLM service available")

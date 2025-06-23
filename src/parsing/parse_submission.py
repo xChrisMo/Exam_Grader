@@ -211,10 +211,16 @@ class DocumentParser:
                     try:
                         logger.debug(f"Converting page {page_num} to image")
                         # Convert page to image
-                        pix = page.get_pixmap()
-                        temp_img_path = f"temp_page_{page_num}.png"
-                        pix.save(temp_img_path)
-                        del pix # Explicitly delete pixmap to release resources
+                        import tempfile
+                        # Create a temporary file for the image
+                        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img_file:
+                            temp_img_path = temp_img_file.name
+                            pix = page.get_pixmap()
+                            pix.save(temp_img_path)
+                            del pix # Explicitly delete pixmap to release resources
+
+                        # Ensure the file is closed before OCR processing
+                        # The tempfile context manager handles closing, but we need to ensure it's flushed if not already.
 
                         logger.debug(f"Processing page {page_num} with OCR")
                         # Process image with OCR
@@ -230,9 +236,9 @@ class DocumentParser:
 
                         # Clean up temporary image
                         try:
-                            os.remove(temp_img_path)
+                            os.unlink(temp_img_path) # Use unlink for better cross-platform compatibility
                             logger.debug(
-                                f"Cleaned up temporary image for page {page_num}"
+                                f"Cleaned up temporary image {temp_img_path} for page {page_num}"
                             )
                         except Exception as e:
                             logger.warning(
