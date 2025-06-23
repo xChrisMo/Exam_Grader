@@ -151,6 +151,8 @@ class DocumentParser:
             # Return empty string to signal that extraction failed
             # The caller will handle OCR fallback
             return ""
+        finally:
+            doc.close() # Ensure the document is closed
 
     @staticmethod
     def extract_text_from_docx(file_path: str) -> str:
@@ -212,6 +214,7 @@ class DocumentParser:
                         pix = page.get_pixmap()
                         temp_img_path = f"temp_page_{page_num}.png"
                         pix.save(temp_img_path)
+                        del pix # Explicitly delete pixmap to release resources
 
                         logger.debug(f"Processing page {page_num} with OCR")
                         # Process image with OCR

@@ -13,6 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any
 
+from utils.error_handler import add_recent_activity
+
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
@@ -819,19 +821,18 @@ def view_submissions():
 def view_results():
     """View grading results."""
     try:
-        if not session.get('last_grading_result'):
-            flash('No grading results available.', 'warning')
+        last_progress_id = session.get('last_grading_progress_id')
+        logger.info(f"view_results: last_progress_id from session: {last_progress_id}")
+        logger.info(f"view_results: session['last_grading_result'] is {session.get('last_grading_result')}")
+        if not last_progress_id:
+            flash('No recent grading results available. Please run AI grading first.', 'warning')
             return redirect(url_for('dashboard'))
 
-        # Get grading results from database
-        # Assuming we want to display results for the last processed batch
-        # This might need a more robust way to identify the 'current' batch
-        # For now, let's fetch all grading results and filter/group them as needed
-        # Or, if we store a batch_id in session, we can use that to query.
-        # For simplicity, let's fetch all and process.
-        all_grading_results = GradingResult.query.all()
+        # Get grading results from database for the last processed batch
+        all_grading_results = GradingResult.query.filter_by(progress_id=last_progress_id).all()
+        logger.info(f"view_results: Found {len(all_grading_results)} grading results for progress_id: {last_progress_id}")
         if not all_grading_results:
-            flash('No grading results available in the database.', 'warning')
+            flash('No grading results found for the last AI processing run.', 'warning')
             return redirect(url_for('dashboard'))
 
         grading_results = {}
@@ -1230,8 +1231,21 @@ def process_unified_ai():
             logger.error(f"Failed to create progress tracking: {str(e)}")
             return jsonify({'error': f'Progress tracking failed: {str(e)}'}), 500
 
+        progress_id = None # Initialize progress_id to None
         # Process with unified AI service with detailed error handling
         try:
+            session_id = session.sid  # Use SecureFlaskSession's sid property
+            logger.info(f"Creating progress session for {len(submissions)} submissions")
+            progress_id = progress_tracker.create_session(session_id, len(submissions))
+            logger.info(f"Progress session created: {progress_id}")
+
+            # Store progress ID in session for frontend polling
+            session['current_progress_id'] = progress_id
+
+            # Create progress callback
+            progress_callback = progress_tracker.create_progress_callback(progress_id)
+            logger.info("Progress callback created")
+
             logger.info("Starting unified AI processing...")
             result, error = unified_ai_service.process_unified_ai_grading(
                 marking_guide_content=guide_content,
@@ -1243,103 +1257,82 @@ def process_unified_ai():
 
             if error:
                 logger.error(f"Unified AI processing returned error: {error}")
-                progress_tracker.complete_session(progress_id, success=False, message=error)
                 return jsonify({'error': error}), 500
-        except Exception as e:
-            logger.error(f"Exception during unified AI processing: {str(e)}")
-            progress_tracker.complete_session(progress_id, success=False, message=str(e))
-            return jsonify({'error': f'Processing failed: {str(e)}'}), 500
 
-        # Mark progress as completed
-        progress_tracker.complete_session(progress_id, success=True, message="Processing completed successfully")
+            # Save results to database
+            from src.database.models import GradingResult, Mapping, Submission, db
 
-        # Extract results for session storage
-        grading_results = result.get('results', [])
-        summary = result.get('summary', {})
+            for res in result.get('results', []):
+                submission_id = res.get('submission_id')
+                submission = Submission.query.get(submission_id)
+                if not submission:
+                    logger.warning(f"Submission with ID {submission_id} not found for saving results. Skipping.")
+                    continue
 
-        # Save grading results to database
-        logger.info(f"Grading results received: {grading_results}")
-        for res in grading_results:
-            try:
-                # Ensure submission_id is a string
-                submission_id_str = str(res.get('submission_id'))
-                
-                # Fetch the submission from the database
-                submission = Submission.query.get(submission_id_str)
+                guide_id = request.json.get('guide_id') # Assuming guide_id is available from the request
 
-                if submission:
-                    # Update submission status
-                    submission.processing_status = 'completed'
-                    db.session.add(submission)
-
-                    # Create and save GradingResult
-                    grading_result_db = GradingResult(
-                        submission_id=submission_id_str,
-                        guide_id=guide_id,
-                        overall_score=res.get('score', 0),
-                        max_score=res.get('max_score', 0),
-                        percentage=res.get('percentage', 0),
-                        letter_grade=res.get('letter_grade', 'N/A'),
-                        feedback=res.get('feedback', 'No feedback provided'),
-                        detailed_results=res.get('detailed_results', {})
+                # Process individual mappings and their grading results
+                for mapping_data in res.get('mappings', []):
+                    # Create and save Mapping object
+                    new_mapping = Mapping(
+                        submission_id=submission_id,
+                        marking_guide_id=guide_id,
+                        guide_question_id=mapping_data.get('guide_id'),
+                        guide_text=mapping_data.get('guide_text'),
+                        submission_text=mapping_data.get('submission_text'),
+                        match_score=mapping_data.get('match_score'),
+                        match_reason=mapping_data.get('match_reason'),
+                        mapping_method='llm' # Assuming LLM is the method
                     )
-                    db.session.add(grading_result_db)
-                    db.session.commit()
-                    logger.info(f"Grading result for submission {submission_id_str} saved to DB.")
-                else:
-                    logger.warning(f"Submission {submission_id_str} not found in DB. Skipping DB save for this result.")
-            except Exception as db_e:
-                db.session.rollback()
-                logger.error(f"Database error saving grading result for {res.get('filename', 'Unknown')}: {str(db_e)}")
+                    db.session.add(new_mapping)
+                    db.session.flush() # Flush to get the ID for the new_mapping
 
-        # Update session with results
-        session['grading_results'] = grading_results
-        session['last_grading_summary'] = summary
+                    # Create and save GradingResult object for this mapping
+                    grading_result = GradingResult(
+                        submission_id=submission_id,
+                        mapping_id=new_mapping.id,
+                        score=mapping_data.get('grade_score', 0),
+                        max_score=mapping_data.get('max_score', 0),
+                        percentage=mapping_data.get('grade_percentage', 0),
+                        feedback=mapping_data.get('grade_feedback', ''),
+                        detailed_feedback={
+                            'strengths': mapping_data.get('strengths', []),
+                            'weaknesses': mapping_data.get('weaknesses', []),
+                            'guide_answer': mapping_data.get('guide_answer', ''),
+                            'submission_answer': mapping_data.get('submission_answer', '')
+                        },
+                        progress_id=progress_id,
+                        grading_method='llm' # Assuming LLM is the method
+                    )
+                    db.session.add(grading_result)
 
-        # Update the 'processed' status for submissions in the session and database
-        session_submissions = session.get('submissions', [])
-        updated_session_submissions = []
-        for s in session_submissions:
-            submission_id = s.get('id')
-            logger.info(f"Processing session submission {submission_id}. Current processed status: {s.get('processed', False)}")
-            matching_result = next((res for res in grading_results if res.get('submission_id') == submission_id and res.get('status') != 'error'), None)
-            logger.info(f"Matching result for {submission_id}: {matching_result is not None}. Status in grading_results: {next((res.get('status') for res in grading_results if res.get('submission_id') == submission_id), 'N/A')}")
+                submission.processing_status = 'completed'
 
-            if matching_result:
-                s['processed'] = True
-                # Also update in database if it exists there
-                try:
-                    db_submission = Submission.query.get(submission_id)
-                    if db_submission:
-                        db_submission.processing_status = 'completed'
-                        db.session.add(db_submission)
-                        db.session.commit()
-                        logger.info(f"Submission {submission_id} status updated to 'completed' in DB.")
-                except Exception as db_e:
-                    db.session.rollback()
-                    logger.error(f"Error updating submission {submission_id} status in DB: {str(db_e)}")
-            updated_session_submissions.append(s)
-        session['submissions'] = updated_session_submissions
+            db.session.commit()
+            logger.info("Grading results saved to database.")
+            progress_tracker.complete_session(progress_id, success=True)
 
-        # Update recent activity
-        activity = session.get('recent_activity', [])
-        activity.insert(0, {
-            'action': 'Unified AI Processing',
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'details': f'Processed {len(submissions)} submissions in {summary.get("processing_time", 0):.1f}s'
-        })
-        session['recent_activity'] = activity[:10]
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error during unified AI processing or saving results: {str(e)}")
+            if progress_id:
+                progress_tracker.complete_session(progress_id, success=False, message=f"Processing failed: {str(e)}")
+            return jsonify({'error': f'Processing failed: {str(e)}'}), 500
+        finally:
+            if progress_id:
+                # Ensure the session is marked complete even if an unexpected error occurs
+                # This is a safeguard, as success/failure should ideally be handled in try/except blocks
+                pass # The complete_session is already called in try/except blocks
+              
 
-        logger.info(f"Unified AI processing completed: {summary.get('average_percentage', 0):.1f}% average")
-
-        return jsonify({
-            'success': True,
-            'message': result.get('message', 'Processing completed'),
-            'results': grading_results,
-            'summary': summary,
-            'progress_id': progress_id,
-            'metadata': result.get('metadata', {})
-        })
+        # This part should be executed only on success, after the try block.
+        # It was previously inside the finally block, which is incorrect.
+        # Moving it here assumes the function will only reach this point if successful.
+        progress_tracker.complete_session(progress_id, success=True, message="Processing completed")
+        session['last_grading_progress_id'] = progress_id
+        session['last_grading_result'] = True  # Set this to activate the View Results button
+        logger.info(f"process_unified_ai: session['last_grading_progress_id'] set to {session['last_grading_progress_id']}")
+        return jsonify({'success': True, 'progress_id': progress_id, 'summary': result.get('summary')}), 200
 
     except Exception as e:
         logger.error(f"Error in process_unified_ai: {str(e)}")

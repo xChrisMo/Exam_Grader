@@ -414,8 +414,13 @@ const ExamGrader = {
             "success"
           );
 
-          // Hide progress modal
+          // Stop polling and hide progress modal
+          ExamGrader.ui.stopProgressPolling();
           ExamGrader.ui.hideProgressModal();
+
+          // Optionally, redirect to results page or update UI
+          // For now, we rely on the 'View Results' button being active
+          // window.location.href = '/results'; // Example redirect
 
           return data;
         } else {
@@ -423,6 +428,8 @@ const ExamGrader = {
         }
       } catch (error) {
         ExamGrader.ui.hideProgressModal();
+        // Stop any ongoing polling if an error occurs
+        ExamGrader.ui.stopProgressPolling();
         ExamGrader.utils.showToast(`Unified AI processing failed: ${error.message}`, "error");
         return false;
       }
@@ -513,12 +520,20 @@ const ExamGrader = {
     /**
      * Hide progress modal
      */
-    hideProgressModal: function () {
-      const modal = document.getElementById('progress-modal');
-      if (modal) {
-        modal.style.display = 'none';
-      }
-    },
+      hideProgressModal: function () {
+        const modal = document.getElementById("progress-modal");
+        if (modal) {
+          modal.style.display = "none";
+        }
+      },
+
+      stopProgressPolling: function () {
+        if (ExamGrader.progressPollingInterval) {
+          clearInterval(ExamGrader.progressPollingInterval);
+          ExamGrader.progressPollingInterval = null;
+          console.log("Progress polling stopped.");
+        }
+      },
 
     /**
      * Update progress modal with current progress
@@ -561,36 +576,34 @@ const ExamGrader = {
     /**
      * Start progress polling for a progress ID
      */
-    startProgressPolling: function (progressId, interval = 1000) {
-      const pollProgress = async () => {
+    startProgressPolling: function (progressId) {
+      if (ExamGrader.progressPollingInterval) {
+        clearInterval(ExamGrader.progressPollingInterval);
+      }
+
+      ExamGrader.progressPollingInterval = setInterval(async () => {
         try {
           const progress = await ExamGrader.api.getProgress(progressId);
-          if (progress) {
-            ExamGrader.ui.updateProgress(progress);
+          ExamGrader.ui.updateProgress(progress);
 
-            // Stop polling if completed or error
-            if (progress.status === 'completed' || progress.status === 'error') {
-              clearInterval(ExamGrader.ui.progressInterval);
-
-              // Auto-hide modal after a delay if completed successfully
-              if (progress.status === 'completed') {
-                setTimeout(() => {
-                  ExamGrader.ui.hideProgressModal();
-                }, 2000);
-              }
+          if (progress.status === 'completed' || progress.status === 'failed') {
+            clearInterval(ExamGrader.progressPollingInterval);
+            ExamGrader.progressPollingInterval = null;
+            ExamGrader.ui.hideProgressModal();
+            if (progress.status === 'completed') {
+              ExamGrader.utils.showToast('AI processing completed successfully!', 'success');
+            } else {
+              ExamGrader.utils.showToast('AI processing failed: ' + progress.message, 'error');
             }
           }
         } catch (error) {
-          console.error('Error polling progress:', error);
-          clearInterval(ExamGrader.ui.progressInterval);
+          console.error('Error polling for progress:', error);
+          clearInterval(ExamGrader.progressPollingInterval);
+          ExamGrader.progressPollingInterval = null;
+          ExamGrader.ui.hideProgressModal();
+          ExamGrader.utils.showToast('Error during AI processing: ' + error.message, 'error');
         }
-      };
-
-      // Start polling
-      ExamGrader.ui.progressInterval = setInterval(pollProgress, interval);
-
-      // Initial poll
-      pollProgress();
+      }, 2000); // Poll every 2 seconds
     },
 
     /**
@@ -677,20 +690,3 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 // Export for use in other scripts
-async function deleteSubmission(submissionId) {
-    try {
-        const response = await apiRequest('/api/delete-submission', {
-            method: 'POST',
-            body: {
-                submission_id: submissionId
-            }
-        });
-
-        if(response.success) {
-            // Remove DOM element
-            document.querySelector(`tr[data-id='${submissionId}']`).remove();
-        }
-    } catch (error) {
-        showToast(`Deletion failed: ${error.message}`, 'error');
-    }
-}

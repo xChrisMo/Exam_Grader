@@ -277,6 +277,7 @@ class GradingResult(db.Model, TimestampMixin):
     percentage = Column(Float, nullable=False)
     feedback = Column(Text)
     detailed_feedback = Column(JSON)
+    progress_id = Column(String(36), nullable=True, index=True)
     grading_method = Column(String(50), default="llm")  # llm, similarity, manual
     confidence = Column(Float)
 
