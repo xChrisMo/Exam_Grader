@@ -309,7 +309,7 @@ class GradingResult(db.Model, TimestampMixin):
         }
 
 
-class Session(db.Model):
+class Session(db.Model, TimestampMixin):
     """Session model for secure session management."""
 
     __tablename__ = "sessions"
@@ -317,12 +317,11 @@ class Session(db.Model):
     id = Column(String(255), primary_key=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     data = Column(LargeBinary)  # Encrypted session data
+    salt = Column(String(255), nullable=True, default='')  # Salt for session data encryption
     expires_at = Column(DateTime, nullable=False, index=True)
     ip_address = Column(String(45))  # IPv6 compatible
     user_agent = Column(String(500))
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    last_accessed = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
     user = relationship("User", back_populates="sessions")
@@ -334,7 +333,7 @@ class Session(db.Model):
     def extend_session(self, duration_seconds: int = 3600):
         """Extend session expiration."""
         self.expires_at = datetime.utcnow() + timedelta(seconds=duration_seconds)
-        self.last_accessed = datetime.utcnow()
+        self.updated_at = datetime.utcnow()
 
     def invalidate(self):
         """Invalidate session."""
@@ -349,5 +348,6 @@ class Session(db.Model):
             "ip_address": self.ip_address,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat(),
-            "last_accessed": self.last_accessed.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+            "salt": self.salt,
         }
