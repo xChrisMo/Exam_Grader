@@ -602,8 +602,10 @@
       ExamGrader.utils
         .apiRequest(
           "/api/delete-submission",
-          { body: { submission_id: submissionId } },
-          "POST"
+          {
+            method: "POST",
+            body: { submission_id: submissionId },
+          }
         )
         .then((data) => {
           ExamGrader.utils.hideButtonLoading(deleteButton, "Delete");

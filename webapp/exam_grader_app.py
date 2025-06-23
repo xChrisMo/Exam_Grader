@@ -410,6 +410,9 @@ def dashboard():
             recent_activity = session_activity[:5]  # Limit to 5 most recent
             logger.info(f"Using session activity: {len(recent_activity)} items")
 
+        # Ensure session['submissions'] is updated with database submissions for UI visibility
+        session['submissions'] = [s.to_dict() for s in recent_submissions]
+
         # Calculate average score from grading results (user-specific) - optimized
         avg_result = db.session.query(db.func.avg(GradingResult.percentage)).join(
             Submission, GradingResult.submission_id == Submission.id
@@ -795,6 +798,8 @@ def view_submissions():
                         'source': 'database'
                     })
                 logger.info(f"Loaded {len(db_submissions)} submissions from database")
+                # Update session with database submissions for UI visibility
+                session['submissions'] = [s.to_dict() for s in db_submissions]
             except Exception as db_error:
                 logger.warning(f"Error loading database submissions: {str(db_error)}")
 

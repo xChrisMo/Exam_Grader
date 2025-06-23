@@ -165,6 +165,7 @@ const ExamGrader = {
         }
 
         const response = await fetch(url, {
+          ...options, // Spread all original options first
           method: options.method || 'POST',
           headers: {
             ...defaultHeaders,
@@ -172,7 +173,6 @@ const ExamGrader = {
           },
           body: options.body ? JSON.stringify(options.body) : undefined,
           credentials: 'same-origin', // Include cookies for CSRF protection
-          ...options,
         });
 
         // Handle different content types
