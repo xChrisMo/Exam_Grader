@@ -195,6 +195,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const formData = new FormData(uploadForm);
         
+        // Add CSRF token to form data
+        const csrfTokenInput = document.querySelector('input[name="csrf_token"]');
+        if (csrfTokenInput) {
+            formData.append('csrf_token', csrfTokenInput.value);
+        }
+
         // Show progress
         uploadProgress.classList.remove('hidden');
         ExamGrader.utils.showButtonLoading(submitBtn, 'Processing...');

@@ -18,6 +18,14 @@ class SecureFlaskSession(CallbackDict, SessionMixin):
         self.new = new
         self.modified = False
 
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        self.modified = True
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self.modified = True
+
 
 class SecureSessionInterface(SessionInterface):
     def __init__(self, session_manager: SecureSessionManager, app_secret_key: str):
