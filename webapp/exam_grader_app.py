@@ -605,6 +605,7 @@ def upload_guide():
             guide_id = marking_guide.id
 
             logger.info(f"Guide stored in database with ID: {guide_id}")
+            session['guide_uploaded'] = True
 
         except Exception as storage_error:
             logger.error(f"Error storing guide in database: {str(storage_error)}")
@@ -613,25 +614,6 @@ def upload_guide():
             os.remove(file_path)
             return redirect(request.url)
 
-        # Update session for backward compatibility
-        logger.info("Updating session variables after guide storage.")
-        session['guide_id'] = guide_id
-        session['guide_uploaded'] = True
-        session['guide_filename'] = filename
-        session.modified = True
-        logger.info(f"upload_guide: guide_uploaded set to {session.get('guide_uploaded')} before redirect")
-
-        # Add to recent activity
-        activity = session.get('recent_activity', [])
-        activity.insert(0, {
-            'type': 'guide_upload',
-            'message': f'Uploaded marking guide: {filename}',
-            'timestamp': datetime.now().isoformat(),
-            'icon': 'document'
-        })
-        session['recent_activity'] = activity[:10]
-
-        flash('Marking guide uploaded and processed successfully!', 'success')
         logger.info(f"Guide uploaded successfully: {filename}")
 
         # Clean up temp file
@@ -640,6 +622,7 @@ def upload_guide():
         except OSError as e:
             logger.warning(f"Could not remove temporary file {file_path}: {str(e)}")
 
+        flash('Marking guide uploaded and processed successfully!', 'success')
         return redirect(url_for('dashboard'))
 
     except Exception as e:
@@ -655,9 +638,6 @@ def upload_submission():
         return render_template('upload_submission.html', page_title='Upload Submission')
 
     try:
-        if not session.get('guide_uploaded'):
-            flash('Please upload a marking guide first.', 'warning')
-            return redirect(url_for('upload_guide'))
 
         files = request.files.getlist('file')
         if not files or all(f.filename == '' for f in files):
@@ -739,50 +719,12 @@ def upload_submission():
                         submission_id = str(submission.id)
                         logger.info(f"Stored submission in database with ID: {submission_id}")
 
-                        # Also store in session for compatibility with existing code
-                        session[f'submission_{submission_id}'] = {
-                            'filename': filename,
-                            'answers': answers,
-                            'raw_text': raw_text
-                        }
-                    else:
-                        # Fallback to session storage only
-                        session[f'submission_{submission_id}'] = {
-                            'filename': filename,
-                            'answers': answers,
-                            'raw_text': raw_text
-                        }
-                        logger.info(f"Stored submission in session with ID: {submission_id}")
+
+
 
                 except Exception as storage_error:
-                    logger.warning(f"Database storage failed, using session: {str(storage_error)}")
-                    # Fallback to session storage
-                    session[f'submission_{submission_id}'] = {
-                        'filename': filename,
-                        'answers': answers,
-                        'raw_text': raw_text
-                    }
+                    logger.warning(f"Database storage failed: {str(storage_error)}")
 
-                # Optimize session storage - limit raw_text size for performance
-                limited_raw_text = raw_text[:1000] if raw_text else ''  # Limit to 1KB
-                limited_answers = {}
-                if answers:
-                    # Limit answer content size
-                    for key, value in list(answers.items())[:10]:  # Max 10 answers
-                        if isinstance(value, str):
-                            limited_answers[key] = value[:500]  # Limit to 500 chars
-                        else:
-                            limited_answers[key] = value
-
-                submissions_data.append({
-                    'id': submission_id,
-                    'filename': filename,
-                    'uploaded_at': datetime.now().isoformat(),
-                    'processed': False,
-                    'raw_text': limited_raw_text,  # Limited for performance
-                    'extracted_answers': limited_answers,  # Limited for performance
-                    'size_mb': round(get_file_size_mb(file_path), 2) if os.path.exists(file_path) else 0
-                })
                 uploaded_count += 1
 
                 activity = session.get('recent_activity', [])
@@ -805,24 +747,13 @@ def upload_submission():
                     except OSError as e:
                         logger.warning(f"Could not remove temporary file {file_path}: {str(e)}")
 
-        session['submissions'] = submissions_data
-        session.modified = True
+        if uploaded_count > 0:
+            flash(f'{uploaded_count} submission(s) uploaded and processed successfully!', 'success')
+            logger.info(f'{uploaded_count} submission(s) uploaded successfully.')
+        if failed_count > 0:
+            flash(f'{failed_count} submission(s) failed to upload or process. Check logs for details.', 'error')
 
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
-            if uploaded_count > 0 and failed_count == 0:
-                return jsonify({'success': True, 'message': f'{uploaded_count} submission(s) uploaded and processed successfully!', 'uploaded_count': uploaded_count, 'failed_count': failed_count})
-            elif uploaded_count > 0 and failed_count > 0:
-                return jsonify({'success': True, 'message': f'{uploaded_count} submission(s) uploaded, but {failed_count} failed. Check logs for details.', 'uploaded_count': uploaded_count, 'failed_count': failed_count})
-            else:
-                return jsonify({'success': False, 'error': f'Failed to upload any submissions. {failed_count} failed. Check logs for details.', 'uploaded_count': uploaded_count, 'failed_count': failed_count}), 400
-        else:
-            if uploaded_count > 0:
-                flash(f'{uploaded_count} submission(s) uploaded and processed successfully!', 'success')
-                logger.info(f'{uploaded_count} submission(s) uploaded successfully.')
-            if failed_count > 0:
-                flash(f'{failed_count} submission(s) failed to upload or process. Check logs for details.', 'error')
-
-            return redirect(url_for('dashboard'))
+        return redirect(url_for('dashboard'))
 
     except RequestEntityTooLarge:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
@@ -866,15 +797,6 @@ def view_submissions():
                 logger.info(f"Loaded {len(db_submissions)} submissions from database")
             except Exception as db_error:
                 logger.warning(f"Error loading database submissions: {str(db_error)}")
-
-        # Get submissions from session as fallback or additional data
-        session_submissions = session.get('submissions', [])
-        for submission in session_submissions:
-            # Avoid duplicates by checking if ID already exists
-            existing_ids = [s['id'] for s in submissions]
-            if submission.get('id') not in existing_ids:
-                submission['source'] = 'session'
-                submissions.append(submission)
 
         logger.info(f"Total submissions to display: {len(submissions)}")
 
@@ -978,15 +900,19 @@ def process_ai_grading():
     max_questions = request.json.get('max_questions', None)
     """API endpoint to process unified AI-powered mapping and grading with progress tracking."""
     try:
-        if not session.get('guide_uploaded') or not session.get('submissions'):
-            return jsonify({'error': 'Missing guide or submissions'}), 400
+        guide_id = request.json.get('guide_id')
+        submission_ids = request.json.get('submission_ids', [])
 
-        # Get guide and submissions from session or storage
-        guide_id = session.get('guide_id')
-        submissions = session.get('submissions', [])
+        if not guide_id or not submission_ids:
+            return jsonify({'error': 'Missing guide ID or submission IDs'}), 400
 
-        if not guide_id or not submissions:
-            return jsonify({'error': 'Missing guide or submissions data'}), 400
+        guide = MarkingGuide.query.get(guide_id)
+        if not guide:
+            return jsonify({'error': 'Marking guide not found'}), 404
+
+        submissions = Submission.query.filter(Submission.id.in_(submission_ids)).all()
+        if not submissions:
+            return jsonify({'error': 'No submissions found for the provided IDs'}), 404
 
         # Check if services are available
         if not mapping_service:
@@ -998,16 +924,7 @@ def process_ai_grading():
         failed_gradings = 0
 
         # Get guide content from multiple sources
-        guide_content = session.get('guide_content', '')
-        if not guide_content:
-            guide_content = session.get('guide_raw_content', '')
-        if not guide_content and guide_id:
-            try:
-                guide = MarkingGuide.query.get(guide_id)
-                if guide:
-                    guide_content = guide.content_text or ''
-            except Exception as e:
-                logger.warning(f"Could not retrieve guide from database: {str(e)}")
+        guide_content = guide.content_text
 
         if not guide_content:
             return jsonify({'error': 'Guide content not available'}), 400
@@ -1019,8 +936,18 @@ def process_ai_grading():
                 continue
 
             try:
-                # Get submission data from session or database
-                submission_data = session.get(f'submission_{submission_id}', {})
+                # Get submission data from database
+                db_submission = next((s for s in submissions if s.id == submission_id), None)
+                if not db_submission:
+                    logger.warning(f"No data found for submission {submission_id} in the provided list.")
+                    failed_gradings += 1
+                    continue
+
+                submission_data = {
+                    'filename': db_submission.filename,
+                    'content': db_submission.content_text,
+                    'answers': db_submission.answers
+                }
 
                 if not submission_data:
                     try:
@@ -1116,15 +1043,7 @@ def process_ai_grading():
                 failed_gradings += 1
                 continue
 
-        # Update last grading result in session for display purposes
-        session['last_grading_result'] = {
-            'successful': successful_gradings,
-            'failed': failed_gradings,
-            'total': len(submissions),
-            'timestamp': datetime.now().isoformat()
-        }
-        # Clear session grading_results as they are now in DB
-        session.pop('grading_results', None)
+
 
         # Calculate overall statistics
         total_score = sum(result.get('score', 0) for result in grading_results.values())
@@ -1511,34 +1430,6 @@ def marking_guides():
     """View marking guide library with optimized performance and authentication."""
     try:
         guides = []
-
-        # Get session guide data with safe conversion
-        session_guide_data = session.get('guide_data')
-        session_guide_filename = session.get('guide_filename')
-        session_guide_content = session.get('guide_raw_content')
-
-        if session_guide_data and session_guide_filename:
-            try:
-                # Create session guide entry
-                session_guide = {
-                    'id': 'session_guide',  # Keep as string
-                    'name': session_guide_filename,  # For backward compatibility
-                    'title': session_guide_filename,  # Primary field
-                    'filename': session_guide_filename,
-                    'description': 'Currently active guide from session',
-                    'raw_content': session_guide_content or '',
-                    'questions': session_guide_data.get('questions', []),
-                    'total_marks': session_guide_data.get('total_marks', 0),
-                    'extraction_method': session_guide_data.get('extraction_method', 'unknown'),
-                    'created_at': session_guide_data.get('processed_at', datetime.now().isoformat()),
-                    'created_by': 'Session',
-                    'is_session_guide': True
-                }
-                logger.debug(f"Added session guide: ID={session_guide['id']}, Title={session_guide['title']}")
-                guides.append(session_guide)
-                logger.info(f"Added session guide: {session_guide_filename}")
-            except Exception as session_error:
-                logger.error(f"Error processing session guide: {str(session_error)}")
 
         # Get stored guides from database (optimized)
         try:
@@ -2098,6 +1989,8 @@ def api_service_status():
 def delete_submission():
     """API endpoint to delete a submission."""
     try:
+        logger.info(f"Delete submission request - Headers: {request.headers}")
+        logger.info(f"Delete submission request - Data: {request.data}")
         submission_id = request.json.get('submission_id')
         if not submission_id:
             logger.warning("Delete submission: No submission_id provided.")
