@@ -611,14 +611,11 @@
         .then((data) => {
           ExamGrader.utils.hideButtonLoading(deleteButton, "Delete");
           if (data.success) {
-            toastr.success('Submission deleted successfully!');
+            ExamGrader.utils.showToast('Submission deleted successfully!', 'success');
             // Reload the page to update all counts, including dashboard
             window.location.reload();
           } else {
-            ExamGrader.utils.showToast(
-              data.message || "Error deleting submission.",
-              "error"
-            );
+ExamGrader.utils.showToast(data.error || 'An unknown error occurred.', 'error');
           }
         })
         .catch((error) => {

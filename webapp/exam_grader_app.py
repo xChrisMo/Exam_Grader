@@ -1027,6 +1027,7 @@ def process_ai_grading():
                         try:
                             new_grading_result = GradingResult(
                                 submission_id=submission_id,
+                        status=res.get('status', 'error'),
                                 mapping_id=grading_result.get('mapping_id'), # Assuming mapping_id is returned
                                 score=grading_result.get('score', 0),
                                 max_score=grading_result.get('max_score', 0),
@@ -1279,6 +1280,10 @@ def process_unified_ai():
 
                 guide_id = request.json.get('guide_id') # Assuming guide_id is available from the request
 
+                # Update submission processing status based on AI grading result
+                # This ensures the frontend accurately reflects the grading outcome
+                submission.processing_status = res.get('status', 'error')
+
                 # Process individual mappings and their grading results
                 for mapping_data in res.get('mappings', []):
                     # Create and save Mapping object
@@ -1298,26 +1303,15 @@ def process_unified_ai():
                     # Create and save GradingResult object for this mapping
                     grading_result = GradingResult(
                         submission_id=submission_id,
-                        mapping_id=new_mapping.id,
                         score=mapping_data.get('grade_score', 0),
                         max_score=mapping_data.get('max_score', 0),
-                        percentage=mapping_data.get('grade_percentage', 0),
-                        feedback=mapping_data.get('grade_feedback', ''),
-                        detailed_feedback={
-                            'strengths': mapping_data.get('strengths', []),
-                            'weaknesses': mapping_data.get('weaknesses', []),
-                            'guide_answer': mapping_data.get('guide_answer', ''),
-                            'submission_answer': mapping_data.get('submission_answer', '')
-                        },
-                        progress_id=progress_id,
-                        grading_method='llm' # Assuming LLM is the method
+                        percentage=mapping_data.get('percentage', 0),
+                        feedback=mapping_data.get('feedback', ''),
+                        detailed_feedback=mapping_data.get('detailed_feedback', {}),
+                        progress_id=session['current_progress_id'] # Link to the progress session
                     )
                     db.session.add(grading_result)
-
-                submission.processing_status = 'completed'
-
-            db.session.commit()
-            logger.info("Grading results saved to database.")
+                db.session.commit() # Commit all changes for this submission
             progress_tracker.complete_session(progress_id, success=True)
 
         except Exception as e:
@@ -1327,19 +1321,11 @@ def process_unified_ai():
                 progress_tracker.complete_session(progress_id, success=False, message=f"Processing failed: {str(e)}")
             return jsonify({'error': f'Processing failed: {str(e)}'}), 500
         finally:
-            if progress_id:
-                # Ensure the session is marked complete even if an unexpected error occurs
-                # This is a safeguard, as success/failure should ideally be handled in try/except blocks
-                pass # The complete_session is already called in try/except blocks
-              
+            pass # The complete_session is already called in try/except blocks
 
-        # This part should be executed only on success, after the try block.
-        # It was previously inside the finally block, which is incorrect.
-        # Moving it here assumes the function will only reach this point if successful.
-        progress_tracker.complete_session(progress_id, success=True, message="Processing completed")
-        session['last_grading_progress_id'] = progress_id
+
         session['last_grading_result'] = True  # Set this to activate the View Results button
-        logger.info(f"process_unified_ai: session['last_grading_progress_id'] set to {session['last_grading_progress_id']}")
+
         return jsonify({'success': True, 'progress_id': progress_id, 'summary': result.get('summary')}), 200
 
     except Exception as e:
@@ -2009,28 +1995,27 @@ def delete_submission():
             logger.warning("Delete submission: No submission_id provided.")
             return jsonify({'success': False, 'message': 'No submission ID provided.'}), 400
 
-        # Try to delete from database first
-        submission = Submission.query.get(submission_id)
-        if submission:
-            db.session.delete(submission)
-            db.session.commit()
-            logger.info(f"Submission {submission_id} deleted successfully from database.")
-            add_recent_activity('submission_deleted', f'Submission {submission_id[:8]}... deleted.', 'trash')
-            return jsonify({'success': True, 'message': 'Submission deleted successfully.'})
-        else:
-            # Fallback to session if not found in DB (e.g., old session data)
-            submissions = session.get('submissions', [])
-            initial_len = len(submissions)
-            submissions = [s for s in submissions if s.get('id') != submission_id]
-            session['submissions'] = submissions
+        current_user = get_current_user()
+        if not current_user:
+            logger.warning(f"Delete submission: Unauthorized attempt from IP: {request.remote_addr}")
+            return jsonify({'success': False, 'message': 'Authentication required.'}), 401
 
-            if len(submissions) < initial_len:
-                logger.info(f"Submission {submission_id} deleted successfully from session.")
+        try:
+            submission = Submission.query.filter_by(id=submission_id, user_id=current_user.id).first()
+            if submission:
+                db.session.delete(submission)
+                db.session.commit()
+                logger.info(f"Submission {submission_id} deleted successfully from database for user {current_user.id}.")
                 add_recent_activity('submission_deleted', f'Submission {submission_id[:8]}... deleted.', 'trash')
                 return jsonify({'success': True, 'message': 'Submission deleted successfully.'})
             else:
-                logger.warning(f"Submission {submission_id} not found for deletion.")
-                return jsonify({'success': False, 'message': 'Submission not found.'}), 404
+                logger.warning(f"Submission {submission_id} not found or unauthorized for user {current_user.id}.")
+                return jsonify({'success': False, 'message': 'Submission not found or unauthorized.'}), 404
+
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            logger.error(f"Database error deleting submission {submission_id} for user {current_user.id}: {str(e)}")
+            return jsonify({'success': False, 'message': 'Database error occurred while deleting submission.'}), 500
 
     except Exception as e:
         logger.error(f"Error deleting submission: {str(e)}")

@@ -333,7 +333,7 @@ class OCRService:
                         logger.warning(f"Page {i+1} has no transcript content.")
                     text += page_text + "\n"
                 else:
-                    logger.warning(f"Page {i+1} missing 'transcript' key in OCR result.")
+                    logger.warning(f"Page {i+1} missing 'transcript' key in OCR result. Page content: {page}")
             return text.strip()
         else:
             raise OCRServiceError("Unexpected response format from OCR service")
