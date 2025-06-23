@@ -215,12 +215,11 @@ class DocumentParser:
                         # Create a temporary file for the image
                         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img_file:
                             temp_img_path = temp_img_file.name
+                            # Close the file handle immediately so pix.save can write to it
+                            temp_img_file.close()
                             pix = page.get_pixmap()
                             pix.save(temp_img_path)
                             del pix # Explicitly delete pixmap to release resources
-
-                        # Ensure the file is closed before OCR processing
-                        # The tempfile context manager handles closing, but we need to ensure it's flushed if not already.
 
                         logger.debug(f"Processing page {page_num} with OCR")
                         # Process image with OCR
@@ -261,6 +260,7 @@ class DocumentParser:
                 logger.info(
                     f"Successfully extracted {len(text)} characters from PDF using OCR"
                 )
+                doc.close() # Ensure the document is closed
                 return text
             else:
                 # Process a regular image file
