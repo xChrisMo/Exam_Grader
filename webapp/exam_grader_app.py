@@ -1291,7 +1291,7 @@ def process_unified_ai():
 
         # Create progress tracking session with error handling
         try:
-            session_id = session.get('session_id', f"session_{int(time.time())}")
+            session_id = session.sid  # Use SecureFlaskSession's sid property
             logger.info(f"Creating progress session for {len(submissions)} submissions")
             progress_id = progress_tracker.create_session(session_id, len(submissions))
             logger.info(f"Progress session created: {progress_id}")

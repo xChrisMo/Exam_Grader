@@ -27,6 +27,7 @@ class SecureSessionInterface(SessionInterface):
     def open_session(self, app, request):
         self.session_cookie_name = app.config.get('SESSION_COOKIE_NAME', 'session')
         sid = request.cookies.get(self.session_cookie_name)
+        logger.debug(f"Attempting to open session. Cookie name: {self.session_cookie_name}, SID from cookie: {sid}")
         if not sid:
             logger.debug("No session ID found in cookie. Creating new session.")
             # No session ID in cookie, create a new session
@@ -66,8 +67,14 @@ class SecureSessionInterface(SessionInterface):
                 logger.debug(f"New session user_id: {user_id}")
                 # Create a new session in the database, even for anonymous users
                 # The user_id can be None for anonymous sessions
-                sid = self.session_manager.create_session(user_id, dict(session))
+                # Pass remember_me to create_session to determine session timeout
+                sid = self.session_manager.create_session(
+                    user_id,
+                    dict(session),
+                    remember_me=session.get('remember_me', False)
+                )
                 session.sid = sid
+
                 logger.info(f"New session created and saved to DB: {sid} (user_id: {user_id})")
             else:
                 # Update existing session in the database
@@ -86,6 +93,7 @@ class SecureSessionInterface(SessionInterface):
                 secure=secure,
                 samesite=samesite,
             )
+            logger.debug(f"Setting session cookie. Name: {self.session_cookie_name}, SID: {session.sid}, Expires: {expires}")
         elif session.sid and not session.modified:
             # Session not modified, but update last_accessed in DB to keep it alive
             self.session_manager.update_session_last_accessed(session.sid)

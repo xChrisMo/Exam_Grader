@@ -11,6 +11,7 @@ from datetime import datetime
 from flask import (
     Blueprint,
     flash,
+    has_request_context,
     jsonify,
     redirect,
     render_template,
@@ -18,7 +19,7 @@ from flask import (
     session,
     url_for,
 )
-from src.database.models import User, db
+from src.database.models import User, db, Session as SessionModel
 from src.security.session_manager import SecureSessionManager
 from utils.input_sanitizer import InputSanitizer
 from utils.logger import logger
@@ -53,8 +54,25 @@ def login():
     """User login page and handler."""
     if request.method == "GET":
         # Check if user is already logged in
-        if session.get("user_id"):
-            return redirect(url_for("dashboard"))
+        # Validate session through session manager with proper error handling
+        if has_request_context() and session.sid:
+            try:
+                # Get both session data and database record
+                session_data = session_manager.get_session(session.sid)
+                session_model = SessionModel.query.get(session.sid)
+                
+                # Check if session is fully valid
+                if session_data and session_model:
+                    if session_model.is_active and not session_model.is_expired():
+                        # Valid session - allow access
+                        return redirect(url_for("dashboard"))
+                    # Session expired or inactive - clear it
+                    session_manager.invalidate_session(session.sid)
+                # Clear invalid session data
+                session.clear()
+            except Exception as e:
+                logger.error(f"Session validation error: {str(e)}")
+                session.clear()
 
         return render_template("auth/login.html", page_title="Login")
 
@@ -125,26 +143,33 @@ def login():
         user.unlock_account()  # Clear any lock
         db.session.commit()
 
-        # Create secure session
-        session_timeout = (
-            86400 if remember_me else 3600
-        )  # 24 hours if remember me, 1 hour otherwise
-        session_id = session_manager.create_session(
-            user.id,
-            {
-                "username": user.username,
-                "email": user.email,
-                "login_time": datetime.utcnow().isoformat(),
-                "remember_me": remember_me,
-            },
-        )
-
-        # Set Flask session
-        session["user_id"] = user.id
-        session["username"] = user.username
-        session["session_id"] = session_id
+        # Create new secure session with client info
+        session_data = {
+            "user_id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "ip_address": request.remote_addr,
+            "user_agent": request.headers.get("User-Agent", ""),
+            "login_time": datetime.utcnow().isoformat(),
+            "remember_me": remember_me
+        }
+        new_secure_session_id = session_manager.create_session(user.id, session_data, remember_me)
+        
+        # Set critical session attributes
+        session.sid = new_secure_session_id  # This is crucial for session interface
         session["logged_in"] = True
         session.permanent = remember_me
+
+        # Set critical session attributes
+        session.clear() # Clear any existing session data
+        session.sid = new_secure_session_id  # This is crucial for session interface
+        session["user_id"] = user.id
+        session["username"] = user.username
+        session["logged_in"] = True
+        session.permanent = remember_me
+        session.new = True # Explicitly mark as new so save_session creates a new cookie
+        session.pop('session_id', None)  # Remove any legacy session ID storage
+        logger.debug(f"Flask session after login: user_id={session.get('user_id')}, session_id={session.sid}")
 
         logger.info(f"User logged in successfully: {username}")
         flash(f"Welcome back, {user.username}!", "success")
@@ -263,7 +288,7 @@ def logout():
     """User logout handler."""
     try:
         user_id = session.get("user_id")
-        session_id = session.get("session_id")
+        session_id = session.sid
         username = session.get("username", "Unknown")
 
         # Invalidate secure session
@@ -395,9 +420,34 @@ def login_required(f):
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not session.get("user_id"):
+        user_id = session.get("user_id")
+        session_sid = session.sid
+        logger.debug(f"login_required: Checking session. user_id: {user_id}, session.sid: {session_sid}")
+
+        if not user_id or not session_sid:
+            logger.debug(
+                f"login_required: Missing session data. Redirecting to login. Next URL: {request.url}"
+            )
             flash("Please log in to access this page.", "warning")
+            # Clear any invalid session data
+            session.clear()
             return redirect(url_for("auth.login", next=request.url))
-        return f(*args, **kwargs)
+        
+        try:
+            # Validate secure session
+            secure_session = session_manager.get_session(session_sid)
+            if not secure_session or secure_session.get('user_id') != user_id:
+                logger.warning(f"Invalid secure session for user {user_id}")
+                session.clear()
+                flash("Session invalid. Please log in again.", "warning")
+                return redirect(url_for("auth.login"))
+            
+            return f(*args, **kwargs)
+        
+        except Exception as e:
+            logger.error(f"Session validation error: {str(e)}")
+            session.clear()
+            flash("Session error. Please log in again.", "error")
+            return redirect(url_for("auth.login"))
 
     return decorated_function
