@@ -199,6 +199,19 @@ _service_status_cache = {}
 _service_status_cache_time = 0
 SERVICE_STATUS_CACHE_DURATION = 300  # 5 minutes
 
+def _update_guide_uploaded_status(user_id):
+    """Updates the session's 'guide_uploaded' status based on existing guides for the user."""
+    from src.database import MarkingGuide # Import here to avoid circular dependency if models.py imports app
+    remaining_guides = MarkingGuide.query.filter_by(user_id=user_id).first()
+    if not remaining_guides:
+        session['guide_uploaded'] = False
+        session.modified = True
+        logger.info("No marking guides remaining for user. Setting guide_uploaded to False.")
+    else:
+        session['guide_uploaded'] = True
+        session.modified = True
+        logger.info("Marking guides exist for user. Setting guide_uploaded to True.")
+
 def get_service_status() -> Dict[str, bool]:
     """Check status of all services with caching."""
     global _service_status_cache, _service_status_cache_time
@@ -383,12 +396,9 @@ def dashboard():
 
         logger.info(f"Dashboard: Calculated total_submissions: {total_submissions}, processed_submissions: {processed_submissions}")
 
-        # Check if a guide is currently loaded in session (primary check)
+        # Ensure guide_uploaded status is accurate based on database
+        _update_guide_uploaded_status(current_user.id)
         guide_uploaded = session.get('guide_uploaded', False)
-
-        # Fallback: check if any guide exists in database
-        if not guide_uploaded:
-            guide_uploaded = MarkingGuide.query.filter_by(user_id=current_user.id).limit(1).first() is not None
 
         # Get recent submissions as activity (user-specific) - limited to 5
         recent_submissions = Submission.query.filter_by(user_id=current_user.id).order_by(
@@ -610,7 +620,7 @@ def upload_guide():
             guide_id = marking_guide.id
 
             logger.info(f"Guide stored in database with ID: {guide_id}")
-            session['guide_uploaded'] = True
+            _update_guide_uploaded_status(current_user.id)
 
         except Exception as storage_error:
             logger.error(f"Error storing guide in database: {str(storage_error)}")
@@ -1610,7 +1620,7 @@ def use_guide(guide_id):
 
         # Set comprehensive session data for dashboard activation
         session['guide_id'] = guide.id
-        session['guide_uploaded'] = True  # Critical for dashboard component activation
+        _update_guide_uploaded_status(current_user.id) # Critical for dashboard component activation
         session['guide_filename'] = guide.filename or guide.title
         session['guide_content'] = guide.content_text or ''
         session['guide_raw_content'] = guide.content_text or ''
@@ -1861,6 +1871,10 @@ def delete_guide(guide_id):
             session.pop('guide_data', None)
             session.modified = True
             logger.info(f"Cleared active guide from session: {guide_name}")
+
+        # After deletion, update guide_uploaded status
+        _update_guide_uploaded_status(current_user.id)
+        if not session.get('guide_uploaded', True):
             flash(f'Active guide "{guide_name}" deleted and cleared from session', 'warning')
         else:
             flash(f'Marking guide "{guide_name}" deleted successfully', 'success')
@@ -1935,6 +1949,9 @@ def api_delete_guide():
             logger.info(f"Cleared active guide from session: {guide_name}")
 
         logger.info(f"Guide deleted successfully via API: {guide_name} (ID: {guide_id})")
+
+        # After deletion, update guide_uploaded status
+        _update_guide_uploaded_status(current_user.id)
 
         return jsonify({
             'success': True,
