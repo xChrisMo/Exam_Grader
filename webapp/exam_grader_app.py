@@ -699,9 +699,7 @@ def upload_submission():
                     os.remove(file_path)
                     continue
                 elif not answers and not raw_text:
-                    # Fallback if parsing fails or returns empty, but no explicit error
-                    answers = {'extracted_text': f'Sample text from {filename}'}
-                    raw_text = f'Raw text content from {filename}'
+                    error = "No content could be extracted from the file."
 
                 logger.info(f"Before storing in session - filename: {filename}, raw_text length: {len(raw_text) if raw_text else 0}, answers keys: {list(answers.keys()) if answers else 'None'}")
 

@@ -213,13 +213,17 @@ class DocumentParser:
                         # Convert page to image
                         import tempfile
                         # Create a temporary file for the image
-                        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img_file:
-                            temp_img_path = temp_img_file.name
-                            # Close the file handle immediately so pix.save can write to it
-                            temp_img_file.close()
+                        fd, temp_img_path = tempfile.mkstemp(suffix=".png")
+                        os.close(fd) # Close the file descriptor immediately
+                        try:
                             pix = page.get_pixmap()
                             pix.save(temp_img_path)
                             del pix # Explicitly delete pixmap to release resources
+                        except Exception as e:
+                            logger.error(f"Error saving pixmap to temporary file {temp_img_path}: {str(e)}")
+                            if os.path.exists(temp_img_path):
+                                os.unlink(temp_img_path)
+                            raise
 
                         logger.debug(f"Processing page {page_num} with OCR")
                         # Process image with OCR
@@ -399,7 +403,9 @@ def parse_student_submission(
 
         # Check if we have any text
         if not raw_text or not raw_text.strip():
-            return {}, "", "No text could be extracted from the document"
+            error_message = f"No text could be extracted from the document: {file_path}"
+            logger.error(error_message)
+            return {}, "", error_message
 
         # Return the raw text without any further processing
         logger.info(

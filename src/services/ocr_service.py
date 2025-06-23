@@ -326,9 +326,14 @@ class OCRService:
         if "results" in result:
             # Combine text from all pages
             text = ""
-            for page in result.get("results", []):
+            for i, page in enumerate(result.get("results", [])):
                 if "transcript" in page:
-                    text += page.get("transcript", "") + "\n"
+                    page_text = page.get("transcript", "")
+                    if not page_text:
+                        logger.warning(f"Page {i+1} has no transcript content.")
+                    text += page_text + "\n"
+                else:
+                    logger.warning(f"Page {i+1} missing 'transcript' key in OCR result.")
             return text.strip()
         else:
             raise OCRServiceError("Unexpected response format from OCR service")
