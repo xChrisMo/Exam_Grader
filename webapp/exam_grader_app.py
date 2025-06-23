@@ -701,7 +701,8 @@ def upload_submission():
                 elif not answers and not raw_text:
                     error = "No content could be extracted from the file."
 
-                logger.info(f"Before storing in session - filename: {filename}, raw_text length: {len(raw_text) if raw_text else 0}, answers keys: {list(answers.keys()) if answers else 'None'}")
+                logger.info(f"Before storing in session - filename: {filename}, raw_text length: {len(raw_text) if raw_text else 0}, answers keys: {list(answers.keys()) if answers else 'None'}, parse_submission error: {error}")
+                logger.debug(f"Raw text content from parse_student_submission: {raw_text[:500] if raw_text else 'None'}")
 
                 submission_id = str(uuid.uuid4())
 
@@ -1690,7 +1691,7 @@ def view_submission_content(submission_id):
             'page_title': f'Submission: {submission.get("filename", "Unknown")}',
             'submission_id': submission_id,
             'filename': submission.get('filename', 'Unknown'),
-            'raw_text': submission.get('raw_text', ''),
+            'raw_text': submission.get('content_text', ''),
             'extracted_answers': submission.get('extracted_answers', {}),
             'processed': submission.get('processed', False),
             'uploaded_at': submission.get('upload_date', ''),

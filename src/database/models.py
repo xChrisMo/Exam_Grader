@@ -209,6 +209,7 @@ class Submission(db.Model, TimestampMixin):
             "filename": self.filename,
             "file_size": self.file_size,
             "file_type": self.file_type,
+            "content_text": self.content_text,
             "answers": self.answers,
             "ocr_confidence": self.ocr_confidence,
             "processing_status": self.processing_status,
