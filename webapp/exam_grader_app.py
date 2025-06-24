@@ -1327,7 +1327,7 @@ def process_unified_ai():
         finally:
             pass # The complete_session is already called in try/except blocks
 
-
+        session['last_grading_progress_id'] = progress_id # Store the progress_id for viewing results
         session['last_grading_result'] = True  # Set this to activate the View Results button
 
         return jsonify({'success': True, 'progress_id': progress_id, 'summary': result.get('summary')}), 200
