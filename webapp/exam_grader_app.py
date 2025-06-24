@@ -1292,7 +1292,8 @@ def process_unified_ai():
                         submission_id=submission_id,
                         guide_question_id=mapping_data.get('guide_id'),
                         guide_question_text=mapping_data.get('guide_text'),
-                        submission_text=mapping_data.get('submission_text'),
+                        submission_answer=mapping_data.get('submission_answer'),
+                        max_score=mapping_data.get('max_score'),
                         match_score=mapping_data.get('match_score'),
                         match_reason=mapping_data.get('match_reason'),
                         mapping_method='llm' # Assuming LLM is the method
@@ -1303,12 +1304,15 @@ def process_unified_ai():
                     # Create and save GradingResult object for this mapping
                     grading_result = GradingResult(
                         submission_id=submission_id,
+                        mapping_id=new_mapping.id,
                         score=mapping_data.get('grade_score', 0),
                         max_score=mapping_data.get('max_score', 0),
                         percentage=mapping_data.get('percentage', 0),
                         feedback=mapping_data.get('feedback', ''),
                         detailed_feedback=mapping_data.get('detailed_feedback', {}),
-                        progress_id=session['current_progress_id'] # Link to the progress session
+                        progress_id=session['current_progress_id'], # Link to the progress session
+                        confidence=mapping_data.get('confidence', 0.0),
+                        grading_method='llm'
                     )
                     db.session.add(grading_result)
                 db.session.commit() # Commit all changes for this submission
