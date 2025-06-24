@@ -1290,9 +1290,8 @@ def process_unified_ai():
                     # Create and save Mapping object
                     new_mapping = Mapping(
                         submission_id=submission_id,
-                        marking_guide_id=guide_id,
                         guide_question_id=mapping_data.get('guide_id'),
-                        guide_text=mapping_data.get('guide_text'),
+                        guide_question_text=mapping_data.get('guide_text'),
                         submission_text=mapping_data.get('submission_text'),
                         match_score=mapping_data.get('match_score'),
                         match_reason=mapping_data.get('match_reason'),
