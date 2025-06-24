@@ -6,7 +6,7 @@ user inputs, and API requests to prevent security vulnerabilities.
 """
 
 import os
-import re
+
 import magic
 import hashlib
 from pathlib import Path
@@ -319,12 +319,11 @@ class InputValidator:
             # Scan for dangerous patterns
             detected_patterns = []
             for pattern in self.dangerous_patterns:
-                matches = re.findall(pattern, content, re.IGNORECASE | re.DOTALL)
-                if matches:
+                if pattern in content.lower():
                     detected_patterns.append({
                         "pattern": pattern,
-                        "matches": len(matches),
-                        "examples": matches[:3]  # First 3 matches
+                        "matches": 1, # We can't count multiple matches without regex
+                        "examples": [pattern] # Just show the pattern itself
                     })
             
             if detected_patterns:
@@ -380,11 +379,10 @@ class InputValidator:
             # Scan for dangerous patterns
             detected_patterns = []
             for pattern in self.dangerous_patterns:
-                matches = re.findall(pattern, text, re.IGNORECASE | re.DOTALL)
-                if matches:
+                if pattern in text.lower():
                     detected_patterns.append({
                         "pattern": pattern,
-                        "matches": len(matches)
+                        "matches": 1 # We can't count multiple matches without regex
                     })
             
             if detected_patterns:

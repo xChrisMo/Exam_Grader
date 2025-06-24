@@ -109,6 +109,7 @@ class User(db.Model, TimestampMixin):
             "last_login": self.last_login.isoformat() if self.last_login else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
+            "processed": self.processing_status == "completed",
         }
 
 

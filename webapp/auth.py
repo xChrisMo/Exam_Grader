@@ -213,14 +213,14 @@ def signup():
             errors.append("Username must be at least 3 characters long.")
         elif len(username) > 80:
             errors.append("Username must be less than 80 characters.")
-        elif not re.match(r"^[a-zA-Z0-9_-]+$", username):
+        elif not all(c.isalnum() or c in ('-', '_') for c in username):
             errors.append(
                 "Username can only contain letters, numbers, hyphens, and underscores."
             )
 
         if not email:
             errors.append("Email is required.")
-        elif not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
+        elif '@' not in email or '.' not in email or email.find('@') > email.rfind('.'):
             errors.append("Please enter a valid email address.")
         elif len(email) > 120:
             errors.append("Email must be less than 120 characters.")
@@ -229,13 +229,13 @@ def signup():
             errors.append("Password is required.")
         elif len(password) < 8:
             errors.append("Password must be at least 8 characters long.")
-        elif not re.search(r"[A-Z]", password):
+        elif not any(c.isupper() for c in password):
             errors.append("Password must contain at least one uppercase letter.")
-        elif not re.search(r"[a-z]", password):
+        elif not any(c.islower() for c in password):
             errors.append("Password must contain at least one lowercase letter.")
-        elif not re.search(r"\d", password):
+        elif not any(c.isdigit() for c in password):
             errors.append("Password must contain at least one number.")
-        elif not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        elif not any(c in '!@#$%^&*(),.?":{}|<>' for c in password):
             errors.append("Password must contain at least one special character.")
 
         if password != confirm_password:

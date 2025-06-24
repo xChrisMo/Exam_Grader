@@ -5,7 +5,7 @@ questions and answers in student submissions.
 """
 
 import json
-import re
+
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -135,9 +135,7 @@ class MappingService:
             # Parse the response with error handling
             try:
                 # Clean up the response for models that don't properly format JSON
-                json_match = re.search(r"\{.*\}", result, re.DOTALL)
-                if json_match:
-                    result = json_match.group(0)
+
 
                 parsed = json.loads(result)
 

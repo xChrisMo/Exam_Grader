@@ -418,9 +418,8 @@ const ExamGrader = {
           ExamGrader.ui.stopProgressPolling();
           ExamGrader.ui.hideProgressModal();
 
-          // Optionally, redirect to results page or update UI
-          // For now, we rely on the 'View Results' button being active
-          // window.location.href = '/results'; // Example redirect
+          // Reload the page to update the UI based on server-side session variables
+          window.location.reload();
 
           return data;
         } else {

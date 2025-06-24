@@ -29,6 +29,7 @@ from flask import (
     flash, session, jsonify, abort
 )
 from sqlalchemy.exc import SQLAlchemyError
+from flask_login import current_user, LoginManager
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 
@@ -95,6 +96,15 @@ try:
     )
     # Set the custom session interface for Flask
     app.session_interface = SecureSessionInterface(session_manager, app.config['SECRET_KEY'])
+
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'auth.login'
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(user_id)
+
     logger.info("Security components initialized")
 except Exception as e:
     logger.error(f"Failed to initialize security: {str(e)}")
@@ -1315,7 +1325,24 @@ def process_unified_ai():
                         grading_method='llm'
                     )
                     db.session.add(grading_result)
-                db.session.commit() # Commit all changes for this submission
+
+            # Retrieve the submission object and update its status
+            submission = Submission.query.get(submission_id)
+            if submission:
+                submission.processing_status = 'completed'
+                db.session.add(submission)
+
+            db.session.commit() # Commit all changes for this submission, including submission status
+
+            # After committing, refresh the session's submissions to reflect the updated status
+            # This ensures the UI gets the latest data on page reload
+
+            # Re-fetch recent submissions to ensure session data is fresh
+            recent_submissions = Submission.query.filter_by(user_id=current_user.id).order_by(
+                Submission.created_at.desc()
+            ).all()
+            session['submissions'] = [s.to_dict() for s in recent_submissions]
+
             progress_tracker.complete_session(progress_id, success=True)
 
         except Exception as e:
@@ -1490,9 +1517,13 @@ def marking_guides():
                 if not text:
                     return text
                 # Remove control characters that can break JSON
-                import re
                 # Remove control characters except tab, newline, and carriage return
-                text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', str(text))
+                # Using a loop for character-by-character check instead of regex
+                cleaned_text = []
+                for char_code in str(text).encode('utf-8'):
+                    if char_code >= 32 or char_code in (9, 10, 13): # Allow tab (9), newline (10), carriage return (13)
+                        cleaned_text.append(chr(char_code))
+                text = ''.join(cleaned_text)
                 return text
 
             # Sanitize all text fields

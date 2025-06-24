@@ -5,7 +5,7 @@ This service grades student submissions by comparing their answers to the soluti
 
 import json
 import os
-import re
+
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
