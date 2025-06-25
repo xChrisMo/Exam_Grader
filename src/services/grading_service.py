@@ -5,6 +5,7 @@ This service grades student submissions by comparing their answers to the soluti
 
 import json
 import os
+import re
 from utils.logger import logger
 
 from datetime import datetime
