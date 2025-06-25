@@ -320,7 +320,11 @@ class OCRService:
                 f"Failed to get document result: {response.status_code} - {response.text}"
             )
 
-        result = response.json()
+        try:
+            result = response.json()
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decoding error in OCR result: {e}. Raw response: {response.text}")
+            raise OCRServiceError("Invalid JSON response from OCR service") from e
 
         # Extract text from the response based on API format
         if "results" in result:

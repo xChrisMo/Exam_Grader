@@ -108,9 +108,9 @@ class APIConfig:
 
     handwriting_ocr_api_key: str = ""
     deepseek_api_key: str = ""
-    handwriting_ocr_api_url: str = "https://www.handwritingocr.com/api/v3"
+    handwriting_ocr_api_url: str = field(default_factory=lambda: os.getenv("HANDWRITING_OCR_API_URL", ""))
     handwriting_ocr_delete_after: int = 3600
-    deepseek_api_url: str = "https://api.deepseek.com/v1"
+    deepseek_api_url: str = field(default_factory=lambda: os.getenv("DEEPSEEK_API_URL", ""))
     deepseek_model: str = field(default_factory=lambda: os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner"))
     api_timeout: int = 30
     api_retry_attempts: int = 3
@@ -235,9 +235,9 @@ class UnifiedConfig:
                 "HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3"
             ),
             deepseek_api_key=os.getenv("DEEPSEEK_API_KEY", ""),
-            deepseek_api_url=os.getenv(
-                "DEEPSEEK_API_URL", "https://api.deepseek.com/v1"
-            ),
+        deepseek_api_url=os.getenv(
+            "DEEPSEEK_API_URL", ""
+        ),
             deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner"),
             # LLM-Only Mode Configuration
             llm_only_mode=os.getenv("LLM_ONLY_MODE", "False").lower() == "true",

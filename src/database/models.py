@@ -263,17 +263,14 @@ class Mapping(db.Model, TimestampMixin):
 
 
 class GradingResult(db.Model, TimestampMixin):
-    """Grading result model for storing scores and feedback."""
+    """Stores the result of a single grading operation."""
 
     __tablename__ = "grading_results"
 
     id = get_uuid_column()
-    submission_id = Column(
-        String(36), ForeignKey("submissions.id"), nullable=False, index=True
-    )
-    mapping_id = Column(
-        String(36), ForeignKey("mappings.id"), nullable=False, index=True
-    )
+    submission_id = Column(String(36), ForeignKey("submissions.id"), nullable=False)
+    marking_guide_id = Column(String(36), ForeignKey("marking_guides.id"), nullable=True)
+    mapping_id = Column(String(36), ForeignKey("mappings.id"), nullable=True)
     score = Column(Float, nullable=False)
     max_score = Column(Float, nullable=False)
     percentage = Column(Float, nullable=False)
@@ -285,6 +282,7 @@ class GradingResult(db.Model, TimestampMixin):
 
     # Relationships
     submission = relationship("Submission", back_populates="grading_results")
+    marking_guide = relationship("MarkingGuide", backref="grading_results")
     mapping = relationship("Mapping", back_populates="grading_results")
 
     # Composite indexes for performance optimization

@@ -5,6 +5,7 @@ This service grades student submissions by comparing their answers to the soluti
 
 import json
 import os
+from utils.logger import logger
 
 from datetime import datetime
 from pathlib import Path
@@ -25,7 +26,69 @@ class GradingService:
         self.mapping_service = mapping_service
 
     def grade_submission(
-        self, marking_guide_content: str, student_submission_content: str
+        self,
+        marking_guide_content: str,
+        student_submission_content: str,
+        mapped_questions: Optional[List[Dict]] = None,
+        guide_type: Optional[str] = None,
+    ) -> Tuple[Dict, Optional[str]]:
+        """
+        Grade a student submission against a marking guide.
+
+        Args:
+            marking_guide_content: Text content of the marking guide
+            student_submission_content: Text content of the student submission
+            mapped_questions: Optional list of pre-mapped questions and answers.
+            guide_type: Optional type of the guide (e.g., "questions", "answers").
+
+        Returns:
+            Tuple[Dict, Optional[str]]: (Grading result, Error message if any)
+        """
+        if not isinstance(marking_guide_content, dict):
+            logger.error(f"TypeError: marking_guide_content is not a dictionary. Type: {type(marking_guide_content)}")
+            return {}, "Invalid marking guide content: Expected a dictionary."
+        marking_guide_data = marking_guide_content
+
+        # Determine guide type if not provided
+        if guide_type is None and self.mapping_service:
+            guide_type, _ = self.mapping_service.determine_guide_type(marking_guide_data.get("raw_content", ""))
+
+        # Extract answers from student submission content using mapping service
+        # This assumes student_submission_content is raw text, not JSON
+        if self.mapping_service:
+            parsed_student_submission = self.mapping_service.extract_questions_and_answers(student_submission_content)
+            if not parsed_student_submission:
+                logger.warning(f"No answers extracted from student submission content. Content: {student_submission_content[:200]}...")
+                return {}, "Could not extract answers from student submission."
+        else:
+            # Fallback if mapping service is not available, instantiate one to extract answers
+            logger.warning("Mapping service not initialized. Instantiating a temporary MappingService to extract answers.")
+            from src.services.mapping_service import MappingService
+            temp_mapping_service = MappingService(llm_service=self.llm_service) # Pass LLM service if available
+            parsed_student_submission = temp_mapping_service.extract_questions_and_answers(student_submission_content)
+            if not parsed_student_submission:
+                logger.warning(f"No answers extracted from student submission content using temporary mapping service. Content: {student_submission_content[:200]}...")
+                return {}, "Could not extract answers from student submission using fallback mapping service."
+
+        # Extract raw_content from marking_guide_data if it's a dictionary
+        if isinstance(marking_guide_data, dict):
+            marking_guide_raw_content = marking_guide_data.get("raw_content", "")
+        else:
+            marking_guide_raw_content = marking_guide_data # Fallback if it's somehow not a dict
+
+        return self.grade_answers(
+            marking_guide_raw_content,
+            parsed_student_submission,
+            mapped_questions=mapped_questions,
+            guide_type=guide_type,
+        )
+
+    def grade_answers(
+        self,
+        guide_data: str, # Now expects raw content string
+        student_answers: List[Dict],
+        mapped_questions: Optional[List[Dict]] = None,
+        guide_type: Optional[str] = None,
     ) -> Tuple[Dict, Optional[str]]:
         """
         Grade a student submission against a marking guide.
@@ -38,39 +101,60 @@ class GradingService:
             Tuple[Dict, Optional[str]]: (Grading result, Error message if any)
         """
         try:
-            # Use mapping service to match questions and answers
-            if self.mapping_service:
-                mapping_result, mapping_error = (
-                    self.mapping_service.map_submission_to_guide(
-                        marking_guide_content, student_submission_content
-                    )
-                )
-
-                if mapping_error:
-                    return {
-                        "status": "error",
-                        "message": f"Mapping error: {mapping_error}",
-                    }, mapping_error
-
-                mappings = mapping_result.get("mappings", [])
+            if mapped_questions is not None:
+                mappings = mapped_questions
+                # If guide_type is not provided, try to infer from guide_data
+                # This part needs to be adjusted as guide_data is now a string
+                # For now, we'll assume guide_type is passed or defaults to 'unknown'
+                if guide_type is None:
+                    guide_type = "unknown"
+                mapping_result = {"mappings": mappings, "metadata": {"guide_type": guide_type}}
             else:
-                # Initialize mapping service if none was provided
-                from src.services.mapping_service import MappingService
+                # Use mapping service to match questions and answers
+                # Ensure marking_guide_content and student_submission_content are passed
+                # These are not directly available in grade_answers, so we need to reconstruct them
+                # from guide_data and student_answers if mapping_service is used here.
+                # However, the current flow passes raw content to grade_submission, which then calls grade_answers.
+                # So, we need to ensure the mapping service receives the correct input.
+                # For now, assuming guide_data and student_answers are sufficient for mapping service if it's called directly.
+                # This part might need adjustment based on how mapping_service.map_submission_to_guide expects its input.
 
-                temp_mapping_service = MappingService()
-                mapping_result, mapping_error = (
-                    temp_mapping_service.map_submission_to_guide(
-                        marking_guide_content, student_submission_content
+                # marking_guide_content is already the raw content string
+                marking_guide_content = guide_data
+                student_submission_content = json.dumps(student_answers)
+
+                if self.mapping_service:
+                    mapping_result, mapping_error = (
+                        self.mapping_service.map_submission_to_guide(
+                            marking_guide_content, student_submission_content
+                        )
                     )
-                )
 
-                if mapping_error:
-                    return {
-                        "status": "error",
-                        "message": f"Mapping error: {mapping_error}",
-                    }, mapping_error
+                    if mapping_error:
+                        return {
+                            "status": "error",
+                            "message": f"Mapping error: {mapping_error}",
+                        }, mapping_error
 
-                mappings = mapping_result.get("mappings", [])
+                    mappings = mapping_result.get("mappings", [])
+                else:
+                    # Initialize mapping service if none was provided
+                    from src.services.mapping_service import MappingService
+
+                    temp_mapping_service = MappingService()
+                    mapping_result, mapping_error = (
+                        temp_mapping_service.map_submission_to_guide(
+                            marking_guide_content, student_submission_content
+                        )
+                    )
+
+                    if mapping_error:
+                        return {
+                            "status": "error",
+                            "message": f"Mapping error: {mapping_error}",
+                        }, mapping_error
+
+                    mappings = mapping_result.get("mappings", [])
 
             # Grade each mapped question
             overall_score = 0

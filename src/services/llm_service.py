@@ -245,12 +245,12 @@ class LLMService:
         Raises:
             LLMServiceError: If the API call fails after all retries
         """
-        try:
+        try:  # Added proper error handling for API operations
             # Log the start of answer comparison
             logger.info("Preparing to compare answers...")
 
             # Optimize prompt length for performance
-            max_content_length = 1000  # Limit content length for faster processing
+            max_content_length = int(os.getenv("MAX_CONTENT_LENGTH", 10000))  # Configurable content length
 
             # Truncate long content while preserving key information
             question_truncated = question[:max_content_length] if len(question) > max_content_length else question
@@ -260,26 +260,22 @@ class LLMService:
             # Construct optimized prompt for faster processing
             system_prompt = """You are an educational grading assistant. Compare a student's answer to a model answer and assign a score.
 
-Guidelines:
-- Score: 0 to maximum score
-- Focus on content accuracy and key points
-- Be objective and consistent
+            Guidelines:
+            - Score: 0 to maximum score
+            - Focus on content accuracy and key points
+            - Be objective and consistent
 
-Response format (JSON only):
-{
-    "score": <numeric_score>,
-    "feedback": "<brief_explanation>"
-}"""
+            Response format (JSON only). Your response MUST be a valid JSON object with 'score' (numeric) and 'feedback' (string) keys. Example: {"score": 8.5, "feedback": "Good answer, but missing a key detail."}"""
 
             user_prompt = f"""Question: {question_truncated}
 
-Model Answer: {guide_answer_truncated}
+            Model Answer: {guide_answer_truncated}
 
-Student Answer: {submission_answer_truncated}
+            Student Answer: {submission_answer_truncated}
 
-Max Score: {max_score}
+            Max Score: {max_score}
 
-Evaluate and provide score with feedback."""
+            Evaluate and provide score with feedback."""
 
             # Create messages for caching
             messages = [
@@ -305,8 +301,9 @@ Evaluate and provide score with feedback."""
                     "max_tokens": self.max_tokens_default,  # Optimized token limit
                 }
 
-                # Force JSON format for all models
-                params["response_format"] = {"type": "json_object"}
+                # Ensure JSON format for Deepseek-Reasoner
+                if self.model == "deepseek-ai/deepseek-reasoner":
+                    params["response_format"] = {"type": "json_object"}
 
                 # Add seed parameter if in deterministic mode
                 if self.deterministic and self.seed is not None:
@@ -322,39 +319,149 @@ Evaluate and provide score with feedback."""
             # Parse and validate the response
             logger.info("Processing LLM response...")
 
+            # Enhanced JSON parsing with multiple fallback strategies
+            result, extraction_method = self.parse_llm_response(response_text)
+            
+            # Validate required fields
+            if not all(key in result for key in ['score', 'feedback']):
+                logger.error("Missing required keys in LLM response")
+                raise LLMServiceError("Invalid response format from LLM")
+
+            # Extract and validate score
             try:
-                # Parse JSON response directly - no fallbacks
-                import json
-                result = json.loads(response_text.strip())
-
-                # Extract score and feedback with validation
-                score = float(result.get("score", 0))
-                feedback = result.get("feedback", "No feedback provided")
-
-                # Ensure score is within bounds
+                score = float(result['score'])
                 score = max(0, min(score, max_score))
-
-                # Add extraction method info if manual extraction was used
-                if result.get("extraction_method") == "manual":
-                    feedback = f"[Manual extraction] {feedback}"
-
+                feedback = str(result['feedback'])
+                
                 logger.info(f"Answer comparison completed. Score: {score}/{max_score}")
-                return score, feedback
+                return score, f"[{extraction_method}] {feedback}"
+            except (ValueError, TypeError) as e:
+                logger.error(f"Invalid score value: {str(e)}")
+                return 0, f"Error: Invalid scoring format - {str(e)}"
+            except LLMServiceError as e:
+                logger.error(f"LLM service error during comparison: {str(e)}")
+                raise
+            except Exception as e:
+                logger.error(f"Unexpected error during answer comparison: {str(e)}")
+                return 0, f"System error: {str(e)}"
 
-            except Exception as parse_error:
-                logger.error(f"Failed to parse response: {str(parse_error)}")
-                logger.error(f"Raw response: {response_text}")
-
-                # Final fallback: return zero score with error message
-                return 0, f"Error processing response: {str(parse_error)}"
-
-        except LLMServiceError:
-            # Re-raise LLM service errors
-            raise
+        # Add proper error handling for the main try block
+        except ConnectionError as ce:
+            logger.error(f"API connection failed: {str(ce)}")
+            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+        except json.JSONDecodeError as je:
+            logger.error(f"Invalid JSON response: {str(je)}")
+            raise LLMServiceError("Malformed API response") from je
         except Exception as e:
-            logger.error(f"Answer comparison failed: {str(e)}")
-            # Return a default score and error message
-            return 0, f"Error: {str(e)}"
+            logger.error(f"Unexpected error during comparison: {str(e)}")
+            raise LLMServiceError("Comparison process failed") from e
+
+        # Add proper error handling for the main try block
+        except ConnectionError as ce:
+            logger.error(f"API connection failed: {str(ce)}")
+            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+        except json.JSONDecodeError as je:
+            logger.error(f"Invalid JSON response: {str(je)}")
+            raise LLMServiceError("Malformed API response") from je
+        except Exception as e:
+            logger.error(f"Unexpected error during comparison: {str(e)}")
+            raise LLMServiceError("Comparison process failed") from e
+
+        except ConnectionError as ce:
+            logger.error(f"LLM API connection failed: {str(ce)}")
+            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+        except json.JSONDecodeError as je:
+            logger.error(f"JSON parsing failed: {str(je)}")
+            raise LLMServiceError("Invalid response format from API") from je
+        except Exception as e:
+            logger.error(f"Unexpected error in LLM service: {str(e)}")
+            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
+        
+        # Add proper error handling for the outer try block
+        except ConnectionError as ce:
+            logger.error(f"API connection failed: {str(ce)}")
+            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+        except json.JSONDecodeError as je:
+            logger.error(f"Invalid JSON response: {str(je)}")
+            raise LLMServiceError("Malformed API response") from je
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}")
+            raise LLMServiceError("Failed to process API response") from e
+
+        except ConnectionError as ce:
+            logger.error(f"LLM API connection failed: {str(ce)}")
+            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+        except json.JSONDecodeError as je:
+            logger.error(f"JSON parsing failed: {str(je)}")
+            raise LLMServiceError("Invalid response format from API") from je
+        except Exception as e:
+            logger.error(f"Unexpected error in LLM service: {str(e)}")
+            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
+
+        except ConnectionError as ce:
+            logger.error(f"LLM API connection failed: {str(ce)}")
+            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+        except json.JSONDecodeError as je:
+            logger.error(f"JSON parsing failed: {str(je)}")
+            raise LLMServiceError("Invalid response format from API") from je
+        except Exception as e:
+            logger.error(f"Unexpected error in LLM service: {str(e)}")
+            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
+        
+        except ConnectionError as ce:
+            logger.error(f"LLM API connection failed: {str(ce)}")
+            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+        except json.JSONDecodeError as je:
+            logger.error(f"JSON parsing failed: {str(je)}")
+            raise LLMServiceError("Invalid response format from API") from je
+        except Exception as e:
+            logger.error(f"Unexpected error in LLM service: {str(e)}")
+            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
+
+    def parse_llm_response(self, response_text: str) -> Tuple[Dict, str]:
+        """
+        Parse LLM response using structured JSON parsing with LLM assistance.
+        """
+        try:
+            # Use LLM to fix and structure the response
+            sanitized_response = self._get_structured_response(response_text)
+            return json.loads(sanitized_response), "structured"
+        except Exception as e:
+            logger.error(f"Structured parsing failed: {str(e)}")
+            raise LLMServiceError("Failed to parse LLM response")
+
+    def _get_structured_response(self, text: str) -> str:
+        """Use LLM to convert free-form response to valid JSON"""
+        prompt = """Convert this unstructured response to valid JSON format:
+        
+        {response}
+        
+        Return ONLY the JSON object with 'score' and 'feedback' keys.""".format(response=text[:4000])
+
+        return self._get_llm_response(prompt)
+
+    def process_marking_guide(self, guide_text: str) -> Dict:
+        """
+        Analyze marking guide and extract structured Q&A using LLM.
+        Returns either question-based or answer-based format.
+        """
+        prompt = """Analyze this marking guide and extract either:
+        1. Questions with model answers (if questions exist)
+        2. Model answers with sections (if no explicit questions)
+        
+        Guide:
+        {guide}
+        
+        Return JSON format:
+        {{
+            "type": "question|answer",
+            "items": [
+                {{"question": "...", "answer": "..."}} OR {{"section": "...", "answer": "..."}}
+            ]
+        }}""".format(guide=guide_text[:5000])
+
+        response = self._get_llm_response(prompt)
+        return json.loads(response)
 
     def grade_submission(
         self,
@@ -442,3 +549,4 @@ Evaluate and provide score with feedback."""
             return mapping_service.map_submission_to_guide(
                 marking_guide_content, student_submission_content
             )
+       

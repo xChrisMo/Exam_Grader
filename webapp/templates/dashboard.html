@@ -367,15 +367,21 @@
           View Results
         </a>
         {% else %}
+        {% if submissions %}
         <div class="text-center mb-2">
-          <div class="text-sm text-gray-500 mb-2">No results yet</div>
-          <button
-            disabled
-            class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-400 bg-gray-100 cursor-not-allowed"
-          >
+          <a href="{{ url_for('view_results') }}"
+             class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
             View Results
-          </button>
+          </a>
         </div>
+        {% else %}
+        <div class="text-center mb-2">
+          <div class="text-sm text-gray-500 mb-2">
+            <span class="spinner-border spinner-border-sm" role="status"></span>
+            Processing submissions...
+          </div>
+        </div>
+        {% endif %}
         {% endif %} {% if total_submissions > 0 %}
         <a
           href="{{ url_for('view_submissions') }}"
@@ -563,7 +569,7 @@
               "success"
             );
 
-            setTimeout(() => location.reload(), 2000);
+            setTimeout(() => window.location.href = '/results', 2000);
           } else {
             throw new Error(data.error || "AI processing failed");
           }

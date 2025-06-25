@@ -5,7 +5,10 @@ questions and answers in student submissions.
 """
 
 import json
-
+import re
+import re
+import re
+import re
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
