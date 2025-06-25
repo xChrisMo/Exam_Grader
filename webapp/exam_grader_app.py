@@ -661,8 +661,8 @@ def upload_guide():
                                     logger.info(
                                         f"LLM extraction successful: {len(questions)} questions, {total_marks} total marks"
                                     )
-                                else:
-                                    raise ValueError("Empty or invalid extraction result")
+
+
                             except Exception as llm_error:
                                 logger.error(f"LLM extraction failed: {str(llm_error)}")
                                 logger.error(f"LLM extraction error traceback: ", exc_info=True)
@@ -670,8 +670,8 @@ def upload_guide():
                                 total_marks = 0
                                 extraction_method = "error"
                                 flash("AI extraction failed - using basic guide structure", "warning")
-                            else:
-                                logger.warning("LLM extraction returned empty result")
+
+
                         else:
                             if not mapping_service:
                                 logger.warning(

@@ -267,30 +267,14 @@ class MappingService:
                 # Check if the model supports JSON output format
                 supports_json = "deepseek-reasoner" in self.llm_service.model.lower()
 
-                params = {
-                    "model": self.llm_service.model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0.0,
-                }
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ]
 
-                if supports_json:
-                    params["response_format"] = {"type": "json_object"}
+                response_format = {"type": "json_object"} if supports_json else None
 
-                # Add seed parameter if in deterministic mode
-                if (
-                    hasattr(self.llm_service, "deterministic")
-                    and self.llm_service.deterministic
-                    and hasattr(self.llm_service, "seed")
-                    and self.llm_service.seed is not None
-                ):
-                    params["seed"] = self.llm_service.seed
-
-                response = self.llm_service.client.chat.completions.create(**params)
-
-                result = response.choices[0].message.content
+                result = self.llm_service._call_llm_api(messages, response_format=response_format)
 
                 # Log the LLM response processing
                 logger.info("Processing LLM response for question extraction...")
@@ -311,13 +295,9 @@ class MappingService:
 
                     return parsed.get("items", [])
                 except json.JSONDecodeError as e:
+                    logger.error(f"Raw LLM response that failed to parse: {result}")
                     logger.warning(
-                        f"JSON parsing error in extract_questions_and_answers: {str(e)}"
-                    )
-
-                    # Log JSON parsing error
-                    logger.warning(
-                        f"JSON parsing error: {str(e)}. Falling back to regex extraction."
+                        f"JSON parsing error in extract_questions_and_answers: {str(e)}. Falling back to regex extraction."
                     )
 
                     # Return an empty list to trigger the fallback extraction
@@ -418,6 +398,100 @@ class MappingService:
                 )
 
                 # Comprehensive multi-disciplinary question extraction system
+                system_prompt = """
+                You are an expert at extracting questions and their associated total marks from academic documents across various disciplines.
+                Your task is to parse the provided marking guide content and identify all distinct questions, along with any explicitly stated marks for each question or sub-question.
+                Finally, calculate the total marks for the entire guide based on the extracted question marks.
+
+                Important guidelines:
+                - Identify questions even if they are not explicitly numbered (e.g., implied questions in a continuous text).
+                - Extract marks associated with each question or sub-question. Marks can be indicated in various formats (e.g., "(10 marks)", "[5 pts]", "worth 20", "Total: 15").
+                - If a question has sub-parts (e.g., a, b, c), extract marks for each sub-part if specified.
+                - If total marks for the entire guide are explicitly stated, extract that as well.
+                - If no marks are explicitly stated for a question, assign `null` for its `max_score`.
+                - If no total marks are explicitly stated for the guide, calculate the sum of all extracted question/sub-question marks.
+                - Ensure the output is a valid JSON object.
+
+                Output in JSON format:
+                {
+                    "questions": [
+                        {
+                            "id": "unique_question_identifier",
+                            "text": "Full text of the question, including sub-parts if any.",
+                            "max_score": "numeric_value_or_null",
+                            "sub_questions": [
+                                {
+                                    "id": "unique_sub_question_identifier",
+                                    "text": "Text of the sub-question.",
+                                    "max_score": "numeric_value_or_null"
+                                }
+                            ]
+                        }
+                    ],
+                    "total_marks": "numeric_value_or_null",
+                    "extraction_method": "llm"
+                }
+                """
+
+                user_prompt = f"""
+                Please extract questions and total marks from the following marking guide:
+
+                Marking Guide Content:
+                {content}
+                """
+
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ]
+
+                response_content = self.llm_service._call_llm_api(messages, response_format={"type": "json_object"})
+
+                if not response_content:
+                    logger.warning("LLM returned empty response for question and total marks extraction.")
+                    return {"questions": [], "total_marks": 0, "extraction_method": "llm_empty_response"}
+
+                try:
+                    parsed_response = json.loads(response_content)
+                    questions = parsed_response.get("questions", [])
+                    total_marks = parsed_response.get("total_marks", 0)
+                    extraction_method = parsed_response.get("extraction_method", "llm")
+
+                    # Basic validation to ensure it's a list of dicts
+                    if not isinstance(questions, list):
+                        logger.warning(f"LLM returned non-list questions: {questions}. Defaulting to empty list.")
+                        questions = []
+
+                    # Calculate total marks if not provided by LLM or if it's null
+                    if total_marks is None or not isinstance(total_marks, (int, float)):
+                        calculated_total_marks = 0.0
+                        for q in questions:
+                            if q.get("max_score") is not None:
+                                try:
+                                    calculated_total_marks += float(q["max_score"])
+                                except (ValueError, TypeError):
+                                    pass # Ignore if max_score is not a valid number
+                            if "sub_questions" in q and isinstance(q["sub_questions"], list):
+                                for sub_q in q["sub_questions"]:
+                                    if sub_q.get("max_score") is not None:
+                                        try:
+                                            calculated_total_marks += float(sub_q["max_score"])
+                                        except (ValueError, TypeError):
+                                            pass
+                        total_marks = calculated_total_marks
+                        if parsed_response.get("total_marks") is None:
+                            logger.info("LLM did not provide total_marks, calculated from questions.")
+
+                    logger.info(f"LLM extraction successful. Questions: {len(questions)}, Total Marks: {total_marks}")
+                    return {"questions": questions, "total_marks": total_marks, "extraction_method": extraction_method}
+
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON parsing failed for LLM response in extract_questions_and_total_marks: {e}")
+                    logger.error(f"Raw LLM response: {response_content}")
+                    return {"questions": [], "total_marks": 0, "extraction_method": "llm_json_error"}
+                except Exception as e:
+                    logger.error(f"Unexpected error during LLM extraction of questions and total marks: {e}")
+                    return {"questions": [], "total_marks": 0, "extraction_method": "llm_error"}
                 system_prompt = """
                 You are an expert educational assessment analyst with deep knowledge across all academic disciplines. Your task is to intelligently identify questions in marking guides using sophisticated reasoning, regardless of format, discipline, or question type.
 

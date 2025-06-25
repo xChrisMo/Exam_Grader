@@ -151,7 +151,7 @@ class LLMService:
                         {"role": "user", "content": "test"}
                     ],
                     "temperature": 0.0,
-                    "max_tokens": 1,
+
                 }
 
                 # Add seed parameter if in deterministic mode
@@ -201,7 +201,7 @@ class LLMService:
                     {"role": "user", "content": user_prompt},
                 ],
                 "temperature": 0.0,
-                "max_tokens": 20,
+
             }
 
             # Add seed parameter if in deterministic mode
@@ -249,13 +249,9 @@ class LLMService:
             # Log the start of answer comparison
             logger.info("Preparing to compare answers...")
 
-            # Optimize prompt length for performance
-            max_content_length = int(os.getenv("MAX_CONTENT_LENGTH", 10000))  # Configurable content length
-
-            # Truncate long content while preserving key information
-            question_truncated = question[:max_content_length] if len(question) > max_content_length else question
-            guide_answer_truncated = guide_answer[:max_content_length] if len(guide_answer) > max_content_length else guide_answer
-            submission_answer_truncated = submission_answer[:max_content_length] if len(submission_answer) > max_content_length else submission_answer
+            question_truncated = question
+            guide_answer_truncated = guide_answer
+            submission_answer_truncated = submission_answer
 
             # Construct optimized prompt for faster processing
             system_prompt = """You are an educational grading assistant. Compare a student's answer to a model answer and assign a score.
@@ -284,7 +280,7 @@ class LLMService:
             ]
 
             # Check cache first
-            cache_key = self._generate_cache_key(messages, max_tokens=self.max_tokens_default)
+            cache_key = self._generate_cache_key(messages, max_tokens=None)
             cached_response = self._get_cached_response(cache_key)
 
             if cached_response:
@@ -298,7 +294,7 @@ class LLMService:
                     "model": self.model,
                     "messages": messages,
                     "temperature": 0.0,  # Deterministic for consistency
-                    "max_tokens": self.max_tokens_default,  # Optimized token limit
+
                 }
 
                 # Ensure JSON format for Deepseek-Reasoner
@@ -418,6 +414,27 @@ class LLMService:
             logger.error(f"Unexpected error in LLM service: {str(e)}")
             raise LLMServiceError(f"Unexpected error: {str(e)}") from e
 
+    def _call_llm_api(
+        self,
+        messages: List[Dict[str, str]],
+
+        response_format: Optional[Dict[str, str]] = None,
+    ) -> str:
+        """Helper to make a robust LLM API call."""
+        params = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+        }
+
+        if self.deterministic and self.seed is not None:
+            params["seed"] = self.seed
+        if response_format is not None:
+            params["response_format"] = response_format
+
+        response = self.client.chat.completions.create(**params)
+        return response.choices[0].message.content.strip()
+
     def parse_llm_response(self, response_text: str) -> Tuple[Dict, str]:
         """
         Parse LLM response using structured JSON parsing with LLM assistance.
@@ -426,6 +443,23 @@ class LLMService:
             # Use LLM to fix and structure the response
             sanitized_response = self._get_structured_response(response_text)
             return json.loads(sanitized_response), "structured"
+        except json.JSONDecodeError as je:
+            logger.error(f"JSONDecodeError during structured parsing: {str(je)}")
+            logger.error(f"Raw response that failed structured parsing: {response_text}")
+            # Attempt to extract JSON using regex if direct parsing fails
+            logger.warning("Attempting regex extraction for JSON from LLM response.")
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    extracted_json = json_match.group(0)
+                    logger.info(f"Successfully extracted JSON substring: {extracted_json}")
+                    return json.loads(extracted_json), "structured_regex_fallback"
+                except json.JSONDecodeError as inner_je:
+                    logger.error(f"Regex extracted JSON also failed to parse: {str(inner_je)}")
+                    raise LLMServiceError("Failed to parse LLM response even with regex extraction") from inner_je
+            else:
+                logger.error("No JSON object found in LLM response after regex attempt.")
+                raise LLMServiceError("No JSON object found in LLM response") from je
         except Exception as e:
             logger.error(f"Structured parsing failed: {str(e)}")
             raise LLMServiceError("Failed to parse LLM response")
@@ -436,9 +470,12 @@ class LLMService:
         
         {response}
         
-        Return ONLY the JSON object with 'score' and 'feedback' keys.""".format(response=text[:4000])
+        Return ONLY the JSON object with 'score' and 'feedback' keys.""".format(response=text)
 
-        return self._get_llm_response(prompt)
+        messages = [
+            {"role": "user", "content": prompt}
+        ]
+        return self._call_llm_api(messages, response_format={"type": "json_object"})
 
     def process_marking_guide(self, guide_text: str) -> Dict:
         """
@@ -458,16 +495,36 @@ class LLMService:
             "items": [
                 {{"question": "...", "answer": "..."}} OR {{"section": "...", "answer": "..."}}
             ]
-        }}""".format(guide=guide_text[:5000])
+        }}""".format(guide=guide_text)
 
-        response = self._get_llm_response(prompt)
-        return json.loads(response)
+        messages = [
+            {"role": "user", "content": prompt}        ]
+        try:
+            response_content = self._call_llm_api(messages, response_format={"type": "json_object"})
+            if not response_content:
+                logger.warning("LLM returned empty response for marking guide processing.")
+                return {"questions": [], "total_marks": 0, "extraction_method": "llm_empty_response"}
+
+            parsed_response = json.loads(response_content)
+            questions = parsed_response.get("questions", [])
+            total_marks = parsed_response.get("total_marks", 0)
+            extraction_method = parsed_response.get("extraction_method", "llm")
+
+            logger.info(f"LLM extraction successful. Questions: {len(questions)}, Total Marks: {total_marks}")
+            return {"questions": questions, "total_marks": total_marks, "extraction_method": extraction_method}
+
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing failed for LLM response in process_marking_guide: {e}")
+            logger.error(f"Raw LLM response: {response_content}")
+            return {"questions": [], "total_marks": 0, "extraction_method": "llm_json_error"}
+        except Exception as e:
+            logger.error(f"Unexpected error during LLM processing of marking guide: {e}")
+            return {"questions": [], "total_marks": 0, "extraction_method": "llm_error"}
 
     def grade_submission(
         self,
         marking_guide_text: str,
         student_submission_text: str,
-        max_tokens: int = 2048,
     ) -> Dict:
         """
         Grade a student submission against a marking guide.
@@ -478,7 +535,6 @@ class LLMService:
         Args:
             marking_guide_text: Full text of the marking guide
             student_submission_text: Full text of the student submission
-            max_tokens: Maximum tokens for the response
 
         Returns:
             Dict: Grading result with scores and feedback

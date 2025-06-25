@@ -193,9 +193,12 @@ class UnifiedAIService:
                     mapping_result = None
                     mapping_error = None
                     if self.mapping_service:
+                        map_start_time = time.time()
                         mapping_result, mapping_error = self.mapping_service.map_submission_to_guide(
                             marking_guide_content.get("raw_content", ""), submission_content, num_questions=max_questions
                         )
+                        map_end_time = time.time()
+                        logger.info(f"Mapping for {submission_filename} took {map_end_time - map_start_time:.2f} seconds.")
 
                     if mapping_error:
                         logger.error(f"Mapping failed for {submission_filename}: {mapping_error}")
@@ -215,13 +218,16 @@ class UnifiedAIService:
                     grading_result = None
                     grading_error = None
                     if self.grading_service and mapping_result:
+                        grade_start_time = time.time()
                         # Pass the mapped questions and answers to the grading service
                         # Assuming mapping_result contains 'mapped_questions' and 'student_answers'
                         grading_result, grading_error = self.grading_service.grade_submission(
-                            marking_guide_content, submission_content, 
+                            marking_guide_content, submission_content,
                             mapped_questions=mapping_result.get('mappings'),
                             guide_type=guide_type
                         )
+                        grade_end_time = time.time()
+                        logger.info(f"Grading for {submission_filename} took {grade_end_time - grade_start_time:.2f} seconds.")
 
                     if grading_error:
                         logger.error(f"Grading failed for {submission_filename}: {grading_error}")
