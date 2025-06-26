@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from flask import Flask
 import codecs
 
 os.environ['PYTHONIOENCODING'] = 'utf-8'
@@ -16,6 +17,7 @@ sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer)
 sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer)
 
 from dotenv import load_dotenv
+from src.utils import logging_config
 
 
 def check_python_version():
@@ -87,9 +89,12 @@ def setup_environment():
     # Set environment variables
     os.environ.setdefault("FLASK_APP", "webapp.exam_grader_app")
     os.environ.setdefault("FLASK_ENV", "development")
+    if os.environ.get("FLASK_ENV") == "development":
+        os.environ["LOG_LEVEL"] = "DEBUG"
 
     print(f"[OK] Project root: {project_root}")
     print(f"[OK] FLASK_APP: {os.environ.get('FLASK_APP')}")
+    print(f"[DEBUG] LOG_LEVEL environment variable: {os.getenv('LOG_LEVEL')}")
 
 
 def create_directories():
@@ -148,7 +153,7 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
             from src.database.models import db  # Add proper DB import
             
             with app.app_context():
-                db.create_all()  # Create tables first
+
                 MigrationManager(db.engine.url).migrate()
         else:
             print("[ERROR] Database URL not found in configuration. Exiting.")
@@ -162,7 +167,12 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
         print("\n" + "=" * 50)
         print("🎓 EXAM GRADER - AI-POWERED ASSESSMENT PLATFORM")
         print("=" * 50)
-        print(f"🌐 Dashboard: http://{host}:{port}")
+        # Initialize logging_config after UnifiedConfig is available
+        # This ensures log_dir and log_level can be read from config
+        from src.utils.logging_config import setup_application_logging
+        app_logging_config = setup_application_logging()
+
+        print(app_logging_config.create_startup_summary(host=host, port=port))
         print(f"🔧 Debug mode: {'ON' if debug else 'OFF'}")
         print("📁 Storage: temp/ & output/")
         print(f"📊 Max file size: {os.getenv('MAX_FILE_SIZE_MB', '20')}MB")

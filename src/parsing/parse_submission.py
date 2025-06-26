@@ -142,6 +142,8 @@ class DocumentParser:
             # Return empty string to signal that extraction failed
             # The caller will handle OCR fallback
             return ""
+        finally:
+            doc.close() # Ensure the document is closed
 
     @staticmethod
     def extract_text_from_docx(file_path: str) -> str:
@@ -200,9 +202,19 @@ class DocumentParser:
                     try:
                         logger.debug(f"Converting page {page_num} to image")
                         # Convert page to image
-                        pix = page.get_pixmap()
-                        temp_img_path = f"temp_page_{page_num}.png"
-                        pix.save(temp_img_path)
+                        import tempfile
+                        # Create a temporary file for the image
+                        fd, temp_img_path = tempfile.mkstemp(suffix=".png")
+                        os.close(fd) # Close the file descriptor immediately
+                        try:
+                            pix = page.get_pixmap()
+                            pix.save(temp_img_path)
+                            del pix # Explicitly delete pixmap to release resources
+                        except Exception as e:
+                            logger.error(f"Error saving pixmap to temporary file {temp_img_path}: {str(e)}")
+                            if os.path.exists(temp_img_path):
+                                os.unlink(temp_img_path)
+                            raise
 
                         logger.debug(f"Processing page {page_num} with OCR")
                         # Process image with OCR
@@ -218,9 +230,9 @@ class DocumentParser:
 
                         # Clean up temporary image
                         try:
-                            os.remove(temp_img_path)
+                            os.unlink(temp_img_path) # Use unlink for better cross-platform compatibility
                             logger.debug(
-                                f"Cleaned up temporary image for page {page_num}"
+                                f"Cleaned up temporary image {temp_img_path} for page {page_num}"
                             )
                         except Exception as e:
                             logger.warning(
@@ -243,6 +255,7 @@ class DocumentParser:
                 logger.info(
                     f"Successfully extracted {len(text)} characters from PDF using OCR"
                 )
+                doc.close() # Ensure the document is closed
                 return text
             else:
                 # Process a regular image file
@@ -328,8 +341,12 @@ def parse_student_submission(
                 error_message = "Could not extract text from PDF. OCR service not available or enabled."
                 logger.error(error_message)
 
-        elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-            raw_text = DocumentParser.extract_text_from_docx(file_path)
+        # Check if we have any text
+        if not raw_text or not raw_text.strip():
+            error_message = f"No text could be extracted from the document: {file_path}"
+            logger.error(error_message)
+            return {}, "", error_message
+
 
         elif file_type.startswith("image/"):
             if ocr_service and config.ocr.enabled:

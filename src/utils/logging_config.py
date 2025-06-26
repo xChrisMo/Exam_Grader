@@ -141,17 +141,21 @@ class LoggingConfig:
         logger = logging.getLogger(component)
         logger.setLevel(getattr(logging, level.upper()))
 
-    def create_startup_summary(self) -> str:
+    def create_startup_summary(self, host: str = "127.0.0.1", port: int = 5000) -> str:
         """
         Create a clean startup summary message.
         
+        Args:
+            host: The host address of the server.
+            port: The port number of the server.
+            
         Returns:
             Formatted startup summary
         """
-        return """
+        return f"""
 🎓 EXAM GRADER - AI-POWERED ASSESSMENT PLATFORM
 ================================================
-🌐 Dashboard: http://127.0.0.1:5000
+🌐 Dashboard: http://{host}:{port}
 🔧 Debug mode: ON
 📁 Storage: temp/ & output/
 📊 Max file size: 20MB

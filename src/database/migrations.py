@@ -72,6 +72,13 @@ class MigrationManager:
                 Mapping, GradingResult, Session
             )
 
+            # Drop the sessions table if it exists to apply schema changes
+            # This is a temporary solution for development to handle schema changes
+            # For production, a proper migration tool like Alembic should be used.
+            if self.engine.dialect.has_table(self.engine.connect(), "sessions"):
+                db.metadata.tables['sessions'].drop(self.engine)
+                logger.info("Dropped 'sessions' table to apply schema changes.")
+
             # Create all tables using the engine directly
             db.metadata.create_all(self.engine)
 

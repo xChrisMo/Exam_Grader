@@ -458,7 +458,7 @@
       submission_id: "{{ submission_id }}",
       filename: "{{ filename }}",
       uploaded_at: "{{ uploaded_at }}",
-      raw_text: JSON.parse("{{ raw_text|tojson }}"),
+      raw_text: {{ raw_text|tojson|safe }},
       extracted_answers: JSON.parse(`{{ extracted_answers|tojson|safe }}`),
     };
 

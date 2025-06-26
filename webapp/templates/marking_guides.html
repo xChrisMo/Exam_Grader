@@ -656,9 +656,9 @@ async function executeDelete() {
 
                     // Check if no guides left and show empty state
                     const remainingCards = document.querySelectorAll('.guide-card');
-                    if (remainingCards.length === 0) {
-                        location.reload(); // Reload to show empty state
-                    }
+                    setTimeout(function() {
+                                location.reload();
+                            }, 500); // Add a 500ms delay // Always reload to ensure dashboard updates
                 }, 300);
             }
 

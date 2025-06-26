@@ -68,10 +68,12 @@ def parse_marking_guide(file_path: str) -> Tuple[Optional[MarkingGuide], Optiona
             return _parse_docx_guide(file_path, guide)
         elif file_ext == ".txt":
             return _parse_txt_guide(file_path, guide)
+        elif file_ext == ".pdf":
+            return _parse_pdf_guide(file_path, guide)
         else:
             return (
                 None,
-                f"Unsupported file format: {file_ext}. Only .docx and .txt are supported.",
+                f"Unsupported file format: {file_ext}. Only .docx, .txt, and .pdf are supported.",
             )
 
     except Exception as e:
@@ -164,3 +166,46 @@ def _parse_txt_guide(
     except Exception as e:
         logger.error(f"Error extracting text from TXT marking guide: {str(e)}")
         return None, f"Failed to extract text from TXT marking guide: {str(e)}"
+
+def _parse_pdf_guide(
+    file_path: str, guide: MarkingGuide
+) -> Tuple[Optional[MarkingGuide], Optional[str]]:
+    """
+    Extract raw text content from a .pdf marking guide.
+
+    This function reads the PDF file and extracts its content using PyMuPDF (fitz).
+    """
+    try:
+        import fitz  # PyMuPDF
+
+        doc: fitz.Document = fitz.open(file_path)
+        text = ""
+        if not doc.page_count:
+            logger.error("PDF Error: PDF document has no pages")
+            return None, "PDF document has no pages"
+
+        logger.info(f"Processing PDF with {doc.page_count} pages")
+
+        for page_num in range(doc.page_count):
+            try:
+                page: fitz.Page = doc.load_page(page_num)
+                text += page.get_text()
+            except Exception as e:
+                logger.warning(
+                    f"PDF Page Error: Error extracting text from page {page_num}: {str(e)}"
+                )
+                # Continue to next page even if one fails
+
+        doc.close()
+
+        if not text.strip():
+            logger.warning("PDF text extraction yielded insufficient text.")
+            return None, "PDF document is empty or contains no extractable text"
+
+        guide.set_raw_content(text)
+        logger.info(f"Successfully extracted {len(text)} characters from PDF guide")
+        return guide, None
+
+    except Exception as e:
+        logger.error(f"PDF Error: Error extracting text from PDF: {str(e)}")
+        return None, f"Failed to extract text from PDF guide: {str(e)}"

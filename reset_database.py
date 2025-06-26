@@ -70,6 +70,10 @@ def reset_database(confirm: bool = False):
         db.init_app(app)
         
         with app.app_context():
+            # Drop all tables before creating to ensure a clean slate
+            db.drop_all()
+            print("✅ Dropped existing database tables (if any)")
+            
             # Create all tables
             db.create_all()
             print("✅ Database tables created")

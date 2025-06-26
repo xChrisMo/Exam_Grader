@@ -6,6 +6,9 @@ questions and answers in student submissions.
 
 import json
 import re
+import re
+import re
+import re
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -42,20 +45,33 @@ class MappingService:
 
             # Use LLM to determine guide type
             system_prompt = """
-            You are an expert at analyzing exam documents. Your task is to determine if a marking guide
-            contains questions or answers.
+            You are an expert in analyzing academic and exam-related documents across all disciplines. Your task is to determine whether a given marking guide primarily contains questions or answers, regardless of the academic department or subject matter.
 
-            A marking guide with questions typically:
-            - Contains questions without detailed answers
-            - May have brief answer guidelines or marking criteria
-            - Is structured as a list of questions for students to answer
+            Definitions:
+            Marking guide with questions:
 
-            A marking guide with answers typically:
-            - Contains detailed model answers to questions
-            - May include marking criteria alongside answers
-            - Is structured as a reference for graders to evaluate student responses
+            Primarily lists exam or assignment questions.
 
-            Analyze the document carefully and determine its primary type.
+            May include brief answer guidelines, marks allocation, or marking criteria.
+
+            Does not contain detailed model answers.
+
+            Intended for students or to accompany an exam for instructors.
+
+            Marking guide with answers:
+
+            Primarily provides detailed model answers to specific questions.
+
+            May include assessment rubrics or marking criteria.
+
+            Structured for use by instructors or graders for evaluating student responses.
+
+            Instructions:
+            Analyze the structure, content, and wording of the document.
+
+            Consider that different departments may phrase questions and answers differently (e.g., mathematical proofs, essays, multiple-choice responses).
+
+            Use contextual clues to assess whether the document is primarily asking questions or providing answers..
 
             Output in JSON format:
             {
@@ -69,72 +85,43 @@ class MappingService:
             Please analyze this marking guide and determine if it primarily contains questions or answers.
 
             Marking guide content:
-            {marking_guide_content[:2000]}  # Limit to first 2000 chars for efficiency
+            {marking_guide_content[:10000]}  # Limit to first 10000 chars for efficiency
             """
 
             # Log the request
             logger.info("Sending request to LLM service...")
 
             # Check if the model supports JSON output format
-            supports_json = "deepseek-reasoner" not in self.llm_service.model.lower()
+            # DeepSeek models support JSON output, so we explicitly set supports_json to True if it's a deepseek model.
+            supports_json = "deepseek-reasoner" in self.llm_service.model.lower()
 
-            if supports_json:
-                # Make the API call with JSON response format
-                params = {
-                    "model": self.llm_service.model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0.0,
-                    "response_format": {"type": "json_object"},
-                }
+            # Make the API call with JSON response format
+            params = {
+                "model": self.llm_service.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": 0.0,
+                "response_format": {"type": "json_object"},
+            }
 
-                # Add seed parameter if in deterministic mode
-                if (
-                    hasattr(self.llm_service, "deterministic")
-                    and self.llm_service.deterministic
-                    and hasattr(self.llm_service, "seed")
-                    and self.llm_service.seed is not None
-                ):
-                    params["seed"] = self.llm_service.seed
+            # Add seed parameter if in deterministic mode
+            if (
+                hasattr(self.llm_service, "deterministic")
+                and self.llm_service.deterministic
+                and hasattr(self.llm_service, "seed")
+                and self.llm_service.seed is not None
+            ):
+                params["seed"] = self.llm_service.seed
 
-                response = self.llm_service.client.chat.completions.create(**params)
-            else:
-                # For models that don't support JSON response format
-                modified_system_prompt = (
-                    system_prompt
-                    + """
-                IMPORTANT: Your response must be valid JSON. Format your entire response as a JSON object.
-                Do not include any text before or after the JSON object.
-                """
-                )
-
-                params = {
-                    "model": self.llm_service.model,
-                    "messages": [
-                        {"role": "system", "content": modified_system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0.0,
-                }
-
-                # Add seed parameter if in deterministic mode
-                if (
-                    hasattr(self.llm_service, "deterministic")
-                    and self.llm_service.deterministic
-                    and hasattr(self.llm_service, "seed")
-                    and self.llm_service.seed is not None
-                ):
-                    params["seed"] = self.llm_service.seed
-
-                response = self.llm_service.client.chat.completions.create(**params)
+            response = self.llm_service.client.chat.completions.create(**params)
 
             # Log the response processing
             logger.info("Processing LLM response...")
 
             # Validate response structure
-            if not hasattr(response, 'choices') or len(response.choices) == 0:
+            if not hasattr(response, "choices") or len(response.choices) == 0:
                 logger.error("No response choices received from LLM")
                 return "questions", 0.5
 
@@ -151,9 +138,7 @@ class MappingService:
             # Parse the response with error handling
             try:
                 # Clean up the response for models that don't properly format JSON
-                json_match = re.search(r'\{.*\}', result, re.DOTALL)
-                if json_match:
-                    result = json_match.group(0)
+
 
                 parsed = json.loads(result)
 
@@ -163,23 +148,33 @@ class MappingService:
 
                 # Validate guide_type
                 if guide_type not in ["questions", "answers"]:
-                    logger.warning(f"Invalid guide_type '{guide_type}', defaulting to 'questions'")
+                    logger.warning(
+                        f"Invalid guide_type '{guide_type}', defaulting to 'questions'"
+                    )
                     guide_type = "questions"
 
                 # Validate confidence
-                if not isinstance(confidence, (int, float)) or confidence < 0 or confidence > 1:
-                    logger.warning(f"Invalid confidence '{confidence}', defaulting to 0.5")
+                if (
+                    not isinstance(confidence, (int, float))
+                    or confidence < 0
+                    or confidence > 1
+                ):
+                    logger.warning(
+                        f"Invalid confidence '{confidence}', defaulting to 0.5"
+                    )
                     confidence = 0.5
 
                 # Log completion
-                logger.info(f"Guide type determined: {guide_type} (confidence: {confidence})")
+                logger.info(
+                    f"Guide type determined: {guide_type} (confidence: {confidence})"
+                )
                 logger.info(f"Reasoning: {reasoning}")
 
                 return guide_type, confidence
 
             except json.JSONDecodeError as e:
                 logger.error(f"JSON parsing failed: {str(e)}")
-                logger.error(f"Raw response that failed to parse: {result}")
+                logger.error(f"Raw LLM response that failed to parse: {result}")
                 return "questions", 0.5
 
         except Exception as e:
@@ -215,6 +210,7 @@ class MappingService:
 
                 Important guidelines:
                 - Questions may be numbered in different ways (e.g., "QUESTION ONE", "Question 1", "1.")
+                - Quesion may be under one main quesion
                 - Answers may be structured in different ways (e.g., bullet points, paragraphs, numbered lists)
                 - Look for key phrases that indicate the start of questions (e.g., "QUESTION", "Q", "Question")
                 - Look for key phrases that indicate answers (e.g., "Answer:", "Solution:", or content after the question)
@@ -269,63 +265,16 @@ class MappingService:
                 """
 
                 # Check if the model supports JSON output format
-                supports_json = (
-                    "deepseek-reasoner" not in self.llm_service.model.lower()
-                )
+                supports_json = "deepseek-reasoner" in self.llm_service.model.lower()
 
-                if supports_json:
-                    response = self.llm_service.client.chat.completions.create(
-                        model=self.llm_service.model,
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        temperature=0.0,
-                        response_format={"type": "json_object"},
-                    )
-                else:
-                    # For models that don't support JSON response format
-                    modified_system_prompt = (
-                        system_prompt
-                        + """
-                    IMPORTANT: Your response must be valid JSON. Format your entire response as a JSON object.
-                    Do not include any text before or after the JSON object.
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ]
 
-                    Example of valid JSON format:
-                    {
-                        "items": [
-                            {
-                                "id": "q1",
-                                "text": "question text",
-                                "answer": "answer text",
-                                "max_score": 5
-                            }
-                        ]
-                    }
-                    """
-                    )
+                response_format = {"type": "json_object"} if supports_json else None
 
-                    params = {
-                        "model": self.llm_service.model,
-                        "messages": [
-                            {"role": "system", "content": modified_system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        "temperature": 0.0,
-                    }
-
-                    # Add seed parameter if in deterministic mode
-                    if (
-                        hasattr(self.llm_service, "deterministic")
-                        and self.llm_service.deterministic
-                        and hasattr(self.llm_service, "seed")
-                        and self.llm_service.seed is not None
-                    ):
-                        params["seed"] = self.llm_service.seed
-
-                    response = self.llm_service.client.chat.completions.create(**params)
-
-                result = response.choices[0].message.content
+                result = self.llm_service._call_llm_api(messages, response_format=response_format)
 
                 # Log the LLM response processing
                 logger.info("Processing LLM response for question extraction...")
@@ -346,13 +295,9 @@ class MappingService:
 
                     return parsed.get("items", [])
                 except json.JSONDecodeError as e:
+                    logger.error(f"Raw LLM response that failed to parse: {result}")
                     logger.warning(
-                        f"JSON parsing error in extract_questions_and_answers: {str(e)}"
-                    )
-
-                    # Log JSON parsing error
-                    logger.warning(
-                        f"JSON parsing error: {str(e)}. Falling back to regex extraction."
+                        f"JSON parsing error in extract_questions_and_answers: {str(e)}. Falling back to regex extraction."
                     )
 
                     # Return an empty list to trigger the fallback extraction
@@ -454,6 +399,100 @@ class MappingService:
 
                 # Comprehensive multi-disciplinary question extraction system
                 system_prompt = """
+                You are an expert at extracting questions and their associated total marks from academic documents across various disciplines.
+                Your task is to parse the provided marking guide content and identify all distinct questions, along with any explicitly stated marks for each question or sub-question.
+                Finally, calculate the total marks for the entire guide based on the extracted question marks.
+
+                Important guidelines:
+                - Identify questions even if they are not explicitly numbered (e.g., implied questions in a continuous text).
+                - Extract marks associated with each question or sub-question. Marks can be indicated in various formats (e.g., "(10 marks)", "[5 pts]", "worth 20", "Total: 15").
+                - If a question has sub-parts (e.g., a, b, c), extract marks for each sub-part if specified.
+                - If total marks for the entire guide are explicitly stated, extract that as well.
+                - If no marks are explicitly stated for a question, assign `null` for its `max_score`.
+                - If no total marks are explicitly stated for the guide, calculate the sum of all extracted question/sub-question marks.
+                - Ensure the output is a valid JSON object.
+
+                Output in JSON format:
+                {
+                    "questions": [
+                        {
+                            "id": "unique_question_identifier",
+                            "text": "Full text of the question, including sub-parts if any.",
+                            "max_score": "numeric_value_or_null",
+                            "sub_questions": [
+                                {
+                                    "id": "unique_sub_question_identifier",
+                                    "text": "Text of the sub-question.",
+                                    "max_score": "numeric_value_or_null"
+                                }
+                            ]
+                        }
+                    ],
+                    "total_marks": "numeric_value_or_null",
+                    "extraction_method": "llm"
+                }
+                """
+
+                user_prompt = f"""
+                Please extract questions and total marks from the following marking guide:
+
+                Marking Guide Content:
+                {content}
+                """
+
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ]
+
+                response_content = self.llm_service._call_llm_api(messages, response_format={"type": "json_object"})
+
+                if not response_content:
+                    logger.warning("LLM returned empty response for question and total marks extraction.")
+                    return {"questions": [], "total_marks": 0, "extraction_method": "llm_empty_response"}
+
+                try:
+                    parsed_response = json.loads(response_content)
+                    questions = parsed_response.get("questions", [])
+                    total_marks = parsed_response.get("total_marks", 0)
+                    extraction_method = parsed_response.get("extraction_method", "llm")
+
+                    # Basic validation to ensure it's a list of dicts
+                    if not isinstance(questions, list):
+                        logger.warning(f"LLM returned non-list questions: {questions}. Defaulting to empty list.")
+                        questions = []
+
+                    # Calculate total marks if not provided by LLM or if it's null
+                    if total_marks is None or not isinstance(total_marks, (int, float)):
+                        calculated_total_marks = 0.0
+                        for q in questions:
+                            if q.get("max_score") is not None:
+                                try:
+                                    calculated_total_marks += float(q["max_score"])
+                                except (ValueError, TypeError):
+                                    pass # Ignore if max_score is not a valid number
+                            if "sub_questions" in q and isinstance(q["sub_questions"], list):
+                                for sub_q in q["sub_questions"]:
+                                    if sub_q.get("max_score") is not None:
+                                        try:
+                                            calculated_total_marks += float(sub_q["max_score"])
+                                        except (ValueError, TypeError):
+                                            pass
+                        total_marks = calculated_total_marks
+                        if parsed_response.get("total_marks") is None:
+                            logger.info("LLM did not provide total_marks, calculated from questions.")
+
+                    logger.info(f"LLM extraction successful. Questions: {len(questions)}, Total Marks: {total_marks}")
+                    return {"questions": questions, "total_marks": total_marks, "extraction_method": extraction_method}
+
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON parsing failed for LLM response in extract_questions_and_total_marks: {e}")
+                    logger.error(f"Raw LLM response: {response_content}")
+                    return {"questions": [], "total_marks": 0, "extraction_method": "llm_json_error"}
+                except Exception as e:
+                    logger.error(f"Unexpected error during LLM extraction of questions and total marks: {e}")
+                    return {"questions": [], "total_marks": 0, "extraction_method": "llm_error"}
+                system_prompt = """
                 You are an expert educational assessment analyst with deep knowledge across all academic disciplines. Your task is to intelligently identify questions in marking guides using sophisticated reasoning, regardless of format, discipline, or question type.
 
                 CORE REASONING FRAMEWORK:
@@ -541,7 +580,7 @@ class MappingService:
                    - Total marks should align with identified question structure
 
                 OUTPUT FORMAT:
-                Respond with ONLY valid JSON:
+                Respond with ONLY valid JSON. Do not include any other text, explanations, or markdown formatting outside the JSON object. Your entire response must be a single, valid JSON object.
                 {
                     "questions": [
                         {
@@ -615,6 +654,10 @@ class MappingService:
                 """
 
                 # Use the LLM service to extract questions
+                # Check if the model supports JSON output format
+                # DeepSeek models support json_object response format
+                supports_json = True
+
                 params = {
                     "model": self.llm_service.model,
                     "messages": [
@@ -624,6 +667,9 @@ class MappingService:
                     "temperature": 0.0,
                     "max_tokens": 2048,
                 }
+
+                if supports_json:
+                    params["response_format"] = {"type": "json_object"}
 
                 # Add seed parameter if in deterministic mode
                 if (
@@ -639,26 +685,28 @@ class MappingService:
 
                 logger.info("Processing LLM response for question extraction...")
                 logger.info(f"Raw LLM response: {result}")
-                logger.info(f"Content sent to LLM (first 1000 chars): {content[:1000]}...")
-                logger.info(f"Content sent to LLM (last 500 chars): ...{content[-500:]}")
+                logger.info(
+                    f"Content sent to LLM (first 1000 chars): {content[:1000]}..."
+                )
+                logger.info(
+                    f"Content sent to LLM (last 500 chars): ...{content[-500:]}"
+                )
 
-                # Debug: Check if the response contains the expected fields
-                if "discipline" in result:
-                    logger.info("Enhanced response detected - contains discipline field")
-                else:
-                    logger.info("Basic response detected - missing enhanced fields")
-
-                # Simple cleanup for markdown code blocks
                 try:
-                    # Remove markdown code blocks if present
-                    if result.strip().startswith("```"):
-                        lines = result.strip().split('\n')
-                        if lines[0].startswith("```"):
-                            lines = lines[1:]  # Remove first line
-                        if lines and lines[-1].strip().startswith("```"):
-                            lines = lines[:-1]  # Remove last line
-                        result = '\n'.join(lines)
-                        logger.info(f"Cleaned markdown: {result}")
+                    # Clean up the response for models that don't properly format JSON
+                    # Attempt to find the start and end of the JSON object
+                    json_start = result.find('{')
+                    json_end = result.rfind('}')
+
+                    if json_start != -1 and json_end != -1 and json_end > json_start:
+                        result = result[json_start : json_end + 1]
+                        logger.info(f"Extracted JSON string: {result[:500]}...")
+                    else:
+                        logger.warning("No JSON object found in LLM response.")
+                        logger.error(
+                            f"Raw LLM response that failed JSON extraction: {result}"
+                        )
+                        raise ValueError("No JSON object found in LLM response.")
 
                     parsed = json.loads(result)
 
@@ -689,18 +737,32 @@ class MappingService:
                         analysis = parsed.get("analysis", {})
                         if analysis:
                             logger.info(f"Document analysis:")
-                            logger.info(f"  - Document type: {analysis.get('document_type', 'Unknown')}")
-                            logger.info(f"  - Primary discipline: {analysis.get('primary_discipline', 'Unknown')}")
-                            logger.info(f"  - Question format: {analysis.get('question_format', 'Unknown')}")
-                            logger.info(f"  - Extraction confidence: {analysis.get('extraction_confidence', 'Unknown')}")
+                            logger.info(
+                                f"  - Document type: {analysis.get('document_type', 'Unknown')}"
+                            )
+                            logger.info(
+                                f"  - Primary discipline: {analysis.get('primary_discipline', 'Unknown')}"
+                            )
+                            logger.info(
+                                f"  - Question format: {analysis.get('question_format', 'Unknown')}"
+                            )
+                            logger.info(
+                                f"  - Extraction confidence: {analysis.get('extraction_confidence', 'Unknown')}"
+                            )
 
                         # Log detailed information for each question
                         for i, q in enumerate(formatted_questions, 1):
                             logger.info(f"Question {i}:")
-                            logger.info(f"  - Text: {q.get('text', 'No text')[:100]}...")
+                            logger.info(
+                                f"  - Text: {q.get('text', 'No text')[:100]}..."
+                            )
                             logger.info(f"  - Marks: {q.get('marks', 0)}")
-                            logger.info(f"  - Discipline: {q.get('discipline', 'Unknown')}")
-                            logger.info(f"  - Type: {q.get('question_type', 'Unknown')}")
+                            logger.info(
+                                f"  - Discipline: {q.get('discipline', 'Unknown')}"
+                            )
+                            logger.info(
+                                f"  - Type: {q.get('question_type', 'Unknown')}"
+                            )
                             if q.get("reasoning"):
                                 logger.info(f"  - Reasoning: {q['reasoning']}")
 
@@ -717,15 +779,28 @@ class MappingService:
                         return result
                     else:
                         logger.error("LLM response missing required fields")
-                        return {"questions": [], "total_marks": 0, "extraction_method": "llm_failed"}
+                    return {
+                        "questions": [],
+                        "total_marks": 0,
+                        "extraction_method": "llm_failed",
+                    }
 
                 except json.JSONDecodeError as e:
                     logger.error(f"JSON parsing error: {str(e)}")
-                    return {"questions": [], "total_marks": 0, "extraction_method": "json_error"}
+                    logger.error(f"Raw LLM response that caused JSON error: {result}")
+                    return {
+                        "questions": [],
+                        "total_marks": 0,
+                        "extraction_method": "json_error",
+                    }
 
             except Exception as e:
                 logger.error(f"LLM extraction failed: {str(e)}")
-                return {"questions": [], "total_marks": 0, "extraction_method": "llm_error"}
+                return {
+                    "questions": [],
+                    "total_marks": 0,
+                    "extraction_method": "llm_error",
+                }
 
         # No fallback - LLM only
         logger.error("No LLM service available")
@@ -909,9 +984,10 @@ class MappingService:
                         6. Provide a high confidence score (0.8-1.0) only for very clear matches
                         7. For partial matches, provide a lower score (0.5-0.7) and explain why
                         8. If a question has no matching answer, do not include it in the mappings
-                        9. IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide
-                        10. Find the best {num_questions} answers in the student submission and map them to the corresponding questions
-                        11. If there are more potential answers, select only the best {num_questions} based on quality and completeness
+                        9. IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide.
+                        10. Find the best {num_questions} answers in the student submission and map them to the corresponding questions.
+                        11. If there are more potential answers, select only the best {num_questions} based on quality and completeness.
+                        12. Ensure that the final output reflects the mapping and grading for precisely {num_questions} questions.
 
                         Grading guidelines:
                         1. For each matched question-answer pair, grade the answer based on how well it addresses the question
@@ -944,9 +1020,10 @@ class MappingService:
                         6. Provide a high confidence score (0.8-1.0) only for very clear matches
                         7. For partial matches, provide a lower score (0.5-0.7) and explain why
                         8. If a student answer has no matching guide answer, do not include it in the mappings
-                        9. IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide
-                        10. Find the best {num_questions} answers in the student submission and map them to the corresponding model answers
-                        11. If there are more potential answers, select only the best {num_questions} based on quality and completeness
+                        9. IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide.
+                        10. Find the best {num_questions} answers in the student submission and map them to the corresponding model answers.
+                        11. If there are more potential answers, select only the best {num_questions} based on quality and completeness.
+                        12. Ensure that the final output reflects the mapping and grading for precisely {num_questions} questions.
 
                         Grading guidelines:
                         1. For each matched answer pair, grade the student answer based on how well it matches the model answer

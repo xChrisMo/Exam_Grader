@@ -114,6 +114,7 @@ class User(db.Model, TimestampMixin):
             "last_login": self.last_login.isoformat() if self.last_login else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
+            "processed": self.processing_status == "completed",
         }
 
 
@@ -127,7 +128,7 @@ class MarkingGuide(db.Model, TimestampMixin):
     )
     
     id = get_uuid_column()
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     title = Column(String(200), nullable=False)
     description = Column(Text)
     filename = Column(String(255), nullable=False)
@@ -167,7 +168,7 @@ class Submission(db.Model, TimestampMixin):
     __tablename__ = "submissions"
 
     id = get_uuid_column()
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     marking_guide_id = Column(
         String(36), ForeignKey("marking_guides.id"), nullable=True, index=True
     )
@@ -214,6 +215,7 @@ class Submission(db.Model, TimestampMixin):
             "filename": self.filename,
             "file_size": self.file_size,
             "file_type": self.file_type,
+            "content_text": self.content_text,
             "answers": self.answers,
             "ocr_confidence": self.ocr_confidence,
             "processing_status": self.processing_status,
@@ -266,27 +268,26 @@ class Mapping(db.Model, TimestampMixin):
 
 
 class GradingResult(db.Model, TimestampMixin):
-    """Grading result model for storing scores and feedback."""
+    """Stores the result of a single grading operation."""
 
     __tablename__ = "grading_results"
 
     id = get_uuid_column()
-    submission_id = Column(
-        String(36), ForeignKey("submissions.id"), nullable=False, index=True
-    )
-    mapping_id = Column(
-        String(36), ForeignKey("mappings.id"), nullable=False, index=True
-    )
+    submission_id = Column(String(36), ForeignKey("submissions.id"), nullable=False)
+    marking_guide_id = Column(String(36), ForeignKey("marking_guides.id"), nullable=True)
+    mapping_id = Column(String(36), ForeignKey("mappings.id"), nullable=True)
     score = Column(Float, nullable=False)
     max_score = Column(Float, nullable=False)
     percentage = Column(Float, nullable=False)
     feedback = Column(Text)
     detailed_feedback = Column(JSON)
+    progress_id = Column(String(36), nullable=True, index=True)
     grading_method = Column(String(50), default="llm")  # llm, similarity, manual
     confidence = Column(Float)
 
     # Relationships
     submission = relationship("Submission", back_populates="grading_results")
+    marking_guide = relationship("MarkingGuide", backref="grading_results")
     mapping = relationship("Mapping", back_populates="grading_results")
 
     # Composite indexes for performance optimization
@@ -314,20 +315,19 @@ class GradingResult(db.Model, TimestampMixin):
         }
 
 
-class Session(db.Model):
+class Session(db.Model, TimestampMixin):
     """Session model for secure session management."""
 
     __tablename__ = "sessions"
 
     id = Column(String(255), primary_key=True)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     data = Column(LargeBinary)  # Encrypted session data
+    salt = Column(String(255), nullable=True, default='')  # Salt for session data encryption
     expires_at = Column(DateTime, nullable=False, index=True)
     ip_address = Column(String(45))  # IPv6 compatible
     user_agent = Column(String(500))
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    last_accessed = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
     user = relationship("User", back_populates="sessions")
@@ -339,7 +339,7 @@ class Session(db.Model):
     def extend_session(self, duration_seconds: int = 3600):
         """Extend session expiration."""
         self.expires_at = datetime.utcnow() + timedelta(seconds=duration_seconds)
-        self.last_accessed = datetime.utcnow()
+        self.updated_at = datetime.utcnow()
 
     def invalidate(self):
         """Invalidate session."""
@@ -354,5 +354,6 @@ class Session(db.Model):
             "ip_address": self.ip_address,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat(),
-            "last_accessed": self.last_accessed.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+            "salt": self.salt,
         }

@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from dotenv import load_dotenv
 from packaging import version
 
+from src.config.unified_config import config
 from utils.logger import logger
 
 # Load environment variables
@@ -63,7 +64,7 @@ class LLMService:
         self,
         api_key: Optional[str] = None,
         base_url: str = "https://api.deepseek.com/v1",
-        model: str = "deepseek-chat",
+        model: str = config.api.deepseek_model,
         temperature: float = 0.0,
         max_retries: int = 3,
         retry_delay: float = 1.0,
@@ -150,7 +151,7 @@ class LLMService:
                         {"role": "user", "content": "test"}
                     ],
                     "temperature": 0.0,
-                    "max_tokens": 1,
+
                 }
 
                 # Add seed parameter if in deterministic mode
@@ -200,7 +201,7 @@ class LLMService:
                     {"role": "user", "content": user_prompt},
                 ],
                 "temperature": 0.0,
-                "max_tokens": 20,
+
             }
 
             # Add seed parameter if in deterministic mode
@@ -244,41 +245,33 @@ class LLMService:
         Raises:
             LLMServiceError: If the API call fails after all retries
         """
-        try:
+        try:  # Added proper error handling for API operations
             # Log the start of answer comparison
             logger.info("Preparing to compare answers...")
 
-            # Optimize prompt length for performance
-            max_content_length = 1000  # Limit content length for faster processing
-
-            # Truncate long content while preserving key information
-            question_truncated = question[:max_content_length] if len(question) > max_content_length else question
-            guide_answer_truncated = guide_answer[:max_content_length] if len(guide_answer) > max_content_length else guide_answer
-            submission_answer_truncated = submission_answer[:max_content_length] if len(submission_answer) > max_content_length else submission_answer
+            question_truncated = question
+            guide_answer_truncated = guide_answer
+            submission_answer_truncated = submission_answer
 
             # Construct optimized prompt for faster processing
             system_prompt = """You are an educational grading assistant. Compare a student's answer to a model answer and assign a score.
 
-Guidelines:
-- Score: 0 to maximum score
-- Focus on content accuracy and key points
-- Be objective and consistent
+            Guidelines:
+            - Score: 0 to maximum score
+            - Focus on content accuracy and key points
+            - Be objective and consistent
 
-Response format (JSON only):
-{
-    "score": <numeric_score>,
-    "feedback": "<brief_explanation>"
-}"""
+            Response format (JSON only). Your response MUST be a valid JSON object with 'score' (numeric) and 'feedback' (string) keys. Example: {"score": 8.5, "feedback": "Good answer, but missing a key detail."}"""
 
             user_prompt = f"""Question: {question_truncated}
 
-Model Answer: {guide_answer_truncated}
+            Model Answer: {guide_answer_truncated}
 
-Student Answer: {submission_answer_truncated}
+            Student Answer: {submission_answer_truncated}
 
-Max Score: {max_score}
+            Max Score: {max_score}
 
-Evaluate and provide score with feedback."""
+            Evaluate and provide score with feedback."""
 
             # Create messages for caching
             messages = [
@@ -287,7 +280,7 @@ Evaluate and provide score with feedback."""
             ]
 
             # Check cache first
-            cache_key = self._generate_cache_key(messages, max_tokens=self.max_tokens_default)
+            cache_key = self._generate_cache_key(messages, max_tokens=None)
             cached_response = self._get_cached_response(cache_key)
 
             if cached_response:
@@ -301,11 +294,12 @@ Evaluate and provide score with feedback."""
                     "model": self.model,
                     "messages": messages,
                     "temperature": 0.0,  # Deterministic for consistency
-                    "max_tokens": self.max_tokens_default,  # Optimized token limit
+
                 }
 
-                # Force JSON format for all models
-                params["response_format"] = {"type": "json_object"}
+                # Ensure JSON format for Deepseek-Reasoner
+                if self.model == "deepseek-ai/deepseek-reasoner":
+                    params["response_format"] = {"type": "json_object"}
 
                 # Add seed parameter if in deterministic mode
                 if self.deterministic and self.seed is not None:
@@ -321,45 +315,216 @@ Evaluate and provide score with feedback."""
             # Parse and validate the response
             logger.info("Processing LLM response...")
 
+            # Enhanced JSON parsing with multiple fallback strategies
+            result, extraction_method = self.parse_llm_response(response_text)
+            
+            # Validate required fields
+            if not all(key in result for key in ['score', 'feedback']):
+                logger.error("Missing required keys in LLM response")
+                raise LLMServiceError("Invalid response format from LLM")
+
+            # Extract and validate score
             try:
-                # Parse JSON response directly - no fallbacks
-                import json
-                result = json.loads(response_text.strip())
-
-                # Extract score and feedback with validation
-                score = float(result.get("score", 0))
-                feedback = result.get("feedback", "No feedback provided")
-
-                # Ensure score is within bounds
+                score = float(result['score'])
                 score = max(0, min(score, max_score))
-
-                # Add extraction method info if manual extraction was used
-                if result.get("extraction_method") == "manual":
-                    feedback = f"[Manual extraction] {feedback}"
-
+                feedback = str(result['feedback'])
+                
                 logger.info(f"Answer comparison completed. Score: {score}/{max_score}")
-                return score, feedback
+                return score, f"[{extraction_method}] {feedback}"
+            except (ValueError, TypeError) as e:
+                logger.error(f"Invalid score value: {str(e)}")
+                return 0, f"Error: Invalid scoring format - {str(e)}"
+            except LLMServiceError as e:
+                logger.error(f"LLM service error during comparison: {str(e)}")
+                raise
+            except Exception as e:
+                logger.error(f"Unexpected error during answer comparison: {str(e)}")
+                return 0, f"System error: {str(e)}"
 
-            except Exception as parse_error:
-                logger.error(f"Failed to parse response: {str(parse_error)}")
-                logger.error(f"Raw response: {response_text}")
-
-                # Final fallback: return zero score with error message
-                return 0, f"Error processing response: {str(parse_error)}"
-
-        except LLMServiceError:
-            # Re-raise LLM service errors
-            raise
+        # Add proper error handling for the main try block
+        except ConnectionError as ce:
+            logger.error(f"API connection failed: {str(ce)}")
+            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+        except json.JSONDecodeError as je:
+            logger.error(f"Invalid JSON response: {str(je)}")
+            raise LLMServiceError("Malformed API response") from je
         except Exception as e:
-            logger.error(f"Answer comparison failed: {str(e)}")
-            # Return a default score and error message
-            return 0, f"Error: {str(e)}"
+            logger.error(f"Unexpected error during comparison: {str(e)}")
+            raise LLMServiceError("Comparison process failed") from e
+
+        # Add proper error handling for the main try block
+        except ConnectionError as ce:
+            logger.error(f"API connection failed: {str(ce)}")
+            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+        except json.JSONDecodeError as je:
+            logger.error(f"Invalid JSON response: {str(je)}")
+            raise LLMServiceError("Malformed API response") from je
+        except Exception as e:
+            logger.error(f"Unexpected error during comparison: {str(e)}")
+            raise LLMServiceError("Comparison process failed") from e
+
+        except ConnectionError as ce:
+            logger.error(f"LLM API connection failed: {str(ce)}")
+            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+        except json.JSONDecodeError as je:
+            logger.error(f"JSON parsing failed: {str(je)}")
+            raise LLMServiceError("Invalid response format from API") from je
+        except Exception as e:
+            logger.error(f"Unexpected error in LLM service: {str(e)}")
+            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
+        
+        # Add proper error handling for the outer try block
+        except ConnectionError as ce:
+            logger.error(f"API connection failed: {str(ce)}")
+            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+        except json.JSONDecodeError as je:
+            logger.error(f"Invalid JSON response: {str(je)}")
+            raise LLMServiceError("Malformed API response") from je
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}")
+            raise LLMServiceError("Failed to process API response") from e
+
+        except ConnectionError as ce:
+            logger.error(f"LLM API connection failed: {str(ce)}")
+            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+        except json.JSONDecodeError as je:
+            logger.error(f"JSON parsing failed: {str(je)}")
+            raise LLMServiceError("Invalid response format from API") from je
+        except Exception as e:
+            logger.error(f"Unexpected error in LLM service: {str(e)}")
+            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
+
+        except ConnectionError as ce:
+            logger.error(f"LLM API connection failed: {str(ce)}")
+            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+        except json.JSONDecodeError as je:
+            logger.error(f"JSON parsing failed: {str(je)}")
+            raise LLMServiceError("Invalid response format from API") from je
+        except Exception as e:
+            logger.error(f"Unexpected error in LLM service: {str(e)}")
+            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
+        
+        except ConnectionError as ce:
+            logger.error(f"LLM API connection failed: {str(ce)}")
+            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+        except json.JSONDecodeError as je:
+            logger.error(f"JSON parsing failed: {str(je)}")
+            raise LLMServiceError("Invalid response format from API") from je
+        except Exception as e:
+            logger.error(f"Unexpected error in LLM service: {str(e)}")
+            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
+
+    def _call_llm_api(
+        self,
+        messages: List[Dict[str, str]],
+
+        response_format: Optional[Dict[str, str]] = None,
+    ) -> str:
+        """Helper to make a robust LLM API call."""
+        params = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+        }
+
+        if self.deterministic and self.seed is not None:
+            params["seed"] = self.seed
+        if response_format is not None:
+            params["response_format"] = response_format
+
+        response = self.client.chat.completions.create(**params)
+        return response.choices[0].message.content.strip()
+
+    def parse_llm_response(self, response_text: str) -> Tuple[Dict, str]:
+        """
+        Parse LLM response using structured JSON parsing with LLM assistance.
+        """
+        try:
+            # Use LLM to fix and structure the response
+            sanitized_response = self._get_structured_response(response_text)
+            return json.loads(sanitized_response), "structured"
+        except json.JSONDecodeError as je:
+            logger.error(f"JSONDecodeError during structured parsing: {str(je)}")
+            logger.error(f"Raw response that failed structured parsing: {response_text}")
+            # Attempt to extract JSON using regex if direct parsing fails
+            logger.warning("Attempting regex extraction for JSON from LLM response.")
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    extracted_json = json_match.group(0)
+                    logger.info(f"Successfully extracted JSON substring: {extracted_json}")
+                    return json.loads(extracted_json), "structured_regex_fallback"
+                except json.JSONDecodeError as inner_je:
+                    logger.error(f"Regex extracted JSON also failed to parse: {str(inner_je)}")
+                    raise LLMServiceError("Failed to parse LLM response even with regex extraction") from inner_je
+            else:
+                logger.error("No JSON object found in LLM response after regex attempt.")
+                raise LLMServiceError("No JSON object found in LLM response") from je
+        except Exception as e:
+            logger.error(f"Structured parsing failed: {str(e)}")
+            raise LLMServiceError("Failed to parse LLM response")
+
+    def _get_structured_response(self, text: str) -> str:
+        """Use LLM to convert free-form response to valid JSON"""
+        prompt = """Convert this unstructured response to valid JSON format:
+        
+        {response}
+        
+        Return ONLY the JSON object with 'score' and 'feedback' keys.""".format(response=text)
+
+        messages = [
+            {"role": "user", "content": prompt}
+        ]
+        return self._call_llm_api(messages, response_format={"type": "json_object"})
+
+    def process_marking_guide(self, guide_text: str) -> Dict:
+        """
+        Analyze marking guide and extract structured Q&A using LLM.
+        Returns either question-based or answer-based format.
+        """
+        prompt = """Analyze this marking guide and extract either:
+        1. Questions with model answers (if questions exist)
+        2. Model answers with sections (if no explicit questions)
+        
+        Guide:
+        {guide}
+        
+        Return JSON format:
+        {{
+            "type": "question|answer",
+            "items": [
+                {{"question": "...", "answer": "..."}} OR {{"section": "...", "answer": "..."}}
+            ]
+        }}""".format(guide=guide_text)
+
+        messages = [
+            {"role": "user", "content": prompt}        ]
+        try:
+            response_content = self._call_llm_api(messages, response_format={"type": "json_object"})
+            if not response_content:
+                logger.warning("LLM returned empty response for marking guide processing.")
+                return {"questions": [], "total_marks": 0, "extraction_method": "llm_empty_response"}
+
+            parsed_response = json.loads(response_content)
+            questions = parsed_response.get("questions", [])
+            total_marks = parsed_response.get("total_marks", 0)
+            extraction_method = parsed_response.get("extraction_method", "llm")
+
+            logger.info(f"LLM extraction successful. Questions: {len(questions)}, Total Marks: {total_marks}")
+            return {"questions": questions, "total_marks": total_marks, "extraction_method": extraction_method}
+
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing failed for LLM response in process_marking_guide: {e}")
+            logger.error(f"Raw LLM response: {response_content}")
+            return {"questions": [], "total_marks": 0, "extraction_method": "llm_json_error"}
+        except Exception as e:
+            logger.error(f"Unexpected error during LLM processing of marking guide: {e}")
+            return {"questions": [], "total_marks": 0, "extraction_method": "llm_error"}
 
     def grade_submission(
         self,
         marking_guide_text: str,
         student_submission_text: str,
-        max_tokens: int = 2048,
     ) -> Dict:
         """
         Grade a student submission against a marking guide.
@@ -370,7 +535,6 @@ Evaluate and provide score with feedback."""
         Args:
             marking_guide_text: Full text of the marking guide
             student_submission_text: Full text of the student submission
-            max_tokens: Maximum tokens for the response
 
         Returns:
             Dict: Grading result with scores and feedback
@@ -441,3 +605,4 @@ Evaluate and provide score with feedback."""
             return mapping_service.map_submission_to_guide(
                 marking_guide_content, student_submission_content
             )
+       
