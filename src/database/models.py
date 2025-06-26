@@ -99,6 +99,11 @@ class User(db.Model, TimestampMixin):
         self.locked_until = None
         self.failed_login_attempts = 0
 
+    @property
+    def is_authenticated(self):
+        """Always True, unless the user is anonymous."""
+        return True
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {

@@ -124,9 +124,397 @@
     <meta name="csrf-token" content="{{ csrf_token }}">
     {% endif %}
 
-    {% block extra_css %}{% endblock %}
+
   </head>
   <body class="h-full overflow-hidden font-sans antialiased">
+    <!-- Mobile menu, show/hide based on menu state. -->
+    <div class="relative z-40 lg:hidden" role="dialog" aria-modal="true" id="mobile-menu">
+      <!--
+        Off-canvas menu backdrop, show/hide based on off-canvas menu state.
+
+        Entering: "transition-opacity ease-linear duration-300"
+          From: "opacity-0"
+          To: "opacity-100"
+        Leaving: "transition-opacity ease-linear duration-300"
+          From: "opacity-100"
+          To: "opacity-0"
+      -->
+      <div class="fixed inset-0 bg-gray-600 bg-opacity-75" aria-hidden="true" id="mobile-menu-overlay"></div>
+
+      <!--
+        Off-canvas menu, show/hide based on off-canvas menu state.
+
+        Entering: "transition ease-in-out duration-300 transform"
+          From: "-translate-x-full"
+          To: "translate-x-0"
+        Leaving: "transition ease-in-out duration-300 transform"
+          From: "translate-x-0"
+          To: "-translate-x-full"
+      -->
+      <div class="fixed inset-0 flex max-w-full pr-16">
+        <div class="flex w-full max-w-xs flex-col">
+          <div class="flex flex-1 flex-col overflow-y-auto bg-white pb-4 pt-5">
+            <div class="flex flex-shrink-0 items-center px-4">
+              <div class="flex items-center">
+                <div class="flex-shrink-0">
+                  <div
+                    class="h-8 w-8 bg-primary-600 rounded-lg flex items-center justify-center"
+                  >
+                    <svg
+                      class="h-5 w-5 text-white"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                </div>
+                <div class="ml-3">
+                  <h1 class="text-lg font-semibold text-gray-900">
+                    Exam Grader
+                  </h1>
+                  <p class="text-xs text-gray-500">v{{ app_version }}</p>
+                </div>
+              </div>
+            </div>
+            <nav class="mt-5 flex flex-1 flex-col px-2">
+              <div class="space-y-1">
+                <a
+                  href="{{ url_for('dashboard') }}"
+                  class="nav-link {% if request.endpoint == 'dashboard' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-base font-medium rounded-md"
+                >
+                  <svg
+                    class="{% if request.endpoint == 'dashboard' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-4 h-6 w-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
+                    />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8 5a2 2 0 012-2h2a2 2 0 012 2v0M8 5a2 2 0 000 4h8a2 2 0 000-4M8 5v0"
+                    />
+                  </svg>
+                  Dashboard
+                </a>
+
+                <a
+                  href="{{ url_for('upload_guide') }}"
+                  class="nav-link {% if request.endpoint == 'upload_guide' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-base font-medium rounded-md"
+                >
+                  <svg
+                    class="{% if request.endpoint == 'upload_guide' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-4 h-6 w-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  Upload Guide
+                </a>
+
+                <a
+                  href="{{ url_for('view_marking_guides') }}"
+                  class="nav-link {% if request.endpoint in ['view_marking_guides', 'create_guide'] %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-base font-medium rounded-md"
+                >
+                  <svg
+                    class="{% if request.endpoint in ['view_marking_guides', 'create_guide'] %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-4 h-6 w-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                    />
+                  </svg>
+                  Guide Library
+                </a>
+
+                <a
+                  href="{{ url_for('upload_submission') }}"
+                  class="nav-link {% if request.endpoint == 'upload_submission' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-base font-medium rounded-md"
+                >
+                  <svg
+                    class="{% if request.endpoint == 'upload_submission' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-4 h-6 w-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                    />
+                  </svg>
+                  Upload Submission
+                </a>
+
+                {% if session.get('submissions') %}
+                <a
+                  href="{{ url_for('view_submissions') }}"
+                  class="nav-link {% if request.endpoint == 'view_submissions' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-base font-medium rounded-md"
+                >
+                  <svg
+                    class="{% if request.endpoint == 'view_submissions' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-4 h-6 w-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  Submissions
+                  <span
+                    class="ml-auto bg-primary-100 text-primary-600 py-0.5 px-2 rounded-full text-xs font-medium"
+                  >
+                    {{ session.get('submissions', [])|length }}
+                  </span>
+                </a>
+                {% endif %} {% if session.get('last_grading_result') %}
+                <a
+                  href="{{ url_for('view_results') }}"
+                  class="nav-link {% if request.endpoint == 'view_results' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-base font-medium rounded-md"
+                >
+                  <svg
+                    class="{% if request.endpoint == 'view_results' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-4 h-6 w-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                    />
+                  </svg>
+                  Results
+                </a>
+                {% endif %}
+
+                <!-- Settings -->
+                <a
+                  href="{{ url_for('settings') }}"
+                  class="nav-link {% if request.endpoint == 'settings' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-base font-medium rounded-md"
+                >
+                  <svg
+                    class="{% if request.endpoint == 'settings' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-4 h-6 w-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                    />
+                  </svg>
+                  Settings
+                </a>
+              </div>
+            </nav>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-1 flex-col lg:pl-64">
+        <div class="flex h-16 flex-shrink-0 border-b border-gray-200 bg-white px-4">
+          <button
+            type="button"
+            class="border-r border-gray-200 px-4 text-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500 lg:hidden"
+            id="mobile-menu-button"
+          >
+            <span class="sr-only">Open sidebar</span>
+            <!-- Icon when menu is closed. -->
+            <!-- Menu open: "hidden", Menu closed: "block" -->
+            <svg
+              class="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+              />
+            </svg>
+            <!-- Icon when menu is open. -->
+            <!-- Menu open: "block", Menu closed: "hidden" -->
+            <svg
+              class="hidden h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+          <div class="flex flex-1 justify-between px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-1">
+              <!-- Search functionality can go here if needed -->
+            </div>
+            <div class="ml-4 flex items-center lg:ml-6">
+              <!-- Profile dropdown -->
+              <div class="relative ml-3">
+                <div>
+                  <button
+                    type="button"
+                    class="flex max-w-xs items-center rounded-full bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+                    id="user-menu-button"
+                    aria-expanded="false"
+                    aria-haspopup="true"
+                  >
+                    <span class="sr-only">Open user menu</span>
+                    <img
+                      class="h-8 w-8 rounded-full"
+                      src="{{ url_for('static', filename='img/user_placeholder.svg') }}"
+                      alt="User avatar"
+                    />
+                  </button>
+                </div>
+
+                <!--
+                  Dropdown menu, show/hide based on menu state.
+
+                  Entering: "transition ease-out duration-100"
+                    From: "transform opacity-0 scale-95"
+                    To: "transform opacity-100 scale-100"
+                  Leaving: "transition ease-in duration-75"
+                    From: "transform opacity-100 scale-100"
+                    To: "transform opacity-0 scale-95"
+                -->
+                <div
+                  class="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
+                  role="menu"
+                  aria-orientation="vertical"
+                  aria-labelledby="user-menu-button"
+                  tabindex="-1"
+                  id="user-menu"
+                >
+                  <a
+                    href="{{ url_for('auth.profile') }}"
+                    class="block px-4 py-2 text-sm text-gray-700"
+                    role="menuitem"
+                    tabindex="-1"
+                    id="user-menu-item-0"
+                    >Your Profile</a
+                  >
+                  <a
+                    href="{{ url_for('settings') }}"
+                    class="block px-4 py-2 text-sm text-gray-700"
+                    role="menuitem"
+                    tabindex="-1"
+                    id="user-menu-item-1"
+                    >Settings</a
+                  >
+                  <a
+                    href="{{ url_for('logout') }}"
+                    class="block px-4 py-2 text-sm text-gray-700"
+                    role="menuitem"
+                    tabindex="-1"
+                    id="user-menu-item-2"
+                    >Sign out</a
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <main class="flex-1 overflow-y-auto focus:outline-none">
+          <div class="py-6">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        // Flash message dismissal
+        document.querySelectorAll('.flash-close').forEach(button => {
+          button.addEventListener('click', function() {
+            this.closest('.flash-message').remove();
+          });
+        });
+
+        // Auto-dismiss flash messages after 5 seconds
+        setTimeout(() => {
+          document.querySelectorAll('.flash-message').forEach(message => {
+            message.remove();
+          });
+        }, 5000);
+
+        // Mobile menu toggle
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const userMenuButton = document.getElementById('user-menu-button');
+        const userMenu = document.getElementById('user-menu');
+
+        // Mobile menu toggle
+        const mobileMenu = document.getElementById('mobile-menu');
+        const mobileMenuOverlay = document.getElementById('mobile-menu-overlay');
+
+        if (mobileMenuButton) {
+          mobileMenuButton.addEventListener('click', () => {
+            mobileMenu.classList.toggle('hidden');
+            mobileMenuOverlay.classList.toggle('hidden');
+          });
+
+          mobileMenuOverlay.addEventListener('click', () => {
+            mobileMenu.classList.add('hidden');
+            mobileMenuOverlay.classList.add('hidden');
+          });
+        }
+
+        if (userMenuButton) {
+          userMenuButton.addEventListener('click', () => {
+            userMenu.classList.toggle('hidden');
+            userMenuButton.setAttribute('aria-expanded', userMenu.classList.contains('hidden') ? 'false' : 'true');
+          });
+
+          // Close user menu when clicking outside
+          document.addEventListener('click', (event) => {
+            if (!userMenuButton.contains(event.target) && !userMenu.contains(event.target)) {
+              userMenu.classList.add('hidden');
+              userMenuButton.setAttribute('aria-expanded', 'false');
+            }
+          });
+        }
+      });
+    </script>
+
     <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %} {% if
     messages %}
@@ -217,7 +605,7 @@
     <!-- Main Layout -->
     <div class="flex h-full">
       <!-- Sidebar -->
-      <div class="hidden lg:flex lg:flex-shrink-0">
+      <div class="lg:flex lg:flex-shrink-0">
         <div class="flex flex-col w-64">
           <div
             class="flex flex-col flex-grow bg-white border-r border-gray-200 pt-5 pb-4 overflow-y-auto"
@@ -296,11 +684,11 @@
               </a>
 
               <a
-                href="{{ url_for('marking_guides') }}"
-                class="nav-link {% if request.endpoint in ['marking_guides', 'create_guide'] %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md"
+                href="{{ url_for('view_marking_guides') }}"
+                class="nav-link {% if request.endpoint in ['view_marking_guides', 'create_guide'] %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md"
               >
                 <svg
-                  class="{% if request.endpoint in ['marking_guides', 'create_guide'] %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                  class="{% if request.endpoint in ['view_marking_guides', 'create_guide'] %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -616,7 +1004,7 @@
       }
     </script>
 
-    {% block extra_js %}{% endblock %}
+
 
     <script>
       // Diagnostic script to ensure all anchor tags are clickable

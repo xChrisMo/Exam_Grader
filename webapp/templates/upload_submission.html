@@ -1,261 +1,151 @@
-{% extends "layout.html" %} {% block content %}
+{% extends "layout.html" %}
+{% block content %}
 <div class="max-w-3xl mx-auto">
-  <!-- Page Header -->
-  <div class="mb-8">
-    <h1 class="text-2xl font-bold text-gray-900">Upload Student Submissions</h1>
-    <p class="mt-2 text-sm text-gray-600">
-      Upload student submissions to be graded against your marking guide.
-      Supports both single file and batch processing for multiple files.
-    </p>
-  </div>
-
-  <!-- Prerequisites Check -->
-  {% if not session.get('guide_uploaded') %}
-  <div class="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-    <div class="flex">
-      <div class="flex-shrink-0">
-        <svg class="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-        </svg>
-      </div>
-      <div class="ml-3">
-        <h3 class="text-sm font-medium text-yellow-800">Marking Guide Required</h3>
-        <div class="mt-2 text-sm text-yellow-700">
-          <p>You need to upload a marking guide before you can submit student work for grading.</p>
-        </div>
-        <div class="mt-4">
-          <a href="{{ url_for('upload_guide') }}" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-yellow-800 bg-yellow-100 hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500">
-            Upload Marking Guide
-          </a>
-        </div>
-      </div>
+    <!-- Page Header -->
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-gray-900">Upload Student Submissions</h1>
+        <p class="mt-2 text-sm text-gray-600">
+            Upload student exam papers for automated grading. Supported formats: PDF, Word documents, and images.
+        </p>
     </div>
-  </div>
-  {% endif %}
 
-  <!-- Upload Form -->
-  <div class="bg-white shadow rounded-lg">
-    <div class="px-4 py-5 sm:p-6">
-      <!-- Message Display Area -->
-      <div id="message-area" class="hidden mb-4 p-3 rounded-md text-sm" role="alert">
-        <p id="message-text"></p>
-      </div>
-      
-      <form method="POST" enctype="multipart/form-data" id="uploadForm">
-        {% if csrf_token %}
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-        {% endif %}
+    <!-- Upload Form -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <form method="POST" enctype="multipart/form-data" id="upload-form">
+                {% if csrf_token %}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                {% endif %}
+                <!-- Marking Guide Selection -->
+                <div class="mb-6">
+                    <label for="marking_guide_id" class="block text-sm font-medium text-gray-700 mb-2">Select Marking Guide</label>
+                    <select id="marking_guide_id" name="marking_guide_id" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md">
+                        <option value="">-- Select a Marking Guide --</option>
+                        {% for guide in marking_guides %}
+                        <option value="{{ guide.id }}">{{ guide.filename }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-        <!-- Upload Mode Selection -->
-        <div class="mb-6">
-          <label class="block text-sm font-medium text-gray-700 mb-3">Upload Mode</label>
-          <div class="flex space-x-4">
-            <label class="flex items-center">
-              <input type="radio" name="uploadMode" value="single" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300" checked>
-              <span class="ml-2 text-sm text-gray-700">Single File</span>
-            </label>
-            <label class="flex items-center">
-              <input type="radio" name="uploadMode" value="multiple" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300">
-              <span class="ml-2 text-sm text-gray-700">Multiple Files (Batch)</span>
-            </label>
-          </div>
+                <!-- File Upload Area -->
+                <div class="mb-6">
+                    <label for="files" class="block text-sm font-medium text-gray-700 mb-2">
+                        Student Submission Files
+                    </label>
+                    <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-primary-400 transition-colors duration-200" id="drop-zone">
+                        <div class="space-y-1 text-center">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <div class="flex text-sm text-gray-600">
+                                <label for="files" class="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500">
+                                    <span>Upload files</span>
+                                    <input id="files" name="files" type="file" class="sr-only" accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.tiff,.bmp,.gif" multiple required>
+                                </label>
+                                <p class="pl-1">or drag and drop</p>
+                            </div>
+                            <p class="text-xs text-gray-500">
+                                PDF, Word documents, or images up to 16MB each
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Selected Files List -->
+                <div id="fileListContainer" class="mb-6 hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Selected Files</label>
+                    <ul id="fileList" class="border border-gray-300 rounded-md bg-white divide-y divide-gray-200 max-h-60 overflow-y-auto">
+                        <!-- Files will be listed here -->
+                    </ul>
+                </div>
+
+                <!-- Processing Options -->
+                <div class="mb-6 bg-gray-50 rounded-lg p-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Processing Options</label>
+                    <div class="flex items-center mb-2">
+                        <input id="process_mode_parallel" name="process_mode" type="radio" value="parallel" class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" checked>
+                        <label for="process_mode_parallel" class="ml-2 block text-sm text-gray-900">Process in Parallel (faster for many files)</label>
+                    </div>
+                    <div class="flex items-center mb-4">
+                        <input id="process_mode_sequential" name="process_mode" type="radio" value="sequential" class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300">
+                        <label for="process_mode_sequential" class="ml-2 block text-sm text-gray-900">Process Sequentially (for debugging or resource-limited systems)</label>
+                    </div>
+
+                    <label for="batch_size" class="block text-sm font-medium text-gray-700 mb-2">Batch Size (for parallel processing)</label>
+                    <input type="number" id="batch_size" name="batch_size" value="5" min="1" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md">
+                </div>
+
+                <!-- Upload Progress -->
+                <div id="upload-progress" class="hidden mb-6">
+                    <div class="bg-gray-200 rounded-full h-2">
+                        <div id="progress-bar" class="bg-primary-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-2">Uploading and processing...</p>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="flex items-center justify-between">
+                    <a href="{{ url_for('dashboard') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                        </svg>
+                        Back to Dashboard
+                    </a>
+                    
+                    <button type="submit" id="submit-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        Upload Submissions
+                    </button>
+                </div>
+            </form>
         </div>
+    </div>
 
-        <!-- File Upload Area -->
-        <div class="mb-6">
-          <label for="submissionFile" class="block text-sm font-medium text-gray-700 mb-2">
-            <span id="upload-label">Student Submission File</span>
-          </label>
-          <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-primary-400 transition-colors duration-200" id="drop-zone">
-            <div class="space-y-1 text-center">
-              <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <div class="flex text-sm text-gray-600">
-                <label for="submissionFile" class="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500">
-                  <span id="upload-text">Upload a file</span>
-                  <input id="submissionFile" name="file" type="file" class="sr-only" accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.tiff,.bmp,.gif" required>
-                </label>
-                <p class="pl-1">or drag and drop</p>
-              </div>
-              <p class="text-xs text-gray-500" id="upload-hint">
-                PDF, Word documents, or images up to 16MB
-              </p>
-            </div>
-          </div>
+    <!-- Processing Results Section -->
+    <div id="results-section" class="hidden mt-8 bg-white shadow rounded-lg p-6">
+        <h2 class="text-xl font-bold text-gray-900 mb-4">Processing Results</h2>
+        <div id="processing-summary" class="mb-4 text-sm text-gray-700">
+            <!-- Summary will be displayed here -->
         </div>
-
-        <!-- Selected Files Display -->
-        <div id="selected-files" class="mb-6 hidden">
-          <h3 class="text-sm font-medium text-gray-700 mb-3">Selected Files (<span id="file-count">0</span>)</h3>
-          <div id="file-list" class="space-y-2 max-h-60 overflow-y-auto">
-            <!-- Files will be displayed here -->
-          </div>
-          <div class="mt-3 flex justify-between items-center">
-            <button type="button" id="clear-files" class="text-sm text-red-600 hover:text-red-800">
-              Clear All Files
-            </button>
-            <span class="text-sm text-gray-500">
-              Total size: <span id="total-size">0 MB</span>
-            </span>
-          </div>
+        <div id="results-list" class="divide-y divide-gray-200">
+            <!-- Results for each file will be displayed here -->
         </div>
-
-        <!-- Batch Processing Options -->
-        <div id="batch-options" class="mb-6 hidden">
-          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 class="text-sm font-medium text-blue-800 mb-3">Batch Processing Options</h3>
-            <div class="space-y-3">
-              <label class="flex items-center">
-                <input type="checkbox" id="parallel-processing" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" checked>
-                <span class="ml-2 text-sm text-blue-700">Enable parallel processing (faster)</span>
-              </label>
-              <div class="flex items-center space-x-4">
-                <label class="text-sm text-blue-700">Batch size:</label>
-                <select id="batch-size" class="text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                  <option value="3">3 files (recommended)</option>
-                  <option value="5" selected>5 files (balanced)</option>
-                  <option value="10">10 files (fast)</option>
-                </select>
-              </div>
-            </div>
-          </div>
+        <div class="mt-6 text-right">
+            <a href="{{ url_for('dashboard') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                Back to Dashboard
+            </a>
         </div>
+    </div>
 
-        <!-- File Preview (Single Mode) -->
-        <div id="file-preview" class="hidden mb-6">
-          <div class="bg-gray-50 rounded-lg p-4">
-            <div class="flex items-center">
-              <div class="flex-shrink-0">
-                <svg class="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+    <!-- Help Section -->
+    <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
                 </svg>
-              </div>
-              <div class="ml-4 flex-1">
-                <div class="text-sm font-medium text-gray-900" id="file-name"></div>
-                <div class="text-sm text-gray-500" id="file-size"></div>
-              </div>
-              <div class="ml-4">
-                <button type="button" id="remove-file" class="text-gray-400 hover:text-gray-500">
-                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                  </svg>
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
-
-        <!-- Upload Progress (Single Mode) -->
-        <div id="upload-progress" class="hidden mb-6">
-          <div class="bg-gray-200 rounded-full h-2">
-            <div id="progress-bar" class="bg-primary-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-          </div>
-          <p class="text-sm text-gray-600 mt-2">Uploading and processing...</p>
-        </div>
-
-        <!-- Batch Progress (Multiple Mode) -->
-        <div id="batch-progress" class="hidden mb-6">
-          <div class="bg-white border border-gray-200 rounded-lg p-4">
-            <h3 class="text-sm font-medium text-gray-900 mb-3">Batch Processing Progress</h3>
-            
-            <!-- Overall Progress -->
-            <div class="mb-4">
-              <div class="flex justify-between text-sm text-gray-600 mb-1">
-                <span id="batch-status">0 of 0 completed</span>
-                <span>Overall Progress</span>
-              </div>
-              <div class="bg-gray-200 rounded-full h-2">
-                <div id="batch-progress-bar" class="bg-green-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-              </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-blue-800">Tips for best results</h3>
+                <div class="mt-2 text-sm text-blue-700">
+                    <ul class="list-disc list-inside space-y-1">
+                        <li>Ensure student submissions are clear and legible.</li>
+                        <li>For best OCR results, use high-quality scans or images.</li>
+                        <li>PDF and Word documents generally yield better parsing accuracy.</li>
+                        <li>Review the processing results for any errors or discrepancies.</li>
+                    </ul>
+                </div>
             </div>
-
-            <!-- Current File Status -->
-            <div class="mb-4">
-              <p class="text-sm text-gray-600">
-                <span class="font-medium">Current:</span> 
-                <span id="current-file-status">Ready to start...</span>
-              </p>
-            </div>
-
-            <!-- Individual File Progress -->
-            <div class="max-h-40 overflow-y-auto">
-              <h4 class="text-xs font-medium text-gray-700 mb-2">File Status:</h4>
-              <div id="file-progress-list" class="space-y-1">
-                <!-- Individual file progress items will be added here -->
-              </div>
-            </div>
-          </div>
         </div>
-
-        <!-- Form Actions -->
-        <div class="flex items-center justify-between">
-          <a href="{{ url_for('dashboard') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-            <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
-            Back to Dashboard
-          </a>
-
-          <button type="submit" id="uploadButton" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed">
-            <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-            </svg>
-            Upload and Grade
-          </button>
-        </div>
-      </form>
     </div>
-  </div>
-
-  <!-- Current Guide Info -->
-  {% if session.get('guide_uploaded') %}
-  <div class="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
-    <div class="flex">
-      <div class="flex-shrink-0">
-        <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-        </svg>
-      </div>
-      <div class="ml-3">
-        <h3 class="text-sm font-medium text-green-800">Marking Guide Ready</h3>
-        <div class="mt-2 text-sm text-green-700">
-          <p>Current guide: <strong>{{ session.get('guide_filename', 'Unknown') }}</strong></p>
-          <p>Submissions will be graded against this marking guide.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-  {% endif %}
-
-  <!-- Help Section -->
-  <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-    <div class="flex">
-      <div class="flex-shrink-0">
-        <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
-        </svg>
-      </div>
-      <div class="ml-3">
-        <h3 class="text-sm font-medium text-blue-800">Tips for best results</h3>
-        <div class="mt-2 text-sm text-blue-700">
-          <ul class="list-disc list-inside space-y-1">
-            <li><strong>Single Mode:</strong> Upload one file at a time for individual processing</li>
-            <li><strong>Batch Mode:</strong> Upload multiple files for efficient batch processing</li>
-            <li>Use high-quality scans or images for handwritten work</li>
-            <li>PDF and Word documents typically provide the best OCR results</li>
-            <li>Make sure all pages are included and in the correct order</li>
-            <li>Avoid blurry or rotated images</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+
   // Initialize ExamGrader namespace if not exists
   window.ExamGrader = window.ExamGrader || {};
   window.ExamGrader.utils = window.ExamGrader.utils || {};
@@ -777,5 +667,6 @@
       // Initialize the upload mode
       updateUploadMode();
   });
+
 </script>
 {% endblock %}
