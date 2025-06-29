@@ -333,10 +333,14 @@ class LLMService:
             ]
 
             # Check cache first
+<<<<<<< HEAD
             cache_key = self._generate_cache_key({
                 "messages": messages,
                 "max_score": max_score
             })
+=======
+            cache_key = self._generate_cache_key(messages, max_tokens=None)
+>>>>>>> 4940b954089ed873782142863b95f7956031a697
             cached_response = self._get_cached_response(cache_key)
 
             if cached_response:
@@ -350,6 +354,10 @@ class LLMService:
                     "model": self.model,
                     "messages": messages,
                     "temperature": 0.0,  # Deterministic for consistency
+<<<<<<< HEAD
+=======
+
+>>>>>>> 4940b954089ed873782142863b95f7956031a697
                 }
 
                 # Ensure JSON format for Deepseek-Reasoner
@@ -582,6 +590,27 @@ class LLMService:
         response = self.client.chat.completions.create(**params)
         return response.choices[0].message.content.strip()
 
+    def _call_llm_api(
+        self,
+        messages: List[Dict[str, str]],
+
+        response_format: Optional[Dict[str, str]] = None,
+    ) -> str:
+        """Helper to make a robust LLM API call."""
+        params = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+        }
+
+        if self.deterministic and self.seed is not None:
+            params["seed"] = self.seed
+        if response_format is not None:
+            params["response_format"] = response_format
+
+        response = self.client.chat.completions.create(**params)
+        return response.choices[0].message.content.strip()
+
     def parse_llm_response(self, response_text: str) -> Tuple[Dict, str]:
         """
         Parse LLM response using structured JSON parsing with LLM assistance.
@@ -607,6 +636,13 @@ class LLMService:
             else:
                 logger.error("No JSON object found in LLM response after regex attempt.")
                 raise LLMServiceError("No JSON object found in LLM response") from je
+<<<<<<< HEAD
+=======
+        except Exception as e:
+            logger.error(f"Structured parsing failed: {str(e)}")
+            raise LLMServiceError("Failed to parse LLM response")
+
+>>>>>>> 4940b954089ed873782142863b95f7956031a697
     def _get_structured_response(self, text: str) -> str:
         """Use LLM to convert free-form response to valid JSON"""
         prompt = """Convert this unstructured response to valid JSON format:

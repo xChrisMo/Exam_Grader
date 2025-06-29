@@ -61,6 +61,7 @@ try:
     from src.services.mapping_service import MappingService
     from src.services.grading_service import GradingService
     from src.services.file_cleanup_service import FileCleanupService
+    from src.services.batch_processing_service import BatchProcessingService
     from src.parsing.parse_submission import parse_student_submission
     from src.parsing.parse_guide import parse_marking_guide
     from utils.logger import logger
@@ -555,6 +556,7 @@ def dashboard():
         return render_template("dashboard.html", **context)
     except Exception as e:
         logger.error(f"Error loading dashboard: {str(e)}")
+
         flash("Error loading dashboard. Please try again.", "error")
         return render_template(
             "dashboard.html",
@@ -570,6 +572,7 @@ def dashboard():
 
 
 @app.route("/upload-guide", methods=["GET", "POST"])
+
 @login_required
 def upload_guide():
     """Upload and process marking guide."""
@@ -666,6 +669,10 @@ def upload_guide():
                                         f"LLM extraction successful: {len(questions)} questions, {total_marks} total marks"
                                     )
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 4940b954089ed873782142863b95f7956031a697
                             except Exception as llm_error:
                                 logger.error(f"LLM extraction failed: {str(llm_error)}")
                                 logger.error(f"LLM extraction error traceback: ", exc_info=True)
@@ -673,6 +680,11 @@ def upload_guide():
                                 total_marks = 0
                                 extraction_method = "error"
                                 flash("AI extraction failed - using basic guide structure", "warning")
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> 4940b954089ed873782142863b95f7956031a697
                         else:
                             if not mapping_service:
                                 logger.warning(
@@ -794,6 +806,7 @@ def upload_guide():
 @login_required
 def upload_submission():
     """Upload and process student submission."""
+
     if request.method == "GET":
         return render_template("upload_submission.html", page_title="Upload Submission")
 
@@ -811,6 +824,7 @@ def upload_submission():
 
         temp_dir = str(config.files.temp_dir)
         os.makedirs(temp_dir, exist_ok=True)
+
 
         uploaded_count = 0
         failed_count = 0
@@ -880,9 +894,21 @@ def upload_submission():
                 )
                 logger.debug(
                     f"Raw text content from parse_student_submission: {raw_text[:500] if raw_text else 'None'}"
-                )
 
-                submission_id = str(uuid.uuid4())
+
+        from src.database.models import MarkingGuide
+        guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
+        guide_list = [{
+            'id': str(guide.id),
+            'title': guide.title,
+            'filename': guide.filename,
+            'uploaded_at': guide.created_at.isoformat()
+        } for guide in guides]
+        return jsonify(guide_list), 200
+    except Exception as e:
+        logger.error(f"Error fetching marking guides via API: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
 
                 # Try to store in database first, fallback to session
                 try:
@@ -1822,10 +1848,12 @@ def get_letter_grade(score):
 
 
 # Additional routes for enhanced functionality
+
 @app.route("/marking-guides")
 @login_required
-def marking_guides():
+def view_marking_guides():
     """View marking guide library with optimized performance and authentication."""
+
     try:
         guides = []
 
@@ -1951,7 +1979,6 @@ def marking_guides():
         flash("Error loading guide library. Please try again.", "error")
         return redirect(url_for("dashboard"))
 
-
 @app.route("/create-guide")
 def create_guide():
     """Create new marking guide."""
@@ -1983,7 +2010,7 @@ def view_guide_content(guide_id):
         if not guide:
             flash("Marking guide not found", "error")
             return redirect(url_for("marking_guides"))
-
+ 
         # Prepare context for template
         context = {
             "page_title": f"Guide: {guide.title}",
@@ -2020,8 +2047,10 @@ def use_guide(guide_id):
         ).first()
 
         if not guide:
+
             flash("Marking guide not found", "error")
             return redirect(url_for("marking_guides"))
+
 
         # Set comprehensive session data for dashboard activation
         session["guide_id"] = guide.id
@@ -2077,6 +2106,7 @@ def use_guide(guide_id):
 
     except SQLAlchemyError as e:
         logger.error(f"Database error in use_guide: {str(e)}")
+
         flash("Error accessing guide database", "error")
         return redirect(url_for("marking_guides"))
     except Exception as e:
@@ -2317,6 +2347,7 @@ def delete_guide(guide_id):
             flash("Marking guide not found", "error")
             return redirect(url_for("marking_guides"))
 
+
         # Store guide name for flash message
         guide_name = guide.title
 
@@ -2350,9 +2381,11 @@ def delete_guide(guide_id):
         logger.info(f"Guide deleted successfully: {guide_name} (ID: {guide_id})")
         return redirect(url_for("marking_guides"))
 
+
     except SQLAlchemyError as e:
         logger.error(f"Database error in delete_guide: {str(e)}")
         db.session.rollback()
+
         flash("Error deleting guide from database", "error")
         return redirect(url_for("marking_guides"))
     except Exception as e:

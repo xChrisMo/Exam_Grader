@@ -41,7 +41,13 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
         # Create console handler
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(console_formatter)
+<<<<<<< HEAD
         console_handler.setLevel(getattr(logging, log_level, logging.DEBUG))
+=======
+
+        console_handler.setLevel(getattr(logging, log_level, logging.DEBUG)) # Ensure console handler respects debug level
+
+>>>>>>> 4940b954089ed873782142863b95f7956031a697
         logger.addHandler(console_handler)
 
         # Create file handler

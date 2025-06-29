@@ -381,7 +381,8 @@ class SecretsManager:
 
 
 # Global secrets manager instance
-secrets_manager = SecretsManager()
+secrets_file_path = Path(__file__).parent.parent.parent / "instance" / "secrets.enc"
+secrets_manager = SecretsManager(secrets_file=str(secrets_file_path))
 
 
 # Initialize with common API keys

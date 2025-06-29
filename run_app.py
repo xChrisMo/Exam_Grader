@@ -153,6 +153,7 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
             from src.database.models import db  # Add proper DB import
             
             with app.app_context():
+
                 MigrationManager(db.engine.url).migrate()
         else:
             print("[ERROR] Database URL not found in configuration. Exiting.")

@@ -1,0 +1,191 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="min-h-full flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div class="sm:mx-auto sm:w-full sm:max-w-md">
+        <div class="text-center">
+            <!-- Error Icon -->
+            <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-danger-100">
+                {% if error_code == 404 %}
+                    <svg class="h-8 w-8 text-danger-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                {% elif error_code == 500 %}
+                    <svg class="h-8 w-8 text-danger-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                    </svg>
+                {% else %}
+                    <svg class="h-8 w-8 text-danger-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                {% endif %}
+            </div>
+            
+            <!-- Error Code -->
+            <h1 class="mt-6 text-6xl font-bold text-gray-900">{{ error_code or '500' }}</h1>
+            
+            <!-- Error Title -->
+            <h2 class="mt-4 text-2xl font-bold text-gray-900">
+                {% if error_code == 404 %}
+                    Page Not Found
+                {% elif error_code == 500 %}
+                    Internal Server Error
+                {% elif error_code == 403 %}
+                    Access Forbidden
+                {% elif error_code == 400 %}
+                    Bad Request
+                {% else %}
+                    Something Went Wrong
+                {% endif %}
+            </h2>
+            
+            <!-- Error Message -->
+            <p class="mt-2 text-base text-gray-500">
+                {% if error_message %}
+                    {{ error_message }}
+                {% elif error_code == 404 %}
+                    The page you're looking for doesn't exist or has been moved.
+                {% elif error_code == 500 %}
+                    We're experiencing some technical difficulties. Please try again later.
+                {% elif error_code == 403 %}
+                    You don't have permission to access this resource.
+                {% elif error_code == 400 %}
+                    The request could not be understood by the server.
+                {% else %}
+                    An unexpected error occurred. Please try again.
+                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div class="space-y-4">
+            <!-- Primary Action -->
+            <a href="{{ url_for('dashboard') }}" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h2a2 2 0 012 2v0M8 5a2 2 0 000 4h8a2 2 0 000-4M8 5v0"/>
+                </svg>
+                Go to Dashboard
+            </a>
+            
+            <!-- Secondary Actions -->
+            <div class="flex space-x-3">
+                <button onclick="history.back()" class="flex-1 flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                    Go Back
+                </button>
+                
+                <button onclick="location.reload()" class="flex-1 flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Retry
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Section -->
+    {% if error_code == 404 %}
+    <div class="mt-12 sm:mx-auto sm:w-full sm:max-w-lg">
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-blue-800">Looking for something specific?</h3>
+                    <div class="mt-2 text-sm text-blue-700">
+                        <ul class="list-disc list-inside space-y-1">
+                            <li><a href="{{ url_for('upload_guide') }}" class="underline hover:text-blue-600">Upload Marking Guide</a></li>
+                            <li><a href="{{ url_for('upload_submission') }}" class="underline hover:text-blue-600">Upload Submission</a></li>
+                            {% if session.get('submissions') %}
+                            <li><a href="{{ url_for('view_submissions') }}" class="underline hover:text-blue-600">View Submissions</a></li>
+                            {% endif %}
+                            {% if session.get('last_grading_result') %}
+                            <li><a href="{{ url_for('view_results') }}" class="underline hover:text-blue-600">View Results</a></li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% elif error_code == 500 %}
+    <div class="mt-12 sm:mx-auto sm:w-full sm:max-w-lg">
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-yellow-800">What you can do:</h3>
+                    <div class="mt-2 text-sm text-yellow-700">
+                        <ul class="list-disc list-inside space-y-1">
+                            <li>Wait a few minutes and try again</li>
+                            <li>Check if your files are not corrupted</li>
+                            <li>Ensure your internet connection is stable</li>
+                            <li>Try uploading smaller files if the issue persists</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- System Status -->
+    <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-lg">
+        <div class="bg-gray-50 rounded-lg p-4">
+            <h4 class="text-sm font-medium text-gray-900 mb-3">System Status</h4>
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">OCR Service</span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium 
+                        {% if service_status.ocr_status %}bg-success-100 text-success-800{% else %}bg-danger-100 text-danger-800{% endif %}">
+                        {% if service_status.ocr_status %}Online{% else %}Offline{% endif %}
+                    </span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">AI Service</span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium 
+                        {% if service_status.llm_status %}bg-success-100 text-success-800{% else %}bg-danger-100 text-danger-800{% endif %}">
+                        {% if service_status.llm_status %}Online{% else %}Offline{% endif %}
+                    </span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">Storage</span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium 
+                        {% if service_status.storage_status %}bg-success-100 text-success-800{% else %}bg-danger-100 text-danger-800{% endif %}">
+                        {% if service_status.storage_status %}Online{% else %}Offline{% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-refresh page if it's a 500 error after 30 seconds
+{% if error_code == 500 %}
+setTimeout(function() {
+    if (confirm('Would you like to try reloading the page?')) {
+        location.reload();
+    }
+}, 30000);
+{% endif %}
+
+// Track error for analytics (if needed)
+console.error('Error {{ error_code }}: {{ error_message }}');
+</script>
+{% endblock %}

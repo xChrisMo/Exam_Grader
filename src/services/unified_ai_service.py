@@ -238,6 +238,7 @@ class UnifiedAIService:
             failed_gradings = 0
             total_score = 0
             total_max_score = 0
+<<<<<<< HEAD
             batch_size = 2
             async def process_all():
                 tasks = [self._process_single_submission(
@@ -253,6 +254,132 @@ class UnifiedAIService:
             for result in batch_results:
                 all_results.append(result)
                 if result['status'] == 'success':
+=======
+            
+            # Step 2: Process each submission with unified mapping + grading
+            for i, submission in enumerate(submissions):
+                current_step += 1
+                submission_content = submission.get('content_text', submission.get('content', ''))
+                submission_filename = submission.get('filename', f'submission_{i+1}')
+                
+                if not submission_content:
+                    logger.warning(f"No content found for submission {submission_filename}. Skipping.")
+                    failed_gradings += 1
+                    all_results.append({
+                        'submission_id': submission.get('id', f'sub_{i}'),
+                        'filename': submission_filename,
+                        'status': 'error',
+                        'error': 'Empty submission content',
+                        'score': 0,
+                        'max_score': 0,
+                        'percentage': 0,
+                        'letter_grade': 'F',
+                        'details': 'No text could be extracted from the submission file. Please ensure the file contains readable text or images.'
+                    })
+                    self._update_progress(ProcessingProgress(
+                        current_step=current_step,
+                        total_steps=total_steps,
+                        current_operation=f"Skipping empty submission {submission_filename}",
+                        submission_index=i + 1,
+                        total_submissions=len(submissions),
+                        percentage=(current_step / total_steps) * 100,
+                        estimated_time_remaining=self._estimate_time_remaining(current_step),
+                        details="No content found for this submission. It will be marked as failed."
+                    ))
+                    continue
+                
+                # Ensure current_step does not exceed total_steps for progress calculation
+                safe_current_step = min(current_step, total_steps)
+                self._update_progress(ProcessingProgress(
+                    current_step=safe_current_step,
+                    total_steps=total_steps,
+                    current_operation=f"Processing {submission_filename}",
+                    submission_index=i + 1,
+                    total_submissions=len(submissions),
+                    percentage=(safe_current_step / total_steps) * 100,
+                    estimated_time_remaining=self._estimate_time_remaining(safe_current_step),
+                    details=f"Mapping answers and grading submission {i+1} of {len(submissions)}"
+                ))
+                
+                try:
+                    mapping_result = None
+                    mapping_error = None
+                    if self.mapping_service:
+                        map_start_time = time.time()
+                        mapping_result, mapping_error = self.mapping_service.map_submission_to_guide(
+                            marking_guide_content.get("raw_content", ""), submission_content, num_questions=max_questions
+                        )
+                        map_end_time = time.time()
+                        logger.info(f"Mapping for {submission_filename} took {map_end_time - map_start_time:.2f} seconds.")
+
+                    if mapping_error:
+                        logger.error(f"Mapping failed for {submission_filename}: {mapping_error}")
+                        failed_gradings += 1
+                        all_results.append({
+                            'submission_id': submission.get('id', f'sub_{i}'),
+                            'filename': submission_filename,
+                            'status': 'error',
+                            'error': mapping_error,
+                            'score': 0,
+                            'max_score': 0,
+                            'percentage': 0,
+                            'letter_grade': 'F'
+                        })
+                        continue
+
+                    grading_result = None
+                    grading_error = None
+                    if self.grading_service and mapping_result:
+                        grade_start_time = time.time()
+                        # Pass the mapped questions and answers to the grading service
+                        # Assuming mapping_result contains 'mapped_questions' and 'student_answers'
+                        grading_result, grading_error = self.grading_service.grade_submission(
+                            marking_guide_content, submission_content,
+                            mapped_questions=mapping_result.get('mappings'),
+                            guide_type=guide_type
+                        )
+                        grade_end_time = time.time()
+                        logger.info(f"Grading for {submission_filename} took {grade_end_time - grade_start_time:.2f} seconds.")
+
+                    if grading_error:
+                        logger.error(f"Grading failed for {submission_filename}: {grading_error}")
+                        failed_gradings += 1
+                        all_results.append({
+                            'submission_id': submission.get('id', f'sub_{i}'),
+                            'filename': submission_filename,
+                            'status': 'error',
+                            'error': grading_error,
+                            'score': 0,
+                            'max_score': 0,
+                            'percentage': 0,
+                            'letter_grade': 'F'
+                        })
+                        continue
+
+                    if not mapping_result and not grading_result:
+                        logger.warning("No mapping or grading service available, or no results generated.")
+                        failed_gradings += 1
+                        all_results.append({
+                            'submission_id': submission.get('id', f'sub_{i}'),
+                            'filename': submission_filename,
+                            'status': 'error',
+                            'error': 'No AI services available or no results generated',
+                            'score': 0,
+                            'max_score': 0,
+                            'percentage': 0,
+                            'letter_grade': 'F'
+                        })
+                        continue
+
+                    # Extract grading results
+                    score = grading_result.get('score', 0)
+                    max_score = grading_result.get('max_score', 0)
+                    percentage = grading_result.get('percentage', 0)
+
+                    # Calculate letter grade
+                    letter_grade = self._get_letter_grade(percentage)
+
+>>>>>>> 4940b954089ed873782142863b95f7956031a697
                     successful_gradings += 1
                     total_score += result.get('score', 0)
                     total_max_score += result.get('max_score', 0)
