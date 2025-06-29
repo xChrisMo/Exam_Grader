@@ -188,6 +188,11 @@ const ExamGrader = {
           // Enhanced error handling with specific status codes
           let errorMessage = data.error || data.message || `HTTP error! status: ${response.status}`;
 
+          // If the message looks like HTML, show a snippet for debugging
+          if (typeof errorMessage === 'string' && errorMessage.trim().startsWith('<')) {
+            errorMessage = 'Server returned HTML error page: ' + errorMessage.substring(0, 200) + (errorMessage.length > 200 ? '...' : '');
+          }
+
           switch (response.status) {
             case 400:
               errorMessage = data.error || 'Bad request. Please check your input.';
@@ -397,6 +402,7 @@ const ExamGrader = {
         // Show progress modal
         ExamGrader.ui.showProgressModal();
 
+        const startTime = performance.now();
         const data = await ExamGrader.utils.apiRequest(
           "/api/process-unified-ai",
           {
@@ -408,18 +414,45 @@ const ExamGrader = {
           const summary = data.summary || {};
           const avgPercentage = summary.average_percentage || 0;
           const processingTime = summary.processing_time || 0;
+          const performance = summary.performance || {};
+          const failedCount = summary.failed || 0;
+
+          // Calculate client-side processing time
+          const clientProcessingTime = ((performance.now() - startTime) / 1000).toFixed(2);
+
+          // Show detailed performance summary
+          let performanceDetails = `Average score: ${avgPercentage}%\n`;
+          performanceDetails += `Server processing time: ${processingTime}s\n`;
+          performanceDetails += `Client processing time: ${clientProcessingTime}s\n`;
+          if (performance.average_time_per_submission) {
+            performanceDetails += `Average time per submission: ${performance.average_time_per_submission}s\n`;
+          }
+          if (failedCount > 0) {
+            performanceDetails += `⚠️ ${failedCount} submissions failed to process\n`;
+          }
 
           ExamGrader.utils.showToast(
-            `Unified AI processing completed! Average score: ${avgPercentage}% (${processingTime}s)`,
-            "success"
+            performanceDetails,
+            failedCount > 0 ? "warning" : "success",
+            8000 // Extended display time for detailed info
           );
 
           // Stop polling and hide progress modal
           ExamGrader.ui.stopProgressPolling();
           ExamGrader.ui.hideProgressModal();
 
-          // Reload the page to update the UI based on server-side session variables
-          window.location.reload();
+          // Log performance metrics
+          console.info('Processing Performance Metrics:', {
+            serverProcessingTime: processingTime,
+            clientProcessingTime,
+            averageTimePerSubmission: performance.average_time_per_submission,
+            batchSize: performance.batch_size,
+            totalBatches: performance.total_batches,
+            successRate: ((summary.successful || 0) / (summary.total || 1) * 100).toFixed(1) + '%'
+          });
+
+          // Reload with a slight delay to ensure all updates are complete
+          setTimeout(() => window.location.reload(), 500);
 
           return data;
         } else {
@@ -487,9 +520,9 @@ const ExamGrader = {
       if (!document.getElementById('progress-modal')) {
         const modalHTML = `
           <div id="progress-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="relative top-20 mx-auto p-5 border w-[32rem] shadow-lg rounded-md bg-white">
               <div class="mt-3 text-center">
-                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100" id="progress-icon">
                   <svg class="animate-spin h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -498,6 +531,17 @@ const ExamGrader = {
                 <h3 class="text-lg leading-6 font-medium text-gray-900 mt-2" id="progress-title">
                   AI Processing in Progress
                 </h3>
+                <div class="mt-2 px-7 py-3">
+                  <div class="bg-gray-50 rounded-lg p-3 mb-3 text-left">
+                    <p class="text-sm font-medium text-gray-900">Processing Statistics</p>
+                    <div class="mt-2 grid grid-cols-2 gap-4 text-sm text-gray-500">
+                      <div id="processed-count">Processed: 0/0</div>
+                      <div id="success-rate">Success Rate: 0%</div>
+                      <div id="avg-time">Avg Time: 0s</div>
+                      <div id="total-time">Total Time: 0s</div>
+                    </div>
+                  </div>
+                </div>
                 <div class="mt-4">
                   <div class="w-full bg-gray-200 rounded-full h-2.5">
                     <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
@@ -542,6 +586,11 @@ const ExamGrader = {
       const progressText = document.getElementById('progress-text');
       const progressDetails = document.getElementById('progress-details');
       const progressEta = document.getElementById('progress-eta');
+      const progressIcon = document.getElementById('progress-icon');
+      const processedCount = document.getElementById('processed-count');
+      const successRate = document.getElementById('success-rate');
+      const avgTime = document.getElementById('avg-time');
+      const totalTime = document.getElementById('total-time');
 
       if (progressBar) {
         progressBar.style.width = `${progress.percentage}%`;
@@ -562,13 +611,43 @@ const ExamGrader = {
         progressEta.textContent = `Estimated time remaining: ${eta}s`;
       }
 
-      // Update status color based on progress status
+      // Update processing statistics
+      if (processedCount) {
+        processedCount.textContent = `Processed: ${progress.submission_index}/${progress.total_submissions}`;
+      }
+
+      if (successRate && progress.submission_index > 0) {
+        const rate = ((progress.successful_count || 0) / progress.submission_index * 100).toFixed(1);
+        successRate.textContent = `Success Rate: ${rate}%`;
+      }
+
+      if (avgTime && progress.average_time) {
+        avgTime.textContent = `Avg Time: ${progress.average_time.toFixed(1)}s`;
+      }
+
+      if (totalTime && progress.total_time) {
+        totalTime.textContent = `Total Time: ${progress.total_time.toFixed(1)}s`;
+      }
+
+      // Update status color and icon based on progress status
       if (progress.status === 'completed') {
-        progressBar.classList.remove('bg-blue-600');
+        progressBar.classList.remove('bg-blue-600', 'bg-red-600');
         progressBar.classList.add('bg-green-600');
+        if (progressIcon) {
+          progressIcon.innerHTML = `
+            <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>`;
+        }
       } else if (progress.status === 'error') {
-        progressBar.classList.remove('bg-blue-600');
+        progressBar.classList.remove('bg-blue-600', 'bg-green-600');
         progressBar.classList.add('bg-red-600');
+        if (progressIcon) {
+          progressIcon.innerHTML = `
+            <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>`;
+        }
       }
     },
 

@@ -5,6 +5,7 @@ This service grades student submissions by comparing their answers to the soluti
 
 import json
 import os
+import re
 from utils.logger import logger
 
 from datetime import datetime
@@ -12,6 +13,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from utils.logger import logger
+import asyncio
+from utils.async_llm_client import call_deepseek_async
 
 
 class GradingService:
@@ -762,3 +765,127 @@ class GradingService:
                 "grading_service": "active"
             }
         return {"grading_service": "active", "llm_cache_stats": "not_available"}
+
+    async def grade_submission_async(
+        self,
+        marking_guide_content: str,
+        student_submission_content: str,
+        mapped_questions: Optional[List[Dict]] = None,
+        guide_type: Optional[str] = None,
+    ) -> Tuple[Dict, Optional[str]]:
+        """
+        Async version: Grade a student submission against a marking guide using DeepSeek LLM.
+        Only sends the relevant question, model answer, and student answer for each grading call.
+        """
+        try:
+            if not isinstance(marking_guide_content, dict):
+                logger.error(f"TypeError: marking_guide_content is not a dictionary. Type: {type(marking_guide_content)}")
+                return {}, "Invalid marking guide content: Expected a dictionary."
+            marking_guide_data = marking_guide_content
+
+            # Determine guide type if not provided
+            if guide_type is None and self.mapping_service:
+                guide_type, _ = self.mapping_service.determine_guide_type(marking_guide_data.get("raw_content", ""))
+
+            # Extract answers from student submission content using mapping service
+            if self.mapping_service:
+                parsed_student_submission = self.mapping_service.extract_questions_and_answers(student_submission_content)
+                if not parsed_student_submission:
+                    logger.warning(f"No answers extracted from student submission content. Content: {student_submission_content[:200]}...")
+                    return {}, "Could not extract answers from student submission."
+            else:
+                from src.services.mapping_service import MappingService
+                temp_mapping_service = MappingService(llm_service=self.llm_service)
+                parsed_student_submission = temp_mapping_service.extract_questions_and_answers(student_submission_content)
+                if not parsed_student_submission:
+                    logger.warning(f"No answers extracted from student submission content using temporary mapping service. Content: {student_submission_content[:200]}...")
+                    return {}, "Could not extract answers from student submission using fallback mapping service."
+
+            # Extract raw_content from marking_guide_data if it's a dictionary
+            if isinstance(marking_guide_data, dict):
+                marking_guide_raw_content = marking_guide_data.get("raw_content", "")
+            else:
+                marking_guide_raw_content = marking_guide_data
+
+            # If mapped_questions are provided, use them; otherwise, map using mapping_service
+            if mapped_questions is not None:
+                mappings = mapped_questions
+            else:
+                if self.mapping_service:
+                    mapping_result, mapping_error = await self.mapping_service.map_submission_to_guide_async(
+                        marking_guide_raw_content, json.dumps(parsed_student_submission)
+                    )
+                    if mapping_error:
+                        return {"status": "error", "message": f"Mapping error: {mapping_error}"}, mapping_error
+                    mappings = mapping_result.get("mappings", [])
+                else:
+                    from src.services.mapping_service import MappingService
+                    temp_mapping_service = MappingService()
+                    mapping_result, mapping_error = await temp_mapping_service.map_submission_to_guide_async(
+                        marking_guide_raw_content, json.dumps(parsed_student_submission)
+                    )
+                    if mapping_error:
+                        return {"status": "error", "message": f"Mapping error: {mapping_error}"}, mapping_error
+                    mappings = mapping_result.get("mappings", [])
+
+            # Grade each mapped question using async LLM calls
+            async def grade_one(mapping):
+                question = mapping.get("guide_text", "")
+                model_answer = mapping.get("guide_answer", "")
+                student_answer = mapping.get("submission_answer", "") or mapping.get("submission_text", "")
+                max_score = mapping.get("max_score", 10)
+                system_prompt = "You are an educational grading assistant. Compare a student's answer to a model answer and assign a score. Respond in JSON with 'score' and 'feedback'."
+                user_prompt = f"Question: {question}\nModel Answer: {model_answer}\nStudent Answer: {student_answer}\nMax Score: {max_score}\nEvaluate and provide score with feedback."
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ]
+                try:
+                    response = await call_deepseek_async(
+                        messages,
+                        model=getattr(self.llm_service, "model", "deepseek-reasoner"),
+                        temperature=0.0,
+                        max_tokens=512,
+                        response_format={"type": "json_object"}
+                    )
+                    result = response["choices"][0]["message"]["content"]
+                    parsed = json.loads(result)
+                    score = float(parsed.get("score", 0))
+                    feedback = parsed.get("feedback", "")
+                    return {"score": score, "feedback": feedback}
+                except Exception as e:
+                    logger.error(f"[ASYNC] LLM grading failed: {str(e)}")
+                    return {"score": 0, "feedback": f"LLM error: {str(e)}"}
+
+            graded_results = await asyncio.gather(*(grade_one(m) for m in mappings))
+
+            # Aggregate results
+            overall_score = sum(r["score"] for r in graded_results)
+            max_possible_score = sum(m.get("max_score", 10) for m in mappings)
+            percent_score = (overall_score / max_possible_score * 100) if max_possible_score > 0 else 0
+            letter_grade = self._get_letter_grade(percent_score)
+            criteria_scores = [
+                {
+                    "question_id": m.get("guide_id", ""),
+                    "description": m.get("guide_text", ""),
+                    "points_earned": r["score"],
+                    "points_possible": m.get("max_score", 10),
+                    "feedback": r["feedback"],
+                    "guide_answer": m.get("guide_answer", ""),
+                    "student_answer": m.get("submission_answer", "") or m.get("submission_text", ""),
+                }
+                for m, r in zip(mappings, graded_results)
+            ]
+            result = {
+                "status": "success",
+                "score": round(overall_score, 1),
+                "max_score": max_possible_score,
+                "percentage": round(percent_score, 1),
+                "letter_grade": letter_grade,
+                "criteria_scores": criteria_scores,
+                "detailed_feedback": {},
+            }
+            return result, None
+        except Exception as e:
+            logger.error(f"[ASYNC] Error in async grading: {str(e)}")
+            return {"status": "error", "message": str(e)}, str(e)

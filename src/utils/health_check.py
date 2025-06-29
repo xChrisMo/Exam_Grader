@@ -295,7 +295,7 @@ class HealthChecker:
                 "checked_out": "unknown",
                 "overflow": "unknown"
             }
-        except:
+        except Exception:
             return {}
 
     def run_all_checks(self, force: bool = False) -> Dict[str, Any]:

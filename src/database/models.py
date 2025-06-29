@@ -32,6 +32,41 @@ from werkzeug.security import check_password_hash, generate_password_hash
 # Initialize SQLAlchemy
 db = SQLAlchemy()
 
+# Add connection management methods
+def is_connected() -> bool:
+    """Check if database is connected."""
+    try:
+        # Try to execute a simple query
+        db.session.execute('SELECT 1')
+        return True
+    except Exception:
+        return False
+
+def connect():
+    """Establish database connection."""
+    try:
+        if not is_connected():
+            db.create_all()
+    except Exception as e:
+        from utils.logger import logger
+        logger.error(f"Failed to connect to database: {str(e)}")
+        raise
+
+def close():
+    """Close database connection."""
+    try:
+        if is_connected():
+            db.session.remove()
+    except Exception as e:
+        from utils.logger import logger
+        logger.error(f"Error closing database connection: {str(e)}")
+        raise
+
+# Add methods to db instance
+db.is_connected = is_connected
+db.connect = connect
+db.close = close
+
 
 # Use UUID for PostgreSQL, String for SQLite
 def get_uuid_column():
@@ -271,6 +306,7 @@ class GradingResult(db.Model, TimestampMixin):
     submission_id = Column(String(36), ForeignKey("submissions.id"), nullable=False)
     marking_guide_id = Column(String(36), ForeignKey("marking_guides.id"), nullable=True)
     mapping_id = Column(String(36), ForeignKey("mappings.id"), nullable=True)
+    status = Column(String(50), default="pending") # pending, completed, failed
     score = Column(Float, nullable=False)
     max_score = Column(Float, nullable=False)
     percentage = Column(Float, nullable=False)
@@ -289,6 +325,7 @@ class GradingResult(db.Model, TimestampMixin):
     __table_args__ = (
         db.Index('idx_submission_mapping', 'submission_id', 'mapping_id'),
         db.Index('idx_submission_score', 'submission_id', 'score'),
+        db.Index('idx_grading_status', 'status'),
         db.Index('idx_method_created', 'grading_method', 'created_at'),
     )
 
@@ -317,7 +354,7 @@ class Session(db.Model, TimestampMixin):
 
     id = Column(String(255), primary_key=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
-    data = Column(LargeBinary)  # Encrypted session data
+    data = Column(LargeBinary, nullable=True, default=b'')  # Encrypted session data
     salt = Column(String(255), nullable=True, default='')  # Salt for session data encryption
     expires_at = Column(DateTime, nullable=False, index=True)
     ip_address = Column(String(45))  # IPv6 compatible

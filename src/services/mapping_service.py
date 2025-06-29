@@ -12,6 +12,8 @@ import re
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
+import asyncio
+from utils.async_llm_client import call_deepseek_async
 
 from utils.logger import logger
 
@@ -267,30 +269,14 @@ class MappingService:
                 # Check if the model supports JSON output format
                 supports_json = "deepseek-reasoner" in self.llm_service.model.lower()
 
-                params = {
-                    "model": self.llm_service.model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0.0,
-                }
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ]
 
-                if supports_json:
-                    params["response_format"] = {"type": "json_object"}
+                response_format = {"type": "json_object"} if supports_json else None
 
-                # Add seed parameter if in deterministic mode
-                if (
-                    hasattr(self.llm_service, "deterministic")
-                    and self.llm_service.deterministic
-                    and hasattr(self.llm_service, "seed")
-                    and self.llm_service.seed is not None
-                ):
-                    params["seed"] = self.llm_service.seed
-
-                response = self.llm_service.client.chat.completions.create(**params)
-
-                result = response.choices[0].message.content
+                result = self.llm_service._call_llm_api(messages, response_format=response_format)
 
                 # Log the LLM response processing
                 logger.info("Processing LLM response for question extraction...")
@@ -311,13 +297,9 @@ class MappingService:
 
                     return parsed.get("items", [])
                 except json.JSONDecodeError as e:
+                    logger.error(f"Raw LLM response that failed to parse: {result}")
                     logger.warning(
-                        f"JSON parsing error in extract_questions_and_answers: {str(e)}"
-                    )
-
-                    # Log JSON parsing error
-                    logger.warning(
-                        f"JSON parsing error: {str(e)}. Falling back to regex extraction."
+                        f"JSON parsing error in extract_questions_and_answers: {str(e)}. Falling back to regex extraction."
                     )
 
                     # Return an empty list to trigger the fallback extraction
@@ -418,6 +400,100 @@ class MappingService:
                 )
 
                 # Comprehensive multi-disciplinary question extraction system
+                system_prompt = """
+                You are an expert at extracting questions and their associated total marks from academic documents across various disciplines.
+                Your task is to parse the provided marking guide content and identify all distinct questions, along with any explicitly stated marks for each question or sub-question.
+                Finally, calculate the total marks for the entire guide based on the extracted question marks.
+
+                Important guidelines:
+                - Identify questions even if they are not explicitly numbered (e.g., implied questions in a continuous text).
+                - Extract marks associated with each question or sub-question. Marks can be indicated in various formats (e.g., "(10 marks)", "[5 pts]", "worth 20", "Total: 15").
+                - If a question has sub-parts (e.g., a, b, c), extract marks for each sub-part if specified.
+                - If total marks for the entire guide are explicitly stated, extract that as well.
+                - If no marks are explicitly stated for a question, assign `null` for its `max_score`.
+                - If no total marks are explicitly stated for the guide, calculate the sum of all extracted question/sub-question marks.
+                - Ensure the output is a valid JSON object.
+
+                Output in JSON format:
+                {
+                    "questions": [
+                        {
+                            "id": "unique_question_identifier",
+                            "text": "Full text of the question, including sub-parts if any.",
+                            "max_score": "numeric_value_or_null",
+                            "sub_questions": [
+                                {
+                                    "id": "unique_sub_question_identifier",
+                                    "text": "Text of the sub-question.",
+                                    "max_score": "numeric_value_or_null"
+                                }
+                            ]
+                        }
+                    ],
+                    "total_marks": "numeric_value_or_null",
+                    "extraction_method": "llm"
+                }
+                """
+
+                user_prompt = f"""
+                Please extract questions and total marks from the following marking guide:
+
+                Marking Guide Content:
+                {content}
+                """
+
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ]
+
+                response_content = self.llm_service._call_llm_api(messages, response_format={"type": "json_object"})
+
+                if not response_content:
+                    logger.warning("LLM returned empty response for question and total marks extraction.")
+                    return {"questions": [], "total_marks": 0, "extraction_method": "llm_empty_response"}
+
+                try:
+                    parsed_response = json.loads(response_content)
+                    questions = parsed_response.get("questions", [])
+                    total_marks = parsed_response.get("total_marks", 0)
+                    extraction_method = parsed_response.get("extraction_method", "llm")
+
+                    # Basic validation to ensure it's a list of dicts
+                    if not isinstance(questions, list):
+                        logger.warning(f"LLM returned non-list questions: {questions}. Defaulting to empty list.")
+                        questions = []
+
+                    # Calculate total marks if not provided by LLM or if it's null
+                    if total_marks is None or not isinstance(total_marks, (int, float)):
+                        calculated_total_marks = 0.0
+                        for q in questions:
+                            if q.get("max_score") is not None:
+                                try:
+                                    calculated_total_marks += float(q["max_score"])
+                                except (ValueError, TypeError):
+                                    pass # Ignore if max_score is not a valid number
+                            if "sub_questions" in q and isinstance(q["sub_questions"], list):
+                                for sub_q in q["sub_questions"]:
+                                    if sub_q.get("max_score") is not None:
+                                        try:
+                                            calculated_total_marks += float(sub_q["max_score"])
+                                        except (ValueError, TypeError):
+                                            pass
+                        total_marks = calculated_total_marks
+                        if parsed_response.get("total_marks") is None:
+                            logger.info("LLM did not provide total_marks, calculated from questions.")
+
+                    logger.info(f"LLM extraction successful. Questions: {len(questions)}, Total Marks: {total_marks}")
+                    return {"questions": questions, "total_marks": total_marks, "extraction_method": extraction_method}
+
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON parsing failed for LLM response in extract_questions_and_total_marks: {e}")
+                    logger.error(f"Raw LLM response: {response_content}")
+                    return {"questions": [], "total_marks": 0, "extraction_method": "llm_json_error"}
+                except Exception as e:
+                    logger.error(f"Unexpected error during LLM extraction of questions and total marks: {e}")
+                    return {"questions": [], "total_marks": 0, "extraction_method": "llm_error"}
                 system_prompt = """
                 You are an expert educational assessment analyst with deep knowledge across all academic disciplines. Your task is to intelligently identify questions in marking guides using sophisticated reasoning, regardless of format, discipline, or question type.
 
@@ -831,654 +907,65 @@ class MappingService:
             "extraction_method": "regex",
         }
 
-    def map_submission_to_guide(
+    async def map_submission_to_guide_async(
         self,
         marking_guide_content: str,
         student_submission_content: str,
         num_questions: int = 1,
     ) -> Tuple[Dict, Optional[str]]:
         """
-        Map a student submission to a marking guide using LLM for intelligent grouping and grading.
-
-        This method:
-        1. Determines if the marking guide contains questions or answers
-        2. Uses the LLM to group guide and submission content based on the guide type
-        3. Grades each mapped answer in a single LLM call
-        4. Identifies the best N answers based on the num_questions parameter
-        5. Calculates overall grade and provides detailed feedback
-
-        Args:
-            marking_guide_content: Raw text content of the marking guide
-            student_submission_content: Raw text content of the student submission
-            num_questions: Number of questions the student should answer (default: 1)
-
-        Returns:
-            Tuple[Dict, Optional[str]]: (Mapping and grading result, Error message if any)
+        Async version: Map a student submission to a marking guide using DeepSeek LLM for intelligent grouping and grading.
+        Only sends the relevant guide and submission text, not the entire document.
         """
         try:
-            # Log the operation
-            logger.info("Starting mapping submission to guide...")
-
-            # Check if we have content to work with
+            logger.info("[ASYNC] Starting mapping submission to guide...")
             if not marking_guide_content or not marking_guide_content.strip():
                 logger.error("Marking guide content is empty")
-                return {
-                    "status": "error",
-                    "message": "Marking guide content is empty",
-                }, "Empty marking guide"
-
+                return {"status": "error", "message": "Marking guide content is empty"}, "Empty marking guide"
             if not student_submission_content or not student_submission_content.strip():
                 logger.error("Student submission content is empty")
-                return {
-                    "status": "error",
-                    "message": "Student submission content is empty",
-                }, "Empty student submission"
-
-            # Initialize empty mappings list
-            mappings = []
-
-            if self.llm_service:
-                try:
-                    # Log the guide type determination
-                    logger.info(
-                        "Determining if marking guide contains questions or answers..."
-                    )
-
-                    # Determine if the marking guide contains questions or answers
-                    guide_type, confidence = self.determine_guide_type(
-                        marking_guide_content
-                    )
-
-                    # Log the guide type determination result
-                    logger.info(
-                        f"Guide type determined: {guide_type} (confidence: {confidence:.2f}). Preparing for mapping..."
-                    )
-
-                    # Use LLM to map submission to guide based on guide type and perform grading
-                    if guide_type == "questions":
-                        system_prompt = f"""
-                        You are an expert at matching and grading exam questions with student answers.
-                        Your task is to analyze the raw text of a marking guide containing QUESTIONS and a student submission containing ANSWERS.
-                        You need to identify and match the best {num_questions} questions in the guide with the corresponding answers in the submission, and then grade each answer.
-
-                        Important guidelines:
-                        1. First, identify the questions in the marking guide
-                        2. Look for mark allocations in the marking guide (e.g., "5 marks", "[10]", "(15 points)", etc.)
-                        3. Then, identify the answers in the student submission
-                        4. Match each question with the answer that best addresses it
-                        5. Consider semantic similarity and content relevance
-                        6. Provide a high confidence score (0.8-1.0) only for very clear matches
-                        7. For partial matches, provide a lower score (0.5-0.7) and explain why
-                        8. If a question has no matching answer, do not include it in the mappings
-                        9. IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide.
-                        10. Find the best {num_questions} answers in the student submission and map them to the corresponding questions.
-                        11. If there are more potential answers, select only the best {num_questions} based on quality and completeness.
-                        12. Ensure that the final output reflects the mapping and grading for precisely {num_questions} questions.
-
-                        Grading guidelines:
-                        1. For each matched question-answer pair, grade the answer based on how well it addresses the question
-                        2. Assign a score as a percentage of the maximum marks available (e.g., 8/10 = 80%)
-                        3. Consider content accuracy, completeness, and relevance when grading
-                        4. Provide brief feedback explaining the grade
-                        5. Identify key strengths and weaknesses in the answer
-                        6. The total possible score should be the sum of the maximum marks for the {num_questions} questions that were mapped
-
-                        Pay special attention to mark allocations:
-                        - Look for numbers followed by "marks", "points", "%" or enclosed in brackets/parentheses
-                        - Check for mark breakdowns in sub-questions (e.g., "a) 5 marks, b) 10 marks")
-                        - If marks are mentioned in a section header, apply them to all questions in that section
-                        - If no marks are explicitly stated for a question, leave max_score as null
-
-                        Output in JSON format with no comments.
-                        """
-                    else:  # guide_type == "answers"
-                        system_prompt = f"""
-                        You are an expert at matching and grading exam answers between a marking guide and a student submission.
-                        Your task is to analyze the raw text of a marking guide containing MODEL ANSWERS and a student submission containing STUDENT ANSWERS.
-                        You need to identify and match the best {num_questions} answers in the student submission with the corresponding model answers in the guide, and then grade each student answer.
-
-                        Important guidelines:
-                        1. First, identify the model answers in the marking guide
-                        2. Look for mark allocations in the marking guide (e.g., "5 marks", "[10]", "(15 points)", etc.)
-                        3. Then, identify the student answers in the submission
-                        4. Match answers that address the same question, even if they differ in content
-                        5. Look for semantic similarity and shared key concepts
-                        6. Provide a high confidence score (0.8-1.0) only for very clear matches
-                        7. For partial matches, provide a lower score (0.5-0.7) and explain why
-                        8. If a student answer has no matching guide answer, do not include it in the mappings
-                        9. IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide.
-                        10. Find the best {num_questions} answers in the student submission and map them to the corresponding model answers.
-                        11. If there are more potential answers, select only the best {num_questions} based on quality and completeness.
-                        12. Ensure that the final output reflects the mapping and grading for precisely {num_questions} questions.
-
-                        Grading guidelines:
-                        1. For each matched answer pair, grade the student answer based on how well it matches the model answer
-                        2. Assign a score as a percentage of the maximum marks available (e.g., 8/10 = 80%)
-                        3. Consider content accuracy, completeness, and relevance when grading
-                        4. Provide brief feedback explaining the grade
-                        5. Identify key strengths and weaknesses in the student answer compared to the model answer
-                        6. The total possible score should be the sum of the maximum marks for the {num_questions} questions that were mapped
-
-                        Pay special attention to mark allocations:
-                        - Look for numbers followed by "marks", "points", "%" or enclosed in brackets/parentheses
-                        - Check for mark breakdowns in sub-answers (e.g., "a) 5 marks, b) 10 marks")
-                        - If marks are mentioned in a section header, apply them to all answers in that section
-                        - If no marks are explicitly stated for an answer, leave max_score as null
-
-                        Output in JSON format with no comments.
-                        """
-
-                    # Log the mapping process
-                    logger.info(
-                        f"Using LLM to map submission to guide (finding best {num_questions} answers)..."
-                    )
-
-                    # Pass the raw content to the LLM for mapping and grading
-                    user_prompt = f"""
-                    Marking Guide Content:
-                    {marking_guide_content[:5000]}
-
-                    Student Submission Content:
-                    {student_submission_content[:5000]}
-
-                    Number of questions to answer: {num_questions}
-
-                    Please analyze both documents using ONLY the raw text content provided above.
-                    Do not attempt to extract questions and answers - work directly with the raw text.
-                    Create mappings between related parts of the guide and submission.
-
-                    IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide.
-                    Find the best {num_questions} answers in the student submission and map them to the corresponding questions in the marking guide.
-                    If there are more potential answers, select only the best {num_questions} based on quality and completeness.
-
-                    Pay special attention to:
-
-                    1. Question structure:
-                    - Some questions may contain multiple sub-questions (e.g., Question 1 might have parts a, b, c)
-                    - Each sub-question may have its own mark allocation
-                    - Treat each question or sub-question as a separate item to be mapped and graded
-                    - Pay attention to question numbering and hierarchies (e.g., 1, 1.1, 1.2, or 1a, 1b, 1c)
-                    - A student might answer some or all parts of a multi-part question
-                    - For multi-part questions, count the entire question (with all its parts) as ONE question toward the {num_questions} total
-
-                    2. Mark allocations:
-                    - Look for numbers followed by "marks", "points", "%" or enclosed in brackets/parentheses
-                    - Include these mark allocations in the max_score field for each mapping
-                    - For questions with sub-parts, each sub-part may have its own mark allocation
-                    - The total marks for a question with sub-parts is the sum of marks for all sub-parts
-
-                    After mapping, grade each student answer based on how well it matches the expected answer:
-                    - Assign a score out of the maximum marks available
-                    - Calculate a percentage score
-                    - Provide brief feedback explaining the grade
-                    - Identify strengths and weaknesses in the answer
-
-                    Finally, calculate an overall grade by summing all scores and determining the percentage of total available marks.
-                    The total possible score should be the sum of the maximum marks for the {num_questions} questions that were mapped.
-
-                    CRITICAL INSTRUCTIONS:
-                    1. DO NOT include any comments in the JSON response
-                    2. DO NOT use # or // in your response
-                    3. DO NOT copy any example data - use ONLY the actual content from the documents
-                    4. DO NOT include the text "What is the capital of France" or "Paris" in your response unless it actually appears in the documents
-                    5. Use ONLY the actual content from the marking guide and student submission
-                    6. Be sure to identify and properly map multi-part questions and their sub-questions
-                    """
-
-                    # For deepseek-reasoner model, we need to use a different approach
-                    # since it doesn't support JSON response format
-                    logger.info(f"Using model: {self.llm_service.model}")
-
-                    # Modify the system prompt to request a specific format
-                    # Remove all the JSON examples with comments from the original system prompt
-                    system_prompt = system_prompt.replace("Output in JSON format:", "")
-                    system_prompt = re.sub(
-                        r"\{[^}]*\}", "", system_prompt, flags=re.DOTALL
-                    )
-
-                    modified_system_prompt = """
-                    You are an expert at matching and grading exam content.
-
-                    Your task is to analyze the RAW TEXT of a marking guide and a student submission.
-                    DO NOT try to extract questions and answers - work directly with the raw text provided.
-
-                    IMPORTANT: Understand the structure of exam questions:
-                    1. Some questions may contain multiple sub-questions (e.g., Question 1 might have parts a, b, c)
-                    2. Each sub-question may have its own mark allocation (e.g., 1a: 5 marks, 1b: 10 marks)
-                    3. Treat each question or sub-question as a separate item to be mapped and graded
-                    4. Pay attention to question numbering and hierarchies (e.g., 1, 1.1, 1.2, or 1a, 1b, 1c)
-                    5. A student might answer some or all parts of a multi-part question
-
-                    Your response must be valid JSON without any comments.
-
-                    Format your entire response as a JSON object with these exact fields:
-                    - mappings: an array of mapping objects
-                    - overall_grade: an object with grading information
-
-                    Each mapping object must have these fields:
-                    - guide_id: a string identifier for the guide item (use "g1", "g1a", "g1b", "g2", etc.)
-                    - guide_text: the text from the guide (a section, question, or sub-question)
-                    - guide_answer: the answer from the guide (if any)
-                    - max_score: the maximum score for this item (a number)
-                    - parent_question: (optional) if this is a sub-question, include the parent question ID
-                    - submission_id: a string identifier for the submission item (use "s1", "s1a", "s1b", "s2", etc.)
-                    - submission_text: the text from the submission (the student's answer)
-                    - match_score: a number between 0 and 1 indicating match confidence
-                    - match_reason: a string explaining the match
-                    - grade_score: the score awarded (a number)
-                    - grade_percentage: the percentage score (a number)
-                    - grade_feedback: feedback on the answer (a string)
-                    - strengths: an array of strings listing strengths
-                    - weaknesses: an array of strings listing weaknesses
-
-                    The overall_grade object must have these fields:
-                    - total_score: the total score awarded (a number)
-                    - max_possible_score: the maximum possible score (a number)
-                    - percentage: the percentage score (a number)
-                    - letter_grade: the letter grade (a string)
-
-                    CRITICAL INSTRUCTIONS:
-                    1. DO NOT include any comments in the JSON
-                    2. DO NOT use # or // in your response
-                    3. DO NOT copy any example data - use ONLY the actual content from the documents
-                    4. DO NOT include the text "What is the capital of France" or "Paris" in your response unless it actually appears in the documents
-                    5. Use ONLY the actual content from the marking guide and student submission
-                    6. Be sure to identify and properly map multi-part questions and their sub-questions
-                    """
-
-                    # Use a simpler prompt for the deepseek-reasoner model
-                    params = {
-                        "model": self.llm_service.model,
-                        "messages": [
-                            {"role": "system", "content": modified_system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        "temperature": 0.0,
-                    }
-
-                    # Add seed parameter if in deterministic mode
-                    if (
-                        hasattr(self.llm_service, "deterministic")
-                        and self.llm_service.deterministic
-                        and hasattr(self.llm_service, "seed")
-                        and self.llm_service.seed is not None
-                    ):
-                        params["seed"] = self.llm_service.seed
-                        logger.info(
-                            f"Using deterministic mode with seed: {self.llm_service.seed} for mapping"
-                        )
-
-                    response = self.llm_service.client.chat.completions.create(**params)
-
-                    result = response.choices[0].message.content
-
-                    # Log the LLM response processing
-                    logger.info("Processing LLM response...")
-
-                    # Try to clean up the response for models that don't properly format JSON
-                    try:
-                        # Log the raw response for debugging
-                        logger.info(f"Raw LLM response: {result[:200]}...")
-
-                        # Find JSON content between curly braces if there's text before/after
-                        json_match = re.search(r"\{.*\}", result, re.DOTALL)
-                        if json_match:
-                            result = json_match.group(0)
-                            logger.info(f"Extracted JSON: {result[:200]}...")
-
-                        # More aggressive cleaning for deepseek-reasoner model
-
-                        # First, try to extract just the JSON part if there's surrounding text
-                        json_pattern = r"(\{[\s\S]*\})"
-                        json_matches = re.findall(json_pattern, result)
-                        if json_matches:
-                            result = json_matches[0]
-                            logger.info(f"Extracted JSON object: {result[:100]}...")
-
-                        # Remove any comments in the JSON (deepseek-reasoner sometimes adds these)
-                        result = re.sub(r"//.*?$", "", result, flags=re.MULTILINE)
-                        result = re.sub(r"/\*.*?\*/", "", result, flags=re.DOTALL)
-                        result = re.sub(r"#.*?$", "", result, flags=re.MULTILINE)
-
-                        # Remove comments that appear after values (common in deepseek output)
-                        result = re.sub(r'(["}\]])(\s*#[^\n]*)', r"\1", result)
-                        result = re.sub(r"(\d+)(\s*#[^\n]*)(,|\n|})", r"\1\3", result)
-
-                        # Fix common JSON formatting issues
-                        # Replace single quotes with double quotes
-                        result = re.sub(r"'([^']*)':", r'"\1":', result)
-                        result = re.sub(r": *\'([^\']*)\'", r': "\1"', result)
-
-                        # Fix trailing commas in arrays and objects
-                        result = re.sub(r",\s*]", "]", result)
-                        result = re.sub(r",\s*}", "}", result)
-
-                        # Handle specific format issues with deepseek-reasoner
-                        # Replace any remaining instances of "key": value # comment
-                        result = re.sub(
-                            r'("[^"]+"):\s*([^,\n\]}{#]*)(\s*#[^\n]*)(,|\n|}|\])',
-                            r"\1: \2\4",
-                            result,
-                        )
-
-                        # Final pass to remove any remaining comments
-                        result = re.sub(r"#[^\n]*\n", "\n", result)
-
-                        # Log the cleaned JSON
-                        logger.info(f"Cleaned JSON: {result[:200]}...")
-
-                        parsed = json.loads(result)
-                        logger.info("JSON parsing successful")
-                    except json.JSONDecodeError as e:
-                        logger.error(f"JSON parsing error: {str(e)}")
-                        logger.error(f"Problematic JSON: {result}")
-
-                        # Try a more aggressive approach to extract valid JSON
-                        try:
-                            logger.info("Attempting manual JSON extraction...")
-
-                            # Try to manually construct a valid JSON object
-                            mappings = []
-
-                            # Extract mappings using regex patterns
-                            mapping_pattern = r'"guide_id"\s*:\s*"([^"]+)".*?"guide_text"\s*:\s*"([^"]+)".*?"max_score"\s*:\s*(\d+).*?"submission_id"\s*:\s*"([^"]+)".*?"submission_text"\s*:\s*"([^"]+)".*?"match_score"\s*:\s*([\d\.]+)'
-                            mapping_matches = re.findall(
-                                mapping_pattern, result, re.DOTALL
-                            )
-
-                            if mapping_matches:
-                                logger.info(
-                                    f"Found {len(mapping_matches)} mappings using regex"
-                                )
-
-                                for i, match in enumerate(mapping_matches):
-                                    (
-                                        guide_id,
-                                        guide_text,
-                                        max_score,
-                                        submission_id,
-                                        submission_text,
-                                        match_score,
-                                    ) = match
-
-                                    # Create a basic mapping
-                                    mappings.append(
-                                        {
-                                            "guide_id": guide_id,
-                                            "guide_text": guide_text,
-                                            "guide_answer": "",
-                                            "max_score": float(max_score),
-                                            "submission_id": submission_id,
-                                            "submission_text": submission_text,
-                                            "match_score": float(match_score),
-                                            "match_reason": f"Mapping extracted from LLM response",
-                                            "grade_score": float(max_score)
-                                            * 0.8,  # Assume 80% score as default
-                                            "grade_percentage": 80,
-                                            "grade_feedback": "Score estimated due to parsing issues",
-                                            "strengths": [],
-                                            "weaknesses": [],
-                                        }
-                                    )
-
-                                # Create a basic result structure
-                                parsed = {
-                                    "mappings": mappings,
-                                    "overall_grade": {
-                                        "total_score": sum(
-                                            m["grade_score"] for m in mappings
-                                        ),
-                                        "max_possible_score": sum(
-                                            m["max_score"] for m in mappings
-                                        ),
-                                        "percentage": 80,  # Assume 80% as default
-                                        "letter_grade": "B",
-                                    },
-                                }
-
-                                logger.info(
-                                    "Successfully created mappings from regex extraction"
-                                )
-                            else:
-                                # If regex extraction fails, create a minimal valid structure
-                                logger.warning(
-                                    "Regex extraction failed, using minimal valid structure"
-                                )
-
-                                # Log the JSON parsing error with fallback
-                                logger.warning(
-                                    f"JSON parsing error: {str(e)}. Using fallback mapping."
-                                )
-
-                                # Log the extraction failure
-                                logger.error(
-                                    f"JSON parsing error: {str(e)}. Unable to extract mappings."
-                                )
-
-                                # Raise the exception to stop processing
-                                raise Exception(
-                                    f"JSON parsing error: {str(e)}. Unable to extract mappings from LLM response."
-                                )
-                        except Exception as fallback_error:
-                            logger.error(
-                                f"Fallback extraction also failed: {str(fallback_error)}"
-                            )
-
-                            # Log the fallback extraction failure
-                            logger.error(f"JSON parsing error: {str(e)}")
-
-                            # Raise the exception to stop processing
-                            raise Exception(f"JSON parsing error: {str(e)}")
-
-                    # Process LLM mappings and grading
-                    overall_grade = parsed.get("overall_grade", {})
-                    total_score = 0
-                    max_possible_score = 0
-
-                    for mapping in parsed.get("mappings", []):
-                        # Extract grading information
-                        grade_score = mapping.get("grade_score", 0)
-                        grade_percentage = mapping.get("grade_percentage", 0)
-                        grade_feedback = mapping.get("grade_feedback", "")
-                        strengths = mapping.get("strengths", [])
-                        weaknesses = mapping.get("weaknesses", [])
-
-                        # Add to total scores
-                        max_score = mapping.get("max_score")
-                        if max_score is not None:
-                            try:
-                                max_score_float = float(max_score)
-                                max_possible_score += max_score_float
-                                if grade_score:
-                                    total_score += float(grade_score)
-                            except (ValueError, TypeError):
-                                logger.warning(f"Invalid max_score value: {max_score}")
-
-                        # Create mapping with grading information
-                        mapping_obj = {
-                            "guide_id": mapping.get("guide_id", f"g{len(mappings)+1}"),
-                            "guide_text": mapping.get("guide_text", ""),
-                            "guide_answer": mapping.get("guide_answer", ""),
-                            "max_score": max_score,  # No default value
-                            "submission_id": mapping.get(
-                                "submission_id", f"s{len(mappings)+1}"
-                            ),
-                            "submission_text": mapping.get("submission_text", ""),
-                            "submission_answer": mapping.get("submission_answer", ""),
-                            "match_score": mapping.get("match_score", 0.5),
-                            "match_reason": mapping.get("match_reason", ""),
-                            "guide_type": guide_type,
-                            # Grading information
-                            "grade_score": grade_score,
-                            "grade_percentage": grade_percentage,
-                            "grade_feedback": grade_feedback,
-                            "strengths": strengths,
-                            "weaknesses": weaknesses,
-                        }
-
-                        # Add parent_question field if it exists
-                        if mapping.get("parent_question"):
-                            mapping_obj["parent_question"] = mapping.get(
-                                "parent_question"
-                            )
-
-                        mappings.append(mapping_obj)
-
-                    # If overall grade wasn't provided by the LLM, calculate it
-                    if not overall_grade:
-                        # Calculate percentage
-                        percentage = (
-                            (total_score / max_possible_score * 100)
-                            if max_possible_score > 0
-                            else 0
-                        )
-
-                        # Normalize the score to be out of 100
-                        normalized_score = (
-                            percentage  # This is already the percentage out of 100
-                        )
-
-                        # Determine letter grade
-                        letter_grade = self._get_letter_grade(percentage)
-
-                        overall_grade = {
-                            "total_score": round(total_score, 1),
-                            "max_possible_score": max_possible_score,
-                            "normalized_score": round(normalized_score, 1),
-                            "percentage": round(percentage, 1),
-                            "letter_grade": letter_grade,
-                        }
-
-                except Exception as e:
-                    logger.error(f"LLM mapping failed: {str(e)}")
-                    # Log the LLM mapping error
-                    logger.error(f"LLM mapping failed: {str(e)}")
-
-                    # No need to create items for unmapped sections anymore
-                    # We'll just use the raw content
-
-                    # Create a basic result with raw content
-                    result = {
-                        "status": "error",
-                        "message": f"LLM mapping failed: {str(e)}",
-                        "mappings": [],
-                        "metadata": {
-                            "mapping_count": 0,
-                            "guide_type": "unknown",
-                            "mapping_method": "Failed LLM",
-                            "timestamp": datetime.now().isoformat(),
-                            "num_questions": num_questions,
-                        },
-                        "raw_guide_content": marking_guide_content,
-                        "raw_submission_content": student_submission_content,
-                        "overall_grade": {
-                            "total_score": 0,
-                            "max_possible_score": 0,
-                            "percentage": 0,
-                            "letter_grade": "F",
-                        },
-                    }
-
-                    return result, f"LLM mapping failed: {str(e)}"
+                return {"status": "error", "message": "Student submission content is empty"}, "Empty student submission"
+
+            # Determine guide type (reuse sync method for now)
+            guide_type, confidence = self.determine_guide_type(marking_guide_content)
+            logger.info(f"[ASYNC] Guide type determined: {guide_type} (confidence: {confidence:.2f})")
+
+            # Build optimized prompt
+            if guide_type == "questions":
+                system_prompt = "You are an expert at matching and grading exam questions with student answers. Match and grade the best {num_questions} question-answer pairs. Output JSON only, no comments."
             else:
-                # Log the no LLM service error
-                logger.error(
-                    "No LLM service available. LLM service is required for mapping."
+                system_prompt = "You are an expert at matching and grading model answers with student answers. Match and grade the best {num_questions} answer pairs. Output JSON only, no comments."
+            user_prompt = f"""
+Marking Guide Content:
+{marking_guide_content[:3000]}
+
+Student Submission Content:
+{student_submission_content[:3000]}
+
+Number of questions to answer: {num_questions}
+"""
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
+            # Call async LLM client
+            try:
+                response = await call_deepseek_async(
+                    messages,
+                    model=getattr(self.llm_service, "model", "deepseek-reasoner"),
+                    temperature=0.0,
+                    max_tokens=1024,
+                    response_format={"type": "json_object"}
                 )
-
-                # Raise an error since LLM service is required
-                raise Exception(
-                    "LLM service is required for mapping. No fallback available."
-                )
-
-            # Get guide type if available (from first mapping)
-            guide_type = (
-                mappings[0].get("guide_type", "unknown") if mappings else "unknown"
-            )
-
-            # We're no longer generating unmapped items
-            # Just store the raw content for display
-
-            # Log finalizing mapping
-            logger.info("Finalizing mapping results")
-
-            # Initialize overall_grade if it doesn't exist
-            if "overall_grade" not in locals():
-                # Calculate total score and max possible score
-                total_score = 0
-                max_possible_score = 0
-
-                # Calculate the total points from all mappings
-                for mapping in mappings:
-                    if mapping.get("grade_score") is not None:
-                        total_score += mapping.get("grade_score", 0)
-                    if mapping.get("max_score") is not None:
-                        max_possible_score += mapping.get("max_score", 0)
-
-                # Ensure max_possible_score is not zero to avoid division by zero
-                if max_possible_score == 0:
-                    max_possible_score = 100  # Default to 100 if no max score is found
-
-                # Calculate percentage
-                percentage = (
-                    (total_score / max_possible_score * 100)
-                    if max_possible_score > 0
-                    else 0
-                )
-
-                # Normalize the score to be out of 100
-                normalized_score = (
-                    percentage  # This is already the percentage out of 100
-                )
-
-                # Determine letter grade
-                letter_grade = self._get_letter_grade(percentage)
-
-                overall_grade = {
-                    "total_score": round(total_score, 1),
-                    "max_possible_score": max_possible_score,
-                    "normalized_score": round(normalized_score, 1),
-                    "percentage": round(percentage, 1),
-                    "letter_grade": letter_grade,
-                }
-
-            # Create result
-            result = {
-                "status": "success",
-                "message": "Content mapped successfully",
-                "mappings": mappings,
-                "metadata": {
-                    "num_questions": num_questions,
-                    "mapping_count": len(mappings),
-                    "guide_type": guide_type,
-                    "mapping_method": "LLM" if self.llm_service else "Text-based",
-                    "timestamp": datetime.now().isoformat(),
-                },
-                "raw_guide_content": marking_guide_content,
-                "raw_submission_content": student_submission_content,
-                "overall_grade": overall_grade,
-            }
-
-            # Log completion
-            logger.info(
-                f"Mapping and grading completed successfully. Score: {overall_grade.get('percentage', 0)}%"
-            )
-
-            return result, None
-
+                result = response["choices"][0]["message"]["content"]
+                parsed = json.loads(result)
+                return parsed, None
+            except Exception as e:
+                logger.error(f"[ASYNC] LLM mapping failed: {str(e)}")
+                return {"status": "error", "message": str(e)}, str(e)
         except Exception as e:
-            error_message = f"Error in mapping service: {str(e)}"
-
-            # Log error
-            logger.error(f"Mapping failed: {str(e)}")
-
-            # Return error with raw content included
-            return {
-                "status": "error",
-                "message": error_message,
-                "raw_guide_content": marking_guide_content,
-                "raw_submission_content": student_submission_content,
-            }, error_message
+            logger.error(f"[ASYNC] Error in async mapping: {str(e)}")
+            return {"status": "error", "message": str(e)}, str(e)
 
     def _extract_keywords(self, text: str) -> List[str]:
         """
@@ -1913,7 +1400,7 @@ class MappingService:
                             0.6 * answer_score + 0.4 * keyword_score
                         ) * float(guide_item.get("max_score"))
                     else:
-                        grade_score = match_score * float(guide_item.get("max_score"))
+                        grade_score = match_score * float(guide_item.get("max_score", 0))
                     grade_score = round(grade_score, 1)
 
                 mappings.append(
@@ -1934,6 +1421,16 @@ class MappingService:
                 )
 
         return mappings
+
+    async def map_submission_to_guide(self, marking_guide_content: str, student_submission_content: str, num_questions: int = 1) -> Tuple[Dict, Optional[str]]:
+        """
+        Synchronous wrapper for map_submission_to_guide_async
+        """
+        return await self.map_submission_to_guide_async(
+            marking_guide_content,
+            student_submission_content,
+            num_questions
+        )
 
     def _get_letter_grade(self, percent_score: float) -> str:
         """

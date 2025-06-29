@@ -42,15 +42,21 @@ class SecureSessionInterface(SessionInterface):
             return SecureFlaskSession(new=True)
 
         # Try to load session from database using SecureSessionManager
-        session_data = self.session_manager.get_session(sid)
-        if session_data is None:
-            # Session not found or invalid, create a new one
-            logger.info(f"Session {sid} not found or invalid in DB. Creating new session.")
-            return SecureFlaskSession(new=True)
+        try:
+            session_data = self.session_manager.get_session(sid)
+            if session_data is None:
+                # Session not found or invalid, create a new one
+                logger.info(f"Session {sid} not found or invalid in DB. Creating new session.")
+                return SecureFlaskSession(new=True)
 
-        # Session found, decrypt and load data
-        logger.debug(f"Session {sid} loaded from DB.")
-        return SecureFlaskSession(session_data, sid=sid)
+            # Session found, decrypt and load data
+            logger.debug(f"Session {sid} loaded from DB.")
+            return SecureFlaskSession(session_data, sid=sid)
+            
+        except Exception as e:
+            logger.error(f"Error loading session {sid}: {str(e)}. Creating new session.")
+            # If there's any error loading the session, create a new one
+            return SecureFlaskSession(new=True)
 
     def save_session(self, app, session: SecureFlaskSession, response):
         domain = self.get_cookie_domain(app)
@@ -69,8 +75,8 @@ class SecureSessionInterface(SessionInterface):
 
         if session.modified or session.new:
             # If session is new or modified, save it
-            if session.new:
-                # Create a new session in the database
+            if session.new and not session.sid:
+                # Create a new session in the database only if no sid exists
                 user_id = session.get('user_id') # Assuming user_id is stored in session
                 logger.debug(f"New session user_id: {user_id}")
                 # Create a new session in the database, even for anonymous users
@@ -84,24 +90,33 @@ class SecureSessionInterface(SessionInterface):
                 session.sid = sid
 
                 logger.info(f"New session created and saved to DB: {sid} (user_id: {user_id})")
-            else:
+            elif session.sid:
                 # Update existing session in the database
-                self.session_manager.update_session(session.sid, dict(session))
+                # Convert session to dict carefully, excluding internal attributes
+                session_dict = {}
+                for key, value in session.items():
+                    if not key.startswith('_') and key not in ['sid', 'new', 'modified']:
+                        session_dict[key] = value
+                
+                self.session_manager.update_session(session.sid, session_dict)
                 logger.debug(f"Session {session.sid} updated in DB.")
+            else:
+                logger.warning("Session is new but has no sid, skipping save")
 
             # Set the session cookie
-            expires = datetime.utcnow() + timedelta(seconds=self.session_manager.session_timeout)
-            response.set_cookie(
-                self.session_cookie_name,
-                session.sid,
-                expires=expires,
-                httponly=httponly,
-                domain=domain,
-                path=path,
-                secure=secure,
-                samesite=samesite,
-            )
-            logger.debug(f"Setting session cookie. Name: {self.session_cookie_name}, SID: {session.sid}, Expires: {expires}")
+            if session.sid:
+                expires = datetime.utcnow() + timedelta(seconds=self.session_manager.session_timeout)
+                response.set_cookie(
+                    self.session_cookie_name,
+                    session.sid,
+                    expires=expires,
+                    httponly=httponly,
+                    domain=domain,
+                    path=path,
+                    secure=secure,
+                    samesite=samesite,
+                )
+                logger.debug(f"Setting session cookie. Name: {self.session_cookie_name}, SID: {session.sid}, Expires: {expires}")
         elif session.sid and not session.modified:
             # Session not modified, but update last_accessed in DB to keep it alive
             self.session_manager.update_session_last_accessed(session.sid)

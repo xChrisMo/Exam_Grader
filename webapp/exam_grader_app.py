@@ -40,6 +40,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from flask_login import current_user, LoginManager
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
+from werkzeug.exceptions import RequestEntityTooLarge
 
 # Project imports
 try:
@@ -65,10 +66,13 @@ try:
     from utils.logger import logger
     from utils.input_sanitizer import sanitize_form_data, validate_file_upload
     from utils.loading_states import loading_manager, get_loading_state_for_template
+    from src.utils.logging_config import log_startup_summary
     from webapp.auth import init_auth, login_required, get_current_user
+    from src.config.config_manager import ConfigManager
 except ImportError as e:
     print(f"[ERROR] Failed to import required modules: {e}", file=sys.stderr)
     sys.exit(1)
+
 
 # Initialize Flask application
 app = Flask(__name__)
@@ -661,8 +665,7 @@ def upload_guide():
                                     logger.info(
                                         f"LLM extraction successful: {len(questions)} questions, {total_marks} total marks"
                                     )
-                                else:
-                                    raise ValueError("Empty or invalid extraction result")
+
                             except Exception as llm_error:
                                 logger.error(f"LLM extraction failed: {str(llm_error)}")
                                 logger.error(f"LLM extraction error traceback: ", exc_info=True)
@@ -670,8 +673,6 @@ def upload_guide():
                                 total_marks = 0
                                 extraction_method = "error"
                                 flash("AI extraction failed - using basic guide structure", "warning")
-                            else:
-                                logger.warning("LLM extraction returned empty result")
                         else:
                             if not mapping_service:
                                 logger.warning(
@@ -967,12 +968,12 @@ def upload_submission():
                 jsonify(
                     {
                         "success": False,
-                        "error": f"File too large. Max size is {config.max_file_size_mb}MB.",
+                        "error": f"File too large. Max size is {config.files.max_file_size_mb}MB.",
                     }
                 ),
                 413,
             )
-        flash(f"File too large. Max size is {config.max_file_size_mb}MB.", "error")
+        flash(f"File too large. Max size is {config.files.max_file_size_mb}MB.", "error")
         return redirect(request.url)
     except Exception as e:
         logger.error(f"Error uploading submission: {str(e)}")
@@ -1038,35 +1039,23 @@ def view_submissions():
 
 
 @app.route("/results")
+@login_required
 def view_results():
     """View grading results."""
     try:
-        last_progress_id = session.get("last_grading_progress_id")
-        logger.info(f"view_results: last_progress_id from session: {last_progress_id}")
-        logger.info(
-            f"view_results: session['last_grading_result'] is {session.get('last_grading_result')}"
-        )
-        if not last_progress_id:
-            flash(
-                "No recent grading results available. Please run AI grading first.",
-                "warning",
-            )
+        # Get all grading results from database
+        all_grading_results = GradingResult.query.order_by(GradingResult.created_at.desc()).all()
+        
+        if not all_grading_results:
+            flash("No grading results found.", "info")
             return redirect(url_for("dashboard"))
-
-        # Get grading results from database for the last processed batch
-        guide_id = session.get('guide_id')
-        if not guide_id:
-            flash('No marking guide selected. Please upload or select a guide first.', 'warning')
-            return redirect(url_for('dashboard'))
-
-        all_grading_results = GradingResult.query.filter_by(
-            progress_id=last_progress_id, marking_guide_id=guide_id
-        ).all()
         logger.info(
             f"view_results: Found {len(all_grading_results)} grading results for progress_id: {last_progress_id}"
         )
         if not all_grading_results:
-            flash("No grading results found for the last AI processing run.", "warning")
+            session["last_grading_progress_id"] = None
+            session["last_grading_result"] = False
+            flash("No grading results found for the last AI processing run. Please run AI grading again.", "warning")
             return redirect(url_for("dashboard"))
 
         grading_results = {}
@@ -1140,55 +1129,135 @@ def view_results():
 @app.route("/api/process-ai-grading", methods=["POST"])
 @csrf.exempt
 def process_ai_grading():
-    max_questions = request.json.get("max_questions", None)
     """API endpoint to process unified AI-powered mapping and grading with progress tracking."""
     try:
-        guide_id = request.json.get("guide_id")
-        submission_ids = request.json.get("submission_ids", [])
+        # Generate a unique progress ID for this grading session
+        progress_id = str(uuid.uuid4())
+        session['last_grading_progress_id'] = progress_id
+        session['last_grading_result'] = True
+        
+        # Validate request data
+        if not request.is_json:
+            return jsonify({"error": "Request must be JSON"}), 400
+            
+        request_data = request.get_json()
+        max_questions = request_data.get("max_questions")
+        guide_id = request_data.get("guide_id")
+        submission_ids = request_data.get("submission_ids", [])
+        
+        # Validate required fields
+        if not guide_id:
+            return jsonify({"error": "Missing required field: guide_id"}), 400
+        if not submission_ids or not isinstance(submission_ids, list):
+            return jsonify({"error": "submission_ids must be a non-empty list"}), 400
+            
+        logger.info(f"Starting AI grading with progress_id: {progress_id}, {len(submission_ids)} submissions")
+        session.modified = True
 
-        if not guide_id or not submission_ids:
-            return jsonify({"error": "Missing guide ID or submission IDs"}), 400
-
+        # Validate guide existence and access
         guide = MarkingGuide.query.get(guide_id)
         if not guide:
+            logger.error(f"Marking guide not found: {guide_id}")
             return jsonify({"error": "Marking guide not found"}), 404
+        if guide.user_id != current_user.id:
+            logger.warning(f"Unauthorized access to guide {guide_id} by user {current_user.id}")
+            return jsonify({"error": "Unauthorized access to marking guide"}), 403
 
-        submissions = Submission.query.filter(Submission.id.in_(submission_ids)).all()
+        # Validate submissions
+        try:
+            submissions = Submission.query.filter(
+                Submission.id.in_(submission_ids),
+                Submission.user_id == current_user.id
+            ).all()
+        except SQLAlchemyError as e:
+            logger.error(f"Database error while fetching submissions: {str(e)}")
+            return jsonify({"error": "Database error occurred"}), 500
+
         if not submissions:
-            return jsonify({"error": "No submissions found for the provided IDs"}), 404
+            logger.warning(f"No accessible submissions found for IDs: {submission_ids}")
+            return jsonify({"error": "No valid submissions found"}), 404
+        if len(submissions) != len(submission_ids):
+            logger.warning(f"Some submissions not found or not accessible: {submission_ids}")
+            return jsonify({"error": "Some submissions are invalid or not accessible"}), 400
 
-        # Check if services are available
-        if not mapping_service:
+        # Check service availability
+        if not mapping_service or not mapping_service.llm_service:
+            logger.error("AI services not properly initialized")
             return jsonify({"error": "AI services not available"}), 503
 
-        # Process AI grading (mapping + grading combined)
+        # Process AI grading asynchronously
         grading_results = {}
-        successful_gradings = 0
-        failed_gradings = 0
-
-        # Get guide content from multiple sources
+        
+        # Get guide content
         guide_content = guide.content_text
-
+        
         if not guide_content:
             return jsonify({"error": "Guide content not available"}), 400
-
-        # Process each submission with combined AI mapping and grading
+            
+        # Create initial pending results for all submissions
         for submission in submissions:
             submission_id = submission.get("id")
             if not submission_id:
                 continue
+                
+            # Create pending grading result
+            new_grading_result = GradingResult(
+                submission_id=submission_id,
+                marking_guide_id=guide_id,
+                progress_id=progress_id,
+                status="pending",
+                score=0,
+                max_score=0,
+                percentage=0,
+                feedback="Grading in progress..."
+            )
+            db.session.add(new_grading_result)
+        
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Failed to create pending results: {str(e)}")
+            return jsonify({"error": "Failed to initialize grading process"}), 500
+            
+        # Start background processing thread
+        def process_submissions(submission_id, guide_id, progress_id, max_questions, guide_content):
+            successful_gradings = 0
+            failed_gradings = 0
+            grading_results = {}
 
-            try:
-                # Get submission data from database
-                db_submission = next(
-                    (s for s in submissions if s.id == submission_id), None
-                )
-                if not db_submission:
-                    logger.warning(
-                        f"No data found for submission {submission_id} in the provided list."
-                    )
-                    failed_gradings += 1
-                    continue
+            with app.app_context():
+                try:
+                    # Get submission data from database
+                    db_submission = Submission.query.get(submission_id)
+                    if not db_submission:
+                        logger.warning(
+                            f"No data found for submission {submission_id} in the database."
+                        )
+                        # Update grading result status to failed
+                        grading_result = GradingResult.query.filter_by(
+                            submission_id=submission_id,
+                            marking_guide_id=guide_id,
+                            progress_id=progress_id
+                        ).first()
+                    if grading_result:
+                        grading_result.status = "failed"
+                        grading_result.feedback = "Submission not found."
+                        db.session.commit()
+                    return
+
+                except Exception as e:
+                    logger.error(f"Error retrieving submission {submission_id}: {str(e)}")
+                    grading_result = GradingResult.query.filter_by(
+                        submission_id=submission_id,
+                        marking_guide_id=guide_id,
+                        progress_id=progress_id
+                    ).first()
+                    if grading_result:
+                        grading_result.status = "failed"
+                        grading_result.feedback = f"Error retrieving submission: {str(e)}"
+                        db.session.commit()
+                    return
 
                 submission_data = {
                     "filename": db_submission.filename,
@@ -1212,8 +1281,17 @@ def process_ai_grading():
 
                 if not submission_data:
                     logger.warning(f"No data found for submission {submission_id}")
-                    failed_gradings += 1
-                    continue
+                    # Update grading result status to failed
+                    grading_result = GradingResult.query.filter_by(
+                        submission_id=submission_id,
+                        marking_guide_id=guide_id,
+                        progress_id=progress_id
+                    ).first()
+                    if grading_result:
+                        grading_result.status = "failed"
+                        grading_result.feedback = "No submission data found."
+                        db.session.commit()
+                    return
 
                 # Get submission content
                 submission_content = submission_data.get("content", "")
@@ -1231,13 +1309,31 @@ def process_ai_grading():
                             submission_content = ""
                 elif not submission_content and not submission_data.get("answers"):
                     logger.warning(f"Submission {submission_id} has no content and no answers.")
-                    failed_gradings += 1
-                    continue
+                    # Update grading result status to failed
+                    grading_result = GradingResult.query.filter_by(
+                        submission_id=submission_id,
+                        marking_guide_id=guide_id,
+                        progress_id=progress_id
+                    ).first()
+                    if grading_result:
+                        grading_result.status = "failed"
+                        grading_result.feedback = "No content or answers found."
+                        db.session.commit()
+                    return
 
                 if not submission_content:
                     logger.warning(f"No content found for submission {submission_id}")
-                    failed_gradings += 1
-                    continue
+                    # Update grading result status to failed
+                    grading_result = GradingResult.query.filter_by(
+                        submission_id=submission_id,
+                        marking_guide_id=guide_id,
+                        progress_id=progress_id
+                    ).first()
+                    if grading_result:
+                        grading_result.status = "failed"
+                        grading_result.feedback = "No content found."
+                        db.session.commit()
+                    return
 
                 # Use grading service for combined mapping and grading
                 try:
@@ -1255,53 +1351,70 @@ def process_ai_grading():
                             f"AI grading failed for submission {submission_id}: {grading_error}"
                         )
                         failed_gradings += 1
-                        continue
+                        # Update grading result status to failed
+                        grading_result = GradingResult.query.filter_by(
+                            submission_id=submission_id,
+                            marking_guide_id=guide_id,
+                            progress_id=progress_id
+                        ).first()
+                        if grading_result:
+                            grading_result.status = "failed"
+                            grading_result.feedback = f"AI grading failed: {grading_error}"
+                            db.session.commit()
+                        return
 
                     if grading_result and grading_result.get("status") == "success":
                         # Store comprehensive grading results
                         grading_results[submission_id] = {
-                            "filename": submission.get("filename", "Unknown"),
+                            "filename": db_submission.filename,
                             "status": "completed",
                             "timestamp": datetime.now().isoformat(),
-                            "score": grading_result.get("score", 0),
-                            "percentage": grading_result.get("percentage", 0),
-                            "max_score": grading_result.get("max_score", 0),
-                            "feedback": grading_result.get("feedback", ""),
-                            "criteria_scores": grading_result.get(
-                                "criteria_scores", []
-                            ),
-                            "mappings": grading_result.get("mappings", []),
-                            "metadata": grading_result.get("metadata", {}),
                         }
-                        # Save grading result to database
+                        
+                        # Update grading result in database
                         try:
-                            new_grading_result = GradingResult(
+                            db_result = GradingResult.query.filter_by(
                                 submission_id=submission_id,
-                                status=res.get("status", "error"),
-                                mapping_id=grading_result.get(
-                                    "mapping_id"
-                                ),  # Assuming mapping_id is returned
-                                score=grading_result.get("score", 0),
-                                max_score=grading_result.get("max_score", 0),
-                                percentage=grading_result.get("percentage", 0),
-                                feedback=grading_result.get("feedback", ""),
-                                detailed_feedback=grading_result.get(
-                                    "criteria_scores", []
-                                ),  # Or a more appropriate field
-                            )
-                            db.session.add(new_grading_result)
-                            db.session.commit()
-                            successful_gradings += 1
-                            logger.info(
-                                f"AI processing completed for {submission_id}: {grading_result.get('percentage', 0)}%"
-                            )
+                                marking_guide_id=guide_id,
+                                progress_id=progress_id
+                            ).first()
+                            
+                            if db_result:
+                                db_result.status = grading_result.get("status", "completed")
+                                db_result.mapping_id = grading_result.get("mapping_id")
+                                db_result.score = grading_result.get("score", 0)
+                                db_result.max_score = grading_result.get("max_score", 0)
+                                db_result.percentage = grading_result.get("percentage", 0)
+                                db_result.feedback = grading_result.get("feedback", "")
+                                db_result.detailed_feedback = grading_result.get("criteria_scores", [])
+                                
+                                db.session.commit()
+                                successful_gradings += 1
+                                logger.info(
+                                    f"AI processing completed for {submission_id}: {grading_result.get('percentage', 0)}%"
+                                )
+                            else:
+                                logger.error(f"No pending result found for submission {submission_id}")
                         except Exception as db_e:
                             db.session.rollback()
                             logger.error(
-                                f"Database error saving grading result for {submission_id}: {str(db_e)}"
+                                f"Database error updating grading result for {submission_id}: {str(db_e)}"
                             )
                             failed_gradings += 1
-                            continue
+                            return
+                except Exception as e:
+                    logger.error(f"Error during AI grading for submission {submission_id}: {str(e)}")
+                    failed_gradings += 1
+                    # Update grading result status to failed
+                    grading_result = GradingResult.query.filter_by(
+                        submission_id=submission_id,
+                        marking_guide_id=guide_id,
+                        progress_id=progress_id
+                    ).first()
+                    if grading_result:
+                        grading_result.status = "failed"
+                        grading_result.feedback = f"Error during AI grading: {str(e)}"
+                        db.session.commit()
                     else:
                         logger.error(
                             f"Invalid grading result for submission {submission_id}"
@@ -1309,16 +1422,10 @@ def process_ai_grading():
                         failed_gradings += 1
 
                 except Exception as e:
-                    logger.error(
-                        f"Error in AI processing for submission {submission_id}: {str(e)}"
-                    )
+                    logger.error(f"Error processing submission {submission_id}: {str(e)}")
                     failed_gradings += 1
-                    continue
 
-            except Exception as e:
-                logger.error(f"Error processing submission {submission_id}: {str(e)}")
-                failed_gradings += 1
-                continue
+        # Calculate overall statistics
 
         # Calculate overall statistics
         total_score = sum(result.get("score", 0) for result in grading_results.values())
@@ -1332,34 +1439,17 @@ def process_ai_grading():
             else 0
         )
 
-        # Add to recent activity
-        activity = session.get("recent_activity", [])
-        activity.insert(
-            0,
-            {
-                "type": "ai_grading_complete",
-                "message": f"AI processing completed: {successful_gradings} successful, {failed_gradings} failed",
-                "timestamp": datetime.now().isoformat(),
-                "icon": "check",
-            },
-        )
-        session["recent_activity"] = activity[:10]
-
-        return jsonify(
-            {
-                "success": True,
-                "message": f"AI processing completed: {successful_gradings} successful, {failed_gradings} failed",
-                "results": grading_results,
-                "summary": {
-                    "successful": successful_gradings,
-                    "failed": failed_gradings,
-                    "total": len(submissions),
-                    "total_score": total_score,
-                    "total_max_score": total_max_score,
-                    "average_percentage": round(average_percentage, 1),
-                },
-            }
-        )
+        # Start background processing threads for each submission
+        for submission_id in submission_ids:
+            thread = Thread(target=process_submissions, args=(submission_id, guide_id, progress_id, max_questions))
+            thread.daemon = True
+            thread.start()
+        
+        return jsonify({
+            "success": True,
+            "message": "Grading process started",
+            "progress_id": progress_id
+        })
 
     except Exception as e:
         logger.error(f"Error in process_ai_grading: {str(e)}")
@@ -1367,11 +1457,18 @@ def process_ai_grading():
 
 
 @app.route("/api/process-unified-ai", methods=["POST"])
-@login_required
 @csrf.exempt
 def process_unified_ai():
+    # Import necessary for async support
+    from asgiref.sync import async_to_sync
     """API endpoint for unified AI processing with real-time progress tracking."""
     try:
+        # Import necessary modules at the beginning of the function
+        from src.database.models import GradingResult, Mapping, Submission, db
+        from src.services.unified_ai_service import UnifiedAIService
+        from src.services.progress_tracker import progress_tracker
+        import asyncio
+        
         logger.info("Starting unified AI processing endpoint")
 
         # Get max_questions from request, default to None if not provided
@@ -1461,13 +1558,9 @@ def process_unified_ai():
         )
 
         # Initialize unified AI service with error handling
+
+
         try:
-            logger.info("Importing unified AI services...")
-            from src.services.unified_ai_service import UnifiedAIService
-            from src.services.progress_tracker import progress_tracker
-
-            logger.info("Services imported successfully")
-
             unified_ai_service = UnifiedAIService(
                 mapping_service=mapping_service,
                 grading_service=(
@@ -1516,7 +1609,8 @@ def process_unified_ai():
             logger.info("Progress callback created")
 
             logger.info("Starting unified AI processing...")
-            result, error = unified_ai_service.process_unified_ai_grading(
+            # Use async_to_sync to call the async function from a synchronous context
+            result, error = async_to_sync(unified_ai_service.process_unified_ai_grading)(
                 marking_guide_content=guide_data,
                 submissions=submissions,
                 progress_callback=progress_callback,
@@ -1529,8 +1623,6 @@ def process_unified_ai():
                 return jsonify({"error": error}), 500
 
             # Save results to database
-            from src.database.models import GradingResult, Mapping, Submission, db
-
             for res in result.get("results", []):
                 submission_id = res.get("submission_id")
                 submission = Submission.query.get(submission_id)
@@ -1569,6 +1661,7 @@ def process_unified_ai():
                         submission_id=submission_id,
                         marking_guide_id=guide_id,
                         mapping_id=new_mapping.id,
+                        status=mapping_data.get("status", "completed"),
                         score=mapping_data.get("grade_score", 0),
                         max_score=mapping_data.get("max_score", 0),
                         percentage=mapping_data.get("percentage", 0),
@@ -1576,7 +1669,7 @@ def process_unified_ai():
                         detailed_feedback=mapping_data.get("detailed_feedback", {}),
                         progress_id=session[
                             "current_progress_id"
-                        ],  # Link to the progress session
+            ],  # Link to the progress session
                         confidence=mapping_data.get("confidence", 0.0),
                         grading_method="llm",
                     )
@@ -1604,6 +1697,26 @@ def process_unified_ai():
 
             progress_tracker.complete_session(progress_id, success=True)
 
+            session["last_grading_progress_id"] = (
+                progress_id  # Store the progress_id for viewing results
+            )
+            session["last_grading_result"] = (
+                True  # Set this to activate the View Results button
+            )
+            session['guide_id'] = guide_id # Store guide_id in session
+
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "progress_id": progress_id,
+                        "summary": result.get("summary"),
+                        "average_processing_speed_per_submission_seconds": result.get("summary", {}).get("average_processing_speed_per_submission_seconds"),
+                    }
+                ),
+                200,
+            )
+
         except Exception as e:
             db.session.rollback()
             logger.error(
@@ -1613,28 +1726,11 @@ def process_unified_ai():
                 progress_tracker.complete_session(
                     progress_id, success=False, message=f"Processing failed: {str(e)}"
                 )
+            session["last_grading_progress_id"] = None
+            session["last_grading_result"] = False
             return jsonify({"error": f"Processing failed: {str(e)}"}), 500
         finally:
             pass  # The complete_session is already called in try/except blocks
-
-        session["last_grading_progress_id"] = (
-            progress_id  # Store the progress_id for viewing results
-        )
-        session["last_grading_result"] = (
-            True  # Set this to activate the View Results button
-        )
-        session['guide_id'] = guide_id # Store guide_id in session
-
-        return (
-            jsonify(
-                {
-                    "success": True,
-                    "progress_id": progress_id,
-                    "summary": result.get("summary"),
-                }
-            ),
-            200,
-        )
 
     except Exception as e:
         logger.error(f"Error in process_unified_ai: {str(e)}")
@@ -2049,30 +2145,49 @@ def view_submission_content(submission_id):
 
 
 @app.route("/settings")
+@app.route("/settings/", methods=["GET", "POST"])  # Support both with and without trailing slash
+@csrf.exempt
+@login_required  # Require authentication
 def settings():
     """Application settings page."""
-    try:
-        # Default settings
-        default_settings = {
-            "max_file_size": 16,
-            "allowed_formats": [
-                ".pdf",
-                ".docx",
-                ".doc",
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".tiff",
-                ".bmp",
-                ".gif",
-            ],
-            "auto_process": True,
-            "save_temp_files": False,
-            "notification_level": "all",
-            "theme": "light",
-            "language": "en",
-        }
+    if request.method == "POST":
+        try:
+            # Handle POST request for saving settings
+            # Update settings based on form data
+            config_manager = ConfigManager(config.config_path)
 
+            # File Upload Settings
+            config.files.max_file_size_mb = int(request.form.get('max_file_size', config.files.max_file_size_mb))
+            allowed_formats = request.form.getlist('allowed_formats')
+            config.files.supported_formats = [f for f in allowed_formats if f in default_settings["allowed_formats"]]
+
+            # Processing Settings
+            config.app.auto_process_submissions = 'auto_process' in request.form
+            config.app.save_temp_files = 'save_temp_files' in request.form
+
+            # User Interface Settings
+            config.app.notification_level = request.form.get('notification_level', config.app.notification_level)
+            config.app.theme = request.form.get('theme', config.app.theme)
+            config.app.language = request.form.get('language', config.app.language)
+
+            # LLM Settings
+            config.api.llm_model = request.form.get('llm_model', config.api.llm_model)
+            config.api.llm_api_key = request.form.get('llm_api_key', config.api.llm_api_key)
+            config.api.llm_base_url = request.form.get('llm_base_url', config.api.llm_base_url)
+
+            # Save the updated configuration
+            config_manager.save_config(config)
+            logger.info("Settings updated and saved.")
+
+            flash("Settings saved successfully!", "success")
+            return redirect(url_for("settings"))
+        except Exception as e:
+            logger.error(f"Error saving settings: {str(e)}", exc_info=True)
+            flash("Error saving settings. Please try again.", "error")
+            return redirect(url_for("settings"))
+
+
+    try:
         # Available options
         available_formats = [
             ".pdf",
@@ -2104,80 +2219,78 @@ def settings():
             {"value": "de", "label": "German"},
         ]
 
+        available_llm_models = [
+            {"value": "deepseek-chat", "label": "DeepSeek Chat"},
+            {"value": "deepseek-coder", "label": "DeepSeek Coder"},
+            {"value": "gpt-3.5-turbo", "label": "OpenAI GPT-3.5 Turbo"},
+            {"value": "gpt-4", "label": "OpenAI GPT-4"},
+            {"value": "gemini-pro", "label": "Google Gemini Pro"},
+            {"value": "claude-2", "label": "Anthropic Claude 2"},
+            # Add more models as needed
+        ]
+
         context = {
             "page_title": "Settings",
-            "settings": default_settings,
+            "settings": {
+                "max_file_size": config.files.max_file_size_mb,
+                "allowed_formats": config.files.supported_formats,
+                "auto_process": config.app.auto_process_submissions,
+                        "save_temp_files": config.app.save_temp_files,
+                        "notification_level": config.app.notification_level,
+                        "theme": config.app.theme,
+                        "language": config.app.language,
+                        "llm_provider": config.api.llm_provider,
+                        "llm_model": config.api.llm_model,
+                        "llm_api_key": config.api.llm_api_key,
+                        "llm_base_url": config.api.llm_base_url,
+            },
             "available_formats": available_formats,
             "notification_levels": notification_levels,
             "themes": themes,
             "languages": languages,
+            "available_llm_models": available_llm_models,
             "service_status": get_service_status(),
             "storage_stats": get_storage_stats(),
         }
         return render_template("settings.html", **context)
     except Exception as e:
-        logger.error(f"Error loading settings: {str(e)}")
+        logger.error(f"Error loading settings: {str(e)}", exc_info=True)
         flash("Error loading settings. Please try again.", "error")
         return redirect(url_for("dashboard"))
 
 
+
+
+
+
 @app.route("/api/export-results")
+@login_required
 @csrf.exempt
 def export_results():
-    """API endpoint to export grading results."""
+    """API endpoint to export grading results from database."""
     try:
-        if not session.get("grading_results"):
-            return (
-                jsonify({"success": False, "error": "No grading results available"}),
-                404,
-            )
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({"success": False, "error": "User not authenticated"}), 401
 
-        grading_results = session.get("grading_results", {})
+        # Query results from database
+        results = GradingResult.query.join(Submission).filter(
+            Submission.user_id == current_user.id
+        ).order_by(GradingResult.created_at.desc()).all()
+
+        if not results:
+            return jsonify({"success": False, "error": "No grading results available"}), 404
 
         # Format data for export
         export_data = {
             "batch_summary": {
-                "total_submissions": len(grading_results),
-                "average_score": session.get("last_score", 0),
+                "total_submissions": len(results),
                 "timestamp": datetime.now().isoformat(),
-                "guide_id": session.get("guide_id", ""),
-                "guide_filename": session.get("guide_filename", ""),
             },
-            "results": [],
+            "results": [result.to_dict() for result in results]
         }
 
-        # Add individual results
-        for submission_id, result in grading_results.items():
-            export_data["results"].append(
-                {
-                    "submission_id": submission_id,
-                    "filename": result.get("filename", "Unknown"),
-                    "score": result.get("score", 0),
-                    "letter_grade": result.get("letter_grade", "F"),
-                    "feedback": result.get("feedback", ""),
-                    "strengths": result.get("strengths", []),
-                    "weaknesses": result.get("weaknesses", []),
-                    "question_scores": result.get("question_scores", []),
-                    "timestamp": result.get("timestamp", datetime.now().isoformat()),
-                }
-            )
-
-        # Generate filename for export
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"exam_results_{timestamp}.json"
-
-        # Note: results_storage service is not available
-        # Results are returned directly to the client
-        logger.info(f"Results prepared for export: {filename}")
-
-        return jsonify(
-            {
-                "success": True,
-                "message": "Results exported successfully",
-                "filename": filename,
-                "data": export_data,
-            }
-        )
+        return jsonify({"success": True, "data": export_data}), 200
 
     except Exception as e:
         logger.error(f"Error exporting results: {str(e)}")
@@ -2535,6 +2648,22 @@ def get_cache_stats():
         )
 
 
+@app.route("/api/submission-status")
+@login_required
+def api_submission_status():
+    """API endpoint to get the processing status of a submission by filename for the current user."""
+    from src.database.models import Submission
+    filename = request.args.get("filename")
+    if not filename:
+        return jsonify({"error": "Missing filename parameter"}), 400
+    current_user = get_current_user()
+    submission = Submission.query.filter_by(user_id=current_user.id, filename=filename).order_by(Submission.created_at.desc()).first()
+    if not submission:
+        return jsonify({"error": "Submission not found"}), 404
+    status = submission.processing_status or "pending"
+    return jsonify({"status": status})
+
+
 if __name__ == "__main__":
     print("[START] Starting Exam Grader Web Application...")
 
@@ -2543,7 +2672,7 @@ if __name__ == "__main__":
     port = getattr(config, "PORT", 5000)
     debug = getattr(config, "DEBUG", True)
 
-    print(logging_config.create_startup_summary(host=host, port=port))
+    log_startup_summary(host=host, port=port, debug=app.debug)
     print(f"[DEBUG] Debug mode: {debug}")
 
     app.run(host=host, port=port, debug=debug)

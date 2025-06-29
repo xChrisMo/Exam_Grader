@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, Dict
 from werkzeug.security import generate_password_hash
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,7 +57,7 @@ class DatabaseUtils:
             logger.error(f"Failed to create default user: {str(e)}")
             try:
                 db.session.rollback()
-            except:
+            except Exception:
                 pass
             return False
     

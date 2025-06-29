@@ -15,21 +15,29 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from dotenv import load_dotenv
+import requests
+from openai import OpenAI, AuthenticationError, APIConnectionError, RateLimitError
+
+
 from packaging import version
 
 from src.config.unified_config import config
-from utils.logger import logger
 
-# Load environment variables
-load_dotenv()
+from src.database.redis import redis_client
+from requests.exceptions import RequestException
+
+import pickle
+from utils.logger import logger
+from .retry_service import retry_service, CircuitBreakerError
+
+
 
 
 class LLMServiceError(Exception):
     """Exception raised for errors in the LLM service."""
 
     def __init__(
-        self, message: str, error_code: str = None, original_error: Exception = None
+        self, message: str, error_code: Optional[str] = None, original_error: Optional[Exception] = None
     ):
         """Initialize LLM service error.
 
@@ -63,8 +71,10 @@ class LLMService:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        base_url: str = "https://api.deepseek.com/v1",
-        model: str = config.api.deepseek_model,
+        base_url: str = config.api.llm_base_url,  # Use URL from unified config
+        model: str = config.api.llm_model,  # Use model from unified config
+        # Alternatives: "deepseek-r1" (even faster but less contextual)
+        # or "deepseek-education" (domain-optimized)
         temperature: float = 0.0,
         max_retries: int = 3,
         retry_delay: float = 1.0,
@@ -87,19 +97,35 @@ class LLMService:
         Raises:
             LLMServiceError: If API key is not available
         """
-        self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
+        # Force reload environment variables to ensure we get the latest values
+        self.api_key = api_key or config.api.llm_api_key
         if not self.api_key:
+            logger.error("LLM_API_KEY environment variable not set. Please set it to a valid LLM API key.")
+            raise LLMServiceError("LLM_API_KEY environment variable not set", error_code="AUTH_ERROR")
+        logger.info(f"LLM API key loaded (first 5 chars): {self.api_key[:5]}...")
+
+
+        # Validate API key format
+        if not self._validate_api_key(self.api_key):
+            logger.error("Invalid LLM API key format")
             raise LLMServiceError(
-                "DeepSeek API key not configured. Set DEEPSEEK_API_KEY in .env"
+                "Invalid LLM API key format",
+                error_code="INVALID_KEY"
             )
 
-        self.base_url = base_url
+        self.base_url = base_url.rstrip('/')  # Should be "https://api.deepseek.com/v1"
         self.model = model
         self.temperature = temperature
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.seed = seed
         self.deterministic = deterministic
+
+        logger.debug(f"LLMService initializing OpenAI client with base_url: {self.base_url} and API key (first 5 chars): {self.api_key[:5]}...")
+        self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+
+        # Initialize connection status
+        self._test_api_connection()
 
         # Log the deterministic mode setting
         if self.deterministic:
@@ -108,29 +134,56 @@ class LLMService:
             )
         else:
             logger.info("LLM service initialized in non-deterministic mode")
+        logger.info(f"LLM service initialized with model: {self.model}")
 
-        try:
-            # Import OpenAI in a way that handles different versions
-            from openai import OpenAI
-
-            # Get the OpenAI version
+    def _make_api_call_with_retry(self, params: Dict) -> Any:
+        """Make API call with retry logic."""
+        for attempt in range(self.max_retries):
             try:
-                openai_version_str = importlib.metadata.version("openai")
-                openai_version = version.parse(openai_version_str)
-                logger.info(f"Using OpenAI library version: {openai_version_str}")
-            except (importlib.metadata.PackageNotFoundError, version.InvalidVersion):
-                openai_version = version.parse("0.0.0")
-                logger.warning("Could not determine OpenAI library version")
 
-            # Initialize OpenAI client with parameters based on version
-            client_params = {"api_key": self.api_key, "base_url": self.base_url}
+                return self.client.chat.completions.create(**params)
+            except Exception as e:
+                if attempt >= self.max_retries - 1:
+                    raise
+                logger.warning(f"API call failed (attempt {attempt+1}): {str(e)}")
+                time.sleep(self.retry_delay)
+        raise LLMServiceError("API call failed after maximum retries")
 
-            # Create the client with appropriate parameters
-            self.client = OpenAI(**client_params)
-            logger.info(f"LLM service initialized with model: {self.model}")
+    def _validate_api_key(self, api_key: str) -> bool:
+        """Validate API key format."""
+        # Basic validation - check if key has expected length and format
+        if not api_key:
+            logger.error("API key is empty.")
+            return False
+        if len(api_key) < 32:  # DeepSeek API keys are typically long, e.g., 40+ characters
+            logger.error(f"API key is too short ({len(api_key)} characters). Expected at least 32 characters. Please check your DEEPSEEK_API_KEY.")
+            return False
+        # Add more specific regex validation if DeepSeek API keys have a known pattern
+        # For example: if re.match(r"^sk-[a-zA-Z0-9]{32,}", api_key):
+        return True
+        
+    def _test_api_connection(self) -> None:
+        """Test API connection and key validity."""
+        try:
+            # Use OpenAI client's native method for connection test
+            self.client.models.list()
+            logger.info("API connection test successful")
+        except AuthenticationError as e:
+            logger.error(f"API connection failed: Authentication Error - {e.body.get('message', 'Invalid API key or credentials.')}")
+            raise LLMServiceError(
+                f"API connection failed: Authentication Error - {e.body.get('message', 'Invalid API key or credentials.')}",
+                error_code="AUTH_ERROR",
+                original_error=e
+            )
         except Exception as e:
-            logger.error(f"Failed to initialize LLM service: {str(e)}")
-            raise LLMServiceError(f"Failed to initialize LLM service: {str(e)}")
+            logger.error(f"API connection failed: {str(e)}")
+            raise LLMServiceError(
+                f"API connection failed: {str(e)}",
+                error_code="CONNECTION_ERROR",
+                original_error=e
+            )
+
+
 
     def is_available(self) -> bool:
         """Check if the LLM service is available by testing API connectivity."""
@@ -151,7 +204,7 @@ class LLMService:
                         {"role": "user", "content": "test"}
                     ],
                     "temperature": 0.0,
-                    "max_tokens": 1,
+
                 }
 
                 # Add seed parameter if in deterministic mode
@@ -201,7 +254,7 @@ class LLMService:
                     {"role": "user", "content": user_prompt},
                 ],
                 "temperature": 0.0,
-                "max_tokens": 20,
+
             }
 
             # Add seed parameter if in deterministic mode
@@ -249,13 +302,9 @@ class LLMService:
             # Log the start of answer comparison
             logger.info("Preparing to compare answers...")
 
-            # Optimize prompt length for performance
-            max_content_length = int(os.getenv("MAX_CONTENT_LENGTH", 10000))  # Configurable content length
-
-            # Truncate long content while preserving key information
-            question_truncated = question[:max_content_length] if len(question) > max_content_length else question
-            guide_answer_truncated = guide_answer[:max_content_length] if len(guide_answer) > max_content_length else guide_answer
-            submission_answer_truncated = submission_answer[:max_content_length] if len(submission_answer) > max_content_length else submission_answer
+            question_truncated = question
+            guide_answer_truncated = guide_answer
+            submission_answer_truncated = submission_answer
 
             # Construct optimized prompt for faster processing
             system_prompt = """You are an educational grading assistant. Compare a student's answer to a model answer and assign a score.
@@ -284,7 +333,10 @@ class LLMService:
             ]
 
             # Check cache first
-            cache_key = self._generate_cache_key(messages, max_tokens=self.max_tokens_default)
+            cache_key = self._generate_cache_key({
+                "messages": messages,
+                "max_score": max_score
+            })
             cached_response = self._get_cached_response(cache_key)
 
             if cached_response:
@@ -298,11 +350,103 @@ class LLMService:
                     "model": self.model,
                     "messages": messages,
                     "temperature": 0.0,  # Deterministic for consistency
-                    "max_tokens": self.max_tokens_default,  # Optimized token limit
                 }
 
                 # Ensure JSON format for Deepseek-Reasoner
-                if self.model == "deepseek-ai/deepseek-reasoner":
+                if self.model == "deepseek-chat":
+                    params["response_format"] = {"type": "json_object"}
+
+                # Add seed parameter if in deterministic mode
+                if self.deterministic and self.seed is not None:
+                    params["seed"] = self.seed
+
+                # Make API call with retry logic
+                response = self._make_api_call_with_retry(params)
+                response_text = response.choices[0].message.content.strip()
+
+                # Cache the response
+                self._cache_response(cache_key, response_text)
+
+            # Parse and validate the response
+            logger.info("Processing LLM response...")
+            result, extraction_method = self.parse_llm_response(response_text)
+            
+            # Validate required fields
+            if not all(key in result for key in ['score', 'feedback']):
+                logger.error("Missing required keys in LLM response")
+                raise LLMServiceError("Invalid response format from LLM")
+
+            # Extract and validate score
+            score = float(result['score'])
+            score = max(0, min(score, max_score))
+            feedback = str(result['feedback'])
+            
+            logger.info(f"Answer comparison completed. Score: {score}/{max_score}")
+            return score, f"[{extraction_method}] {feedback}"
+
+        except json.JSONDecodeError as je:
+            logger.error(f"JSON parsing failed: {str(je)}")
+            raise LLMServiceError("Invalid JSON response from API") from je
+        except ConnectionError as ce:
+            logger.error(f"API connection failed: {str(ce)}")
+            raise LLMServiceError("API connection error") from ce
+        except Exception as e:
+            logger.error(f"Unexpected error during comparison: {str(e)}")
+            raise LLMServiceError("Answer comparison failed") from e
+            """Generate a unique cache key for the given parameters."""
+            cache_key = f"llm_cache:{hash(frozenset(params.items()))}"
+            logger.debug(f"Generated cache key: {cache_key} for params: {params}")
+            return cache_key
+    
+        def _get_cached_response(self, cache_key: str) -> Optional[Dict]:
+            """Retrieve cached response from Redis if exists."""
+            logger.debug(f"Checking cache for key: {cache_key}")
+            # cached = redis_client.get(cache_key)
+            logger.debug(f"Cache {'hit' if cached else 'miss'} for key: {cache_key}")
+            return pickle.loads(cached) if cached else None
+    
+        def _cache_response(self, cache_key: str, response: Dict, ttl: int = 3600) -> None:
+            """Cache the API response with specified TTL."""
+            logger.debug(f"Caching response for key: {cache_key} (TTL: {ttl}s)")
+            # redis_client.setex(cache_key, ttl, pickle.dumps(response))
+    
+        def _make_api_call_with_retry(self, params: Dict) -> Any:
+            """Make API call with retry logic."""
+            try:
+                logger.debug(f"_make_api_call_with_retry: Calling API with base_url: {self.client.base_url} and API key (first 10 chars): {self.api_key[:10]}...")
+                return retry_service.execute_with_retry(
+                    func=lambda: self.client.chat.completions.create(**params),
+                    service_name="deepseek_api",
+                    max_attempts=self.max_retries,
+                    base_delay=self.retry_delay,
+                    max_delay=60.0, # Max delay for exponential backoff
+                    backoff_multiplier=2.0
+                )
+            except CircuitBreakerError as cb_e:
+                logger.error(f"Circuit breaker open for DeepSeek API: {cb_e}")
+                raise LLMServiceError(f"DeepSeek API unavailable due to circuit breaker: {cb_e}") from cb_e
+            except Exception as e:
+                logger.error(f"DeepSeek API call failed after retries: {e}")
+                raise LLMServiceError(f"DeepSeek API call failed: {e}") from e
+            cache_key = self._generate_cache_key(messages, max_tokens=None)
+            cached_response = self._get_cached_response(cache_key)
+
+            if cached_response:
+                logger.info("Using cached response for answer comparison")
+                response_text = cached_response
+            else:
+                logger.info("Making API call for answer comparison...")
+
+                # Prepare optimized API parameters
+                params = {
+                    "model": self.model,
+                    "messages": messages,
+                    "temperature": 0.0,  # Deterministic for consistency
+
+                }
+
+                # Ensure JSON format for Deepseek-Reasoner
+                if self.model == "deepseek-chat":
                     params["response_format"] = {"type": "json_object"}
 
                 # Add seed parameter if in deterministic mode
@@ -346,6 +490,67 @@ class LLMService:
                 return 0, f"System error: {str(e)}"
 
         # Add proper error handling for the main try block
+        # Check cache first
+        cache_key = self._generate_cache_key({"messages": messages, "max_score": max_score})
+        cached_response = self._get_cached_response(cache_key)
+
+        if cached_response:
+            logger.info("Using cached response for answer comparison")
+            response_text = cached_response
+        else:
+            logger.info("Making API call for answer comparison...")
+
+            # Prepare optimized API parameters
+            params = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": 0.0,  # Deterministic for consistency
+            }
+
+            # Ensure JSON format for Deepseek-Reasoner
+            if self.model == "deepseek-chat":
+                params["response_format"] = {"type": "json_object"}
+
+            # Add seed parameter if in deterministic mode
+            if self.deterministic and self.seed is not None:
+                params["seed"] = self.seed
+
+            # Make API call with retry logic
+            response = self._make_api_call_with_retry(params)
+            response_text = response.choices[0].message.content.strip()
+
+            # Cache the response
+            self._cache_response(cache_key, response_text)
+
+        # Parse and validate the response
+        logger.info("Processing LLM response...")
+
+        # Enhanced JSON parsing with multiple fallback strategies
+        result, extraction_method = self.parse_llm_response(response_text)
+        
+        # Validate required fields
+        if not all(key in result for key in ['score', 'feedback']):
+            logger.error("Missing required keys in LLM response")
+            raise LLMServiceError("Invalid response format from LLM")
+
+        # Extract and validate score
+        try:
+            score = float(result['score'])
+            score = max(0, min(score, max_score))
+            feedback = str(result['feedback'])
+            
+            logger.info(f"Answer comparison completed. Score: {score}/{max_score}")
+            return score, f"[{extraction_method}] {feedback}"
+        except (ValueError, TypeError) as e:
+            logger.error(f"Invalid score value: {str(e)}")
+            return 0, f"Error: Invalid scoring format - {str(e)}"
+        except LLMServiceError as e:
+            logger.error(f"LLM service error during comparison: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error during answer comparison: {str(e)}")
+            return 0, f"System error: {str(e)}"
+
         except ConnectionError as ce:
             logger.error(f"API connection failed: {str(ce)}")
             raise LLMServiceError(f"Connection error: {str(ce)}") from ce
@@ -356,67 +561,26 @@ class LLMService:
             logger.error(f"Unexpected error during comparison: {str(e)}")
             raise LLMServiceError("Comparison process failed") from e
 
-        # Add proper error handling for the main try block
-        except ConnectionError as ce:
-            logger.error(f"API connection failed: {str(ce)}")
-            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
-        except json.JSONDecodeError as je:
-            logger.error(f"Invalid JSON response: {str(je)}")
-            raise LLMServiceError("Malformed API response") from je
-        except Exception as e:
-            logger.error(f"Unexpected error during comparison: {str(e)}")
-            raise LLMServiceError("Comparison process failed") from e
+    def _call_llm_api(
+        self,
+        messages: List[Dict[str, str]],
 
-        except ConnectionError as ce:
-            logger.error(f"LLM API connection failed: {str(ce)}")
-            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
-        except json.JSONDecodeError as je:
-            logger.error(f"JSON parsing failed: {str(je)}")
-            raise LLMServiceError("Invalid response format from API") from je
-        except Exception as e:
-            logger.error(f"Unexpected error in LLM service: {str(e)}")
-            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
-        
-        # Add proper error handling for the outer try block
-        except ConnectionError as ce:
-            logger.error(f"API connection failed: {str(ce)}")
-            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
-        except json.JSONDecodeError as je:
-            logger.error(f"Invalid JSON response: {str(je)}")
-            raise LLMServiceError("Malformed API response") from je
-        except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
-            raise LLMServiceError("Failed to process API response") from e
+        response_format: Optional[Dict[str, str]] = None,
+    ) -> str:
+        """Helper to make a robust LLM API call."""
+        params = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+        }
 
-        except ConnectionError as ce:
-            logger.error(f"LLM API connection failed: {str(ce)}")
-            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
-        except json.JSONDecodeError as je:
-            logger.error(f"JSON parsing failed: {str(je)}")
-            raise LLMServiceError("Invalid response format from API") from je
-        except Exception as e:
-            logger.error(f"Unexpected error in LLM service: {str(e)}")
-            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
+        if self.deterministic and self.seed is not None:
+            params["seed"] = self.seed
+        if response_format is not None:
+            params["response_format"] = response_format
 
-        except ConnectionError as ce:
-            logger.error(f"LLM API connection failed: {str(ce)}")
-            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
-        except json.JSONDecodeError as je:
-            logger.error(f"JSON parsing failed: {str(je)}")
-            raise LLMServiceError("Invalid response format from API") from je
-        except Exception as e:
-            logger.error(f"Unexpected error in LLM service: {str(e)}")
-            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
-        
-        except ConnectionError as ce:
-            logger.error(f"LLM API connection failed: {str(ce)}")
-            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
-        except json.JSONDecodeError as je:
-            logger.error(f"JSON parsing failed: {str(je)}")
-            raise LLMServiceError("Invalid response format from API") from je
-        except Exception as e:
-            logger.error(f"Unexpected error in LLM service: {str(e)}")
-            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
+        response = self.client.chat.completions.create(**params)
+        return response.choices[0].message.content.strip()
 
     def parse_llm_response(self, response_text: str) -> Tuple[Dict, str]:
         """
@@ -426,19 +590,35 @@ class LLMService:
             # Use LLM to fix and structure the response
             sanitized_response = self._get_structured_response(response_text)
             return json.loads(sanitized_response), "structured"
-        except Exception as e:
-            logger.error(f"Structured parsing failed: {str(e)}")
-            raise LLMServiceError("Failed to parse LLM response")
-
+        except json.JSONDecodeError as je:
+            logger.error(f"JSONDecodeError during structured parsing: {str(je)}")
+            logger.error(f"Raw response that failed structured parsing: {response_text}")
+            # Attempt to extract JSON using regex if direct parsing fails
+            logger.warning("Attempting regex extraction for JSON from LLM response.")
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    extracted_json = json_match.group(0)
+                    logger.info(f"Successfully extracted JSON substring: {extracted_json}")
+                    return json.loads(extracted_json), "structured_regex_fallback"
+                except json.JSONDecodeError as inner_je:
+                    logger.error(f"Regex extracted JSON also failed to parse: {str(inner_je)}")
+                    raise LLMServiceError("Failed to parse LLM response even with regex extraction") from inner_je
+            else:
+                logger.error("No JSON object found in LLM response after regex attempt.")
+                raise LLMServiceError("No JSON object found in LLM response") from je
     def _get_structured_response(self, text: str) -> str:
         """Use LLM to convert free-form response to valid JSON"""
         prompt = """Convert this unstructured response to valid JSON format:
         
         {response}
         
-        Return ONLY the JSON object with 'score' and 'feedback' keys.""".format(response=text[:4000])
+        Return ONLY the JSON object with 'score' and 'feedback' keys.""".format(response=text)
 
-        return self._get_llm_response(prompt)
+        messages = [
+            {"role": "user", "content": prompt}
+        ]
+        return self._call_llm_api(messages, response_format={"type": "json_object"})
 
     def process_marking_guide(self, guide_text: str) -> Dict:
         """
@@ -458,16 +638,36 @@ class LLMService:
             "items": [
                 {{"question": "...", "answer": "..."}} OR {{"section": "...", "answer": "..."}}
             ]
-        }}""".format(guide=guide_text[:5000])
+        }}""".format(guide=guide_text)
 
-        response = self._get_llm_response(prompt)
-        return json.loads(response)
+        messages = [
+            {"role": "user", "content": prompt}        ]
+        try:
+            response_content = self._call_llm_api(messages, response_format={"type": "json_object"})
+            if not response_content:
+                logger.warning("LLM returned empty response for marking guide processing.")
+                return {"questions": [], "total_marks": 0, "extraction_method": "llm_empty_response"}
+
+            parsed_response = json.loads(response_content)
+            questions = parsed_response.get("questions", [])
+            total_marks = parsed_response.get("total_marks", 0)
+            extraction_method = parsed_response.get("extraction_method", "llm")
+
+            logger.info(f"LLM extraction successful. Questions: {len(questions)}, Total Marks: {total_marks}")
+            return {"questions": questions, "total_marks": total_marks, "extraction_method": extraction_method}
+
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing failed for LLM response in process_marking_guide: {e}")
+            logger.error(f"Raw LLM response: {response_content}")
+            return {"questions": [], "total_marks": 0, "extraction_method": "llm_json_error"}
+        except Exception as e:
+            logger.error(f"Unexpected error during LLM processing of marking guide: {e}")
+            return {"questions": [], "total_marks": 0, "extraction_method": "llm_error"}
 
     def grade_submission(
         self,
         marking_guide_text: str,
         student_submission_text: str,
-        max_tokens: int = 2048,
     ) -> Dict:
         """
         Grade a student submission against a marking guide.
@@ -478,7 +678,6 @@ class LLMService:
         Args:
             marking_guide_text: Full text of the marking guide
             student_submission_text: Full text of the student submission
-            max_tokens: Maximum tokens for the response
 
         Returns:
             Dict: Grading result with scores and feedback
@@ -518,7 +717,7 @@ class LLMService:
         self,
         marking_guide_content: str,
         student_submission_content: str,
-        num_questions: int = None,
+        num_questions: Optional[int] = None,
     ) -> Tuple[Dict, Optional[str]]:
         """
         Map a student submission to a marking guide.

@@ -749,6 +749,10 @@
 
               if (!response.ok) {
                   const errorData = await response.json().catch(() => ({}));
+                  // Instead of immediately marking as failed, set as 'Delayed' and start polling
+                  statusSpan.textContent = 'Delayed';
+                  statusSpan.className = 'text-yellow-600 ml-2';
+                  pollFileStatus(file.name, statusSpan, currentFileStatus);
                   throw new Error(errorData.error || `HTTP ${response.status}`);
               }
 
@@ -760,11 +764,44 @@
               return result;
 
           } catch (error) {
-              statusSpan.textContent = 'Failed';
-              statusSpan.className = 'text-red-600 ml-2';
+              // Instead of marking as failed, set as 'Delayed' and start polling
+              statusSpan.textContent = 'Delayed';
+              statusSpan.className = 'text-yellow-600 ml-2';
+              pollFileStatus(file.name, statusSpan, currentFileStatus);
               console.error(`Error processing file ${file.name}:`, error);
-              throw error;
+              // Do not throw error immediately, allow polling to update status
           }
+      }
+
+      // Poll backend for file status after a delay or error
+      function pollFileStatus(filename, statusSpan, currentFileStatus) {
+          let attempts = 0;
+          const maxAttempts = 30; // Poll for up to 1 minute (2s interval)
+          const interval = setInterval(async () => {
+              attempts++;
+              try {
+                  const response = await fetch(`/api/submission-status?filename=${encodeURIComponent(filename)}`);
+                  if (response.ok) {
+                      const data = await response.json();
+                      if (data.status === 'completed') {
+                          statusSpan.textContent = 'Completed';
+                          statusSpan.className = 'text-green-600 ml-2';
+                          currentFileStatus.textContent = `Completed: ${filename}`;
+                          clearInterval(interval);
+                      } else if (data.status === 'failed') {
+                          statusSpan.textContent = 'Failed';
+                          statusSpan.className = 'text-red-600 ml-2';
+                          currentFileStatus.textContent = `Failed: ${filename}`;
+                          clearInterval(interval);
+                      } // else keep polling if still processing
+                  }
+              } catch (e) {
+                  // Ignore polling errors, just keep polling
+              }
+              if (attempts >= maxAttempts) {
+                  clearInterval(interval);
+              }
+          }, 2000);
       }
 
       // Update batch progress

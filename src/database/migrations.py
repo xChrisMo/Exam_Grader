@@ -23,7 +23,7 @@ class MigrationManager:
             logger.info("Starting database migration...")
             
             # Create database file if it doesn't exist (for SQLite)
-            if self.database_url.startswith('sqlite:///'):
+            if str(self.database_url).startswith('sqlite:///'):
                 db_path = self.database_url.replace('sqlite:///', '')
                 db_dir = Path(db_path).parent
                 db_dir.mkdir(parents=True, exist_ok=True)
@@ -72,15 +72,16 @@ class MigrationManager:
                 Mapping, GradingResult, Session
             )
 
-            # Drop the sessions table if it exists to apply schema changes
+            # Drop all tables if they exist to apply schema changes
             # This is a temporary solution for development to handle schema changes
             # For production, a proper migration tool like Alembic should be used.
-            if self.engine.dialect.has_table(self.engine.connect(), "sessions"):
-                db.metadata.tables['sessions'].drop(self.engine)
-                logger.info("Dropped 'sessions' table to apply schema changes.")
+            logger.info("Attempting to drop all existing tables...")
+            db.metadata.drop_all(self.engine)
+            logger.info("All existing tables dropped successfully.")
 
-            # Create all tables using the engine directly
+            logger.info("Attempting to create all tables...")
             db.metadata.create_all(self.engine)
+            logger.info("All tables created successfully.")
 
             # Verify tables were created
             inspector = inspect(self.engine)

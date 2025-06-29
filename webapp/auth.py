@@ -155,20 +155,15 @@ def login():
         }
         new_secure_session_id = session_manager.create_session(user.id, session_data, remember_me)
         
-        # Set critical session attributes
-        session.sid = new_secure_session_id  # This is crucial for session interface
-        session["logged_in"] = True
-        session.permanent = remember_me
-
-        # Set critical session attributes
-        session.clear() # Clear any existing session data
+        # Set Flask session attributes - do this only once
         session.sid = new_secure_session_id  # This is crucial for session interface
         session["user_id"] = user.id
         session["username"] = user.username
         session["logged_in"] = True
         session.permanent = remember_me
-        session.new = True # Explicitly mark as new so save_session creates a new cookie
-        session.pop('session_id', None)  # Remove any legacy session ID storage
+        session.new = True  # Explicitly mark as new so save_session creates a new cookie
+        session.modified = True  # Mark as modified to ensure it gets saved
+        
         logger.debug(f"Flask session after login: user_id={session.get('user_id')}, session_id={session.sid}")
 
         logger.info(f"User logged in successfully: {username}")

@@ -71,7 +71,14 @@ class SessionEncryption:
     def encrypt_data(self, data: Dict[str, Any]) -> bytes:
         """Encrypt session data."""
         try:
-            json_data = json.dumps(data, default=str).encode()
+            # Use a custom JSON encoder to handle datetime objects
+            class DateTimeEncoder(json.JSONEncoder):
+                def default(self, obj):
+                    if isinstance(obj, datetime):
+                        return obj.isoformat()
+                    return super().default(obj)
+            
+            json_data = json.dumps(data, cls=DateTimeEncoder).encode()
             return self._get_fernet().encrypt(json_data)
         except Exception as e:
             logger.error(f"Failed to encrypt session data: {str(e)}")
@@ -80,8 +87,27 @@ class SessionEncryption:
     def decrypt_data(self, encrypted_data: bytes) -> Dict[str, Any]:
         """Decrypt session data."""
         try:
+            if not encrypted_data:
+                logger.warning("Attempted to decrypt empty session data")
+                return {}
+                
             decrypted_data = self._get_fernet().decrypt(encrypted_data)
-            return json.loads(decrypted_data.decode())
+            if not decrypted_data:
+                logger.warning("Decryption resulted in empty data")
+                return {}
+                
+            # Try to decode and parse JSON
+            try:
+                json_str = decrypted_data.decode('utf-8')
+                return json.loads(json_str)
+            except UnicodeDecodeError as e:
+                logger.error(f"Failed to decode decrypted session data: {str(e)}")
+                return {}
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON from session data: {str(e)}")
+                logger.error(f"Raw decrypted data: {decrypted_data[:100]}...")  # Log first 100 chars
+                return {}
+                
         except Exception as e:
             logger.error(f"Failed to decrypt session data: {str(e)}")
             return {}
@@ -192,34 +218,6 @@ class SecureSessionManager:
                 return None
 
             # Check expiration
-            if session.is_expired():
-                self.invalidate_session(session_id)
-                return None
-
-            # Validate client information
-            if not self._validate_client_info(session):
-                self.invalidate_session(session_id)
-                return None
-
-            # Return decrypted session data
-            return self.encryption.decrypt_data(session.data)
-            # Get session from database
-            session = SessionModel.query.filter_by(
-                id=session_id, is_active=True
-            ).first()
-            # Get session from database
-            session = SessionModel.query.filter_by(
-                id=session_id, is_active=True
-            ).first()
-            # Get session from database
-            session = SessionModel.query.filter_by(
-                id=session_id, is_active=True
-            ).first()
-
-            if not session:
-                return None
-
-            # Check if session is expired
             if session.is_expired():
                 self.invalidate_session(session_id)
                 return None
@@ -450,10 +448,9 @@ class SecureSessionManager:
                 f"IP change detected for session {session.id}: {session.ip_address} -> {current_ip}"
             )
 
-        # User agent should remain consistent
+        # Log user agent changes but don't invalidate session (can cause redirect loops)
         if session.user_agent != current_user_agent:
-            logger.warning(f"User agent change detected for session {session.id}")
-            return False
+            logger.info(f"User agent change detected for session {session.id}: {session.user_agent} -> {current_user_agent}")
 
         return True
 

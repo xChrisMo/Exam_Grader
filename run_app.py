@@ -42,7 +42,7 @@ def check_virtual_environment():
         print("   Consider using: python -m venv venv && source venv/bin/activate")
 
 
-def install_requirements(requirements_file: str = "webapp/requirements.txt"):
+def install_requirements(requirements_file: str = "requirements.txt"):
     """Install required packages."""
     if not os.path.exists(requirements_file):
         print(f"[ERROR] Requirements file not found: {requirements_file}")
@@ -187,13 +187,9 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
         print("=" * 50)
 
         # Run the application with reloader disabled to prevent double initialization
-        app.run(
-            host=host,
-            port=port,
-            debug=debug,
-            use_reloader=False,  # Disable reloader to prevent double initialization
-            threaded=True,
-        )
+        import uvicorn
+        # Use WSGI interface explicitly to handle async Flask views properly
+        uvicorn.run(app, host=host, port=port, interface="wsgi")
 
     except ImportError as e:
         print(f"[ERROR] Failed to import Flask application: {e}")

@@ -5,26 +5,26 @@ This module consolidates all configuration settings from config.py and config_ma
 into a single, centralized system with environment-specific settings and validation.
 """
 
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 import os
 import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from dotenv import load_dotenv
-
 # Import logger with fallback
 try:
     from utils.logger import Logger
+    logger = Logger().get_logger()
 except ImportError:
     import logging
-
     logger = logging.getLogger(__name__)
 
-logger = Logger().get_logger()
 
-# Load environment variables
-load_dotenv()
 
 
 @dataclass
@@ -110,8 +110,13 @@ class APIConfig:
     deepseek_api_key: str = ""
     handwriting_ocr_api_url: str = field(default_factory=lambda: os.getenv("HANDWRITING_OCR_API_URL", ""))
     handwriting_ocr_delete_after: int = 3600
-    deepseek_api_url: str = field(default_factory=lambda: os.getenv("DEEPSEEK_API_URL", ""))
-    deepseek_model: str = field(default_factory=lambda: os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner"))
+    deepseek_api_url: str = field(default_factory=lambda: os.getenv("DEEPSEEK_BASE_URL", ""))
+    deepseek_model: str = field(default_factory=lambda: os.getenv("DEEPSEEK_MODEL", "deepseek-chat"))
+
+    llm_provider: str = field(default_factory=lambda: os.getenv("LLM_PROVIDER", "deepseek"))
+    llm_model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", "deepseek-chat"))
+    llm_api_key: str = field(default_factory=lambda: os.getenv("LLM_API_KEY", os.getenv("DEEPSEEK_API_KEY", "")))
+    llm_base_url: str = field(default_factory=lambda: os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1"))
     api_timeout: int = 30
     api_retry_attempts: int = 3
     api_retry_delay: float = 2.0
@@ -124,6 +129,8 @@ class APIConfig:
 
     def __post_init__(self):
         """Validate API configuration."""
+
+
         if not self.handwriting_ocr_api_key:
             logger.warning(
                 "HandwritingOCR API key not configured - OCR features will be limited"
@@ -182,6 +189,16 @@ class ServerConfig:
             raise ValueError("port must be between 1 and 65535")
 
 
+@dataclass
+class AppConfig:
+    """General application configuration settings."""
+    auto_process_submissions: bool = True
+    save_temp_files: bool = False
+    notification_level: str = "all"
+    theme: str = "light"
+    language: str = "en"
+
+
 class UnifiedConfig:
     """
     Unified configuration manager that consolidates all application settings.
@@ -189,6 +206,35 @@ class UnifiedConfig:
     This class provides a single point of configuration management with
     environment-specific settings and proper validation.
     """
+
+    def save_config(self):
+        """Saves the current configuration to the .env file."""
+        env_path = Path('.env')
+        updated_lines = []
+        existing_keys = set()
+
+        # Read existing .env file
+        if env_path.exists():
+            with open(env_path, 'r') as f:
+                for line in f:
+                    # Check if line contains an LLM related key
+                    if any(key in line for key in ["LLM_PROVIDER", "LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL"]):
+                        existing_keys.add(line.split('=')[0].strip())
+                        continue # Skip existing LLM keys, we'll add updated ones
+                    updated_lines.append(line.strip())
+
+        # Add/Update LLM settings
+        updated_lines.append(f"LLM_PROVIDER={self.api.llm_provider}")
+        updated_lines.append(f"LLM_MODEL={self.api.llm_model}")
+        updated_lines.append(f"LLM_API_KEY={self.api.llm_api_key}")
+        updated_lines.append(f"LLM_BASE_URL={self.api.llm_base_url}")
+
+        # Write back to .env file
+        with open(env_path, 'w') as f:
+            for line in updated_lines:
+                f.write(line + '\n')
+        logger.info("Configuration saved to .env file.")
+
 
     def __init__(self, environment: str = None):
         """
@@ -204,7 +250,7 @@ class UnifiedConfig:
         """Load configuration based on environment."""
         # Security configuration
         self.security = SecurityConfig(
-            secret_key=self._get_secret_key(),
+            secret_key=self._retrieve_secret_key(),
             session_timeout=int(os.getenv("SESSION_TIMEOUT", "3600")),
             csrf_enabled=os.getenv("CSRF_ENABLED", "True").lower() == "true",
             rate_limit_enabled=os.getenv("RATE_LIMIT_ENABLED", "True").lower()
@@ -235,10 +281,12 @@ class UnifiedConfig:
                 "HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3"
             ),
             deepseek_api_key=os.getenv("DEEPSEEK_API_KEY", ""),
-        deepseek_api_url=os.getenv(
-            "DEEPSEEK_API_URL", ""
-        ),
+            deepseek_api_url=os.getenv(
+                "DEEPSEEK_API_URL", ""
+            ),
             deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner"),
+            llm_model=os.getenv("LLM_MODEL", os.getenv("DEEPSEEK_MODEL", "deepseek-chat")),
+            llm_provider=os.getenv("LLM_PROVIDER", "deepseek"),
             # LLM-Only Mode Configuration
             llm_only_mode=os.getenv("LLM_ONLY_MODE", "False").lower() == "true",
             llm_strict_mode=os.getenv("LLM_STRICT_MODE", "False").lower() == "true",
@@ -262,8 +310,15 @@ class UnifiedConfig:
         self.server: ServerConfig = ServerConfig(
             host=os.getenv("HOST", "127.0.0.1"),
             port=int(os.getenv("PORT", "5000")),
-            debug=self.environment == "development",
-            testing=self.environment == "testing",
+        )
+
+        # Application configuration
+        self.app = AppConfig(
+            auto_process_submissions=os.getenv("AUTO_PROCESS_SUBMISSIONS", "True").lower() == "true",
+            save_temp_files=os.getenv("SAVE_TEMP_FILES", "False").lower() == "true",
+            notification_level=os.getenv("NOTIFICATION_LEVEL", "all"),
+            theme=os.getenv("THEME", "light"),
+            language=os.getenv("LANGUAGE", "en"),
         )
 
         # Adjust secure cookie setting based on environment
@@ -271,7 +326,7 @@ class UnifiedConfig:
             self.security.session_cookie_secure = False
             logger.info("Session cookies set to non-secure for development/testing environment.")
 
-    def _get_secret_key(self) -> str:
+    def _retrieve_secret_key(self) -> str:
         """Get or generate a secure secret key."""
         logger.debug("Attempting to retrieve SECRET_KEY.")
         secret_key = os.getenv("SECRET_KEY")

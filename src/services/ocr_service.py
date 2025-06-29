@@ -71,45 +71,63 @@ class OCRService:
             self.headers = {"Accept": "application/json"}
             logger.warning("OCR service initialized without API key - service will be disabled")
 
-    def is_available(self) -> bool:
-        """Check if the OCR service is available by testing API connectivity."""
+    def is_available(self) -> Tuple[bool, Optional[str]]:
+        """Check if the OCR service is available by testing API connectivity.
+        
+        Returns:
+            Tuple[bool, Optional[str]]: (is_available, error_message)
+        """
         try:
             # Basic configuration check
             if not self.api_key:
-                logger.debug("OCR service unavailable: No API key configured")
-                return False
+                return False, "OCR service unavailable: No API key configured"
             if not self.base_url:
-                logger.debug("OCR service unavailable: No base URL configured")
-                return False
+                return False, "OCR service unavailable: No base URL configured"
 
-            # Test API connectivity with a simple request
-            try:
-                import requests
-                response = requests.get(
-                    f"{self.base_url}/health",  # Try health endpoint first
-                    headers=self.headers,
-                    timeout=5
-                )
-                if response.status_code == 200:
-                    logger.debug("OCR service health check passed")
-                    return True
-            except requests.exceptions.RequestException:
-                # Health endpoint might not exist, try documents endpoint
+            # Test API connectivity with exponential backoff
+            max_retries = 3
+            retry_delay = 1  # Initial delay in seconds
+            last_error = None
+
+            for attempt in range(max_retries):
                 try:
                     response = requests.get(
-                        f"{self.base_url}/documents",
+                        f"{self.base_url}/health",
                         headers=self.headers,
                         timeout=5
                     )
-                    # Any response (even 401/403) means the service is reachable
-                    if response.status_code in [200, 401, 403]:
-                        logger.debug("OCR service connectivity confirmed")
-                        return True
+                    
+                    if response.status_code == 200:
+                        logger.info("OCR service health check passed")
+                        return True, None
+                    elif response.status_code == 401:
+                        logger.error("OCR service authentication failed")
+                        return False, "Authentication failed: Invalid API key"
+                    elif response.status_code == 429:
+                        retry_after = int(response.headers.get('Retry-After', retry_delay))
+                        logger.warning(f"Rate limit exceeded, waiting {retry_after}s")
+                        time.sleep(retry_after)
+                        continue
+                    else:
+                        last_error = f"Unexpected status code: {response.status_code}"
+                        
+                except requests.exceptions.Timeout:
+                    last_error = "Connection timeout"
+                except requests.exceptions.ConnectionError:
+                    last_error = "Connection failed"
                 except requests.exceptions.RequestException as e:
-                    logger.debug(f"OCR service connectivity test failed: {str(e)}")
-                    return False
+                    last_error = str(e)
+                
+                # Exponential backoff
+                if attempt < max_retries - 1:
+                    sleep_time = retry_delay * (2 ** attempt)
+                    logger.warning(f"Retrying in {sleep_time}s... (Attempt {attempt + 1}/{max_retries})")
+                    time.sleep(sleep_time)
 
-            return False
+            # If we get here, all retries failed
+            error_msg = f"OCR service unavailable after {max_retries} attempts: {last_error}"
+            logger.error(error_msg)
+            return False, error_msg
         except Exception as e:
             logger.error(f"OCR service availability check failed: {str(e)}")
             return False

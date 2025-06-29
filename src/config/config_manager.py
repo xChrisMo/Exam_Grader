@@ -35,6 +35,12 @@ class Config:
     handwriting_ocr_api_key: str
     handwriting_ocr_delete_after: int
 
+    # LLM settings
+    llm_provider: str
+    llm_model: str
+    llm_api_key: str
+    llm_base_url: str
+
     def __post_init__(self):
         """Validate configuration after initialization."""
         # API key is optional - app can run without OCR service
@@ -91,6 +97,11 @@ class ConfigManager:
             handwriting_ocr_delete_after=int(
                 os.getenv("HANDWRITING_OCR_DELETE_AFTER", "86400").split("#")[0].strip()
             ),
+            # LLM settings
+            llm_provider=os.getenv("LLM_PROVIDER", "deepseek"),
+            llm_model=os.getenv("LLM_MODEL", "deepseek-chat"),
+            llm_api_key=os.getenv("LLM_API_KEY", ""),
+            llm_base_url=os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1"),
         )
 
         # Create necessary directories

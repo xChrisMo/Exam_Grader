@@ -27,9 +27,9 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
     # Only configure if it hasn't been configured before
     if not logger.handlers:
         # Set log level from environment or default to INFO
-        log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-        print(f"[DEBUG] Setting logger level to: {log_level}") # Added for debugging
-        # Ensure the logger level is set to DEBUG to capture all messages
+        # Temporarily force log level to DEBUG for debugging purposes
+        log_level = "DEBUG"
+        print(f"[DEBUG] Forcing logger level to: {log_level}") # Added for debugging
         logger.setLevel(getattr(logging, log_level, logging.DEBUG))
 
         # Create formatters
@@ -41,7 +41,7 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
         # Create console handler
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(console_formatter)
-        console_handler.setLevel(getattr(logging, log_level, logging.DEBUG)) # Ensure console handler respects debug level
+        console_handler.setLevel(getattr(logging, log_level, logging.DEBUG))
         logger.addHandler(console_handler)
 
         # Create file handler
@@ -56,7 +56,7 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
             backupCount=5,
         )
         file_handler.setFormatter(file_formatter)
-        file_handler.setLevel(getattr(logging, log_level, logging.DEBUG)) # Ensure file handler respects debug level
+        file_handler.setLevel(getattr(logging, log_level, logging.DEBUG))
         logger.addHandler(file_handler)
 
         # Don't propagate to root logger
