@@ -43,6 +43,8 @@ from werkzeug.utils import secure_filename
 from flask_babel import Babel, _
 
 # Project imports
+from src.config.logging_config import create_startup_summary
+
 try:
     from src.config.unified_config import config
     from src.database import (
@@ -67,6 +69,7 @@ try:
     from utils.input_sanitizer import sanitize_form_data, validate_file_upload
     from utils.loading_states import loading_manager, get_loading_state_for_template
     from webapp.auth import init_auth, login_required, get_current_user
+
 except ImportError as e:
     print(f"[ERROR] Failed to import required modules: {e}", file=sys.stderr)
     sys.exit(1)
@@ -2648,7 +2651,7 @@ if __name__ == "__main__":
     port = getattr(config, "PORT", 5000)
     debug = getattr(config, "DEBUG", True)
 
-    print(logging_config.create_startup_summary(host=host, port=port))
+    print(create_startup_summary(host=host, port=port))
     print(f"[DEBUG] Debug mode: {debug}")
 
     app.run(host=host, port=port, debug=debug)
