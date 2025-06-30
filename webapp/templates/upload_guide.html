@@ -4,8 +4,8 @@
 <div class="max-w-3xl mx-auto">
     <!-- Page Header -->
     <div class="mb-8">
-        <h1 class="text-2xl font-bold text-gray-900">Upload Marking Guide</h1>
-        <p class="mt-2 text-sm text-gray-600">
+        <h1 class="text-2xl font-bold text-gray-900" data-i18n="upload_marking_guide_title">Upload Marking Guide</h1>
+        <p class="mt-2 text-sm text-gray-600" data-i18n="upload_marking_guide_description">
             Upload your marking guide to enable automated grading. Supported formats: PDF, Word documents, and images.
         </p>
     </div>
@@ -19,7 +19,7 @@
                 {% endif %}
                 <!-- File Upload Area -->
                 <div class="mb-6">
-                    <label for="guide_file" class="block text-sm font-medium text-gray-700 mb-2">
+                    <label for="guide_file" class="block text-sm font-medium text-gray-700 mb-2" data-i18n="marking_guide_file">
                         Marking Guide File
                     </label>
                     <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-primary-400 transition-colors duration-200" id="drop-zone">
@@ -29,12 +29,12 @@
                             </svg>
                             <div class="flex text-sm text-gray-600">
                                 <label for="guide_file" class="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500">
-                                    <span>Upload a file</span>
+                                    <span data-i18n="upload_a_file">Upload a file</span>
                                     <input id="guide_file" name="guide_file" type="file" class="sr-only" accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.tiff,.bmp,.gif" required>
                                 </label>
-                                <p class="pl-1">or drag and drop</p>
+                                <p class="pl-1" data-i18n="or_drag_and_drop">or drag and drop</p>
                             </div>
-                            <p class="text-xs text-gray-500">
+                            <p class="text-xs text-gray-500" data-i18n="file_types_hint">
                                 PDF, Word documents, or images up to 16MB
                             </p>
                         </div>
@@ -70,7 +70,7 @@
                     <div class="bg-gray-200 rounded-full h-2">
                         <div id="progress-bar" class="bg-primary-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
                     </div>
-                    <p class="text-sm text-gray-600 mt-2">Uploading and processing...</p>
+                    <p class="text-sm text-gray-600 mt-2" data-i18n="uploading_processing">Uploading and processing...</p>
                 </div>
 
                 <!-- Form Actions -->
@@ -79,14 +79,14 @@
                         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
                         </svg>
-                        Back to Dashboard
+                        <span data-i18n="back_to_dashboard">Back to Dashboard</span>
                     </a>
                     
                     <button type="submit" id="submit-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed">
                         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                         </svg>
-                        Upload Guide
+                        <span data-i18n="upload_guide_button">Upload Guide</span>
                     </button>
                 </div>
             </form>
@@ -102,13 +102,13 @@
                 </svg>
             </div>
             <div class="ml-3">
-                <h3 class="text-sm font-medium text-blue-800">Tips for best results</h3>
+                <h3 class="text-sm font-medium text-blue-800" data-i18n="tips_for_best_results">Tips for best results</h3>
                 <div class="mt-2 text-sm text-blue-700">
                     <ul class="list-disc list-inside space-y-1">
-                        <li>Ensure your marking guide is clearly structured with question numbers and point values</li>
-                        <li>Use high-quality scans or images if uploading image files</li>
-                        <li>PDF and Word documents typically provide the best OCR results</li>
-                        <li>Include sample answers or key points for each question when possible</li>
+                        <li data-i18n="tip_structure">Ensure your marking guide is clearly structured with question numbers and point values</li>
+                        <li data-i18n="tip_quality">Use high-quality scans or images if uploading image files</li>
+                        <li data-i18n="tip_format">PDF and Word documents typically provide the best OCR results</li>
+                        <li data-i18n="tip_answers">Include sample answers or key points for each question when possible</li>
                     </ul>
                 </div>
             </div>
@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         
         if (!fileInput.files.length) {
-            alert('Please select a file to upload.');
+            alert(ExamGrader.i18n.translate('please_select_file'));
             return;
         }
 
@@ -203,7 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Show progress
         uploadProgress.classList.remove('hidden');
-        ExamGrader.utils.showButtonLoading(submitBtn, 'Processing...');
+        ExamGrader.utils.showButtonLoading(submitBtn, ExamGrader.i18n.translate('processing'));
         submitBtn.disabled = true;
 
         // Simulate progress
@@ -235,8 +235,8 @@ document.addEventListener('DOMContentLoaded', function() {
             clearInterval(progressInterval);
             uploadProgress.classList.add('hidden');
             submitBtn.disabled = false;
-            ExamGrader.utils.hideButtonLoading(submitBtn, 'Upload Guide');
-            alert('Upload failed. Please try again.');
+            ExamGrader.utils.hideButtonLoading(submitBtn, ExamGrader.i18n.translate('upload_guide_button'));
+            alert(ExamGrader.i18n.translate('upload_failed'));
         });
     });
 });

@@ -232,14 +232,14 @@ function exportResults() {
                 link.download = data.filename;
                 link.click();
 
-                ExamGrader.utils.showToast('Results exported successfully!', 'success');
+                ExamGrader.notificationManager.notify('Results exported successfully!', 'success');
             } else {
-                ExamGrader.utils.showToast('Failed to export results: ' + data.error, 'error');
+                ExamGrader.notificationManager.notify('Failed to export results: ' + data.error, 'error');
             }
         })
         .catch(error => {
             console.error('Export error:', error);
-            ExamGrader.utils.showToast('Failed to export results', 'error');
+            ExamGrader.notificationManager.notify('Failed to export results', 'error');
         });
 }
 
@@ -249,7 +249,7 @@ function viewDetails(submissionId) {
     const result = results.find(r => r.submission_id === submissionId);
 
     if (!result) {
-        ExamGrader.utils.showToast('Result details not found', 'error');
+        ExamGrader.notificationManager.notify('Result details not found', 'error');
         return;
     }
 

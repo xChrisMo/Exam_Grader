@@ -54,6 +54,9 @@ class SecureSessionInterface(SessionInterface):
 
     def save_session(self, app, session: SecureFlaskSession, response):
         domain = self.get_cookie_domain(app)
+        # Ensure domain is None to avoid CSRF token issues with certain browsers
+        if domain == '':  # Flask returns empty string when no domain is set
+            domain = None
         path = self.get_cookie_path(app)
         httponly = self.get_cookie_httponly(app)
         secure = self.get_cookie_secure(app)

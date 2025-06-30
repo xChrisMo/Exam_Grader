@@ -23,12 +23,12 @@
         </svg>
       </div>
       <dl>
-        <dt id="guide-status-heading" class="text-sm font-medium text-gray-500 mb-1">Guide Status</dt>
+        <dt id="guide-status-heading" class="text-sm font-medium text-gray-500 mb-1" data-i18n="guide_status">Guide Status</dt>
         <dd class="text-lg font-medium text-gray-900" aria-describedby="guide-status-heading">
           {% if guide_uploaded %}
-          <span class="text-success-600">Uploaded</span>
+          <span class="text-success-600" data-i18n="status_uploaded">Uploaded</span>
           {% else %}
-          <span class="text-gray-400">Not uploaded</span>
+          <span class="text-gray-400" data-i18n="status_not_uploaded">Not uploaded</span>
           {% endif %}
         </dd>
       </dl>
@@ -36,12 +36,12 @@
     <div class="bg-gray-50 px-5 py-3 text-center">
       <div class="text-sm">
         {% if guide_uploaded %}
-        <span class="text-success-600 font-medium">Ready to grade</span>
+        <span class="text-success-600 font-medium" data-i18n="ready_to_grade">Ready to grade</span>
         {% else %}
         <a
           href="{{ url_for('upload_guide') }}"
           class="text-primary-600 font-medium hover:text-primary-500"
-          >Upload required</a
+          data-i18n="upload_required">Upload required</a
         >
         {% endif %}
       </div>
@@ -70,7 +70,7 @@
         </svg>
       </div>
       <dl>
-        <dt class="text-sm font-medium text-gray-500 mb-1">Submissions</dt>
+        <dt class="text-sm font-medium text-gray-500 mb-1" data-i18n="submissions">Submissions</dt>
         <dd class="text-lg font-medium text-gray-900">
           {{ total_submissions }}
         </dd>
@@ -80,7 +80,7 @@
     <div class="bg-gray-50 px-5 py-3 text-center">
       <div class="text-sm">
         <span class="text-gray-600 font-medium" id="processed-submissions-dashboard-count"
-          >{{ processed_submissions }} processed</span
+          >{{ processed_submissions }} <span data-i18n="processed">processed</span></span
         >
       </div>
     </div>
@@ -107,7 +107,7 @@
         </svg>
       </div>
       <dl>
-        <dt class="text-sm font-medium text-gray-500 mb-1">Last Score</dt>
+        <dt class="text-sm font-medium text-gray-500 mb-1" data-i18n="last_score">Last Score</dt>
         <dd class="text-lg font-medium text-gray-900">
           {% if last_score > 0 %} {{ last_score }}% {% else %} -- {% endif %}
         </dd>
@@ -116,9 +116,9 @@
     <div class="bg-gray-50 px-5 py-3 text-center">
       <div class="text-sm">
         {% if last_score > 0 %}
-        <span class="text-gray-600 font-medium">Latest result</span>
+        <span class="text-gray-600 font-medium" data-i18n="latest_result">Latest result</span>
         {% else %}
-        <span class="text-gray-600 font-medium">No grades yet</span>
+        <span class="text-gray-600 font-medium" data-i18n="no_grades">No grades yet</span>
         {% endif %}
       </div>
     </div>
@@ -145,12 +145,12 @@
         </svg>
       </div>
       <dl>
-        <dt class="text-sm font-medium text-gray-500 mb-1">System Status</dt>
+        <dt class="text-sm font-medium text-gray-500 mb-1" data-i18n="system_status">System Status</dt>
         <dd class="text-lg font-medium text-gray-900">
           {% if service_status.ocr_status and service_status.llm_status %}
-          <span class="text-success-600">Online</span>
+          <span class="text-success-600" data-i18n="status_online">Online</span>
           {% else %}
-          <span class="text-warning-600">Limited</span>
+          <span class="text-warning-600" data-i18n="status_limited">Limited</span>
           {% endif %}
         </dd>
       </dl>
@@ -158,9 +158,9 @@
     <div class="bg-gray-50 px-5 py-3 text-center">
       <div class="text-sm">
         {% if service_status.ocr_status and service_status.llm_status %}
-        <span class="text-success-600 font-medium">All services ready</span>
+        <span class="text-success-600 font-medium" data-i18n="all_services_ready">All services ready</span>
         {% else %}
-        <span class="text-warning-600 font-medium">Some services offline</span>
+        <span class="text-warning-600 font-medium" data-i18n="some_services_offline">Some services offline</span>
         {% endif %}
       </div>
     </div>
@@ -189,10 +189,10 @@
           </svg>
         </div>
         <div class="ml-5">
-          <h3 class="text-lg leading-6 font-medium text-gray-900">
+          <h3 class="text-lg leading-6 font-medium text-gray-900" data-i18n="marking_guide">
             Marking Guide
           </h3>
-          <p class="mt-2 text-sm text-gray-500">Upload marking guide</p>
+          <p class="mt-2 text-sm text-gray-500" data-i18n="upload_marking_guide">Upload marking guide</p>
         </div>
       </div>
       <div class="mt-5">
@@ -564,7 +564,7 @@
             const avgPercentage = summary.average_percentage || 0;
             const processingTime = summary.processing_time || 0;
 
-            ExamGrader.utils.showToast(
+            ExamGrader.notificationManager.notify(
               `AI processing completed! Average score: ${avgPercentage}% (${processingTime}s)`,
               "success"
             );
@@ -575,7 +575,7 @@
           }
         } catch (error) {
           console.error("Error:", error);
-          ExamGrader.utils.showToast(`AI processing failed: ${error.message}`, "error");
+          ExamGrader.notificationManager.notify(`AI processing failed: ${error.message}`, "error");
         } finally {
           ExamGrader.utils.hideButtonLoading(this, "AI Processing");
           this.disabled = false;
@@ -615,14 +615,14 @@
           const data = await response.json();
 
           if (data.success) {
-            ExamGrader.utils.showToast(data.message, 'success');
+            ExamGrader.notificationManager.notify(data.message, 'success');
             setTimeout(() => location.reload(), 1000);
           } else {
-            ExamGrader.utils.showToast(data.message, 'error');
+            ExamGrader.notificationManager.notify(data.message, 'error');
           }
         } catch (error) {
           console.error('Error deleting item:', error);
-          ExamGrader.utils.showToast('Error deleting item: ' + error.message, 'error');
+          ExamGrader.notificationManager.notify('Error deleting item: ' + error.message, 'error');
         }
       });
     });

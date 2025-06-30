@@ -494,6 +494,13 @@ var currentDeleteGuideName = null;
 
 // Toast notification system
 function showToast(message, type = 'success') {
+    // Use the ExamGrader notification manager if available
+    if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+        ExamGrader.notificationManager.notify(message, type);
+        return;
+    }
+    
+    // Fallback to original implementation if ExamGrader is not available
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.innerHTML = `

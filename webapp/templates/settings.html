@@ -4,22 +4,25 @@
 <div class="max-w-4xl mx-auto">
     <!-- Page Header -->
     <div class="mb-8">
-        <h1 class="text-2xl font-bold text-gray-900">Application Settings</h1>
-        <p class="mt-2 text-sm text-gray-600">
+        <h1 class="text-2xl font-bold text-gray-900" data-i18n="settings_title">Application Settings</h1>
+        <p class="mt-2 text-sm text-gray-600" data-i18n="settings_description">
             Configure your exam grader application preferences and settings.
         </p>
     </div>
 
     <form method="POST" id="settings-form">
+        {% if csrf_token %}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        {% endif %}
         <div class="space-y-8">
             <!-- File Upload Settings -->
             <div class="bg-white shadow rounded-lg">
                 <div class="px-4 py-5 sm:p-6">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">File Upload Settings</h3>
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" data-i18n="file_upload_settings">File Upload Settings</h3>
                     
                     <!-- Max File Size -->
                     <div class="mb-6">
-                        <label for="max_file_size" class="block text-sm font-medium text-gray-700 mb-2">
+                        <label for="max_file_size" class="block text-sm font-medium text-gray-700 mb-2" data-i18n="max_file_size">
                             Maximum File Size (MB)
                         </label>
                         <div class="flex items-center space-x-3">
@@ -30,14 +33,14 @@
                                 {{ settings.max_file_size }}MB
                             </span>
                         </div>
-                        <p class="mt-1 text-sm text-gray-500">
+                        <p class="mt-1 text-sm text-gray-500" data-i18n="max_file_size_description">
                             Maximum size allowed for uploaded files (1-100 MB)
                         </p>
                     </div>
 
                     <!-- Allowed File Formats -->
                     <div class="mb-6">
-                        <label class="block text-sm font-medium text-gray-700 mb-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-3" data-i18n="allowed_file_formats">
                             Allowed File Formats
                         </label>
                         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -50,7 +53,7 @@
                             </label>
                             {% endfor %}
                         </div>
-                        <p class="mt-2 text-sm text-gray-500">
+                        <p class="mt-2 text-sm text-gray-500" data-i18n="allowed_formats_description">
                             Select which file formats are allowed for upload
                         </p>
                     </div>
@@ -107,11 +110,11 @@
             <!-- User Interface Settings -->
             <div class="bg-white shadow rounded-lg">
                 <div class="px-4 py-5 sm:p-6">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">User Interface Settings</h3>
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" data-i18n="ui_settings">User Interface Settings</h3>
                     
                     <!-- Notification Level -->
                     <div class="mb-6">
-                        <label for="notification_level" class="block text-sm font-medium text-gray-700 mb-2">
+                        <label for="notification_level" class="block text-sm font-medium text-gray-700 mb-2" data-i18n="notification_level">
                             Notification Level
                         </label>
                         <select id="notification_level" name="notification_level"
@@ -122,14 +125,14 @@
                             </option>
                             {% endfor %}
                         </select>
-                        <p class="mt-1 text-sm text-gray-500">
+                        <p class="mt-1 text-sm text-gray-500" data-i18n="notification_level_description">
                             Choose which notifications to display
                         </p>
                     </div>
 
                     <!-- Theme -->
                     <div class="mb-6">
-                        <label for="theme" class="block text-sm font-medium text-gray-700 mb-2">
+                        <label for="theme" class="block text-sm font-medium text-gray-700 mb-2" data-i18n="theme">
                             Theme
                         </label>
                         <select id="theme" name="theme"
@@ -140,26 +143,98 @@
                             </option>
                             {% endfor %}
                         </select>
-                        <p class="mt-1 text-sm text-gray-500">
+                        <p class="mt-1 text-sm text-gray-500" data-i18n="theme_description">
                             Select your preferred theme
                         </p>
                     </div>
 
                     <!-- Language -->
                     <div class="mb-6">
-                        <label for="language" class="block text-sm font-medium text-gray-700 mb-2">
+                        <label for="language" class="block text-sm font-medium text-gray-700 mb-2" data-i18n="language">
                             Language
                         </label>
                         <select id="language" name="language"
                                 class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
                             {% for lang in languages %}
-                            <option value="{{ lang.value }}" {% if lang.value == settings.language %}selected{% endif %}>
+                            <option value="{{ lang.value }}" {% if lang.value == settings.language %}selected{% endif %} data-i18n="language_{{ lang.value }}">
                                 {{ lang.label }}
                             </option>
                             {% endfor %}
                         </select>
-                        <p class="mt-1 text-sm text-gray-500">
+                        <p class="mt-1 text-sm text-gray-500" data-i18n="language_description">
                             Choose your preferred language
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Configuration Settings -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">AI Configuration Settings</h3>
+                    
+                    <!-- LLM API Key -->
+                    <div class="mb-6">
+                        <label for="llm_api_key" class="block text-sm font-medium text-gray-700 mb-2">
+                            LLM API Key (DeepSeek)
+                        </label>
+                        <input type="password" id="llm_api_key" name="llm_api_key" 
+                               value="{{ settings.llm_api_key }}" 
+                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                        <p class="mt-1 text-sm text-gray-500">
+                            API key for the DeepSeek LLM service
+                        </p>
+                    </div>
+
+                    <!-- LLM Model -->
+                    <div class="mb-6">
+                        <label for="llm_model" class="block text-sm font-medium text-gray-700 mb-2">
+                            LLM Model
+                        </label>
+                        <input type="text" id="llm_model" name="llm_model" 
+                               value="{{ settings.llm_model }}" 
+                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                        <p class="mt-1 text-sm text-gray-500">
+                            Model name for the DeepSeek LLM service (e.g., deepseek-reasoner)
+                        </p>
+                    </div>
+                    
+                    <!-- LLM Seed -->
+                    <div class="mb-6">
+                        <label for="llm_seed" class="block text-sm font-medium text-gray-700 mb-2">
+                            LLM Seed
+                        </label>
+                        <input type="number" id="llm_seed" name="llm_seed" 
+                               value="{{ settings.llm_seed }}" 
+                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                        <p class="mt-1 text-sm text-gray-500">
+                            Random seed for deterministic outputs (e.g., 42)
+                        </p>
+                    </div>
+
+                    <!-- OCR API Key -->
+                    <div class="mb-6">
+                        <label for="ocr_api_key" class="block text-sm font-medium text-gray-700 mb-2">
+                            OCR API Key (HandwritingOCR)
+                        </label>
+                        <input type="password" id="ocr_api_key" name="ocr_api_key" 
+                               value="{{ settings.ocr_api_key }}" 
+                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                        <p class="mt-1 text-sm text-gray-500">
+                            API key for the HandwritingOCR service
+                        </p>
+                    </div>
+
+                    <!-- OCR API URL -->
+                    <div class="mb-6">
+                        <label for="ocr_api_url" class="block text-sm font-medium text-gray-700 mb-2">
+                            OCR API URL
+                        </label>
+                        <input type="text" id="ocr_api_url" name="ocr_api_url" 
+                               value="{{ settings.ocr_api_url }}" 
+                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                        <p class="mt-1 text-sm text-gray-500">
+                            API URL for the HandwritingOCR service
                         </p>
                     </div>
                 </div>
@@ -263,6 +338,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('notification_level').value = 'all';
             document.getElementById('theme').value = 'light';
             document.getElementById('language').value = 'en';
+            document.getElementById('llm_seed').value = '42';
         }
     });
 
@@ -272,7 +348,23 @@ document.addEventListener('DOMContentLoaded', function() {
         if (checkedFormats.length === 0) {
             e.preventDefault();
             alert('Please select at least one file format.');
-            return false;
+            return;
+        }
+        
+        // Save settings to localStorage
+        const notificationLevel = document.getElementById('notification_level').value;
+        const theme = document.getElementById('theme').value;
+        const language = document.getElementById('language').value;
+        
+        localStorage.setItem('notification_level', notificationLevel);
+        localStorage.setItem('theme', theme);
+        localStorage.setItem('language', language);
+        
+        // Apply theme and language immediately
+        if (typeof SettingsManager !== 'undefined') {
+            SettingsManager.applyTheme();
+            SettingsManager.applyLanguage();
+        }
         }
     });
 });

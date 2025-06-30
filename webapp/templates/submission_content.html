@@ -445,11 +445,11 @@
       .writeText(textToCopy)
       .then(function () {
         // Show success message
-        ExamGrader.utils.showToast("Content copied to clipboard!", "success");
+        ExamGrader.notificationManager.notify("Content copied to clipboard!", "success");
       })
       .catch(function (err) {
         console.error("Failed to copy: ", err);
-        ExamGrader.utils.showToast("Failed to copy content", "error");
+        ExamGrader.notificationManager.notify("Failed to copy content", "error");
       });
   }
 

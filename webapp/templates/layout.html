@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-gray-50">
+<html lang="{{ settings.language if settings and settings.language else 'en' }}" data-theme="{{ settings.theme if settings and settings.theme else 'light' }}" class="h-full bg-gray-50">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -126,7 +126,7 @@
 
     {% block extra_css %}{% endblock %}
   </head>
-  <body class="h-full overflow-hidden font-sans antialiased">
+  <body class="h-full overflow-hidden font-sans antialiased" data-theme="{{ settings.theme if settings and settings.theme else 'light' }}">
     <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %} {% if
     messages %}
@@ -239,7 +239,7 @@
                   </div>
                 </div>
                 <div class="ml-3">
-                  <h1 class="text-lg font-semibold text-gray-900">
+                  <h1 class="text-lg font-semibold text-gray-900" data-i18n="app_title">
                     Exam Grader
                   </h1>
                   <p class="text-xs text-gray-500">v{{ app_version }}</p>
@@ -272,7 +272,7 @@
                     d="M8 5a2 2 0 012-2h2a2 2 0 012 2v0M8 5a2 2 0 000 4h8a2 2 0 000-4M8 5v0"
                   />
                 </svg>
-                Dashboard
+                <span data-i18n="nav_dashboard">Dashboard</span>
               </a>
 
               <a
@@ -292,7 +292,7 @@
                     d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                   />
                 </svg>
-                Upload Guide
+                <span data-i18n="nav_guides">Upload Guide</span>
               </a>
 
               <a
@@ -312,7 +312,7 @@
                     d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
                   />
                 </svg>
-                Guide Library
+                <span data-i18n="nav_guides">Guide Library</span>
               </a>
 
               <a
@@ -332,7 +332,7 @@
                     d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                   />
                 </svg>
-                Upload Submission
+                <span data-i18n="nav_submissions">Upload Submission</span>
               </a>
 
               {% if session.get('submissions') %}
@@ -353,7 +353,7 @@
                     d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                   />
                 </svg>
-                Submissions
+                <span data-i18n="nav_submissions">Submissions</span>
                 <span
                   class="ml-auto bg-primary-100 text-primary-600 py-0.5 px-2 rounded-full text-xs font-medium"
                 >
@@ -378,7 +378,7 @@
                     d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
                   />
                 </svg>
-                Results
+                <span data-i18n="nav_results">Results</span>
               </a>
               {% endif %}
 
@@ -406,7 +406,7 @@
                     d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                   />
                 </svg>
-                Settings
+                <span data-i18n="nav_settings">Settings</span>
               </a>
             </nav>
 
@@ -415,24 +415,24 @@
               <div
                 class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2"
               >
-                System Status
+                <span data-i18n="system_status">System Status</span>
               </div>
               <div class="space-y-1">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs text-gray-600">OCR Service</span>
+                  <span class="text-xs text-gray-600" data-i18n="ocr_service">OCR Service</span>
                   <span
                     class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {% if service_status.ocr_status %}bg-success-100 text-success-800{% else %}bg-danger-100 text-danger-800{% endif %}"
                   >
-                    {% if service_status.ocr_status %}Online{% else %}Offline{%
+                    {% if service_status.ocr_status %}<span data-i18n="status_online">Online</span>{% else %}<span data-i18n="status_offline">Offline</span>{%
                     endif %}
                   </span>
                 </div>
                 <div class="flex items-center justify-between">
-                  <span class="text-xs text-gray-600">AI Service</span>
+                  <span class="text-xs text-gray-600" data-i18n="ai_service">AI Service</span>
                   <span
                     class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {% if service_status.llm_status %}bg-success-100 text-success-800{% else %}bg-danger-100 text-danger-800{% endif %}"
                   >
-                    {% if service_status.llm_status %}Online{% else %}Offline{%
+                    {% if service_status.llm_status %}<span data-i18n="status_online">Online</span>{% else %}<span data-i18n="status_offline">Offline</span>{%
                     endif %}
                   </span>
                 </div>
@@ -605,7 +605,9 @@
     </script>
 
     <!-- Custom JavaScript -->
+    <script src="{{ url_for('static', filename='js/translations.js') }}"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
 
     <!-- Initialize client config from server -->
     <script>

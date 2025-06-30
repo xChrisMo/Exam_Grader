@@ -1,5 +1,107 @@
 /* Custom CSS for Exam Grader Application */
 
+/* Theme Variables */
+:root {
+    /* Light theme (default) */
+    --bg-color: #f9fafb;
+    --text-color: #111827;
+    --card-bg: #ffffff;
+    --border-color: #e5e7eb;
+    --input-bg: #ffffff;
+    --input-border: #d1d5db;
+}
+
+/* Dark theme */
+html[data-theme="dark"], body[data-theme="dark"] {
+    --bg-color: #111827;
+    --text-color: #f9fafb;
+    --card-bg: #1f2937;
+    --border-color: #374151;
+    --input-bg: #1f2937;
+    --input-border: #4b5563;
+    --text-muted: #9ca3af;
+    --text-heading: #f3f4f6;
+    --shadow-color: rgba(0, 0, 0, 0.5);
+}
+
+/* Dark theme specific overrides */
+html[data-theme="dark"] .bg-gray-50, 
+body[data-theme="dark"] .bg-gray-50 {
+    background-color: var(--bg-color) !important;
+}
+
+html[data-theme="dark"] .text-gray-500, 
+html[data-theme="dark"] .text-gray-600,
+body[data-theme="dark"] .text-gray-500, 
+body[data-theme="dark"] .text-gray-600 {
+    color: var(--text-muted) !important;
+}
+
+html[data-theme="dark"] .text-gray-900,
+body[data-theme="dark"] .text-gray-900 {
+    color: var(--text-heading) !important;
+}
+
+html[data-theme="dark"] .shadow,
+body[data-theme="dark"] .shadow {
+    box-shadow: 0 1px 3px 0 var(--shadow-color), 0 1px 2px -1px var(--shadow-color) !important;
+}
+
+/* Form elements in dark mode */
+html[data-theme="dark"] input, 
+html[data-theme="dark"] select, 
+html[data-theme="dark"] textarea,
+body[data-theme="dark"] input, 
+body[data-theme="dark"] select, 
+body[data-theme="dark"] textarea {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--text-color) !important;
+}
+
+/* Card backgrounds in dark mode */
+html[data-theme="dark"] .bg-white,
+body[data-theme="dark"] .bg-white {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+}
+
+/* Buttons in dark mode */
+html[data-theme="dark"] .btn-secondary,
+body[data-theme="dark"] .btn-secondary {
+    background-color: var(--card-bg) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-color) !important;
+}
+
+/* Borders in dark mode */
+html[data-theme="dark"] .border,
+html[data-theme="dark"] .border-gray-200,
+body[data-theme="dark"] .border,
+body[data-theme="dark"] .border-gray-200 {
+    border-color: var(--border-color) !important;
+}
+
+/* Apply theme variables */
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.bg-white, .bg-gray-50 {
+    background-color: var(--card-bg) !important;
+}
+
+.border-gray-300 {
+    border-color: var(--border-color) !important;
+}
+
+input, select, textarea {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--text-color) !important;
+}
+
 /* Performance optimizations */
 * {
     box-sizing: border-box;

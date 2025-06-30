@@ -25,6 +25,54 @@ const ExamGrader = {
     },
   },
 
+  // Notification Manager
+  notificationManager: {
+    // Get user's notification level preference
+    getNotificationLevel: function() {
+      // Try to get from localStorage first
+      const storedLevel = localStorage.getItem('notification_level');
+      if (storedLevel) {
+        return storedLevel;
+      }
+      
+      // Try to get from DOM if available
+      const levelSelect = document.getElementById('notification_level');
+      if (levelSelect && levelSelect.value) {
+        return levelSelect.value;
+      }
+      
+      // Default to 'all' if not found
+      return 'all';
+    },
+    
+    // Check if notification should be shown based on type and user preference
+    shouldShowNotification: function(type) {
+      const level = this.getNotificationLevel();
+      
+      switch (level) {
+        case 'none':
+          return false;
+        case 'errors':
+          return type === 'error';
+        case 'important':
+          return type === 'error' || type === 'warning';
+        case 'all':
+        default:
+          return true;
+      }
+    },
+    
+    // Show notification if it meets the user's preference criteria
+    notify: function(message, type = 'info', duration = 5000) {
+      if (!this.shouldShowNotification(type)) {
+        console.log(`Notification suppressed (level: ${this.getNotificationLevel()}): ${type} - ${message}`);
+        return;
+      }
+      
+      ExamGrader.utils.showToast(message, type, duration);
+    }
+  },
+
   // Utility functions
   utils: {
     /**
@@ -152,9 +200,15 @@ const ExamGrader = {
      */
     apiRequest: async function (url, options = {}) {
       try {
-        // Add CSRF token if available
-        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
-                         document.querySelector('input[name=csrf_token]')?.value;
+        // Add CSRF token if available - try multiple sources
+        let csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+                       document.querySelector('input[name=csrf_token]')?.value ||
+                       document.querySelector('input[name=csrf-token]')?.value;
+                       
+        // Log CSRF token status for debugging
+        if (!csrfToken) {
+          console.warn('CSRF token not found in DOM. This may cause request failures.');
+        }
 
         const defaultHeaders = {
           "Content-Type": "application/json",
@@ -190,7 +244,16 @@ const ExamGrader = {
 
           switch (response.status) {
             case 400:
-              errorMessage = data.error || 'Bad request. Please check your input.';
+              if (data.error && data.error.toLowerCase().includes('csrf')) {
+                errorMessage = 'CSRF token error. Please refresh the page and try again.';
+                console.error('CSRF token error detected:', data);
+                // Attempt to reload the page after a short delay to get a fresh CSRF token
+                setTimeout(() => {
+                  window.location.reload();
+                }, 3000);
+              } else {
+                errorMessage = data.error || 'Bad request. Please check your input.';
+              }
               break;
             case 401:
               errorMessage = 'Authentication required. Please refresh the page.';
@@ -348,7 +411,7 @@ const ExamGrader = {
         );
 
         if (data.success) {
-          ExamGrader.utils.showToast(
+          ExamGrader.notificationManager.notify(
             "Answer mapping completed successfully!",
             "success"
           );
@@ -357,7 +420,7 @@ const ExamGrader = {
           throw new Error(data.error || "Mapping failed");
         }
       } catch (error) {
-        ExamGrader.utils.showToast(`Mapping failed: ${error.message}`, "error");
+        ExamGrader.notificationManager.notify(`Mapping failed: ${error.message}`, "error");
         return false;
       }
     },
@@ -375,7 +438,7 @@ const ExamGrader = {
         );
 
         if (data.success) {
-          ExamGrader.utils.showToast(
+          ExamGrader.notificationManager.notify(
             `Grading completed! Score: ${data.score}%`,
             "success"
           );
@@ -384,7 +447,7 @@ const ExamGrader = {
           throw new Error(data.error || "Grading failed");
         }
       } catch (error) {
-        ExamGrader.utils.showToast(`Grading failed: ${error.message}`, "error");
+        ExamGrader.notificationManager.notify(`Grading failed: ${error.message}`, "error");
         return false;
       }
     },
@@ -409,7 +472,7 @@ const ExamGrader = {
           const avgPercentage = summary.average_percentage || 0;
           const processingTime = summary.processing_time || 0;
 
-          ExamGrader.utils.showToast(
+          ExamGrader.notificationManager.notify(
             `Unified AI processing completed! Average score: ${avgPercentage}% (${processingTime}s)`,
             "success"
           );
@@ -429,7 +492,7 @@ const ExamGrader = {
         ExamGrader.ui.hideProgressModal();
         // Stop any ongoing polling if an error occurs
         ExamGrader.ui.stopProgressPolling();
-        ExamGrader.utils.showToast(`Unified AI processing failed: ${error.message}`, "error");
+        ExamGrader.notificationManager.notify(`Unified AI processing failed: ${error.message}`, "error");
         return false;
       }
     },
@@ -590,9 +653,9 @@ const ExamGrader = {
             ExamGrader.progressPollingInterval = null;
             ExamGrader.ui.hideProgressModal();
             if (progress.status === 'completed') {
-              ExamGrader.utils.showToast('AI processing completed successfully!', 'success');
+              ExamGrader.notificationManager.notify('AI processing completed successfully!', 'success');
             } else {
-              ExamGrader.utils.showToast('AI processing failed: ' + progress.message, 'error');
+              ExamGrader.notificationManager.notify('AI processing failed: ' + progress.message, 'error');
             }
           }
         } catch (error) {
@@ -600,7 +663,7 @@ const ExamGrader = {
           clearInterval(ExamGrader.progressPollingInterval);
           ExamGrader.progressPollingInterval = null;
           ExamGrader.ui.hideProgressModal();
-          ExamGrader.utils.showToast('Error during AI processing: ' + error.message, 'error');
+          ExamGrader.notificationManager.notify('Error during AI processing: ' + error.message, 'error');
         }
       }, 2000); // Poll every 2 seconds
     },
@@ -623,18 +686,34 @@ const ExamGrader = {
     // Initialize common functionality
     this.initFlashMessages();
     this.initServiceWorker();
+    
+    // Initialize settings from localStorage
+    this.initSettings();
 
     // Add global error handler
     window.addEventListener("error", function (e) {
       console.error("Global error:", e.error);
-      ExamGrader.utils.showToast("An unexpected error occurred", "error");
+      ExamGrader.notificationManager.notify("An unexpected error occurred", "error");
     });
 
     // Add unhandled promise rejection handler
     window.addEventListener("unhandledrejection", function (e) {
       console.error("Unhandled promise rejection:", e.reason);
-      ExamGrader.utils.showToast("An unexpected error occurred", "error");
+      ExamGrader.notificationManager.notify("An unexpected error occurred", "error");
     });
+  },
+  
+  // Initialize settings from localStorage
+  initSettings: function() {
+    // Get notification level from localStorage
+    const storedNotificationLevel = localStorage.getItem('notification_level');
+    if (storedNotificationLevel) {
+      // Update notification level select if it exists
+      const notificationLevelSelect = document.getElementById('notification_level');
+      if (notificationLevelSelect) {
+        notificationLevelSelect.value = storedNotificationLevel;
+      }
+    }
   },
 
   /**

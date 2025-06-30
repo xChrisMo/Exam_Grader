@@ -384,8 +384,11 @@ def inject_globals():
     try:
         from flask_wtf.csrf import generate_csrf
 
+        # Always generate a fresh CSRF token
         csrf_token = generate_csrf()
-    except Exception:
+        logger.debug(f"Generated CSRF token for template context: {csrf_token[:10]}...")
+    except Exception as e:
+        logger.error(f"Failed to generate CSRF token: {str(e)}")
         csrf_token = ""
 
     return {
@@ -1041,11 +1044,22 @@ def view_submissions():
 def view_results():
     """View grading results."""
     try:
+        # Log all relevant session variables for debugging
         last_progress_id = session.get("last_grading_progress_id")
+        last_grading_result = session.get('last_grading_result')
+        guide_id = session.get('guide_id')
+        
         logger.info(f"view_results: last_progress_id from session: {last_progress_id}")
-        logger.info(
-            f"view_results: session['last_grading_result'] is {session.get('last_grading_result')}"
-        )
+        logger.info(f"view_results: session['last_grading_result'] is {last_grading_result}")
+        logger.info(f"view_results: session['guide_id'] is {guide_id}")
+        
+        # If last_grading_result is None, set it to True if we have a progress_id
+        # This helps recover from situations where the session variable wasn't properly set
+        if last_progress_id and last_grading_result is None:
+            logger.info(f"Setting session['last_grading_result'] to True since we have a progress_id")
+            session['last_grading_result'] = True
+            session.modified = True
+        
         if not last_progress_id:
             flash(
                 "No recent grading results available. Please run AI grading first.",
@@ -1617,13 +1631,19 @@ def process_unified_ai():
         finally:
             pass  # The complete_session is already called in try/except blocks
 
-        session["last_grading_progress_id"] = (
-            progress_id  # Store the progress_id for viewing results
-        )
-        session["last_grading_result"] = (
-            True  # Set this to activate the View Results button
-        )
-        session['guide_id'] = guide_id # Store guide_id in session
+        # Store the progress_id for viewing results
+        session["last_grading_progress_id"] = progress_id
+        
+        # Set this to activate the View Results button
+        session["last_grading_result"] = True
+        
+        # Store guide_id in session
+        session['guide_id'] = guide_id
+        
+        # Ensure session is saved
+        session.modified = True
+        
+        logger.info(f"Session variables set: last_grading_progress_id={progress_id}, last_grading_result=True, guide_id={guide_id}")
 
         return (
             jsonify(
@@ -2048,29 +2068,43 @@ def view_submission_content(submission_id):
         return redirect(url_for("view_submissions"))
 
 
-@app.route("/settings")
+@app.route("/settings", methods=["GET", "POST"])
 def settings():
     """Application settings page."""
     try:
+        # Get current settings from environment variables
+        current_max_file_size = int(os.getenv("MAX_FILE_SIZE_MB", "16"))
+        current_formats = os.getenv(
+            "SUPPORTED_FORMATS",
+            ".pdf,.docx,.doc,.jpg,.jpeg,.png,.tiff,.bmp,.gif"
+        ).split(",")
+        
+        # Get API keys and configuration from environment variables
+        current_llm_api_key = os.getenv("DEEPSEEK_API_KEY", "")
+        current_llm_model = os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner")
+        current_llm_seed = os.getenv("DEEPSEEK_SEED", "42")
+        current_ocr_api_key = os.getenv("HANDWRITING_OCR_API_KEY", "")
+        current_ocr_api_url = os.getenv("HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3")
+        
+        # Get UI settings from environment variables
+        current_notification_level = os.getenv("NOTIFICATION_LEVEL", "all")
+        current_theme = os.getenv("THEME", "light")
+        current_language = os.getenv("LANGUAGE", "en")
+        
         # Default settings
         default_settings = {
-            "max_file_size": 16,
-            "allowed_formats": [
-                ".pdf",
-                ".docx",
-                ".doc",
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".tiff",
-                ".bmp",
-                ".gif",
-            ],
+            "max_file_size": current_max_file_size,
+            "allowed_formats": current_formats,
             "auto_process": True,
             "save_temp_files": False,
-            "notification_level": "all",
-            "theme": "light",
-            "language": "en",
+            "notification_level": current_notification_level,
+            "theme": current_theme,
+            "language": current_language,
+            "llm_api_key": current_llm_api_key,
+            "llm_model": current_llm_model,
+            "llm_seed": current_llm_seed,
+            "ocr_api_key": current_ocr_api_key,
+            "ocr_api_url": current_ocr_api_url,
         }
 
         # Available options
@@ -2103,6 +2137,94 @@ def settings():
             {"value": "fr", "label": "French"},
             {"value": "de", "label": "German"},
         ]
+        
+        # Handle form submission
+        if request.method == "POST":
+            try:
+                # Get form data
+                max_file_size = request.form.get("max_file_size", "16")
+                allowed_formats = request.form.getlist("allowed_formats")
+                llm_api_key = request.form.get("llm_api_key", "")
+                llm_model = request.form.get("llm_model", "deepseek-reasoner")
+                llm_seed = request.form.get("llm_seed", "42")
+                ocr_api_key = request.form.get("ocr_api_key", "")
+                ocr_api_url = request.form.get("ocr_api_url", "https://www.handwritingocr.com/api/v3")
+                
+                # Get UI settings
+                notification_level = request.form.get("notification_level", "all")
+                theme = request.form.get("theme", "light")
+                language = request.form.get("language", "en")
+                
+                # Validate form data
+                if not allowed_formats:
+                    flash("Please select at least one file format.", "error")
+                    return redirect(url_for("settings"))
+                
+                # Find .env file
+                dotenv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+                
+                # Update .env file
+                import dotenv
+                
+                # Update MAX_FILE_SIZE_MB
+                dotenv.set_key(dotenv_path, "MAX_FILE_SIZE_MB", max_file_size)
+                os.environ["MAX_FILE_SIZE_MB"] = max_file_size
+                
+                # Update SUPPORTED_FORMATS
+                formats_str = ",".join(allowed_formats)
+                dotenv.set_key(dotenv_path, "SUPPORTED_FORMATS", formats_str)
+                os.environ["SUPPORTED_FORMATS"] = formats_str
+                
+                # Update LLM configuration
+                dotenv.set_key(dotenv_path, "DEEPSEEK_API_KEY", llm_api_key)
+                os.environ["DEEPSEEK_API_KEY"] = llm_api_key
+                
+                dotenv.set_key(dotenv_path, "DEEPSEEK_MODEL", llm_model)
+                os.environ["DEEPSEEK_MODEL"] = llm_model
+                
+                dotenv.set_key(dotenv_path, "DEEPSEEK_SEED", llm_seed)
+                os.environ["DEEPSEEK_SEED"] = llm_seed
+                
+                # Update OCR configuration
+                dotenv.set_key(dotenv_path, "HANDWRITING_OCR_API_KEY", ocr_api_key)
+                os.environ["HANDWRITING_OCR_API_KEY"] = ocr_api_key
+                
+                dotenv.set_key(dotenv_path, "HANDWRITING_OCR_API_URL", ocr_api_url)
+                os.environ["HANDWRITING_OCR_API_URL"] = ocr_api_url
+                
+                # Update UI settings
+                dotenv.set_key(dotenv_path, "NOTIFICATION_LEVEL", notification_level)
+                os.environ["NOTIFICATION_LEVEL"] = notification_level
+                
+                dotenv.set_key(dotenv_path, "THEME", theme)
+                os.environ["THEME"] = theme
+                
+                dotenv.set_key(dotenv_path, "LANGUAGE", language)
+                os.environ["LANGUAGE"] = language
+                
+                # Reload configuration
+                from src.config.config_manager import ConfigManager
+                ConfigManager().__init__()
+                
+                # Reinitialize services with new API keys
+                if "ocr_service" in globals() and ocr_api_key:
+                    global ocr_service
+                    ocr_service = OCRService(api_key=ocr_api_key)
+                    logger.info("OCR service reinitialized with new API key")
+                
+                if "llm_service" in globals() and llm_api_key:
+                    global llm_service, mapping_service, grading_service
+                    llm_service = LLMService(api_key=llm_api_key, model=llm_model, seed=int(llm_seed))
+                    mapping_service = MappingService(llm_service=llm_service)
+                    grading_service = GradingService(llm_service=llm_service, mapping_service=mapping_service)
+                    logger.info("LLM services reinitialized with new API key and seed")
+                
+                flash("Settings updated successfully.", "success")
+                return redirect(url_for("settings"))
+            except Exception as e:
+                logger.error(f"Error updating settings: {str(e)}")
+                flash(f"Error updating settings: {str(e)}", "error")
+                return redirect(url_for("settings"))
 
         context = {
             "page_title": "Settings",

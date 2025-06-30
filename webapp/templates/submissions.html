@@ -566,14 +566,14 @@
         .then((data) => {
           ExamGrader.utils.hideButtonLoading(gradeButton, "Grade");
           if (data.success) {
-            ExamGrader.utils.showToast(
+            ExamGrader.notificationManager.notify(
               "Submission graded successfully!",
               "success"
             );
             // Optionally, update UI or redirect
             window.location.reload();
           } else {
-            ExamGrader.utils.showToast(
+            ExamGrader.notificationManager.notify(
               data.message || "Error grading submission.",
               "error"
             );
@@ -581,7 +581,7 @@
         })
         .catch((error) => {
           ExamGrader.utils.hideButtonLoading(gradeButton, "Grade");
-          ExamGrader.utils.showToast(
+          ExamGrader.notificationManager.notify(
             "An error occurred: " + error.message,
             "error"
           );
@@ -611,16 +611,16 @@
         .then((data) => {
           ExamGrader.utils.hideButtonLoading(deleteButton, "Delete");
           if (data.success) {
-            ExamGrader.utils.showToast('Submission deleted successfully!', 'success');
+            ExamGrader.notificationManager.notify('Submission deleted successfully!', 'success');
             // Reload the page to update all counts, including dashboard
             window.location.reload();
           } else {
-ExamGrader.utils.showToast(data.error || 'An unknown error occurred.', 'error');
+ExamGrader.notificationManager.notify(data.error || 'An unknown error occurred.', 'error');
           }
         })
         .catch((error) => {
           ExamGrader.utils.hideButtonLoading(deleteButton, "Delete");
-          ExamGrader.utils.showToast(
+          ExamGrader.notificationManager.notify(
             "An error occurred: " + error.message,
             "error"
           );
@@ -657,14 +657,14 @@ ExamGrader.utils.showToast(data.error || 'An unknown error occurred.', 'error');
         .then((response) => response.json())
         .then((data) => {
           if (data.success) {
-            ExamGrader.utils.showToast(
+            ExamGrader.notificationManager.notify(
               "Cache cleared successfully!",
               "success"
             );
             // Refresh cache stats
             loadCacheStats();
           } else {
-            ExamGrader.utils.showToast(
+            ExamGrader.notificationManager.notify(
               "Error clearing cache: " + (data.message || "Unknown error"),
               "error"
             );
@@ -672,7 +672,7 @@ ExamGrader.utils.showToast(data.error || 'An unknown error occurred.', 'error');
         })
         .catch((error) => {
           console.error("Error:", error);
-          ExamGrader.utils.showToast(
+          ExamGrader.notificationManager.notify(
             "Error clearing cache: " + error.message,
             "error"
           );

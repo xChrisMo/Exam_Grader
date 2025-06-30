@@ -11,6 +11,9 @@
     </div>
 
     <form method="POST" id="create-guide-form">
+        {% if csrf_token %}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        {% endif %}
         <div class="space-y-8">
             <!-- Basic Information -->
             <div class="bg-white shadow rounded-lg">

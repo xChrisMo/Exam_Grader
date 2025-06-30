@@ -40,6 +40,7 @@ class SecurityConfig:
     session_cookie_httponly: bool = True
     session_cookie_secure: bool = False # Changed to False for local HTTP development
     session_cookie_samesite: str = "Lax"
+    session_cookie_domain: str = None # Set to None to avoid domain issues with CSRF tokens
 
     def __post_init__(self):
         """Validate security configuration."""
@@ -302,7 +303,9 @@ class UnifiedConfig:
             "SESSION_COOKIE_HTTPONLY": self.security.session_cookie_httponly,
             "SESSION_COOKIE_SECURE": self.security.session_cookie_secure,
             "SESSION_COOKIE_SAMESITE": self.security.session_cookie_samesite,
+            "SESSION_COOKIE_DOMAIN": self.security.session_cookie_domain,
             "WTF_CSRF_ENABLED": self.security.csrf_enabled,
+            "WTF_CSRF_TIME_LIMIT": 86400,  # Extend CSRF token validity to 24 hours
             "SQLALCHEMY_DATABASE_URI": self.database.database_url,
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "SQLALCHEMY_ENGINE_OPTIONS": {
