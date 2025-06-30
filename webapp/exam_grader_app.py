@@ -1057,10 +1057,25 @@ def view_submissions():
         return redirect(url_for("dashboard"))
 
 
+def get_letter_grade(score):
+    """Convert numerical score to letter grade."""
+    if score >= 90:
+        return 'A'
+    elif score >= 80:
+        return 'B'
+    elif score >= 70:
+        return 'C'
+    elif score >= 60:
+        return 'D'
+    else:
+        return 'F'
+
 @app.route("/results")
 def view_results():
     """View grading results."""
     try:
+        from src.database.models import GradingResult
+        
         # Log all relevant session variables for debugging
         last_progress_id = session.get("last_grading_progress_id")
         last_grading_result = session.get('last_grading_result')
@@ -1603,6 +1618,18 @@ def process_unified_ai():
                 session["submissions"] = [s.to_dict() for s in recent_submissions]
 
             progress_tracker.complete_session(progress_id, success=True)
+
+            # Update session variables for results page
+            session['last_grading_progress_id'] = progress_id
+            session['last_grading_result'] = True
+            session.modified = True  # Mark session as modified to ensure changes are saved
+            
+            # Update session with progress ID and grading result flag
+            session['last_grading_progress_id'] = progress_id
+            session['last_grading_result'] = True
+            session.modified = True
+            
+            logger.info(f"Updated session with progress_id {progress_id} and set last_grading_result to True")
 
         except Exception as e:
             db.session.rollback()
