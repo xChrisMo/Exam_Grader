@@ -80,13 +80,7 @@ class ProgressTracker:
         return progress_id
     
     def update_progress(
-        self,
-        progress_id: str,
-        current_step: int,
-        current_operation: str,
-        submission_index: int = 0,
-        status: str = "processing",
-        details: Optional[str] = None
+        self, progress_id: str, current_step: int, current_operation: str, submission_index: int = 0, status: str = "processing", details: Optional[str] = None, percentage: Optional[float] = None
     ) -> ProgressUpdate:
         """
         Update progress for a session.
@@ -98,6 +92,7 @@ class ProgressTracker:
             submission_index: Current submission index (0-based)
             status: Current status
             details: Additional details
+            percentage: Optional pre-calculated percentage
             
         Returns:
             ProgressUpdate: The created progress update
@@ -112,8 +107,11 @@ class ProgressTracker:
             session['status'] = status
             session['last_update'] = time.time()
             
-            # Calculate percentage
-            percentage = (current_step / session['total_steps']) * 100
+            # Use provided percentage or calculate it
+            if percentage is None:
+                calculated_percentage = (current_step / session['total_steps']) * 100
+            else:
+                calculated_percentage = percentage
             
             # Estimate time remaining
             elapsed_time = time.time() - session['start_time']
@@ -132,7 +130,7 @@ class ProgressTracker:
                 current_operation=current_operation,
                 submission_index=submission_index,
                 total_submissions=session['total_submissions'],
-                percentage=min(percentage, 100.0),
+                percentage=min(calculated_percentage, 100.0),
                 estimated_time_remaining=estimated_time_remaining,
                 status=status,
                 details=details
@@ -145,7 +143,7 @@ class ProgressTracker:
             if len(self.progress_history[progress_id]) > 50:
                 self.progress_history[progress_id] = self.progress_history[progress_id][-50:]
         
-        logger.debug(f"Progress update: {percentage:.1f}% - {current_operation}")
+        logger.debug(f"Progress update for {progress_id}: Step {current_step}/{session['total_steps']} ({calculated_percentage:.1f}%) - {current_operation}")
         return progress_update
     
     def complete_session(self, progress_id: str, success: bool = True, message: str = None) -> ProgressUpdate:
@@ -174,7 +172,8 @@ class ProgressTracker:
                 current_operation="Processing completed" if success else "Processing failed",
                 submission_index=session['total_submissions'],
                 status=status,
-                details=message
+                details=message,
+                percentage=100.0 # Ensure 100% on completion
             )
             
             # Mark session as completed but keep it for a while
@@ -281,7 +280,8 @@ class ProgressTracker:
                     current_operation=progress_data.current_operation,
                     submission_index=progress_data.submission_index,
                     status=progress_data.status,
-                    details=progress_data.details
+                    details=progress_data.details,
+                    percentage=progress_data.percentage # Pass the percentage
                 )
             elif isinstance(progress_data, dict):
                 # Handle dictionary progress data

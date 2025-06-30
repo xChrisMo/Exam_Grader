@@ -62,7 +62,7 @@ const Translations = {
         // Navigation
         'nav_dashboard': 'Dashboard',
         'nav_exams': 'Exams',
-        'nav_guides': 'Marking Guides',
+        'nav_marking_guides': 'Marking Guides',
         'nav_submissions': 'Submissions',
         'nav_results': 'Results',
         'nav_settings': 'Settings',
@@ -228,8 +228,8 @@ const Translations = {
         // Navigation
         'nav_dashboard': 'Panel',
         'nav_exams': 'Exámenes',
-        'nav_guides': 'Guías de Calificación',
-        'nav_submissions': 'Entregas',
+        'nav_marking_guides': 'Guías de Calificación',
+        'nav_submissions': 'Entregas'}]}}}
         'nav_results': 'Resultados',
         'nav_settings': 'Configuración',
         'nav_logout': 'Cerrar Sesión',

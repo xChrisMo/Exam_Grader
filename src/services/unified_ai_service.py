@@ -176,15 +176,15 @@ class UnifiedAIService:
                     ))
                     continue
                 
-                # Ensure current_step does not exceed total_steps for progress calculation
-                safe_current_step = min(current_step, total_steps)
+                # Calculate and update progress for current submission
+                current_percentage = int((safe_current_step / total_steps) * 100)
                 self._update_progress(ProcessingProgress(
                     current_step=safe_current_step,
                     total_steps=total_steps,
                     current_operation=f"Processing {submission_filename}",
                     submission_index=i + 1,
                     total_submissions=len(submissions),
-                    percentage=(safe_current_step / total_steps) * 100,
+                    percentage=current_percentage,
                     estimated_time_remaining=self._estimate_time_remaining(safe_current_step),
                     details=f"Mapping answers and grading submission {i+1} of {len(submissions)}"
                 ))

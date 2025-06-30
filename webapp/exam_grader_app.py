@@ -40,6 +40,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from flask_login import current_user, LoginManager
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
+from flask_babel import Babel, _
 
 # Project imports
 try:
@@ -72,6 +73,13 @@ except ImportError as e:
 
 # Initialize Flask application
 app = Flask(__name__)
+babel = Babel(app)
+
+@babel.localeselector
+def get_locale():
+    # You can try to get the language from the request, user settings, etc.
+    # For now, we'll just return 'en' as a default.
+    return 'en'
 
 # Load and validate configuration
 try:
@@ -1060,12 +1068,7 @@ def view_results():
             session['last_grading_result'] = True
             session.modified = True
         
-        if not last_progress_id:
-            flash(
-                "No recent grading results available. Please run AI grading first.",
-                "warning",
-            )
-            return redirect(url_for("dashboard"))
+        # Allow access to results page even if no recent grading results, the template will handle the display.
 
         # Get grading results from database for the last processed batch
         guide_id = session.get('guide_id')
@@ -1079,9 +1082,7 @@ def view_results():
         logger.info(
             f"view_results: Found {len(all_grading_results)} grading results for progress_id: {last_progress_id}"
         )
-        if not all_grading_results:
-            flash("No grading results found for the last AI processing run.", "warning")
-            return redirect(url_for("dashboard"))
+        # If no grading results, the template will display a message.
 
         grading_results = {}
         for res in all_grading_results:
@@ -1497,24 +1498,7 @@ def process_unified_ai():
             logger.error(f"Failed to create unified AI service: {str(e)}")
             return jsonify({"error": f"Service creation failed: {str(e)}"}), 500
 
-        # Create progress tracking session with error handling
-        try:
-            session_id = session.sid  # Use SecureFlaskSession's sid property
-            logger.info(f"Creating progress session for {len(submissions)} submissions")
-            progress_id = progress_tracker.create_session(session_id, len(submissions))
-            logger.info(f"Progress session created: {progress_id}")
 
-            # Store progress ID in session for frontend polling
-            session["current_progress_id"] = progress_id
-
-            # Create progress callback
-            progress_callback = progress_tracker.create_progress_callback(progress_id)
-            logger.info("Progress callback created")
-        except Exception as e:
-            logger.error(f"Failed to create progress tracking: {str(e)}")
-            return jsonify({"error": f"Progress tracking failed: {str(e)}"}), 500
-
-        progress_id = None  # Initialize progress_id to None
         # Process with unified AI service with detailed error handling
         try:
             session_id = session.sid  # Use SecureFlaskSession's sid property
@@ -1554,9 +1538,7 @@ def process_unified_ai():
                     )
                     continue
 
-                guide_id = request.json.get(
-                    "guide_id"
-                )  # Assuming guide_id is available from the request
+                guide_id = session.get("guide_id") # Retrieve guide_id from session
 
                 # Update submission processing status based on AI grading result
                 # This ensures the frontend accurately reflects the grading outcome
@@ -1596,13 +1578,8 @@ def process_unified_ai():
                     )
                     db.session.add(grading_result)
 
-            # Retrieve the submission object and update its status
-            submission = Submission.query.get(submission_id)
-            if submission:
-                submission.processing_status = "completed"
-                db.session.add(submission)
-
-            db.session.commit()  # Commit all changes for this submission, including submission status
+            # After processing all results for the batch, commit all changes
+            db.session.commit()
 
             # After committing, refresh the session's submissions to reflect the updated status
             # This ensures the UI gets the latest data on page reload
