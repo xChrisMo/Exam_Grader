@@ -463,6 +463,8 @@ def dashboard():
             flash("Please log in to access the dashboard.", "error")
             return redirect(url_for("auth.login"))
 
+        logger.info(f"Dashboard: session['guide_id'] is {session.get('guide_id')}")
+
         # Calculate dashboard statistics from database (user-specific) with session fallback
         from src.database.models import Submission, MarkingGuide, GradingResult
 
@@ -772,6 +774,10 @@ def upload_guide():
             db.session.add(marking_guide)
             db.session.commit()
             guide_id = marking_guide.id
+
+            # Store guide_id in session after successful upload
+            session['guide_id'] = guide_id
+            session.modified = True
 
             logger.info(f"Guide stored in database with ID: {guide_id}")
             _update_guide_uploaded_status(current_user.id)
