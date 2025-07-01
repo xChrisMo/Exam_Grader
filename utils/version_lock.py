@@ -230,4 +230,13 @@ if __name__ == "__main__":
     # Create locks when run directly
     lock = create_batch_processing_lock()
     status = lock.get_all_feature_status()
-    print(f"Feature Status: {json.dumps(status, indent=2)}")
+    
+    # Import logging
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Configure basic logging if not already configured
+    if not logger.handlers:
+        logging.basicConfig(level=logging.INFO)
+    
+    logger.info(f"Feature Status: {json.dumps(status, indent=2)}")

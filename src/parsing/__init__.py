@@ -15,10 +15,11 @@ detects file types and uses appropriate parsing strategies.
 Example:
     ```python
     from src.parsing import parse_student_submission
+    from utils.logger import logger
 
     answers, raw_text, error = parse_student_submission("student_exam.pdf")
     if not error:
-        print(f"Successfully parsed {len(answers)} questions")
+        logger.info(f"Successfully parsed {len(answers)} questions")
     ```
 """
 

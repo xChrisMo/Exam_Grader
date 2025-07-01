@@ -28,7 +28,13 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
     if not logger.handlers:
         # Set log level from environment or default to INFO
         log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-        print(f"[DEBUG] Setting logger level to: {log_level}") # Added for debugging
+        # Use a temporary console handler to log the debug message
+        temp_handler = logging.StreamHandler()
+        temp_handler.setFormatter(logging.Formatter("%(message)s"))
+        temp_logger = logging.getLogger("setup")
+        temp_logger.setLevel(logging.DEBUG)
+        temp_logger.addHandler(temp_handler)
+        temp_logger.debug(f"[DEBUG] Setting logger level to: {log_level}")
         # Ensure the logger level is set to DEBUG to capture all messages
         logger.setLevel(getattr(logging, log_level, logging.DEBUG))
 

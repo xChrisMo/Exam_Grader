@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Data Cleanup Utility for Exam Grader Application.
+"""Data Cleanup Utility for Exam Grader Application.
 
 This script cleans up all application data except user accounts:
 1. Removes all marking guides and their files
@@ -20,6 +19,7 @@ import argparse
 import os
 import shutil
 import sys
+import logging
 from pathlib import Path
 
 # Add project root to Python path
@@ -31,12 +31,20 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv("instance/.env", override=True)
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    stream=sys.stdout
+)
+
 
 def check_data_status():
     """Check current data status."""
     try:
-        print("📊 CHECKING DATA STATUS...")
-        print("=" * 50)
+        logging.info("📊 CHECKING DATA STATUS...")
+        logging.info("=" * 50)
         
         # Set up Flask app context
         from flask import Flask
@@ -56,36 +64,36 @@ def check_data_status():
             result_count = GradingResult.query.count()
             session_count = Session.query.count()
             
-            print(f"👥 Users: {user_count}")
-            print(f"📋 Marking Guides: {guide_count}")
-            print(f"📄 Submissions: {submission_count}")
-            print(f"🔗 Mappings: {mapping_count}")
-            print(f"📊 Grading Results: {result_count}")
-            print(f"🔐 Sessions: {session_count}")
+            logging.info(f"👥 Users: {user_count}")
+            logging.info(f"📋 Marking Guides: {guide_count}")
+            logging.info(f"📄 Submissions: {submission_count}")
+            logging.info(f"🔗 Mappings: {mapping_count}")
+            logging.info(f"📊 Grading Results: {result_count}")
+            logging.info(f"🔐 Sessions: {session_count}")
             
             # Check file directories
             temp_files = count_files_in_directory("temp")
             output_files = count_files_in_directory("output")
             upload_files = count_files_in_directory("uploads")
             
-            print(f"\n📁 FILE DIRECTORIES:")
-            print(f"   temp/: {temp_files} files")
-            print(f"   output/: {output_files} files")
-            print(f"   uploads/: {upload_files} files")
+            logging.info(f"\n📁 FILE DIRECTORIES:")
+            logging.info(f"   temp/: {temp_files} files")
+            logging.info(f"   output/: {output_files} files")
+            logging.info(f"   uploads/: {upload_files} files")
             
             # Calculate total data to be cleaned
             total_data_records = guide_count + submission_count + mapping_count + result_count + session_count
             total_files = temp_files + output_files + upload_files
             
-            print(f"\n🧹 DATA TO BE CLEANED:")
-            print(f"   Database records: {total_data_records}")
-            print(f"   Files: {total_files}")
-            print(f"   Users preserved: {user_count}")
+            logging.info(f"\n🧹 DATA TO BE CLEANED:")
+            logging.info(f"   Database records: {total_data_records}")
+            logging.info(f"   Files: {total_files}")
+            logging.info(f"   Users preserved: {user_count}")
             
         return True
         
     except Exception as e:
-        print(f"❌ Error checking data status: {str(e)}")
+        logging.error(f"❌ Error checking data status: {str(e)}")
         return False
 
 
@@ -108,7 +116,7 @@ def count_files_in_directory(directory_path):
 def cleanup_database_data():
     """Clean up database data except users."""
     try:
-        print("🗄️  CLEANING DATABASE DATA...")
+        logging.info("🗄️  CLEANING DATABASE DATA...")
 
         from flask import Flask
         from src.config.unified_config import config
@@ -126,36 +134,36 @@ def cleanup_database_data():
             result_count = GradingResult.query.count()
             session_count = Session.query.count()
 
-            print(f"   Deleting {result_count} grading results...")
+            logging.info(f"   Deleting {result_count} grading results...")
             GradingResult.query.delete()
 
-            print(f"   Deleting {mapping_count} mappings...")
+            logging.info(f"   Deleting {mapping_count} mappings...")
             Mapping.query.delete()
 
-            print(f"   Deleting {submission_count} submissions...")
+            logging.info(f"   Deleting {submission_count} submissions...")
             Submission.query.delete()
 
-            print(f"   Deleting {guide_count} marking guides...")
+            logging.info(f"   Deleting {guide_count} marking guides...")
             MarkingGuide.query.delete()
 
-            print(f"   Deleting {session_count} sessions...")
+            logging.info(f"   Deleting {session_count} sessions...")
             Session.query.delete()
 
             # Commit all deletions
             db.session.commit()
 
-            print("✅ Database data cleaned successfully")
+            logging.info("✅ Database data cleaned successfully")
             return True
 
     except Exception as e:
-        print(f"❌ Error cleaning database: {str(e)}")
+        logging.error(f"❌ Error cleaning database: {str(e)}")
         return False
 
 
 def cleanup_session_data():
     """Clean up session data by clearing Flask sessions."""
     try:
-        print("🔐 CLEANING SESSION DATA...")
+        logging.info("🔐 CLEANING SESSION DATA...")
 
         from flask import Flask
         from src.config.unified_config import config
@@ -168,23 +176,23 @@ def cleanup_session_data():
         with app.app_context():
             # Clear all session records (this will force users to re-login)
             session_count = SessionModel.query.count()
-            print(f"   Clearing {session_count} active sessions...")
+            logging.info(f"   Clearing {session_count} active sessions...")
             SessionModel.query.delete()
             db.session.commit()
 
-            print("✅ Session data cleaned successfully")
-            print("   Note: Users will need to log in again")
+            logging.info("✅ Session data cleaned successfully")
+            logging.info("   Note: Users will need to log in again")
             return True
 
     except Exception as e:
-        print(f"❌ Error cleaning session data: {str(e)}")
+        logging.error(f"❌ Error cleaning session data: {str(e)}")
         return False
 
 
 def cleanup_file_directories():
     """Clean up file directories."""
     try:
-        print("📁 CLEANING FILE DIRECTORIES...")
+        logging.info("📁 CLEANING FILE DIRECTORIES...")
         
         directories = ["temp", "output", "uploads"]
         
@@ -192,7 +200,7 @@ def cleanup_file_directories():
             path = Path(directory)
             if path.exists():
                 file_count = count_files_in_directory(directory)
-                print(f"   Cleaning {directory}/: {file_count} files...")
+                logging.info(f"   Cleaning {directory}/: {file_count} files...")
                 
                 # Remove all contents but keep the directory
                 for item in path.iterdir():
@@ -201,18 +209,18 @@ def cleanup_file_directories():
                     elif item.is_dir():
                         shutil.rmtree(item)
                 
-                print(f"   ✅ {directory}/ cleaned")
+                logging.info(f"   ✅ {directory}/ cleaned")
             else:
-                print(f"   ℹ️  {directory}/ doesn't exist")
+                logging.info(f"   ℹ️  {directory}/ doesn't exist")
                 # Create the directory
                 path.mkdir(exist_ok=True)
-                print(f"   ✅ {directory}/ created")
+                logging.info(f"   ✅ {directory}/ created")
         
-        print("✅ File directories cleaned successfully")
+        logging.info("✅ File directories cleaned successfully")
         return True
         
     except Exception as e:
-        print(f"❌ Error cleaning file directories: {str(e)}")
+        logging.error(f"❌ Error cleaning file directories: {str(e)}")
         return False
 
 
@@ -220,28 +228,28 @@ def cleanup_data(confirm: bool = False):
     """Clean up all application data except users."""
     
     if not confirm:
-        print("⚠️  WARNING: This will delete all application data except user accounts!")
-        print("   The following will be removed:")
-        print("   • All marking guides and their files")
-        print("   • All submissions and their files")
-        print("   • All mappings and grading results")
-        print("   • All session data (users will need to log in again)")
-        print("   • All files in temp/, output/, and uploads/ directories")
-        print("\n   User accounts will be preserved.")
+        logging.warning("⚠️  WARNING: This will delete all application data except user accounts!")
+        logging.info("   The following will be removed:")
+        logging.info("   • All marking guides and their files")
+        logging.info("   • All submissions and their files")
+        logging.info("   • All mappings and grading results")
+        logging.info("   • All session data (users will need to log in again)")
+        logging.info("   • All files in temp/, output/, and uploads/ directories")
+        logging.info("\n   User accounts will be preserved.")
         response = input("\n   Are you sure you want to continue? (yes/no): ")
         if response.lower() not in ['yes', 'y']:
-            print("Data cleanup cancelled.")
+            logging.info("Data cleanup cancelled.")
             return False
     
     try:
-        print("\n🧹 STARTING DATA CLEANUP...")
-        print("=" * 50)
+        logging.info("\n🧹 STARTING DATA CLEANUP...")
+        logging.info("=" * 50)
         
         # Check current status
         if not check_data_status():
             return False
         
-        print("\n" + "=" * 50)
+        logging.info("\n" + "=" * 50)
         
         # Clean database data
         if not cleanup_database_data():
@@ -255,19 +263,19 @@ def cleanup_data(confirm: bool = False):
         if not cleanup_file_directories():
             return False
         
-        print("\n🎉 DATA CLEANUP COMPLETED SUCCESSFULLY!")
-        print("\n" + "=" * 60)
-        print("DATA CLEANUP COMPLETE")
-        print("=" * 60)
-        print("All application data has been cleaned except user accounts.")
-        print("The application is ready for fresh data.")
-        print("You can continue using the application with existing user accounts.")
-        print("=" * 60)
+        logging.info("\n🎉 DATA CLEANUP COMPLETED SUCCESSFULLY!")
+        logging.info("\n" + "=" * 60)
+        logging.info("DATA CLEANUP COMPLETE")
+        logging.info("=" * 60)
+        logging.info("All application data has been cleaned except user accounts.")
+        logging.info("The application is ready for fresh data.")
+        logging.info("You can continue using the application with existing user accounts.")
+        logging.info("=" * 60)
         
         return True
         
     except Exception as e:
-        print(f"❌ Error during cleanup: {str(e)}")
+        logging.error(f"❌ Error during cleanup: {str(e)}")
         return False
 
 
@@ -298,8 +306,8 @@ Examples:
     
     args = parser.parse_args()
     
-    print("🧹 EXAM GRADER DATA CLEANUP UTILITY")
-    print("=" * 40)
+    logging.info("🧹 EXAM GRADER DATA CLEANUP UTILITY")
+    logging.info("=" * 40)
     
     if args.status:
         success = check_data_status()

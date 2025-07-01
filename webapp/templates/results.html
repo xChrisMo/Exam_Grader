@@ -218,7 +218,392 @@
     </div>
 </div>
 {% block extra_js %}
+<!-- Make sure app.js is loaded -->
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
 <script>
+// Create a simple notification manager if ExamGrader is not defined
+if (typeof ExamGrader === 'undefined') {
+    console.log('ExamGrader not defined, creating fallback notification manager');
+    window.ExamGrader = {
+        notificationManager: {
+            notify: function(message, type) {
+                console.log(`Notification (${type}): ${message}`);
+                // Create a simple notification
+                const notification = document.createElement('div');
+                notification.className = `fixed top-4 right-4 p-4 rounded-md shadow-md ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white`;
+                notification.textContent = message;
+                document.body.appendChild(notification);
+                
+                // Remove after 3 seconds
+                setTimeout(() => {
+                    notification.remove();
+                }, 3000);
+            }
+        }
+    };
+}
+
+// Call initAutoRefresh when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing auto-refresh');
+    try {
+        initAutoRefresh();
+        console.log('Auto-refresh initialized successfully');
+        
+        // Trigger an immediate refresh to test functionality
+        setTimeout(() => {
+            console.log('Triggering initial refresh');
+            refreshResults();
+        }, 2000);
+    } catch (error) {
+        console.error('Error initializing auto-refresh:', error);
+    }
+    
+    // Debug info
+    console.log('Results data:', {
+        hasResults: {{ has_results|tojson }},
+        resultsCount: {{ results_list|length }},
+        batchSummary: {{ batch_summary|tojson }}
+    });
+});
+
+// Auto-refresh functionality
+let autoRefreshEnabled = localStorage.getItem('results_auto_refresh') !== 'false';
+let refreshInterval;
+const REFRESH_INTERVAL_MS = 30000; // 30 seconds
+
+// Initialize auto-refresh toggle
+function initAutoRefresh() {
+    // Add auto-refresh toggle to the header
+    const headerDiv = document.querySelector('.flex.items-center.justify-between');
+    if (headerDiv) {
+        const toggleContainer = document.createElement('div');
+        toggleContainer.className = 'flex items-center mr-4';
+        toggleContainer.innerHTML = `
+            <span class="text-sm text-gray-600 mr-2">Auto-refresh:</span>
+            <label class="inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="auto-refresh-toggle" class="sr-only peer" ${autoRefreshEnabled ? 'checked' : ''}>
+                <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+            </label>
+            <span id="refresh-status" class="text-xs text-gray-500 ml-2 min-w-[80px]"></span>
+        `;
+        
+        // Insert before the export button
+        const buttonContainer = headerDiv.querySelector('.flex.space-x-3');
+        if (buttonContainer) {
+            headerDiv.insertBefore(toggleContainer, buttonContainer);
+        }
+        
+        // Add event listener to toggle
+        const toggle = document.getElementById('auto-refresh-toggle');
+        if (toggle) {
+            toggle.addEventListener('change', function() {
+                autoRefreshEnabled = this.checked;
+                localStorage.setItem('results_auto_refresh', autoRefreshEnabled);
+                if (autoRefreshEnabled) {
+                    startAutoRefresh();
+                    ExamGrader.notificationManager.notify('Auto-refresh enabled', 'info');
+                } else {
+                    stopAutoRefresh();
+                    ExamGrader.notificationManager.notify('Auto-refresh disabled', 'info');
+                }
+            });
+        }
+        
+        // Start auto-refresh if enabled
+        if (autoRefreshEnabled) {
+            startAutoRefresh();
+        }
+    }
+}
+
+// Start auto-refresh
+function startAutoRefresh() {
+    stopAutoRefresh(); // Clear any existing interval
+    
+    const statusElement = document.getElementById('refresh-status');
+    const toggleElement = document.getElementById('auto-refresh-toggle');
+    let countdown = REFRESH_INTERVAL_MS / 1000;
+    
+    // Update UI elements
+    if (statusElement) {
+        statusElement.innerHTML = `<span class="text-primary-600">Refresh in ${countdown}s</span>`;
+    }
+    if (toggleElement) {
+        toggleElement.checked = true;
+    }
+    
+    // Set up countdown timer with visual feedback
+    refreshInterval = setInterval(() => {
+        countdown--;
+        
+        if (statusElement) {
+            if (countdown <= 10) {
+                // Add visual urgency for last 10 seconds
+                statusElement.innerHTML = `<span class="text-warning-600 font-medium">Refresh in ${countdown}s</span>`;
+            } else {
+                statusElement.innerHTML = `<span class="text-primary-600">Refresh in ${countdown}s</span>`;
+            }
+        }
+        
+        if (countdown <= 0) {
+            if (statusElement) {
+                statusElement.innerHTML = '<span class="text-info-600">Refreshing...</span>';
+            }
+            // Refresh the page
+            refreshResults();
+            countdown = REFRESH_INTERVAL_MS / 1000;
+        }
+    }, 1000);
+}
+
+// Stop auto-refresh
+function stopAutoRefresh() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+        
+        const statusElement = document.getElementById('refresh-status');
+        const toggleElement = document.getElementById('auto-refresh-toggle');
+        
+        // Update UI elements
+        if (statusElement) {
+            statusElement.innerHTML = '<span class="text-gray-500">Auto-refresh paused</span>';
+        }
+        if (toggleElement) {
+            toggleElement.checked = false;
+        }
+        
+        // Notify user
+        if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+            ExamGrader.notificationManager.notify('Auto-refresh paused', 'info');
+        }
+    }
+}
+
+// Refresh results without reloading the page
+async function refreshResults() {
+    let retryCount = 0;
+    const maxRetries = 3;
+    const retryDelay = 2000; // 2 seconds
+
+    async function attemptRefresh() {
+        try {
+            console.log(`Refresh attempt ${retryCount + 1} of ${maxRetries}`);
+            const statusElement = document.getElementById('refresh-status');
+            if (statusElement) {
+                statusElement.textContent = 'Refreshing...';
+            }
+            
+            // Fetch updated results data with timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            
+            console.log('Fetching data from:', window.location.href);
+            const response = await fetch(window.location.href, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'Cache-Control': 'no-cache'
+                },
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+        
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+            
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            console.log('Response content type:', contentType);
+            
+            if (contentType && contentType.includes('application/json')) {
+                const data = await response.json();
+                console.log('Received JSON data:', data);
+                updateResultsUI(data);
+                if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+                    ExamGrader.notificationManager.notify('Results updated', 'success');
+                } else {
+                    console.warn('ExamGrader.notificationManager not available');
+                }
+                return true; // Successful refresh
+            } else {
+                throw new Error('Response is not JSON');
+            }
+        } catch (error) {
+            console.error(`Refresh attempt ${retryCount + 1} failed:`, error);
+            if (error.name === 'AbortError') {
+                throw new Error('Request timed out');
+            }
+            throw error;
+        }
+    }
+
+    while (retryCount < maxRetries) {
+        try {
+            await attemptRefresh();
+            return; // Success, exit function
+        } catch (error) {
+            retryCount++;
+            console.log(`Retry ${retryCount} of ${maxRetries}`);
+            if (retryCount < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+            }
+        }
+    }
+
+    // All retries failed
+    console.error('All refresh attempts failed');
+    if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+        ExamGrader.notificationManager.notify('Failed to refresh results after multiple attempts', 'error');
+    }
+    
+    // Reset auto-refresh if all retries failed
+    if (autoRefreshEnabled) {
+        startAutoRefresh();
+    }
+    } catch (error) {
+        console.error('Error in refresh process:', error);
+        if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+            ExamGrader.notificationManager.notify(`Failed to refresh results: ${error.message}`, 'error');
+        }
+    } finally {
+        const statusElement = document.getElementById('refresh-status');
+        if (statusElement) {
+            statusElement.textContent = autoRefreshEnabled ? 'Waiting...' : 'Paused';
+        }
+        console.log('Refresh process completed, autoRefreshEnabled:', autoRefreshEnabled);
+        if (autoRefreshEnabled) {
+            startAutoRefresh();
+        }
+    }
+}
+
+// Update UI with new results data
+function updateResultsUI(data) {
+    console.log('Updating UI with data:', data);
+    
+    if (!data || !data.success) {
+        console.error('Invalid data received');
+        return;
+    }
+    
+    // Update batch summary cards
+    if (data.batch_summary) {
+        const summary = data.batch_summary;
+        console.log('Updating summary cards with:', summary);
+        
+        try {
+            updateElementText('.text-lg.font-medium.text-gray-900', 0, data.batch_summary.total_submissions);
+            updateElementText('.text-lg.font-medium.text-gray-900', 1, `${summary.average_score}%`);
+            updateElementText('.text-lg.font-medium.text-gray-900', 2, `${summary.highest_score}%`);
+            updateElementText('.text-lg.font-medium.text-gray-900', 3, `${summary.lowest_score}%`);
+            
+            // Add last updated timestamp if not exists
+            const headerDiv = document.querySelector('.flex.items-center.justify-between');
+            let lastUpdatedEl = document.getElementById('last-updated-timestamp');
+            if (!lastUpdatedEl && headerDiv) {
+                lastUpdatedEl = document.createElement('div');
+                lastUpdatedEl.id = 'last-updated-timestamp';
+                lastUpdatedEl.className = 'text-xs text-gray-500 mt-1';
+                headerDiv.querySelector('div').appendChild(lastUpdatedEl);
+            }
+            
+            if (lastUpdatedEl) {
+                lastUpdatedEl.textContent = `Last updated: ${summary.last_updated}`;
+            }
+        } catch (error) {
+            console.error('Error updating summary cards:', error);
+        }
+    }
+    
+    // Update results table
+    if (data.results && data.results.length > 0) {
+        console.log('Updating results table with', data.results.length, 'rows');
+        
+        try {
+            const tableBody = document.querySelector('table.min-w-full tbody');
+            if (tableBody) {
+                // Clear existing rows
+                tableBody.innerHTML = '';
+                
+                // Add new rows
+                data.results.forEach(result => {
+                    console.log('Adding row for:', result.filename);
+                    const row = document.createElement('tr');
+                    row.className = 'bg-white hover:bg-gray-50';
+                    
+                    // Create cells based on your table structure
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 h-10 w-10">
+                                    <div class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
+                                        <svg class="h-5 w-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="ml-4">
+                                    <div class="text-sm font-medium text-gray-900">${result.filename || 'Unknown'}</div>
+                                    <div class="text-sm text-gray-500">ID: ${result.submission_id ? result.submission_id.substring(0, 8) : 'Unknown'}...</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900">${result.score || 0}%</div>
+                            <div class="w-16 bg-gray-200 rounded-full h-2 mt-1">
+                                <div class="h-2 rounded-full ${result.score >= 80 ? 'bg-success-500' : result.score >= 60 ? 'bg-warning-500' : 'bg-danger-500'}" style="width: ${result.score || 0}%"></div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${result.score >= 90 ? 'bg-success-100 text-success-800' : result.score >= 80 ? 'bg-success-100 text-success-800' : result.score >= 70 ? 'bg-warning-100 text-warning-800' : result.score >= 60 ? 'bg-warning-100 text-warning-800' : 'bg-danger-100 text-danger-800'}">
+                                ${result.letter_grade || 'F'}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${result.total_questions || 0} questions
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${result.graded_at || ''}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button onclick="viewDetails('${result.submission_id}')" class="text-primary-600 hover:text-primary-900">View Details</button>
+                        </td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                });
+            } else {
+                console.error('Table body element not found');
+            }
+        } catch (error) {
+            console.error('Error updating results table:', error);
+        }
+    } else {
+        console.log('No results to display');
+    }
+}
+
+// Helper function to update text content of elements
+function updateElementText(selector, index, text) {
+    try {
+        const elements = document.querySelectorAll(selector);
+        console.log(`Found ${elements.length} elements matching ${selector}`);
+        if (elements && elements[index]) {
+            elements[index].textContent = text;
+        } else {
+            console.warn(`Element at index ${index} not found for selector ${selector}`);
+        }
+    } catch (error) {
+        console.error(`Error updating element text for ${selector}:`, error);
+    }
+}
+
+// Export results function
 function exportResults() {
     // Call the API to export results
     fetch('/api/export-results')
@@ -357,6 +742,11 @@ document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
         closeDetailsModal();
     }
+});
+
+// Initialize auto-refresh when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+    initAutoRefresh();
 });
 </script>
 {% endblock %}

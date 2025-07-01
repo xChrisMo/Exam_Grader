@@ -1,0 +1,22 @@
+Check started at: 2025-07-01 15:48:54.423375
+Python version: 3.13.4 (tags/v3.13.4:8a526ec, Jun  3 2025, 17:46:04) [MSC v.1943 64 bit (AMD64)]
+Current directory: C:\Users\mezac\Documents\job\Exam_Grader
+Importing modules...
+Importing app from webapp.exam_grader_app...
+Successfully imported app
+Importing database models...
+Successfully imported models
+Inside app context
+Total grading results: 42
+
+Sample result:
+ID: d1f0575b-e0d6-4069-b1b6-2661edd9f3d5
+Submission ID: 0066be4b-d3a7-495b-98b3-922d30a92d4c
+Progress ID: aba164ec-bdd1-4dc5-adbe-d07eed44ac83
+Created at: 2025-06-30 09:43:22.246945
+Total submissions: 1
+
+Sample submission:
+ID: 0066be4b-d3a7-495b-98b3-922d30a92d4c
+Filename: 0.pdf
+Processing status: completed

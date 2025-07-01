@@ -231,4 +231,13 @@ if __name__ == "__main__":
     # Initialize protection when run directly
     protection = initialize_file_protection()
     status = protection.get_protection_status()
-    print(f"File Protection Status: {json.dumps(status, indent=2)}")
+    
+    # Import logging
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Configure basic logging if not already configured
+    if not logger.handlers:
+        logging.basicConfig(level=logging.INFO)
+    
+    logger.info(f"File Protection Status: {json.dumps(status, indent=2)}")

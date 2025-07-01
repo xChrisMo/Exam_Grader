@@ -12,9 +12,9 @@ Example Usage:
     ```python
     result, text, error = parse_student_submission("student_exam.pdf")
     if error:
-        print(f"Error: {error}")
+        logger.error(f"Error: {error}")
     else:
-        print(text)  # Raw document content
+        logger.info(text)  # Raw document content
     ```
 """
 
@@ -333,9 +333,9 @@ def parse_student_submission(
         ```python
         result, raw_text, error = parse_student_submission("exam.pdf")
         if error:
-            print(f"Failed to extract text: {error}")
+            logger.error(f"Failed to extract text: {error}")
         else:
-            print(f"Raw text: {raw_text}")
+            logger.info(f"Raw text: {raw_text}")
         ```
 
     Note:

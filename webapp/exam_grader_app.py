@@ -71,7 +71,8 @@ try:
     from webapp.auth import init_auth, login_required, get_current_user
 
 except ImportError as e:
-    print(f"[ERROR] Failed to import required modules: {e}", file=sys.stderr)
+    # Use stderr for critical errors before logger is initialized
+    sys.stderr.write(f"ERROR: Failed to import required modules: {e}\n")
     sys.exit(1)
 
 # Initialize Flask application
@@ -91,8 +92,8 @@ try:
     app.config["SECRET_KEY"] = config.security.secret_key
     logger.info(f"Configuration loaded for environment: {config.environment}")
 except Exception as e:
-    logger.error(f"Failed to load configuration: {str(e)}")
-    print(f"[CRITICAL ERROR] Failed to load configuration: {e}", file=sys.stderr)
+    logger.critical(f"Failed to load configuration: {str(e)}")
+    sys.stderr.write(f"CRITICAL ERROR: Failed to load configuration: {e}\n")
     sys.exit(1)
 
 # Initialize CSRF protection
@@ -100,10 +101,8 @@ try:
     csrf = CSRFProtect(app)
     logger.info("CSRF protection initialized")
 except Exception as e:
-    logger.error(f"Failed to initialize CSRF protection: {str(e)}")
-    print(
-        f"[CRITICAL ERROR] Failed to initialize CSRF protection: {e}", file=sys.stderr
-    )
+    logger.critical(f"Failed to initialize CSRF protection: {str(e)}")
+    sys.stderr.write(f"CRITICAL ERROR: Failed to initialize CSRF protection: {e}\n")
     sys.exit(1)
 
 # Initialize database
@@ -111,8 +110,8 @@ try:
     db.init_app(app)
     logger.info("Database initialized")
 except Exception as e:
-    logger.error(f"Failed to initialize database: {str(e)}")
-    print(f"[CRITICAL ERROR] Failed to initialize database: {e}", file=sys.stderr)
+    logger.critical(f"Failed to initialize database: {str(e)}")
+    sys.stderr.write(f"CRITICAL ERROR: Failed to initialize database: {e}\n")
     sys.exit(1)
 
 # Initialize security components
@@ -136,8 +135,8 @@ try:
 
     logger.info("Security components initialized")
 except Exception as e:
-    logger.error(f"Failed to initialize security: {str(e)}")
-    print(f"[CRITICAL ERROR] Failed to initialize security: {e}", file=sys.stderr)
+    logger.critical(f"Failed to initialize security: {str(e)}")
+    sys.stderr.write(f"CRITICAL ERROR: Failed to initialize security: {e}\n")
     sys.exit(1)
 
 # Initialize authentication system
@@ -145,8 +144,8 @@ try:
     init_auth(app, session_manager)
     logger.info("Authentication system initialized")
 except Exception as e:
-    logger.error(f"Failed to initialize authentication: {str(e)}")
-    print(f"[CRITICAL ERROR] Failed to initialize authentication: {e}", file=sys.stderr)
+    logger.critical(f"Failed to initialize authentication: {str(e)}")
+    sys.stderr.write(f"CRITICAL ERROR: Failed to initialize authentication: {e}\n")
     sys.exit(1)
 
 
@@ -175,8 +174,8 @@ try:
 
     logger.info("Services initialized")
 except Exception as e:
-    logger.error(f"Failed to initialize services: {str(e)}")
-    print(f"[CRITICAL ERROR] Failed to initialize services: {e}", file=sys.stderr)
+    logger.critical(f"Failed to initialize services: {str(e)}")
+    sys.stderr.write(f"CRITICAL ERROR: Failed to initialize services: {e}\n")
     ocr_service = None
     llm_service = None
     mapping_service = None
@@ -468,38 +467,49 @@ def dashboard():
 
         logger.info(f"Dashboard: session['guide_id'] is {session.get('guide_id')}")
 
-        # Calculate dashboard statistics from database (user-specific) with session fallback
+        # Use session data for dashboard statistics if available
         from src.database.models import Submission, MarkingGuide, GradingResult
-
-        # Single optimized query to get all submission statistics
-        submission_stats = (
-            db.session.query(
-                db.func.count(Submission.id).label("total"),
-                db.func.count(
-                    db.case((Submission.processing_status == "completed", 1))
-                ).label("processed"),
+        
+        # Get values from session first
+        total_submissions = session.get("total_submissions")
+        processed_submissions = session.get("processed_submissions")
+        
+        # If not in session, calculate from database
+        if total_submissions is None or processed_submissions is None:
+            # Single optimized query to get all submission statistics
+            submission_stats = (
+                db.session.query(
+                    db.func.count(Submission.id).label("total"),
+                    db.func.count(
+                        db.case((Submission.processing_status == "completed", 1))
+                    ).label("processed"),
+                )
+                .filter(Submission.user_id == current_user.id)
+                .first()
             )
-            .filter(Submission.user_id == current_user.id)
-            .first()
-        )
 
-        total_submissions = submission_stats.total if submission_stats else 0
-        processed_submissions = submission_stats.processed if submission_stats else 0
+            total_submissions = submission_stats.total if submission_stats else 0
+            processed_submissions = submission_stats.processed if submission_stats else 0
 
-        # If no database submissions, check session data as fallback
-        if total_submissions == 0:
-            session_submissions = session.get("submissions", [])
-            total_submissions = len(session_submissions)
-            processed_submissions = len(
-                [s for s in session_submissions if s.get("processed", False)]
-            )
-            logger.info(
-                f"Dashboard: Using session data fallback. Total: {total_submissions}, Processed: {processed_submissions}"
-            )
-            logger.info(f"Dashboard: Raw session['submissions']: {session_submissions}")
+            # If no database submissions, check session data as fallback
+            if total_submissions == 0:
+                session_submissions = session.get("submissions", [])
+                total_submissions = len(session_submissions)
+                processed_submissions = len(
+                    [s for s in session_submissions if s.get("processed", False)]
+                )
+                logger.info(
+                    f"Dashboard: Using session data fallback. Total: {total_submissions}, Processed: {processed_submissions}"
+                )
+                logger.info(f"Dashboard: Raw session['submissions']: {session_submissions}")
+
+            # Update session with calculated values
+            session["total_submissions"] = total_submissions
+            session["processed_submissions"] = processed_submissions
+            session.modified = True
 
         logger.info(
-            f"Dashboard: Calculated total_submissions: {total_submissions}, processed_submissions: {processed_submissions}"
+            f"Dashboard: Using total_submissions: {total_submissions}, processed_submissions: {processed_submissions}"
         )
 
         # Ensure guide_uploaded status is accurate based on database
@@ -534,15 +544,27 @@ def dashboard():
         # Ensure session['submissions'] is updated with database submissions for UI visibility
         session["submissions"] = [s.to_dict() for s in recent_submissions]
 
-        # Calculate average score from grading results (user-specific) - optimized
-        avg_result = (
-            db.session.query(db.func.avg(GradingResult.percentage))
-            .join(Submission, GradingResult.submission_id == Submission.id)
-            .filter(Submission.user_id == current_user.id)
-            .scalar()
-        )
-        avg_score = round(avg_result, 1) if avg_result else 0
-        last_score = avg_score  # Use average as last score for now
+        # Get last score from session if available
+        last_score = session.get("last_score")
+        
+        # If not in session, calculate from database
+        if last_score is None:
+            # Calculate average score from grading results (user-specific) - optimized
+            avg_result = (
+                db.session.query(db.func.avg(GradingResult.percentage))
+                .join(Submission, GradingResult.submission_id == Submission.id)
+                .filter(Submission.user_id == current_user.id)
+                .scalar()
+            )
+            avg_score = round(avg_result, 1) if avg_result else 0
+            last_score = avg_score  # Use average as last score for now
+            
+            # Update session with calculated value
+            session["last_score"] = last_score
+            session.modified = True
+        else:
+            # Use last_score as avg_score if we got it from session
+            avg_score = last_score
 
         service_status = get_service_status()
         context = {
@@ -1071,9 +1093,11 @@ def get_letter_grade(score):
         return 'F'
 
 @app.route("/results")
+@login_required
 def view_results():
     """View grading results."""
     try:
+        # Add timestamp for data freshness tracking
         from src.database.models import GradingResult
         
         # Log all relevant session variables for debugging
@@ -1100,13 +1124,30 @@ def view_results():
             flash('No marking guide selected. Please upload or select a guide first.', 'warning')
             return redirect(url_for('dashboard'))
 
-        all_grading_results = GradingResult.query.filter_by(
-            progress_id=last_progress_id, marking_guide_id=guide_id
-        ).all()
+        # Get the latest results from the database
+        # This ensures we always have the most up-to-date data
+        # First try to get results for the specific progress_id
+        all_grading_results = []
+        if last_progress_id:
+            all_grading_results = GradingResult.query.filter_by(
+                progress_id=last_progress_id, marking_guide_id=guide_id
+            ).order_by(GradingResult.updated_at.desc()).all()
+
+        # If no results found with progress_id, get all results for the current guide
+        if not all_grading_results:
+            logger.info(f"No results found for progress_id {last_progress_id}, fetching all results for guide {guide_id}")
+            all_grading_results = GradingResult.query.filter_by(
+                marking_guide_id=guide_id
+            ).order_by(GradingResult.updated_at.desc()).all()
+        
+        # Log the number of results found
         logger.info(
             f"view_results: Found {len(all_grading_results)} grading results for progress_id: {last_progress_id}"
         )
         # If no grading results, the template will display a message.
+
+        # Record the timestamp when data was fetched
+        data_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         grading_results = {}
         for res in all_grading_results:
@@ -1114,6 +1155,7 @@ def view_results():
                 "filename": res.submission.filename if res.submission else "Unknown",
                 "status": "completed",
                 "timestamp": res.created_at.isoformat() if res.created_at else "",
+                "updated_at": res.updated_at.isoformat() if res.updated_at else "",
                 "score": res.score,
                 "percentage": res.percentage,
                 "max_score": res.max_score,
@@ -1154,20 +1196,36 @@ def view_results():
         # Sort results by score (highest first)
         results_list.sort(key=lambda x: x["score"], reverse=True)
 
+        # Create batch summary with last updated timestamp
+        batch_summary = {
+            "total_submissions": total_submissions,
+            "average_score": round(avg_score, 1),
+            "highest_score": highest_score,
+            "lowest_score": lowest_score,
+            "score_distribution": grade_distribution,
+            "last_updated": data_timestamp,
+        }
+        
         context = {
             "page_title": "Grading Results",
             "has_results": bool(grading_results),
             "successful_grades": total_submissions,
-            "batch_summary": {
-                "total_submissions": total_submissions,
-                "average_score": round(avg_score, 1),
-                "highest_score": highest_score,
-                "lowest_score": lowest_score,
-                "score_distribution": grade_distribution,
-            },
+            "batch_summary": batch_summary,
             "results_list": results_list,
         }
+        
+        # Check if this is an AJAX request
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            # Return JSON response for AJAX requests
+            return jsonify({
+                "success": True,
+                "has_results": bool(grading_results),
+                "results": results_list,
+                "batch_summary": batch_summary,
+                "last_updated": data_timestamp
+            })
 
+        # Return HTML response for normal requests
         return render_template("results.html", **context)
 
     except Exception as e:
@@ -1622,14 +1680,10 @@ def process_unified_ai():
             # Update session variables for results page
             session['last_grading_progress_id'] = progress_id
             session['last_grading_result'] = True
+            session['guide_id'] = guide_id
             session.modified = True  # Mark session as modified to ensure changes are saved
             
-            # Update session with progress ID and grading result flag
-            session['last_grading_progress_id'] = progress_id
-            session['last_grading_result'] = True
-            session.modified = True
-            
-            logger.info(f"Updated session with progress_id {progress_id} and set last_grading_result to True")
+            logger.info(f"Updated session with progress_id {progress_id}, last_grading_result=True, and guide_id={guide_id}")
 
         except Exception as e:
             db.session.rollback()
@@ -1643,20 +1697,6 @@ def process_unified_ai():
             return jsonify({"error": f"Processing failed: {str(e)}"}), 500
         finally:
             pass  # The complete_session is already called in try/except blocks
-
-        # Store the progress_id for viewing results
-        session["last_grading_progress_id"] = progress_id
-        
-        # Set this to activate the View Results button
-        session["last_grading_result"] = True
-        
-        # Store guide_id in session
-        session['guide_id'] = guide_id
-        
-        # Ensure session is saved
-        session.modified = True
-        
-        logger.info(f"Session variables set: last_grading_progress_id={progress_id}, last_grading_result=True, guide_id={guide_id}")
 
         return (
             jsonify(
@@ -2025,13 +2065,18 @@ def use_guide(guide_id):
 @app.route("/clear-session-guide", methods=["GET", "POST"])
 @login_required
 def clear_session_guide():
-    """Clear the current session guide."""
+    """Clear the current session guide and related grading data."""
     try:
+        # Clear guide-related session variables
         session.pop("guide_data", None)
         session.pop("guide_filename", None)
         session.pop("guide_raw_content", None)
         session.pop("guide_uploaded", None)
         session.pop("guide_id", None)
+        
+        # Clear grading-related session variables
+        session.pop("last_grading_progress_id", None)
+        session.pop("last_grading_result", None)
         session.modified = True
         flash("Session guide cleared successfully.", "success")
         return redirect(url_for("marking_guides"))
@@ -2352,12 +2397,18 @@ def delete_guide(guide_id):
 
         # Clear session if this was the active guide
         if was_active_guide:
+            # Clear guide-related session variables
             session.pop("guide_id", None)
             session.pop("guide_uploaded", None)
             session.pop("guide_filename", None)
             session.pop("guide_data", None)
+            
+            # Clear grading-related session variables
+            session.pop("last_grading_progress_id", None)
+            session.pop("last_grading_result", None)
+            
             session.modified = True
-            logger.info(f"Cleared active guide from session: {guide_name}")
+            logger.info(f"Cleared active guide and related grading data from session: {guide_name}")
 
         # After deletion, update guide_uploaded status
         _update_guide_uploaded_status(current_user.id)
@@ -2422,12 +2473,18 @@ def api_delete_guide():
 
         # Clear session if this was the active guide
         if was_active_guide:
+            # Clear guide-related session variables
             session.pop("guide_id", None)
             session.pop("guide_uploaded", None)
             session.pop("guide_filename", None)
             session.pop("guide_data", None)
+            
+            # Clear grading-related session variables
+            session.pop("last_grading_progress_id", None)
+            session.pop("last_grading_result", None)
+            
             session.modified = True
-            logger.info(f"Cleared active guide from session: {guide_name}")
+            logger.info(f"Cleared active guide and related grading data from session: {guide_name}")
 
         logger.info(
             f"Guide deleted successfully via API: {guide_name} (ID: {guide_id})"
@@ -2671,14 +2728,14 @@ def get_cache_stats():
 
 
 if __name__ == "__main__":
-    print("[START] Starting Exam Grader Web Application...")
+    logger.info("Starting Exam Grader Web Application...")
 
     # Get configuration values
     host = getattr(config, "HOST", "127.0.0.1")
     port = getattr(config, "PORT", 5000)
     debug = getattr(config, "DEBUG", True)
 
-    print(create_startup_summary(host=host, port=port))
-    print(f"[DEBUG] Debug mode: {debug}")
+    logger.info(create_startup_summary(host=host, port=port))
+    logger.debug(f"Debug mode: {debug}")
 
     app.run(host=host, port=port, debug=debug)

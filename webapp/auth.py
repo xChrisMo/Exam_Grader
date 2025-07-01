@@ -19,7 +19,7 @@ from flask import (
     session,
     url_for,
 )
-from src.database.models import User, db, Session as SessionModel
+from src.database.models import User, db, Session as SessionModel, MarkingGuide, Submission, GradingResult
 from src.security.session_manager import SecureSessionManager
 from utils.input_sanitizer import InputSanitizer
 from utils.logger import logger
@@ -29,6 +29,50 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 # Initialize session manager (will be set by main app)
 session_manager = None
+
+def _update_user_data_in_session(user_id):
+    """Update user data in session including submission stats and guide status."""
+    try:
+        # Update guide uploaded status
+        remaining_guides = MarkingGuide.query.filter_by(user_id=user_id).first()
+        if remaining_guides:
+            session["guide_uploaded"] = True
+        else:
+            session["guide_uploaded"] = False
+            
+        # Get submission stats
+        total_submissions = Submission.query.filter_by(user_id=user_id).count()
+        processed_submissions = Submission.query.filter_by(
+            user_id=user_id, processing_status="completed"
+        ).count()
+        
+        # Calculate average score if there are processed submissions
+        avg_score = 0
+        if processed_submissions > 0:
+            # Get the most recent submission
+            recent_submission = Submission.query.filter_by(
+                user_id=user_id, processing_status="completed"
+            ).order_by(Submission.created_at.desc()).first()
+            
+            if recent_submission:
+                # Calculate average score from grading results
+                grading_results = GradingResult.query.filter_by(
+                    submission_id=recent_submission.id
+                ).all()
+                
+                if grading_results:
+                    total_percentage = sum(result.percentage for result in grading_results)
+                    avg_score = total_percentage / len(grading_results)
+        
+        # Update session with stats
+        session["total_submissions"] = total_submissions
+        session["processed_submissions"] = processed_submissions
+        session["last_score"] = avg_score
+        session.modified = True
+        
+        logger.info(f"Updated session data for user {user_id}: submissions={total_submissions}, processed={processed_submissions}, score={avg_score}")
+    except Exception as e:
+        logger.error(f"Error updating user data in session: {str(e)}")
 
 
 def init_auth(app, secure_session_manager):
@@ -163,6 +207,9 @@ def login():
         session.permanent = remember_me
         session.new = True  # Explicitly mark as new so save_session creates a new cookie
         session.modified = True  # Mark as modified to ensure it gets saved
+        
+        # Update user data in session
+        _update_user_data_in_session(user.id)
         
         logger.debug(f"Flask session after login: user_id={session.get('user_id')}, session_id={session.sid}")
 
