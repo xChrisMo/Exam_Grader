@@ -6,6 +6,7 @@ with enhanced security features.
 """
 
 import re
+import traceback
 from datetime import datetime
 
 from flask import (
@@ -480,8 +481,23 @@ def login_required(f):
         try:
             # Validate secure session
             secure_session = session_manager.get_session(session_sid)
-            if not secure_session or secure_session.get('user_id') != user_id:
-                logger.warning(f"Invalid secure session for user {user_id}")
+            logger.debug(f"login_required: Got secure session: {secure_session is not None}, type: {type(secure_session).__name__ if secure_session else 'None'}")
+            
+            # Updated session validation check with detailed logging
+            if not secure_session:
+                logger.warning(f"Invalid secure session for user {user_id}: session is None")
+                session.clear()
+                flash("Session invalid. Please log in again.", "warning")
+                return redirect(url_for("auth.login"))
+            
+            if not isinstance(secure_session, dict):
+                logger.warning(f"Invalid secure session for user {user_id}: session is not a dict but {type(secure_session).__name__}")
+                session.clear()
+                flash("Session invalid. Please log in again.", "warning")
+                return redirect(url_for("auth.login"))
+            
+            if secure_session.get('user_id') != user_id:
+                logger.warning(f"Invalid secure session for user {user_id}: session user_id mismatch {secure_session.get('user_id')}")
                 session.clear()
                 flash("Session invalid. Please log in again.", "warning")
                 return redirect(url_for("auth.login"))
@@ -490,6 +506,7 @@ def login_required(f):
         
         except Exception as e:
             logger.error(f"Session validation error: {str(e)}")
+            logger.error(f"Detailed session validation error: {traceback.format_exc()}")
             session.clear()
             flash("Session error. Please log in again.", "error")
             return redirect(url_for("auth.login"))

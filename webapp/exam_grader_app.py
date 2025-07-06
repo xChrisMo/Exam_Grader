@@ -178,11 +178,11 @@ except Exception as e:
 def inject_csrf_token():
     from flask_wtf.csrf import generate_csrf
     try:
-        token = generate_csrf()
-        logger.debug(f"Generated CSRF token in context processor: {token}")
-        return dict(csrf_token=token)
+        # Return the function instead of calling it
+        logger.debug("Injecting CSRF token function into template context")
+        return dict(csrf_token=generate_csrf)
     except Exception as e:
-        logger.error(f"Failed to generate CSRF token: {str(e)}")
+        logger.error(f"Failed to inject CSRF token function: {str(e)}")
         return dict(csrf_token=None)
 
 

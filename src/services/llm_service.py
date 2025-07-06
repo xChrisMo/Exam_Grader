@@ -10,6 +10,7 @@ This is an updated version that works with the latest OpenAI library.
 import importlib.metadata
 import json
 import os
+import random
 import re
 import threading
 import time

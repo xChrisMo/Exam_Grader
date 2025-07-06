@@ -84,7 +84,8 @@ class SessionEncryption:
             return json.loads(decrypted_data.decode())
         except Exception as e:
             logger.error(f"Failed to decrypt session data: {str(e)}")
-            return {}
+            # Return None instead of empty dict to ensure consistent behavior with get_session
+            return None
 
 
 class SecureSessionManager:
@@ -201,44 +202,19 @@ class SecureSessionManager:
                 self.invalidate_session(session_id)
                 return None
 
-            # Return decrypted session data
-            return self.encryption.decrypt_data(session.data)
-            # Get session from database
-            session = SessionModel.query.filter_by(
-                id=session_id, is_active=True
-            ).first()
-            # Get session from database
-            session = SessionModel.query.filter_by(
-                id=session_id, is_active=True
-            ).first()
-            # Get session from database
-            session = SessionModel.query.filter_by(
-                id=session_id, is_active=True
-            ).first()
-
-            if not session:
-                return None
-
-            # Check if session is expired
-            if session.is_expired():
-                self.invalidate_session(session_id)
-                return None
-
-            # Validate client information
-            if not self._validate_client_info(session):
-                logger.warning(f"Session {session_id} failed client validation")
-                self.invalidate_session(session_id)
-                return None
-
             # Decrypt and return session data
-            session_data = self.encryption.decrypt_data(session.data)
-
-            # Update last accessed time
-            session.last_accessed = datetime.utcnow()
-            db.session.commit()
-
-            self._current_session = session
-            return session_data
+            try:
+                session_data = self.encryption.decrypt_data(session.data)
+                self._current_session = session
+                
+                # Update last accessed time
+                session.last_accessed = datetime.utcnow()
+                db.session.commit()
+                
+                return session_data
+            except Exception as e:
+                logger.error(f"Failed to decrypt session data: {str(e)}")
+                return None
 
         except Exception as e:
             logger.error(f"Failed to get session {session_id}: {str(e)}")
@@ -445,13 +421,13 @@ class SecureSessionManager:
         current_user_agent = self._get_user_agent()
 
         # Allow IP changes for mobile users but log them
-        if session.ip_address != current_ip:
+        if str(session.ip_address) != current_ip:
             logger.info(
                 f"IP change detected for session {session.id}: {session.ip_address} -> {current_ip}"
             )
 
         # User agent should remain consistent
-        if session.user_agent != current_user_agent:
+        if str(session.user_agent) != current_user_agent:
             logger.warning(f"User agent change detected for session {session.id}")
             return False
 

@@ -595,7 +595,11 @@
           // Submit form
           fetch(uploadForm.action || window.location.href, {
               method: 'POST',
-              body: formData
+              body: formData,
+              headers: {
+                  'X-Requested-With': 'XMLHttpRequest',
+                  'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+              }
           })
           .then(response => {
               clearInterval(progressInterval);
