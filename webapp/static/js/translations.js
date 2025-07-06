@@ -1,23 +1,24 @@
-/**
- * Translations for Exam Grader Application
- * Contains dictionaries for all supported languages
- */
+// Initialize translation system
+window.ExamGrader = window.ExamGrader || {};
+ExamGrader.translations = ExamGrader.translations || {};
+ExamGrader.currentLang = ExamGrader.currentLang || 'en';
 
-const Translations = {
-    // English translations (default)
+// Translation system with proper structure
+ExamGrader.translations = {
+    // English translations
     'en': {
         // Auth
-        'welcome_back': 'Welcome Back',
-        'sign_in_to_continue': 'Sign in to your account to continue',
+        'welcome_back': 'Welcome back',
+        'sign_in_to_continue': 'Sign in to continue',
         'username': 'Username',
         'password': 'Password',
         'remember_me': 'Remember me',
         'forgot_password': 'Forgot your password?',
-        'sign_in': 'Sign In',
-        'dont_have_account': 'Don\'t have an account?',
+        'sign_in': 'Sign in',
+        'dont_have_account': "Don't have an account?",
         'sign_up_here': 'Sign up here',
         'back_to_homepage': '← Back to homepage',
-        'please_enter_credentials': 'Please enter both username and password.',
+        'please_enter_credentials': 'Please enter username and password.',
         'signing_in': 'Signing in...',
         'enter_your_username': 'Enter your username',
         'enter_your_password': 'Enter your password',
@@ -27,6 +28,8 @@ const Translations = {
         'choose_username': 'Choose a username',
         'username_requirements': 'At least 3 characters, letters, numbers, hyphens, and underscores only',
         'enter_email': 'Enter your email address',
+        'choose_password': 'Choose a password',
+        'password_requirements': 'At least 8 characters, including uppercase, lowercase, numbers, and special characters',
         'create_strong_password': 'Create a strong password',
         'confirm_password': 'Confirm Password',
         'confirm_your_password': 'Confirm your password',
@@ -38,6 +41,7 @@ const Translations = {
         'already_have_account': 'Already have an account?',
         'sign_in_here': 'Sign in here',
         'creating_account': 'Creating Account...',
+        
         // Common UI elements
         'app_title': 'Exam Grader',
         'dashboard': 'Dashboard',
@@ -121,7 +125,6 @@ const Translations = {
         'tip_format': 'PDF and Word documents typically provide the best OCR results',
         'tip_answers': 'Include sample answers or key points for each question when possible',
         'please_select_file': 'Please select a file to upload.',
-        'processing': 'Processing...',
         'upload_failed': 'Upload failed. Please try again.',
         
         // Settings page
@@ -167,7 +170,7 @@ const Translations = {
         'notification_all': 'All Notifications',
         'notification_important': 'Important Only',
         'notification_minimal': 'Minimal',
-        'notification_none': 'None',
+        'notification_none': 'None'
     },
     
     // Spanish translations
@@ -193,6 +196,8 @@ const Translations = {
         'choose_username': 'Elige un nombre de usuario',
         'username_requirements': 'Al menos 3 caracteres, solo letras, números, guiones y guiones bajos',
         'enter_email': 'Introduce tu dirección de correo electrónico',
+        'choose_password': 'Elige una contraseña',
+        'password_requirements': 'Al menos 8 caracteres, incluyendo mayúsculas, minúsculas, números y caracteres especiales',
         'create_strong_password': 'Crea una contraseña segura',
         'confirm_password': 'Confirmar contraseña',
         'confirm_your_password': 'Confirma tu contraseña',
@@ -204,6 +209,7 @@ const Translations = {
         'already_have_account': '¿Ya tienes una cuenta?',
         'sign_in_here': 'Inicia sesión aquí',
         'creating_account': 'Creando cuenta...',
+        
         // Common UI elements
         'app_title': 'Calificador de Exámenes',
         'dashboard': 'Panel',
@@ -229,7 +235,7 @@ const Translations = {
         'nav_dashboard': 'Panel',
         'nav_exams': 'Exámenes',
         'nav_marking_guides': 'Guías de Calificación',
-        'nav_submissions': 'Entregas'}]}}}
+        'nav_submissions': 'Entregas',
         'nav_results': 'Resultados',
         'nav_settings': 'Configuración',
         'nav_logout': 'Cerrar Sesión',
@@ -287,7 +293,6 @@ const Translations = {
         'tip_format': 'Los documentos PDF y Word suelen proporcionar los mejores resultados de OCR',
         'tip_answers': 'Incluye respuestas de ejemplo o puntos clave para cada pregunta cuando sea posible',
         'please_select_file': 'Por favor, selecciona un archivo para subir.',
-        'processing': 'Procesando...',
         'upload_failed': 'Error al subir. Por favor, inténtalo de nuevo.',
         
         // Settings page
@@ -333,11 +338,36 @@ const Translations = {
         'notification_all': 'Todas las Notificaciones',
         'notification_important': 'Solo Importantes',
         'notification_minimal': 'Mínimas',
-        'notification_none': 'Ninguna',
+        'notification_none': 'Ninguna'
     }
 };
 
-// Export for use in other scripts
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = Translations;
+// Translation function
+ExamGrader.translate = function(key) {
+    const lang = this.currentLang || 'en';
+    return this.translations[lang] && this.translations[lang][key] ||
+           this.translations.en[key] ||  // Fallback to English
+           key;  // Fallback to key if not found
+};
+
+// Function to change language
+ExamGrader.setLanguage = function(language) {
+    this.currentLang = language;
+    // Save to localStorage if available
+    if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('examGraderLanguage', language);
+    }
+};
+
+// Function to get current language
+ExamGrader.getCurrentLanguage = function() {
+    return this.currentLang || 'en';
+};
+
+// Initialize language from localStorage if available
+if (typeof localStorage !== 'undefined') {
+    const savedLang = localStorage.getItem('examGraderLanguage');
+    if (savedLang) {
+        ExamGrader.currentLang = savedLang;
+    }
 }

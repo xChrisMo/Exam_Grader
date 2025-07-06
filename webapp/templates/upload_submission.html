@@ -42,10 +42,9 @@
       </div>
       
       <form method="POST" enctype="multipart/form-data" id="uploadForm">
-        {% if csrf_token %}
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-        {% endif %}
-
+        <!-- Use only one CSRF token implementation -->
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        
         <!-- Upload Mode Selection -->
         <div class="mb-6">
           <label class="block text-sm font-medium text-gray-700 mb-3" data-i18n="upload_mode">Upload Mode</label>

@@ -187,6 +187,7 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
         print("=" * 50)
 
         # Run the application with reloader disabled to prevent double initialization
+        os.environ['LOG_LEVEL'] = 'DEBUG'
         app.run(
             host=host,
             port=port,

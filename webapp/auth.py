@@ -118,7 +118,9 @@ def login():
                 logger.error(f"Session validation error: {str(e)}")
                 session.clear()
 
-        return render_template("auth/login.html", page_title="Login")
+        from webapp.forms import LoginForm
+        form = LoginForm()
+        return render_template("auth/login.html", page_title="Login", form=form)
 
     try:
         # Get form data

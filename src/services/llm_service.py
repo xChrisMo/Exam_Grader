@@ -70,9 +70,9 @@ class LLMService:
         retry_delay: float = 1.0,
         seed: Optional[int] = 42,
         deterministic: bool = True,
+
     ):
-        """
-        Initialize the LLM service.
+        """Initialize the LLM service.
 
         Args:
             api_key: DeepSeek API key (from environment if not provided)
@@ -83,6 +83,7 @@ class LLMService:
             retry_delay: Delay between retry attempts in seconds
             seed: Random seed for deterministic outputs (default: 42)
             deterministic: Whether to use deterministic mode (default: True)
+
 
         Raises:
             LLMServiceError: If API key is not available
@@ -100,6 +101,11 @@ class LLMService:
         self.retry_delay = retry_delay
         self.seed = seed
         self.deterministic = deterministic
+
+
+        # Initialize response cache
+        self._response_cache = {}
+        self._cache_lock = threading.Lock()
 
         # Log the deterministic mode setting
         if self.deterministic:
@@ -284,7 +290,7 @@ class LLMService:
             ]
 
             # Check cache first
-            cache_key = self._generate_cache_key(messages, max_tokens=self.max_tokens_default)
+            cache_key = self._generate_cache_key(messages)
             cached_response = self._get_cached_response(cache_key)
 
             if cached_response:
@@ -298,7 +304,7 @@ class LLMService:
                     "model": self.model,
                     "messages": messages,
                     "temperature": 0.0,  # Deterministic for consistency
-                    "max_tokens": self.max_tokens_default,  # Optimized token limit
+    
                 }
 
                 # Ensure JSON format for Deepseek-Reasoner
@@ -436,9 +442,36 @@ class LLMService:
         
         {response}
         
-        Return ONLY the JSON object with 'score' and 'feedback' keys.""".format(response=text[:4000])
+        Return ONLY the JSON object with 'score' and 'feedback' keys.""".format(response=text)
 
         return self._get_llm_response(prompt)
+        
+    def _get_llm_response(self, prompt: str) -> str:
+        """Send a prompt to the LLM and get a response"""
+        try:
+            # Prepare API parameters
+            params = {
+                "model": self.model,
+                "messages": [
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.0,  # Deterministic for consistency
+
+            }
+            
+            # Add seed parameter if in deterministic mode
+            if self.deterministic and self.seed is not None:
+                params["seed"] = self.seed
+
+            # Make API call
+            response = self.client.chat.completions.create(**params)
+            response_text = response.choices[0].message.content.strip()
+            
+            return response_text
+            
+        except Exception as e:
+            logger.error(f"Error getting LLM response: {str(e)}")
+            raise LLMServiceError(f"Failed to get LLM response: {str(e)}") from e
 
     def process_marking_guide(self, guide_text: str) -> Dict:
         """
@@ -467,7 +500,7 @@ class LLMService:
         self,
         marking_guide_text: str,
         student_submission_text: str,
-        max_tokens: int = 2048,
+
     ) -> Dict:
         """
         Grade a student submission against a marking guide.
@@ -478,7 +511,6 @@ class LLMService:
         Args:
             marking_guide_text: Full text of the marking guide
             student_submission_text: Full text of the student submission
-            max_tokens: Maximum tokens for the response
 
         Returns:
             Dict: Grading result with scores and feedback
@@ -549,4 +581,57 @@ class LLMService:
             return mapping_service.map_submission_to_guide(
                 marking_guide_content, student_submission_content
             )
+       
+
+    def _generate_cache_key(self, messages: List[Dict[str, str]]) -> str:
+        """Generate a cache key from messages and parameters"""
+        # Create a string representation of the messages and parameters
+        key_parts = [
+            self.model,
+            str(self.temperature),
+
+            str(self.seed) if self.deterministic else "non-deterministic",
+        ]
+        
+        # Add message content to the key
+        for msg in messages:
+            key_parts.append(f"{msg['role']}:{msg['content']}")
+            
+        # Join all parts and create a hash
+        key_str = "|".join(key_parts)
+        import hashlib
+        return hashlib.md5(key_str.encode()).hexdigest()
+    
+    def _get_cached_response(self, cache_key: str) -> Optional[str]:
+        """Get a cached response if available"""
+        with self._cache_lock:
+            return self._response_cache.get(cache_key)
+    
+    def _cache_response(self, cache_key: str, response: str) -> None:
+        """Cache a response for future use"""
+        with self._cache_lock:
+            self._response_cache[cache_key] = response
+            
+    def _make_api_call_with_retry(self, params: Dict[str, Any]):
+        """Make an API call with retry logic"""
+        attempts = 0
+        last_error = None
+        
+        while attempts < self.max_retries:
+            try:
+                return self.client.chat.completions.create(**params)
+            except Exception as e:
+                last_error = e
+                logger.warning(f"API call attempt {attempts+1} failed: {str(e)}")
+                
+                # Exponential backoff with jitter
+                backoff_time = self.retry_delay * (2 ** attempts) * (0.5 + random.random())
+                logger.info(f"Retrying in {backoff_time:.2f} seconds...")
+                time.sleep(backoff_time)
+                
+                attempts += 1
+        
+        # If we get here, all retries failed
+        logger.error(f"API call failed after {self.max_retries} attempts")
+        raise LLMServiceError(f"API call failed after {self.max_retries} attempts", original_error=last_error)
        

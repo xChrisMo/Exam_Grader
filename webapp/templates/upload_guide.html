@@ -118,6 +118,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/translations.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const dropZone = document.getElementById('drop-zone');
@@ -189,7 +190,7 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         
         if (!fileInput.files.length) {
-            alert(ExamGrader.i18n.translate('please_select_file'));
+            alert(ExamGrader.translate('please_select_file'));
             return;
         }
 
@@ -203,7 +204,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Show progress
         uploadProgress.classList.remove('hidden');
-        ExamGrader.utils.showButtonLoading(submitBtn, ExamGrader.i18n.translate('processing'));
+        ExamGrader.utils.showButtonLoading(submitBtn, ExamGrader.translate('processing'));
         submitBtn.disabled = true;
 
         // Simulate progress
@@ -235,8 +236,8 @@ document.addEventListener('DOMContentLoaded', function() {
             clearInterval(progressInterval);
             uploadProgress.classList.add('hidden');
             submitBtn.disabled = false;
-            ExamGrader.utils.hideButtonLoading(submitBtn, ExamGrader.i18n.translate('upload_guide_button'));
-            alert(ExamGrader.i18n.translate('upload_failed'));
+            ExamGrader.utils.hideButtonLoading(submitBtn, ExamGrader.translate('upload_guide_button'));
+            alert(ExamGrader.translate('upload_failed'));
         });
     });
 });

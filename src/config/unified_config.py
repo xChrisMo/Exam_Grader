@@ -117,11 +117,15 @@ class APIConfig:
     api_retry_attempts: int = 3
     api_retry_delay: float = 2.0
 
-    # LLM-Only Mode Configuration
-    llm_only_mode: bool = False  # When True, disables all regex fallbacks
+    # LLM Response Handling Configuration
+    llm_require_json_response: bool = True  # Enforce JSON response format
     llm_strict_mode: bool = False  # When True, fails completely if LLM fails
-    llm_retry_attempts: int = 3  # Number of retry attempts for LLM operations
-    llm_retry_delay: float = 2.0  # Delay between retry attempts in seconds
+    llm_retry_attempts: int = 3  # Total attempts including initial try
+    llm_retry_delay: float = 2.0  # Base delay between attempts in seconds
+    llm_json_timeout: float = 10.0  # Additional time allowance for JSON parsing
+    llm_retry_on_json_error: int = 2  # Retries specifically for JSON parse failures
+    llm_json_schema: Optional[Dict] = None  # Optional JSON schema validation
+    llm_fallback_to_plaintext: bool = True  # Attempt plaintext parsing if JSON fails
 
     def __post_init__(self):
         """Validate API configuration."""
@@ -241,10 +245,13 @@ class UnifiedConfig:
         ),
             deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner"),
             # LLM-Only Mode Configuration
-            llm_only_mode=os.getenv("LLM_ONLY_MODE", "False").lower() == "true",
+            llm_require_json_response=os.getenv("LLM_REQUIRE_JSON", "True").lower() == "true",
             llm_strict_mode=os.getenv("LLM_STRICT_MODE", "False").lower() == "true",
             llm_retry_attempts=int(os.getenv("LLM_RETRY_ATTEMPTS", "3")),
             llm_retry_delay=float(os.getenv("LLM_RETRY_DELAY", "2.0")),
+            llm_json_timeout=float(os.getenv("LLM_JSON_TIMEOUT", "10.0")),
+            llm_retry_on_json_error=int(os.getenv("LLM_RETRY_ON_JSON_ERROR", "2")),
+            llm_fallback_to_plaintext=os.getenv("LLM_FALLBACK_TO_PLAINTEXT", "True").lower() == "true",
         )
 
         # Cache configuration

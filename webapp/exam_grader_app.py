@@ -37,6 +37,9 @@ from flask import (
     abort,
 )
 from sqlalchemy.exc import SQLAlchemyError
+from flask_wtf import FlaskForm
+from wtforms import StringField, PasswordField, BooleanField
+from wtforms.validators import DataRequired
 from flask_login import current_user, LoginManager
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
@@ -89,7 +92,7 @@ def get_locale():
 try:
     config.validate()
     app.config.update(config.get_flask_config())
-    app.config["SECRET_KEY"] = config.security.secret_key
+    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or "dev-key-123"  # Fallback for development
     logger.info(f"Configuration loaded for environment: {config.environment}")
 except Exception as e:
     logger.critical(f"Failed to load configuration: {str(e)}")
@@ -98,8 +101,19 @@ except Exception as e:
 
 # Initialize CSRF protection
 try:
-    csrf = CSRFProtect(app)
-    logger.info("CSRF protection initialized")
+    csrf = CSRFProtect()
+    csrf.init_app(app)
+    
+    # Configure CSRF settings
+    app.config.update(
+        CSRF_COOKIE_NAME='secure_csrf_token',
+        CSRF_COOKIE_HTTPONLY=True,
+        CSRF_COOKIE_SECURE=False,
+        CSRF_COOKIE_SAMESITE='Lax',
+        CSRF_TIME_LIMIT=3600
+    )
+    
+    logger.info(f"CSRF protection initialized with settings: {app.config['CSRF_COOKIE_NAME']}, Timeout: {app.config['CSRF_TIME_LIMIT']}s")
 except Exception as e:
     logger.critical(f"Failed to initialize CSRF protection: {str(e)}")
     sys.stderr.write(f"CRITICAL ERROR: Failed to initialize CSRF protection: {e}\n")
@@ -116,13 +130,24 @@ except Exception as e:
 
 # Initialize security components
 try:
-    initialize_secrets()
-    session_manager = SecureSessionManager(
-        config.security.secret_key, config.security.session_timeout
+    # Configure security settings using app's secret key
+    app.config.update(
+        SESSION_COOKIE_NAME='secure_session',
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SECURE=False,
+        SESSION_COOKIE_SAMESITE='Lax'
     )
-    # Set the custom session interface for Flask
+    
+    # Initialize session manager with app's secret key
+    session_manager = SecureSessionManager(
+        app.config["SECRET_KEY"],
+        int(os.getenv("SESSION_TIMEOUT", "3600"))
+    )
+    
+    # Configure session interface using Flask's standard cookie settings
     app.session_interface = SecureSessionInterface(
-        session_manager, app.config["SECRET_KEY"]
+        session_manager=session_manager,
+        app_secret_key=app.config["SECRET_KEY"]
     )
 
     login_manager = LoginManager()
@@ -147,6 +172,18 @@ except Exception as e:
     logger.critical(f"Failed to initialize authentication: {str(e)}")
     sys.stderr.write(f"CRITICAL ERROR: Failed to initialize authentication: {e}\n")
     sys.exit(1)
+
+# Context processor to make csrf_token available in all templates
+@app.context_processor
+def inject_csrf_token():
+    from flask_wtf.csrf import generate_csrf
+    try:
+        token = generate_csrf()
+        logger.debug(f"Generated CSRF token in context processor: {token}")
+        return dict(csrf_token=token)
+    except Exception as e:
+        logger.error(f"Failed to generate CSRF token: {str(e)}")
+        return dict(csrf_token=None)
 
 
 def allowed_file(filename):
@@ -391,23 +428,12 @@ def inject_globals():
             "total_active_operations": 0,
         }
 
-    try:
-        from flask_wtf.csrf import generate_csrf
-
-        # Always generate a fresh CSRF token
-        csrf_token = generate_csrf()
-        logger.debug(f"Generated CSRF token for template context: {csrf_token[:10]}...")
-    except Exception as e:
-        logger.error(f"Failed to generate CSRF token: {str(e)}")
-        csrf_token = ""
-
     return {
         "app_version": "2.0.0",
         "current_year": datetime.now().year,
         "service_status": get_service_status(),
         "storage_stats": get_storage_stats(),
         "loading_states": loading_states,
-        "csrf_token": csrf_token,
     }
 
 
@@ -2141,6 +2167,7 @@ def settings():
         current_llm_api_key = os.getenv("DEEPSEEK_API_KEY", "")
         current_llm_model = os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner")
         current_llm_seed = os.getenv("DEEPSEEK_SEED", "42")
+        current_llm_token_limit = os.getenv("DEEPSEEK_TOKEN_LIMIT", "2048")
         current_ocr_api_key = os.getenv("HANDWRITING_OCR_API_KEY", "")
         current_ocr_api_url = os.getenv("HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3")
         
@@ -2161,6 +2188,7 @@ def settings():
             "llm_api_key": current_llm_api_key,
             "llm_model": current_llm_model,
             "llm_seed": current_llm_seed,
+            "llm_token_limit": current_llm_token_limit,
             "ocr_api_key": current_ocr_api_key,
             "ocr_api_url": current_ocr_api_url,
         }
@@ -2205,6 +2233,7 @@ def settings():
                 llm_api_key = request.form.get("llm_api_key", "")
                 llm_model = request.form.get("llm_model", "deepseek-reasoner")
                 llm_seed = request.form.get("llm_seed", "42")
+                llm_token_limit = request.form.get("llm_token_limit", "2048")
                 ocr_api_key = request.form.get("ocr_api_key", "")
                 ocr_api_url = request.form.get("ocr_api_url", "https://www.handwritingocr.com/api/v3")
                 
@@ -2243,6 +2272,9 @@ def settings():
                 dotenv.set_key(dotenv_path, "DEEPSEEK_SEED", llm_seed)
                 os.environ["DEEPSEEK_SEED"] = llm_seed
                 
+                dotenv.set_key(dotenv_path, "DEEPSEEK_TOKEN_LIMIT", llm_token_limit)
+                os.environ["DEEPSEEK_TOKEN_LIMIT"] = llm_token_limit
+                
                 # Update OCR configuration
                 dotenv.set_key(dotenv_path, "HANDWRITING_OCR_API_KEY", ocr_api_key)
                 os.environ["HANDWRITING_OCR_API_KEY"] = ocr_api_key
@@ -2275,7 +2307,7 @@ def settings():
                     llm_service = LLMService(api_key=llm_api_key, model=llm_model, seed=int(llm_seed))
                     mapping_service = MappingService(llm_service=llm_service)
                     grading_service = GradingService(llm_service=llm_service, mapping_service=mapping_service)
-                    logger.info("LLM services reinitialized with new API key and seed")
+                    logger.info("LLM services reinitialized with new API key, seed, and token limit")
                 
                 flash("Settings updated successfully.", "success")
                 return redirect(url_for("settings"))

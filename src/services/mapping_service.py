@@ -138,7 +138,27 @@ class MappingService:
             # Parse the response with error handling
             try:
                 # Clean up the response for models that don't properly format JSON
+                # Attempt to find the start and end of the JSON object
+                json_start = result.find('{')
+                json_end = result.rfind('}')
 
+                if json_start != -1 and json_end != -1 and json_end > json_start:
+                    result = result[json_start : json_end + 1]
+                    logger.info(f"Extracted JSON string: {result[:500]}...")
+                else:
+                    logger.warning("No JSON object found in LLM response.")
+                    logger.error(f"Raw LLM response that failed JSON extraction: {result}")
+                    # Instead of immediately raising an error, try to fix the response using LLM
+                    if hasattr(self.llm_service, "_get_structured_response"):
+                        logger.info("Attempting to fix malformed JSON using LLM...")
+                        try:
+                            # Use LLM to fix and structure the response
+                            sanitized_response = self.llm_service._get_structured_response(result)
+                            result = sanitized_response
+                            logger.info(f"LLM-fixed JSON: {result[:500]}...")
+                        except Exception as fix_error:
+                            logger.error(f"Failed to fix JSON with LLM: {str(fix_error)}")
+                            # Continue with the original result and let the JSON parser handle it
 
                 parsed = json.loads(result)
 
@@ -301,6 +321,26 @@ class MappingService:
                     json_match = re.search(r"\{.*\}", result, re.DOTALL)
                     if json_match:
                         result = json_match.group(0)
+                    else:
+                        logger.warning("No JSON object found in LLM response.")
+                        logger.error(
+                            f"Raw LLM response that failed JSON extraction: {result}"
+                        )
+                        # Instead of immediately falling back to regex, try to fix the response using LLM
+                        if self.llm_service and hasattr(self.llm_service, "_get_structured_response"):
+                            logger.info("Attempting to fix malformed JSON using LLM...")
+                            try:
+                                # Use LLM to fix and structure the response
+                                sanitized_response = self.llm_service._get_structured_response(result)
+                                result = sanitized_response
+                                logger.info(f"LLM-fixed JSON: {result[:500]}...")
+                            except Exception as fix_error:
+                                logger.error(f"Failed to fix JSON with LLM: {str(fix_error)}")
+                                # Return an empty list to trigger the fallback extraction
+                                return []
+                        else:
+                            # Return an empty list to trigger the fallback extraction
+                            return []
 
                     parsed = json.loads(result)
 
@@ -591,7 +631,7 @@ class MappingService:
                         {"role": "user", "content": user_prompt},
                     ],
                     "temperature": 0.0,
-                    "max_tokens": 2048,
+        
                 }
 
                 if supports_json:
@@ -632,7 +672,19 @@ class MappingService:
                         logger.error(
                             f"Raw LLM response that failed JSON extraction: {result}"
                         )
-                        raise ValueError("No JSON object found in LLM response.")
+                        # Instead of immediately raising an error, try to fix the response using LLM
+                        if self.llm_service and hasattr(self.llm_service, "_get_structured_response"):
+                            logger.info("Attempting to fix malformed JSON using LLM...")
+                            try:
+                                # Use LLM to fix and structure the response
+                                sanitized_response = self.llm_service._get_structured_response(result)
+                                result = sanitized_response
+                                logger.info(f"LLM-fixed JSON: {result[:500]}...")
+                            except Exception as fix_error:
+                                logger.error(f"Failed to fix JSON with LLM: {str(fix_error)}")
+                                raise ValueError("No JSON object found in LLM response.")
+                        else:
+                            raise ValueError("No JSON object found in LLM response.")
 
                     parsed = json.loads(result)
 
@@ -1167,8 +1219,23 @@ class MappingService:
                         # Log the cleaned JSON
                         logger.info(f"Cleaned JSON: {result[:200]}...")
 
-                        parsed = json.loads(result)
-                        logger.info("JSON parsing successful")
+                        try:
+                            parsed = json.loads(result)
+                            logger.info("JSON parsing successful")
+                        except json.JSONDecodeError as json_error:
+                            logger.warning(f"Initial JSON parsing failed: {str(json_error)}")
+                            logger.warning("Attempting to use _get_structured_response to fix malformed JSON")
+                            
+                            # Try to use the LLM to fix the malformed JSON
+                            try:
+                                result = self.llm_service._get_structured_response(result)
+                                logger.info(f"LLM-fixed JSON: {result[:200]}...")
+                                parsed = json.loads(result)
+                                logger.info("JSON parsing successful after LLM fix")
+                            except Exception as llm_fix_error:
+                                logger.error(f"LLM JSON fix failed: {str(llm_fix_error)}")
+                                # Re-raise the original JSON error to continue with the existing fallback logic
+                                raise json_error
                     except json.JSONDecodeError as e:
                         logger.error(f"JSON parsing error: {str(e)}")
                         logger.error(f"Problematic JSON: {result}")
