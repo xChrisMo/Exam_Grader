@@ -216,7 +216,8 @@ class UnifiedConfig:
             == "true",
             max_requests_per_hour=int(os.getenv("MAX_REQUESTS_PER_HOUR", "1000")),
             secure_cookies=self.environment == "production",
-            session_cookie_secure=self.environment == "production",
+            session_cookie_secure=False,  # Explicitly disabled for development
+            session_cookie_domain=None,  # Ensure cookies work on localhost
         )
 
         # Database configuration
