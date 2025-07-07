@@ -11,9 +11,7 @@
     </div>
 
     <form method="POST" id="settings-form">
-        {% if csrf_token %}
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-        {% endif %}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <div class="space-y-8">
             <!-- File Upload Settings -->
             <div class="bg-white shadow rounded-lg">

@@ -511,6 +511,7 @@ def dashboard():
                     ).label("processed"),
                 )
                 .filter(Submission.user_id == current_user.id)
+                .filter_by(archived=False)
                 .first()
             )
 
@@ -2113,37 +2114,42 @@ def clear_session_guide():
 
 
 @app.route("/view-submission/<submission_id>")
+@login_required
 def view_submission_content(submission_id):
     """View content of a specific submission."""
     try:
-        submissions = session.get("submissions", [])
-        logger.info(
-            f"Attempting to view submission {submission_id}. Total submissions in session: {len(submissions)}"
-        )
-        submission = next(
-            (s for s in submissions if s.get("id") == submission_id), None
-        )
+        # Get current user
+        current_user = get_current_user()
+        if not current_user:
+            flash("Please log in to view submissions", "error")
+            return redirect(url_for("auth.login"))
 
-        if not submission:
-            logger.warning(f"Submission {submission_id} not found in session.")
-
-        if not submission:
-            flash("Submission not found.", "error")
+        # Get submission from database
+        try:
+            submission = Submission.query.filter_by(
+                id=submission_id,
+                user_id=current_user.id
+            ).first()
+        except SQLAlchemyError as e:
+            logger.error(f"Database error fetching submission: {str(e)}")
+            flash("Error retrieving submission", "error")
             return redirect(url_for("view_submissions"))
 
-        logger.info(
-            f"Found submission {submission_id}. Filename: {submission.get('filename')}, Raw text length: {len(submission.get('raw_text', ''))}"
-        )
+        if not submission:
+            logger.warning(f"Submission {submission_id} not found")
+            flash("Submission not found", "error")
+            return redirect(url_for("view_submissions"))
+
+        # Get related grading results
+        grading_results = GradingResult.query.filter_by(
+            submission_id=submission_id
+        ).all()
 
         context = {
-            "page_title": f'Submission: {submission.get("filename", "Unknown")}',
-            "submission_id": submission_id,
-            "filename": submission.get("filename", "Unknown"),
-            "raw_text": submission.get("content_text", ""),
-            "extracted_answers": submission.get("extracted_answers", {}),
-            "processed": submission.get("processed", False),
-            "uploaded_at": submission.get("upload_date", ""),
-            "file_size": submission.get("size_mb", 0) * 1024,  # Convert to KB
+            "page_title": f'Submission: {submission.filename}',
+            "submission": submission,
+            "grading_results": grading_results,
+            "file_size_kb": round(submission.file_size / 1024, 1) if submission.file_size else 0,
         }
         return render_template("submission_content.html", **context)
     except Exception as e:
@@ -2618,6 +2624,33 @@ def delete_submission():
                     f"Submission {submission_id[:8]}... deleted.",
                     "trash",
                 )
+                
+                # Update session data after deletion
+                # Re-fetch recent submissions to ensure session data is fresh
+                recent_submissions = (
+                    Submission.query.filter_by(user_id=current_user.id)
+                    .order_by(Submission.created_at.desc())
+                    .all()
+                )
+                session["submissions"] = [s.to_dict() for s in recent_submissions]
+                
+                # Update submission counts in session
+                submission_stats = (
+                    db.session.query(
+                        db.func.count(Submission.id).label("total"),
+                        db.func.count(
+                            db.case((Submission.processing_status == "completed", 1))
+                        ).label("processed"),
+                    )
+                    .filter(Submission.user_id == current_user.id)
+                    .filter_by(archived=False)
+                    .first()
+                )
+
+                session["total_submissions"] = submission_stats.total if submission_stats else 0
+                session["processed_submissions"] = submission_stats.processed if submission_stats else 0
+                session.modified = True  # Mark session as modified to ensure changes are saved
+                
                 return jsonify(
                     {"success": True, "message": "Submission deleted successfully."}
                 )
