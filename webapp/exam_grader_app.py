@@ -185,6 +185,16 @@ def inject_csrf_token():
         logger.error(f"Failed to inject CSRF token function: {str(e)}")
         return dict(csrf_token=None)
 
+# Context processor to make session variables available in templates
+@app.context_processor
+def inject_session_variables():
+    try:
+        # Make session variables available in templates
+        return dict(session=session)
+    except Exception as e:
+        logger.error(f"Failed to inject session variables: {str(e)}")
+        return dict(session={})
+
 
 def allowed_file(filename):
     """Check if file type is allowed."""
@@ -975,6 +985,7 @@ def upload_submission():
                             content_text=raw_text,
                             answers=answers,
                             processing_status="completed",
+                            archived=False,  # Add archived field with default value
                         )
                         db.session.add(submission)
                         db.session.commit()
@@ -1019,6 +1030,15 @@ def upload_submission():
                 "success",
             )
             logger.info(f"{uploaded_count} submission(s) uploaded successfully.")
+            
+            # Update submission counts in session
+            current_total = session.get("total_submissions", 0)
+            current_processed = session.get("processed_submissions", 0)
+            session["total_submissions"] = current_total + uploaded_count
+            session["processed_submissions"] = current_processed + uploaded_count  # All uploads are marked as processed
+            session.modified = True
+            logger.info(f"Updated session: total_submissions={session['total_submissions']}, processed_submissions={session['processed_submissions']}")
+            
         if failed_count > 0:
             flash(
                 f"{failed_count} submission(s) failed to upload or process. Check logs for details.",
@@ -2145,11 +2165,38 @@ def view_submission_content(submission_id):
             submission_id=submission_id
         ).all()
 
+        # Handle file_size safely - it might be None or not exist in older database records
+        # despite being defined as non-nullable in the current model
+        file_size_kb = 0
+        try:
+            if hasattr(submission, 'file_size') and submission.file_size is not None:
+                file_size_kb = round(submission.file_size / 1024, 1)
+        except (AttributeError, TypeError) as e:
+            logger.warning(f"Could not process file_size for submission {submission_id}: {str(e)}")
+
+        # Extract raw text and answers if available
+        raw_text = ""
+        extracted_answers = {}
+        try:
+            if hasattr(submission, 'raw_text') and submission.raw_text:
+                raw_text = submission.raw_text
+            if hasattr(submission, 'extracted_answers') and submission.extracted_answers:
+                extracted_answers = submission.extracted_answers
+        except (AttributeError, TypeError) as e:
+            logger.warning(f"Could not process text content for submission {submission_id}: {str(e)}")
+
         context = {
             "page_title": f'Submission: {submission.filename}',
             "submission": submission,
             "grading_results": grading_results,
-            "file_size_kb": round(submission.file_size / 1024, 1) if submission.file_size else 0,
+            "file_size_kb": file_size_kb,
+            # Add these variables for direct access in the template
+            "filename": submission.filename,
+            "uploaded_at": submission.uploaded_at.strftime("%Y-%m-%d %H:%M:%S") if submission.uploaded_at else "",
+            "processed": submission.processed,
+            "submission_id": submission_id,
+            "raw_text": raw_text,
+            "extracted_answers": extracted_answers
         }
         return render_template("submission_content.html", **context)
     except Exception as e:

@@ -768,3 +768,64 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 // Export for use in other scripts
+
+// Function to download submission content
+function downloadSubmission(submissionId) {
+  console.log('Downloading submission:', submissionId);
+  
+  // Show loading notification
+  ExamGrader.notificationManager.notify('Preparing download...', 'info');
+  
+  // Fetch submission content
+  fetch(`/view-submission/${submissionId}`)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to fetch submission content');
+      }
+      return response.text();
+    })
+    .then(html => {
+      // Create a temporary container to parse the HTML
+      const tempContainer = document.createElement('div');
+      tempContainer.innerHTML = html;
+      
+      // Extract the raw text content
+      const rawTextScript = tempContainer.querySelector('script');
+      let rawText = '';
+      
+      if (rawTextScript) {
+        const scriptContent = rawTextScript.textContent;
+        const match = scriptContent.match(/raw_text: ([^,]+),/);
+        if (match && match[1]) {
+          try {
+            rawText = JSON.parse(match[1]);
+          } catch (e) {
+            console.error('Error parsing raw text:', e);
+          }
+        }
+      }
+      
+      // Create content object
+      const content = {
+        submission_id: submissionId,
+        raw_text: rawText,
+        downloaded_at: new Date().toISOString()
+      };
+      
+      // Create and download the file
+      const dataStr = JSON.stringify(content, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(dataBlob);
+      link.download = `submission_${submissionId.substring(0, 8)}_content.json`;
+      link.click();
+      
+      // Show success notification
+      ExamGrader.notificationManager.notify('Submission downloaded successfully!', 'success');
+    })
+    .catch(error => {
+      console.error('Error downloading submission:', error);
+      ExamGrader.notificationManager.notify(`Download failed: ${error.message}`, 'error');
+    });
+}

@@ -180,6 +180,7 @@ class Submission(db.Model, TimestampMixin):
         String(50), default="pending"
     )  # pending, processing, completed, failed
     processing_error = Column(Text)
+    archived = Column(Boolean, default=False, nullable=False)  # Add archived field with default value
 
     # Relationships
     user = relationship("User", back_populates="submissions")
@@ -215,6 +216,7 @@ class Submission(db.Model, TimestampMixin):
             "ocr_confidence": self.ocr_confidence,
             "processing_status": self.processing_status,
             "processing_error": self.processing_error,
+            "archived": self.archived,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }

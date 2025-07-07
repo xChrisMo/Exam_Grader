@@ -1,4 +1,12 @@
-{% extends "layout.html" %} {% block content %}
+{% extends "layout.html" %}
+
+{% block extra_css %}
+{% if session.guide_id %}
+<meta name="guide-id" content="{{ session.guide_id }}">
+{% endif %}
+{% endblock %}
+
+{% block content %}
 <div class="max-w-7xl mx-auto">
   <!-- Page Header -->
   <div class="mb-8">
@@ -557,11 +565,29 @@
         "#grade-button-" + submissionId
       );
       ExamGrader.utils.showButtonLoading(gradeButton, "Grading...");
+      
+      // Get the current guide ID from session
+      const guideId = document.querySelector('meta[name="guide-id"]')?.getAttribute('content');
+      
+      if (!guideId) {
+        ExamGrader.utils.hideButtonLoading(gradeButton, "Grade");
+        ExamGrader.notificationManager.notify(
+          "No marking guide selected. Please select a guide first.",
+          "error"
+        );
+        return;
+      }
+      
       ExamGrader.utils
         .apiRequest(
-          "/api/process-grading",
-          { submission_id: submissionId },
-          "POST"
+          "/api/process-ai-grading",
+          {
+            method: "POST",
+            body: { 
+              guide_id: guideId,
+              submission_ids: [submissionId]
+            }
+          }
         )
         .then((data) => {
           ExamGrader.utils.hideButtonLoading(gradeButton, "Grade");
@@ -570,11 +596,11 @@
               "Submission graded successfully!",
               "success"
             );
-            // Optionally, update UI or redirect
+            // Reload the page to update all counts, including dashboard
             window.location.reload();
           } else {
             ExamGrader.notificationManager.notify(
-              data.message || "Error grading submission.",
+              data.error || data.message || "Error grading submission.",
               "error"
             );
           }
