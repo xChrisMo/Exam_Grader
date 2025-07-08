@@ -41,7 +41,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField
 from wtforms.validators import DataRequired
 from flask_login import current_user, LoginManager
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from werkzeug.utils import secure_filename
 from flask_babel import Babel, _
 
@@ -110,7 +110,7 @@ try:
         CSRF_COOKIE_HTTPONLY=True,
         CSRF_COOKIE_SECURE=False,
         CSRF_COOKIE_SAMESITE='Lax',
-        CSRF_TIME_LIMIT=3600
+        CSRF_TIME_LIMIT=86400
     )
     
     logger.info(f"CSRF protection initialized with settings: {app.config['CSRF_COOKIE_NAME']}, Timeout: {app.config['CSRF_TIME_LIMIT']}s")
@@ -180,7 +180,7 @@ def inject_csrf_token():
     try:
         # Return the function instead of calling it
         logger.debug("Injecting CSRF token function into template context")
-        return dict(csrf_token=generate_csrf)
+        return dict(csrf_token=generate_csrf())
     except Exception as e:
         logger.error(f"Failed to inject CSRF token function: {str(e)}")
         return dict(csrf_token=None)
@@ -307,6 +307,34 @@ def _update_guide_uploaded_status(user_id):
         logger.info("Marking guides exist for user. Setting guide_uploaded to True.")
 
 
+def refresh_session_statistics(user_id):
+    """Refresh all session statistics for the current user."""
+    from src.database.models import Submission
+    
+    # Update submission statistics
+    submission_stats = (
+        db.session.query(
+            db.func.count(Submission.id).label("total"),
+            db.func.count(
+                db.case((Submission.processing_status == "completed", 1))
+            ).label("processed"),
+        )
+        .filter(Submission.user_id == user_id)
+        .filter_by(archived=False)
+        .first()
+    )
+    
+    session["total_submissions"] = submission_stats.total if submission_stats else 0
+    session["processed_submissions"] = submission_stats.processed if submission_stats else 0
+    
+    # Refresh other session statistics as needed
+    # ...
+    
+    session.modified = True
+    logger.info(f"Refreshed session statistics: Total: {session['total_submissions']}, Processed: {session['processed_submissions']}")
+
+
+
 def get_service_status() -> Dict[str, bool]:
     """Check status of all services with caching."""
     global _service_status_cache, _service_status_cache_time
@@ -421,6 +449,37 @@ def rate_limit_exceeded(e):
                 error_message="Rate limit exceeded. Please wait before trying again.",
             ),
             429,
+        )
+
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    """Handle CSRF validation errors."""
+    csrf_cookie = request.cookies.get('secure_csrf_token', 'Not Present')
+    csrf_header = request.headers.get('X-CSRFToken', 'Not Present')
+    logger.warning(f"CSRF validation error: {str(e)} - IP: {request.remote_addr}, CSRF Cookie: {csrf_cookie}, X-CSRFToken Header: {csrf_header}")
+    
+    if request.is_json or request.path.startswith("/api/"):
+        return (
+            jsonify(
+                {
+                    "error": "CSRF token validation failed",
+                    "message": str(e),
+                    "status_code": 400,
+                }
+            ),
+            400,
+        )
+    else:
+        flash("Your form session has expired. Please try again.", "warning")
+        return (
+            render_template(
+                "error.html",
+                error_code=400,
+                error_message="CSRF token validation failed. Please refresh the page and try again.",
+                service_status=get_service_status(),
+            ),
+            400,
         )
 
 
@@ -651,6 +710,9 @@ def upload_guide():
     logger.info("=== UPLOAD GUIDE ROUTE CALLED ===")
     logger.info(f"Request method: {request.method}")
     logger.info(f"Request files: {list(request.files.keys())}")
+    csrf_cookie = request.cookies.get('secure_csrf_token', 'Not Present')
+    csrf_header = request.headers.get('X-CSRFToken', 'Not Present')
+    logger.info(f"UPLOAD GUIDE: CSRF Cookie: {csrf_cookie}, X-CSRFToken Header: {csrf_header}")
 
     try:
         if "guide_file" not in request.files:
@@ -872,8 +934,21 @@ def upload_guide():
 @login_required
 def upload_submission():
     """Upload and process student submission."""
-    if request.method == "GET":
-        return render_template("upload_submission.html", page_title="Upload Submission")
+    from .forms import UploadSubmissionForm
+    
+    if not session.get('guide_uploaded'):
+        return redirect(url_for('upload_guide'))
+        
+    form = UploadSubmissionForm()
+    
+    if form.validate_on_submit():
+        file = form.file.data
+        # Process file upload here
+        # ...
+    
+    # If it's a GET request or form validation fails, render the template
+    if request.method == 'GET':
+        return render_template('upload_submission.html', form=form)
 
     try:
 
@@ -1632,8 +1707,13 @@ def process_unified_ai():
         try:
             session_id = session.sid  # Use SecureFlaskSession's sid property
             logger.info(f"Creating progress session for {len(submissions)} submissions")
-            progress_id = progress_tracker.create_session(session_id, len(submissions))
-            logger.info(f"Progress session created: {progress_id}")
+            progress_id = None # Initialize to None
+            try:
+                progress_id = progress_tracker.create_session(session_id, len(submissions))
+                logger.info(f"Progress session created: {progress_id}")
+            except Exception as e:
+                logger.error(f"Error creating progress session: {str(e)}")
+                return jsonify({"error": f"Failed to create progress session: {str(e)}"}), 500
 
             # Store progress ID in session for frontend polling
             session["current_progress_id"] = progress_id
@@ -1721,16 +1801,21 @@ def process_unified_ai():
                         .all()
                 )
                 session["submissions"] = [s.to_dict() for s in recent_submissions]
+                
+                # Refresh session statistics to update dashboard counters
+                refresh_session_statistics(current_user.id)
 
             progress_tracker.complete_session(progress_id, success=True)
 
             # Update session variables for results page
-            session['last_grading_progress_id'] = progress_id
-            session['last_grading_result'] = True
-            session['guide_id'] = guide_id
-            session.modified = True  # Mark session as modified to ensure changes are saved
-            
-            logger.info(f"Updated session with progress_id {progress_id}, last_grading_result=True, and guide_id={guide_id}")
+            if progress_id:
+                session['last_grading_progress_id'] = progress_id
+                session['last_grading_result'] = True
+                session['guide_id'] = guide_id
+                session.modified = True  # Mark session as modified to ensure changes are saved
+                logger.info(f"Updated session with progress_id {progress_id}, last_grading_result=True, and guide_id={guide_id}")
+            else:
+                logger.warning("progress_id was None, not updating session with last_grading_progress_id.")
 
         except Exception as e:
             db.session.rollback()
@@ -1738,9 +1823,12 @@ def process_unified_ai():
                 f"Error during unified AI processing or saving results: {str(e)}"
             )
             if progress_id:
+                logger.info(f"Attempting to complete session {progress_id} with failure.")
                 progress_tracker.complete_session(
                     progress_id, success=False, message=f"Processing failed: {str(e)}"
                 )
+            else:
+                logger.warning("progress_id was None in exception handler, cannot complete session.")
             return jsonify({"error": f"Processing failed: {str(e)}"}), 500
         finally:
             pass  # The complete_session is already called in try/except blocks
@@ -2192,7 +2280,7 @@ def view_submission_content(submission_id):
             "file_size_kb": file_size_kb,
             # Add these variables for direct access in the template
             "filename": submission.filename,
-            "uploaded_at": submission.uploaded_at.strftime("%Y-%m-%d %H:%M:%S") if submission.uploaded_at else "",
+            "uploaded_at": submission.created_at.strftime("%Y-%m-%d %H:%M:%S") if submission.created_at else "",
             "processed": submission.processed,
             "submission_id": submission_id,
             "raw_text": raw_text,

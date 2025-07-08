@@ -178,7 +178,7 @@
         <dl>
           <dt class="text-sm font-medium text-gray-500 mb-1">Uploaded</dt>
           <dd class="text-lg font-medium text-gray-900">
-            {{ uploaded_at[:10] if uploaded_at else 'Unknown' }}
+            {{ submission.created_at.strftime("%Y-%m-%d") if submission.created_at else 'Unknown' }}
           </dd>
         </dl>
       </div>
@@ -362,7 +362,7 @@
         <div>
           <dt class="text-sm font-medium text-gray-500">Upload Date</dt>
           <dd class="mt-1 text-sm text-gray-900">
-            {{ uploaded_at if uploaded_at else 'Unknown' }}
+            {{ submission.created_at.strftime("%Y-%m-%d %H:%M:%S") if submission.created_at else 'Unknown' }}
           </dd>
         </div>
         <div>
@@ -457,7 +457,7 @@
     const content = {
       submission_id: "{{ submission_id }}",
       filename: "{{ filename }}",
-      uploaded_at: "{{ uploaded_at }}",
+      uploaded_at: "{{ submission.created_at.isoformat() if submission.created_at else '' }}",
       raw_text: {{ raw_text|tojson|safe }},
       extracted_answers: JSON.parse(`{{ extracted_answers|tojson|safe }}`),
     };

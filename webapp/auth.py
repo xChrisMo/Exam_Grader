@@ -124,6 +124,9 @@ def login():
         return render_template("auth/login.html", page_title="Login", form=form)
 
     try:
+        # Clear any existing session data to prevent mixing old and new session info
+        session.clear()
+
         # Get form data
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
@@ -473,6 +476,7 @@ def login_required(f):
             logger.debug(
                 f"login_required: Missing session data. Redirecting to login. Next URL: {request.url}"
             )
+            logger.warning("login_required: Clearing session due to missing user_id or session.sid.")
             flash("Please log in to access this page.", "warning")
             # Clear any invalid session data
             session.clear()
@@ -485,19 +489,19 @@ def login_required(f):
             
             # Updated session validation check with detailed logging
             if not secure_session:
-                logger.warning(f"Invalid secure session for user {user_id}: session is None")
+                logger.warning(f"Invalid secure session for user {user_id}: session is None. Clearing session.")
                 session.clear()
                 flash("Session invalid. Please log in again.", "warning")
                 return redirect(url_for("auth.login"))
             
             if not isinstance(secure_session, dict):
-                logger.warning(f"Invalid secure session for user {user_id}: session is not a dict but {type(secure_session).__name__}")
+                logger.warning(f"Invalid secure session for user {user_id}: session is not a dict but {type(secure_session).__name__}. Clearing session.")
                 session.clear()
                 flash("Session invalid. Please log in again.", "warning")
                 return redirect(url_for("auth.login"))
             
             if secure_session.get('user_id') != user_id:
-                logger.warning(f"Invalid secure session for user {user_id}: session user_id mismatch {secure_session.get('user_id')}")
+                logger.warning(f"Invalid secure session for user {user_id}: session user_id mismatch {secure_session.get('user_id')}. Clearing session.")
                 session.clear()
                 flash("Session invalid. Please log in again.", "warning")
                 return redirect(url_for("auth.login"))
@@ -506,7 +510,7 @@ def login_required(f):
         
         except Exception as e:
             logger.error(f"Session validation error: {str(e)}")
-            logger.error(f"Detailed session validation error: {traceback.format_exc()}")
+            logger.error(f"Detailed session validation error: {traceback.format_exc()}. Clearing session.")
             session.clear()
             flash("Session error. Please log in again.", "error")
             return redirect(url_for("auth.login"))

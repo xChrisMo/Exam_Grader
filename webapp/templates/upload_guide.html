@@ -197,10 +197,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const formData = new FormData(uploadForm);
         
         // Add CSRF token to form data
-        const csrfTokenInput = document.querySelector('input[name="csrf_token"]');
-        if (csrfTokenInput) {
-            formData.append('csrf_token', csrfTokenInput.value);
-        }
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+        formData.append('csrf_token', csrfToken);
 
         // Show progress
         uploadProgress.classList.remove('hidden');

@@ -43,7 +43,7 @@
       
       <form method="POST" enctype="multipart/form-data" id="uploadForm">
         <!-- Use only one CSRF token implementation -->
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
         
         <!-- Upload Mode Selection -->
         <div class="mb-6">

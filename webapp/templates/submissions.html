@@ -315,7 +315,7 @@
                 {% endif %}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ submission.uploaded_at[:10] if submission.uploaded_at else
+                {{ submission.created_at.strftime("%Y-%m-%d") if submission.created_at else
                 'Unknown' }}
               </td>
               <td
