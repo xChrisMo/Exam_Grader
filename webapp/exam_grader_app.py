@@ -80,13 +80,23 @@ except ImportError as e:
 
 # Initialize Flask application
 app = Flask(__name__)
-babel = Babel(app)
 
-@babel.localeselector
+# Configure Babel settings
+app.config['BABEL_DEFAULT_LOCALE'] = 'en'
+app.config['BABEL_DEFAULT_TIMEZONE'] = 'UTC'
+
+# Initialize Babel without using the decorator
+babel = Babel()
+babel.init_app(app)
+
+# Define locale selector function
 def get_locale():
     # You can try to get the language from the request, user settings, etc.
     # For now, we'll just return 'en' as a default.
     return 'en'
+
+# Manually set the locale selector
+babel.locale_selector_func = get_locale
 
 # Load and validate configuration
 try:
