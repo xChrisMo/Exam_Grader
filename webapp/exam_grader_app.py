@@ -86,6 +86,8 @@ app.config['BABEL_DEFAULT_LOCALE'] = 'en'
 app.config['BABEL_DEFAULT_TIMEZONE'] = 'UTC'
 
 # Initialize Babel without using the decorator
+# NOTE: This initialization pattern is used for compatibility with Flask 2.3.x and Flask-Babel 2.0.0
+# If upgrading to Flask 3.x, use the locale_selector parameter in init_app instead
 babel = Babel()
 babel.init_app(app)
 
@@ -96,6 +98,7 @@ def get_locale():
     return 'en'
 
 # Manually set the locale selector
+# This is the Flask 2.3.x compatible way to set the locale selector
 babel.locale_selector_func = get_locale
 
 # Load and validate configuration

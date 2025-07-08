@@ -79,6 +79,34 @@ def check_dependencies():
     return True
 
 
+def check_version_compatibility():
+    """Check for version compatibility between key packages."""
+    try:
+        import flask
+        import flask_babel
+        import werkzeug
+        
+        print(f"[INFO] Flask version: {flask.__version__}")
+        print(f"[INFO] Flask-Babel version: {flask_babel.__version__}")
+        print(f"[INFO] Werkzeug version: {werkzeug.__version__}")
+        
+        # Check Flask and Flask-Babel compatibility
+        flask_major, flask_minor = map(int, flask.__version__.split('.')[:2])
+        
+        # Flask 3.x changed how extensions register functions
+        if flask_major >= 3:
+            print("[WARNING] Flask 3.x detected. Make sure Flask-Babel initialization uses the new API.")
+            print("          Check webapp/exam_grader_app.py for proper initialization.")
+        elif flask_major == 2 and flask_minor >= 3:
+            # Current compatible setup
+            print("[OK] Flask 2.3.x detected - compatible with current Flask-Babel setup")
+        
+        return True
+    except (ImportError, AttributeError) as e:
+        print(f"[ERROR] Version compatibility check failed: {e}")
+        return False
+
+
 def setup_environment():
     """Set up environment variables and paths."""
     # Add project root to Python path
@@ -120,6 +148,11 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
         else:
             load_dotenv(".env", override=True)
             print("[WARNING]  Loaded environment from root .env file")
+            
+        # Check version compatibility between Flask and Flask-Babel
+        print("\n📦 Checking package version compatibility...")
+        check_version_compatibility()
+        print("")
 
         # Use .env values if not provided as arguments
         if host is None:
