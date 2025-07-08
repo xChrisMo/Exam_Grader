@@ -1,0 +1,193 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div class="px-4 py-5 sm:px-6">
+            <h2 class="text-lg leading-6 font-medium text-gray-900">AI Processing</h2>
+            <p class="mt-1 max-w-2xl text-sm text-gray-500">Your submissions are being processed by AI.</p>
+        </div>
+        <div class="border-t border-gray-200">
+            <div class="px-4 py-5 sm:p-6 text-center">
+                <div id="processing-status" class="mb-8">
+                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
+                        <svg class="animate-spin h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg leading-6 font-medium text-gray-900" id="progress-title">AI Processing in Progress</h3>
+                    
+                    <div class="mt-6 max-w-xl mx-auto">
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                            <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-2" id="progress-text">Initializing...</p>
+                        <p class="text-xs text-gray-400 mt-1" id="progress-details"></p>
+                        <p class="text-xs text-gray-400 mt-1" id="progress-eta"></p>
+                    </div>
+                </div>
+                
+                <div id="processing-complete" class="hidden">
+                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                        <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">Processing Complete!</h3>
+                    <p class="text-sm text-gray-500 mt-2">Your submissions have been processed successfully.</p>
+                    
+                    <div class="mt-6">
+                        <a href="{{ url_for('view_results') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                            View Results
+                        </a>
+                        <a href="{{ url_for('dashboard') }}" class="ml-3 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                            Return to Dashboard
+                        </a>
+                    </div>
+                </div>
+                
+                <div id="processing-error" class="hidden">
+                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                        <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">Processing Failed</h3>
+                    <p class="text-sm text-gray-500 mt-2" id="error-message">An error occurred during processing.</p>
+                    
+                    <div class="mt-6">
+                        <a href="{{ url_for('dashboard') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                            Return to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get progress ID from URL parameter or session
+        const urlParams = new URLSearchParams(window.location.search);
+        const progressId = urlParams.get('progress_id') || '{{ session.get("current_progress_id", "") }}';
+        
+        if (!progressId) {
+            showError('No progress ID found. Please return to the dashboard and try again.');
+            return;
+        }
+        
+        // Start polling for progress updates
+        startProgressPolling(progressId);
+        
+        function startProgressPolling(progressId) {
+            console.log('Starting progress polling for ID:', progressId);
+            
+            // Clear any existing interval
+            if (window.progressPollingInterval) {
+                clearInterval(window.progressPollingInterval);
+            }
+            
+            // Poll every 2 seconds
+            window.progressPollingInterval = setInterval(async () => {
+                try {
+                    const progress = await getProgress(progressId);
+                    updateProgressUI(progress);
+                    
+                    // Check if processing is complete or failed
+                    if (progress.status === 'completed') {
+                        stopProgressPolling();
+                        showComplete();
+                    } else if (progress.status === 'failed') {
+                        stopProgressPolling();
+                        showError(progress.message || 'Processing failed');
+                    }
+                } catch (error) {
+                    console.error('Error polling for progress:', error);
+                    stopProgressPolling();
+                    showError('Error checking progress: ' + error.message);
+                }
+            }, 2000);
+        }
+        
+        function stopProgressPolling() {
+            if (window.progressPollingInterval) {
+                clearInterval(window.progressPollingInterval);
+                window.progressPollingInterval = null;
+                console.log('Progress polling stopped');
+            }
+        }
+        
+        async function getProgress(progressId) {
+            const response = await fetch(`/api/progress/${progressId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to get progress');
+            }
+            
+            return data.progress;
+        }
+        
+        function updateProgressUI(progress) {
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            const progressDetails = document.getElementById('progress-details');
+            const progressEta = document.getElementById('progress-eta');
+            
+            if (progressBar) {
+                progressBar.style.width = `${progress.percentage}%`;
+            }
+            
+            if (progressText) {
+                progressText.textContent = progress.current_operation || 'Processing...';
+            }
+            
+            if (progressDetails) {
+                const details = progress.details ||
+                    `Step ${progress.current_step}/${progress.total_steps} - Submission ${progress.submission_index}/${progress.total_submissions}`;
+                progressDetails.textContent = details;
+            }
+            
+            if (progressEta && progress.estimated_time_remaining) {
+                const eta = Math.round(progress.estimated_time_remaining);
+                progressEta.textContent = `Estimated time remaining: ${eta}s`;
+            }
+            
+            // Update status color based on progress status
+            if (progress.status === 'completed') {
+                progressBar.classList.remove('bg-blue-600');
+                progressBar.classList.add('bg-green-600');
+            } else if (progress.status === 'error') {
+                progressBar.classList.remove('bg-blue-600');
+                progressBar.classList.add('bg-red-600');
+            }
+        }
+        
+        function showComplete() {
+            document.getElementById('processing-status').classList.add('hidden');
+            document.getElementById('processing-complete').classList.remove('hidden');
+        }
+        
+        function showError(message) {
+            document.getElementById('processing-status').classList.add('hidden');
+            document.getElementById('processing-error').classList.remove('hidden');
+            document.getElementById('error-message').textContent = message;
+        }
+    });
+</script>
+{% endblock %}

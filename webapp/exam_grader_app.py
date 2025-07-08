@@ -1235,6 +1235,20 @@ def get_letter_grade(score):
     else:
         return 'F'
 
+@app.route("/processing")
+@login_required
+def processing():
+    """Show the processing page with real-time progress updates."""
+    # Get progress_id from query parameter or session
+    progress_id = request.args.get('progress_id') or session.get('current_progress_id')
+    
+    if not progress_id:
+        flash('No processing task found.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    return render_template('processing.html')
+
+
 @app.route("/results")
 @login_required
 def view_results():

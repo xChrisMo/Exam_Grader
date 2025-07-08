@@ -581,6 +581,13 @@
           console.log("Processing result:", data);
 
           if (data.success) {
+            // Check if we have a progress_id
+            if (data.progress_id) {
+              // Redirect to the processing page with the progress_id
+              window.location.href = `/processing?progress_id=${data.progress_id}`;
+              return;
+            }
+            
             const summary = data.summary || {};
             const avgPercentage = summary.average_percentage || 0;
             const processingTime = summary.processing_time || 0;
