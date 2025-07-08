@@ -44,7 +44,7 @@ def _update_user_data_in_session(user_id):
         # Get submission stats
         total_submissions = Submission.query.filter_by(user_id=user_id).count()
         processed_submissions = Submission.query.filter_by(
-            user_id=user_id, processing_status="completed"
+            user_id=user_id, processed=True
         ).count()
         
         # Calculate average score if there are processed submissions
@@ -97,6 +97,9 @@ def init_auth(app, secure_session_manager):
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     """User login page and handler."""
+    from webapp.forms import LoginForm
+    form = LoginForm()
+    
     if request.method == "GET":
         # Check if user is already logged in
         # Validate session through session manager with proper error handling
@@ -119,11 +122,18 @@ def login():
                 logger.error(f"Session validation error: {str(e)}")
                 session.clear()
 
-        from webapp.forms import LoginForm
-        form = LoginForm()
         return render_template("auth/login.html", page_title="Login", form=form)
 
     try:
+        # Preserve CSRF token before clearing session
+        from flask_wtf.csrf import generate_csrf
+        csrf_token = None
+        try:
+            csrf_token = generate_csrf()
+            logger.debug(f"Preserved CSRF token before login: {csrf_token[:8]}...")
+        except Exception as e:
+            logger.warning(f"Could not generate CSRF token before login: {str(e)}")
+            
         # Clear any existing session data to prevent mixing old and new session info
         session.clear()
 
@@ -136,7 +146,7 @@ def login():
         if not username or not password:
             flash("Please enter both username and password.", "error")
             return render_template(
-                "auth/login.html", page_title="Login", username=username
+                "auth/login.html", page_title="Login", username=username, form=form
             )
 
         # Sanitize username
@@ -148,19 +158,19 @@ def login():
         if not user:
             logger.warning(f"Login attempt with non-existent username: {username}")
             flash("Invalid username or password.", "error")
-            return render_template("auth/login.html", page_title="Login")
+            return render_template("auth/login.html", page_title="Login", form=form)
 
         # Check if account is locked
         if user.is_locked():
             logger.warning(f"Login attempt on locked account: {username}")
             flash("Account is temporarily locked. Please try again later.", "error")
-            return render_template("auth/login.html", page_title="Login")
+            return render_template("auth/login.html", page_title="Login", form=form)
 
         # Check if account is active
         if not user.is_active:
             logger.warning(f"Login attempt on inactive account: {username}")
             flash("Account is disabled. Please contact administrator.", "error")
-            return render_template("auth/login.html", page_title="Login")
+            return render_template("auth/login.html", page_title="Login", form=form)
 
         # Verify password
         if not user.check_password(password):
@@ -185,7 +195,7 @@ def login():
                 )
 
             db.session.commit()
-            return render_template("auth/login.html", page_title="Login")
+            return render_template("auth/login.html", page_title="Login", form=form)
 
         # Successful login
         user.failed_login_attempts = 0
@@ -217,6 +227,11 @@ def login():
         # Update user data in session
         _update_user_data_in_session(user.id)
         
+        # Restore CSRF token in the new session
+        if csrf_token:
+            session['csrf_token'] = csrf_token
+            logger.debug(f"Restored CSRF token after login: {csrf_token[:8]}...")
+        
         logger.debug(f"Flask session after login: user_id={session.get('user_id')}, session_id={session.sid}")
 
         logger.info(f"User logged in successfully: {username}")
@@ -231,7 +246,7 @@ def login():
     except Exception as e:
         logger.error(f"Error during login: {str(e)}")
         flash("An error occurred during login. Please try again.", "error")
-        return render_template("auth/login.html", page_title="Login")
+        return render_template("auth/login.html", page_title="Login", form=form)
 
 
 @auth_bp.route("/signup", methods=["GET", "POST"])

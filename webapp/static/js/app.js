@@ -73,6 +73,82 @@ const ExamGrader = {
     }
   },
 
+  // CSRF token management
+  csrf: {
+    /**
+     * Refresh CSRF token
+     */
+    refreshToken: async function() {
+      try {
+        const response = await fetch('/get-csrf-token', {
+          method: 'GET',
+          credentials: 'same-origin'
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.csrf_token) {
+            // Update meta tag
+            const metaTag = document.querySelector('meta[name=csrf-token]');
+            if (metaTag) {
+              metaTag.setAttribute('content', data.csrf_token);
+            } else {
+              // Create meta tag if it doesn't exist
+              const newMeta = document.createElement('meta');
+              newMeta.name = 'csrf-token';
+              newMeta.content = data.csrf_token;
+              document.head.appendChild(newMeta);
+            }
+            
+            // Update form inputs
+            const tokenInputs = document.querySelectorAll('input[name=csrf_token]');
+            tokenInputs.forEach(input => {
+              input.value = data.csrf_token;
+            });
+            
+            console.log('CSRF token refreshed successfully');
+            return data.csrf_token;
+          }
+        }
+        throw new Error('Failed to refresh CSRF token');
+      } catch (error) {
+        console.error('Error refreshing CSRF token:', error);
+        return null;
+      }
+    },
+    
+    /**
+     * Initialize automatic CSRF token refresh
+     */
+    initAutoRefresh: function(intervalMinutes = 30) {
+      // Refresh token periodically
+      setInterval(this.refreshToken, intervalMinutes * 60 * 1000);
+      
+      // Refresh token after user becomes active after inactivity
+      let userInactive = false;
+      let inactivityTimer;
+      
+      const resetInactivityTimer = () => {
+        clearTimeout(inactivityTimer);
+        if (userInactive) {
+          userInactive = false;
+          this.refreshToken();
+        }
+        inactivityTimer = setTimeout(() => {
+          userInactive = true;
+        }, 10 * 60 * 1000); // 10 minutes of inactivity
+      };
+      
+      // User activity events
+      ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'].forEach(event => {
+        document.addEventListener(event, resetInactivityTimer, true);
+      });
+      
+      // Initial setup
+      resetInactivityTimer();
+    }
+  },
+  
   // Utility functions
   utils: {
     /**
@@ -208,6 +284,17 @@ const ExamGrader = {
         // Log CSRF token status for debugging
         if (!csrfToken) {
           console.warn('CSRF token not found in DOM. This may cause request failures.');
+          // Try to fetch a new CSRF token using our refresh mechanism
+          try {
+            csrfToken = await ExamGrader.csrf.refreshToken();
+            if (csrfToken) {
+              console.log('Successfully retrieved new CSRF token for API request');
+            } else {
+              console.error('Failed to retrieve CSRF token for API request');
+            }
+          } catch (tokenError) {
+            console.error('Failed to fetch new CSRF token:', tokenError);
+          }
         }
 
         const defaultHeaders = {
@@ -689,6 +776,18 @@ const ExamGrader = {
     
     // Initialize settings from localStorage
     this.initSettings();
+    
+    // Initialize CSRF token auto-refresh
+    this.csrf.initAutoRefresh();
+    
+    // Try to refresh CSRF token immediately
+    this.csrf.refreshToken().then(token => {
+      if (token) {
+        console.log('Initial CSRF token refresh successful');
+      } else {
+        console.warn('Initial CSRF token refresh failed, will retry later');
+      }
+    });
 
     // Add global error handler
     window.addEventListener("error", function (e) {
@@ -765,6 +864,18 @@ const ExamGrader = {
 // Initialize when DOM is loaded
 document.addEventListener("DOMContentLoaded", function () {
   ExamGrader.init();
+  
+  // Refresh CSRF token on page load, especially important after redirects
+  if (window.location.pathname === '/dashboard') {
+    console.log('Dashboard page detected, ensuring CSRF token is refreshed');
+    ExamGrader.csrf.refreshToken().then(token => {
+      if (token) {
+        console.log('Dashboard CSRF token refresh successful');
+      } else {
+        console.warn('Dashboard CSRF token refresh failed');
+      }
+    });
+  }
 });
 
 // Export for use in other scripts

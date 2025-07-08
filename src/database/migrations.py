@@ -1,6 +1,4 @@
-"""
-Database migration manager for the Exam Grader application.
-"""
+"""Database migration manager for the Exam Grader application."""
 
 import logging
 from pathlib import Path
@@ -23,7 +21,7 @@ class MigrationManager:
             logger.info("Starting database migration...")
             
             # Create database file if it doesn't exist (for SQLite)
-            if self.database_url.startswith('sqlite:///'):
+            if isinstance(self.database_url, str) and self.database_url.startswith('sqlite:///'):
                 db_path = self.database_url.replace('sqlite:///', '')
                 db_dir = Path(db_path).parent
                 db_dir.mkdir(parents=True, exist_ok=True)
@@ -72,18 +70,35 @@ class MigrationManager:
                 Mapping, GradingResult, Session
             )
 
-            # Drop the sessions table if it exists to apply schema changes
-            # This is a temporary solution for development to handle schema changes
-            # For production, a proper migration tool like Alembic should be used.
+            inspector = inspect(self.engine)
+            
+            # Check if 'sessions' table exists and drop it if it does
             if self.engine.dialect.has_table(self.engine.connect(), "sessions"):
                 db.metadata.tables['sessions'].drop(self.engine)
                 logger.info("Dropped 'sessions' table to apply schema changes.")
 
-            # Create all tables using the engine directly
+            # Handle 'submissions' table migration more carefully
+            if self.engine.dialect.has_table(self.engine.connect(), "submissions"):
+                # Check if 'processed' column exists in 'submissions' table
+                columns = inspector.get_columns('submissions')
+                column_names = [col['name'] for col in columns]
+                if 'processed' not in column_names:
+                    with self.engine.connect() as connection:
+                        with connection.begin():
+                            if self.engine.dialect.name == 'sqlite':
+                                connection.execute(db.text("ALTER TABLE submissions ADD COLUMN processed BOOLEAN DEFAULT FALSE NOT NULL"))
+                            elif self.engine.dialect.name == 'postgresql':
+                                connection.execute(db.text("ALTER TABLE submissions ADD COLUMN processed BOOLEAN DEFAULT FALSE NOT NULL"))
+                            logger.info("Added 'processed' column to 'submissions' table.")
+                else:
+                    logger.info("'processed' column already exists in 'submissions' table. No alteration needed.")
+            else:
+                logger.info("'submissions' table does not exist. It will be created.")
+
+            # Create all tables that do not exist
             db.metadata.create_all(self.engine)
 
             # Verify tables were created
-            inspector = inspect(self.engine)
             created_tables = inspector.get_table_names()
             logger.info(f"Database tables created successfully: {created_tables}")
 

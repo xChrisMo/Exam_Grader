@@ -40,6 +40,19 @@ def check_schema():
         else:
             print("\nARCHIVED column NOT found in submissions table")
         
+        # Check if 'processed' column exists
+        processed_column = next((col for col in columns if col[1] == 'processed'), None)
+        if processed_column:
+            print(f"\nPROCESSED column found: {processed_column}")
+            print(f"Column index: {processed_column[0]}")
+            print(f"Column name: {processed_column[1]}")
+            print(f"Data type: {processed_column[2]}")
+            print(f"Nullable: {processed_column[3]}")
+            print(f"Default value: {processed_column[4]}")
+            print(f"Primary key: {processed_column[5]}")
+        else:
+            print("\nPROCESSED column NOT found in submissions table")
+        
         conn.close()
         return True
     except Exception as e:

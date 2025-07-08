@@ -526,6 +526,22 @@
 {% endif %} {% endblock %} {% block extra_js %}
 <script>
   document.addEventListener("DOMContentLoaded", function () {
+    // Ensure CSRF token is available
+    const refreshCsrfToken = async () => {
+      try {
+        const token = await ExamGrader.csrf.refreshToken();
+        if (token) {
+          console.log('Dashboard page CSRF token refresh successful');
+        } else {
+          console.warn('Dashboard page CSRF token refresh failed');
+        }
+      } catch (error) {
+        console.error('Error refreshing CSRF token on dashboard:', error);
+      }
+    };
+    
+    // Refresh token immediately
+    refreshCsrfToken();
     // Unified AI Processing Button
     const processUnifiedAIBtn = document.getElementById("process-unified-ai");
     if (processUnifiedAIBtn) {
@@ -539,13 +555,18 @@
           const maxQuestionsInput = document.getElementById('max_questions');
           const maxQuestions = maxQuestionsInput ? parseInt(maxQuestionsInput.value) : null;
 
+          // Get CSRF token from meta tag
+          const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+          
           // Start the unified AI processing
           const response = await fetch('/api/process-unified-ai', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken
             },
-            body: JSON.stringify({ max_questions: maxQuestions })
+            body: JSON.stringify({ max_questions: maxQuestions }),
+            credentials: 'same-origin'
           });
 
           console.log("Response status:", response.status);
@@ -604,12 +625,17 @@
         }
 
         try {
+          // Get CSRF token from meta tag
+          const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+          
           const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken
             },
-            body: JSON.stringify({ [type.includes('submission') ? 'submission_id' : 'grading_result_id']: id })
+            body: JSON.stringify({ [type.includes('submission') ? 'submission_id' : 'grading_result_id']: id }),
+            credentials: 'same-origin'
           });
 
           const data = await response.json();

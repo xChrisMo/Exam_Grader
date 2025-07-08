@@ -178,12 +178,24 @@ except Exception as e:
 def inject_csrf_token():
     from flask_wtf.csrf import generate_csrf
     try:
-        # Return the function instead of calling it
-        logger.debug("Injecting CSRF token function into template context")
+        # Generate the token and return it as a string
+        logger.debug("Injecting CSRF token into template context")
         return dict(csrf_token=generate_csrf())
     except Exception as e:
-        logger.error(f"Failed to inject CSRF token function: {str(e)}")
+        logger.error(f"Failed to inject CSRF token: {str(e)}")
         return dict(csrf_token=None)
+
+# Route to get a fresh CSRF token via AJAX
+@app.route('/get-csrf-token', methods=['GET'])
+def get_csrf_token():
+    from flask_wtf.csrf import generate_csrf
+    try:
+        token = generate_csrf()
+        logger.debug("Generated fresh CSRF token via API endpoint")
+        return jsonify({'csrf_token': token})
+    except Exception as e:
+        logger.error(f"Failed to generate CSRF token: {str(e)}")
+        return jsonify({'error': 'Failed to generate token'}), 500
 
 # Context processor to make session variables available in templates
 @app.context_processor
@@ -457,7 +469,11 @@ def handle_csrf_error(e):
     """Handle CSRF validation errors."""
     csrf_cookie = request.cookies.get('secure_csrf_token', 'Not Present')
     csrf_header = request.headers.get('X-CSRFToken', 'Not Present')
-    logger.warning(f"CSRF validation error: {str(e)} - IP: {request.remote_addr}, CSRF Cookie: {csrf_cookie}, X-CSRFToken Header: {csrf_header}")
+    session_csrf = session.get('csrf_token', 'Not Present')
+    
+    logger.warning(f"CSRF validation error: {str(e)} - IP: {request.remote_addr}")
+    logger.warning(f"CSRF Debug - Cookie: {csrf_cookie}, Header: {csrf_header}, Session: {session_csrf}")
+    logger.warning(f"Request path: {request.path}, Method: {request.method}, Referrer: {request.referrer}")
     
     if request.is_json or request.path.startswith("/api/"):
         return (
@@ -560,6 +576,11 @@ def dashboard():
             flash("Please log in to access the dashboard.", "error")
             return redirect(url_for("auth.login"))
 
+        # Ensure CSRF token is refreshed
+        from flask_wtf.csrf import generate_csrf
+        csrf_token = generate_csrf()
+        logger.debug(f"Dashboard: Refreshed CSRF token: {csrf_token[:8]}...")
+
         logger.info(f"Dashboard: session['guide_id'] is {session.get('guide_id')}")
 
         # Use session data for dashboard statistics if available
@@ -576,7 +597,7 @@ def dashboard():
                 db.session.query(
                     db.func.count(Submission.id).label("total"),
                     db.func.count(
-                        db.case((Submission.processing_status == "completed", 1))
+                        db.case((Submission.processed == True, 1))
                     ).label("processed"),
                 )
                 .filter(Submission.user_id == current_user.id)
@@ -1176,7 +1197,7 @@ def view_submissions():
                             "id": str(submission.id),
                             "filename": submission.filename,
                             "uploaded_at": submission.created_at.isoformat(),
-                            "processed": submission.processing_status == "completed",
+                            "processed": submission.processed,
                             "size_mb": (
                                 round(submission.file_size / (1024 * 1024), 2)
                                 if submission.file_size
@@ -1752,6 +1773,8 @@ def process_unified_ai():
                 # Update submission processing status based on AI grading result
                 # This ensures the frontend accurately reflects the grading outcome
                 submission.processing_status = res.get("status", "error")
+                if submission.processing_status == "completed":
+                    submission.processed = True
 
                 # Process individual mappings and their grading results
                 for mapping_data in res.get("mappings", []):

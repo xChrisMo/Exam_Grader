@@ -762,3 +762,7 @@ class GradingService:
                 "grading_service": "active"
             }
         return {"grading_service": "active", "llm_cache_stats": "not_available"}
+
+    def process_submission(submission):
+        submission.processed = True
+        db.session.commit()

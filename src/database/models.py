@@ -181,6 +181,7 @@ class Submission(db.Model, TimestampMixin):
     )  # pending, processing, completed, failed
     processing_error = Column(Text)
     archived = Column(Boolean, default=False, nullable=False)  # Add archived field with default value
+    processed = Column(Boolean, default=False, nullable=False)  # Track if processing is complete
 
     # Relationships
     user = relationship("User", back_populates="submissions")
@@ -354,3 +355,4 @@ class Session(db.Model, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
             "salt": self.salt,
         }
+        processed = db.Column(db.Boolean, default=False, nullable=False)
