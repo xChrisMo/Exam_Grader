@@ -4,7 +4,11 @@
  */
 
 // Application namespace
-const ExamGrader = {
+var ExamGrader = ExamGrader || {};
+
+// Application namespace
+ExamGrader = {
+
   // Configuration
   config: {
     maxFileSize: 16 * 1024 * 1024, // 16MB

@@ -11,7 +11,7 @@
     </div>
 
     <form method="POST" id="settings-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
         <div class="space-y-8">
             <!-- File Upload Settings -->
             <div class="bg-white shadow rounded-lg">
@@ -334,13 +334,13 @@ document.addEventListener('DOMContentLoaded', function() {
     resetButton.addEventListener('click', function() {
         if (confirm('Are you sure you want to reset all settings to their default values?')) {
             // Reset form to defaults from server config
-            const defaultFileSize = {{ (config.max_file_size_mb if config and config.max_file_size_mb else 20) }};
+            const defaultFileSize = {{ config.files.max_file_size_mb | default(20, true) | int }};
             fileSizeSlider.value = defaultFileSize;
             fileSizeDisplay.textContent = defaultFileSize + 'MB';
 
             // Reset checkboxes
             document.querySelectorAll('input[name="allowed_formats"]').forEach(cb => {
-                const defaultFormats = {{ (config.supported_formats if config and config.supported_formats else ['pdf', 'docx', 'doc', 'jpg', 'jpeg', 'png', 'tiff', 'bmp', 'gif']) | tojson }};
+                const defaultFormats = {{ (config.files.supported_formats if config and config.files and config.files.supported_formats else ['pdf', 'docx', 'doc', 'jpg', 'jpeg', 'png', 'tiff', 'bmp', 'gif']) | tojson }};
                 cb.checked = defaultFormats.includes(cb.value);
             });
             

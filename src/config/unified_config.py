@@ -227,11 +227,38 @@ class UnifiedConfig:
         )
 
         # File configuration
+        supported_formats_env = os.getenv("SUPPORTED_FORMATS", "")
+        supported_formats = []
+        if supported_formats_env:
+            # Ensure each format starts with a dot
+            for fmt in supported_formats_env.split(","):
+                fmt = fmt.strip()
+                if fmt:
+                    if not fmt.startswith("."):
+                        fmt = "." + fmt
+                    supported_formats.append(fmt)
+        
+        # Use default formats if none were provided
+        if not supported_formats:
+            supported_formats = [
+                ".pdf",
+                ".docx",
+                ".doc",
+                ".txt",
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".bmp",
+                ".tiff",
+                ".gif",
+            ]
+        
         self.files = FileConfig(
             max_file_size_mb=int(os.getenv("MAX_FILE_SIZE_MB", "20")),
             temp_dir=Path(os.getenv("TEMP_DIR", "temp")),
             output_dir=Path(os.getenv("OUTPUT_DIR", "output")),
             upload_dir=Path(os.getenv("UPLOAD_DIR", "uploads")),
+            supported_formats=supported_formats
         )
 
         # API configuration

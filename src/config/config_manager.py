@@ -59,6 +59,10 @@ class ConfigManager:
         if self._initialized:
             return
 
+        self._initialize()
+
+    def _initialize(self):
+        """Internal initialization method."""
         # Load environment variables from root .env file
         load_dotenv(".env", override=True)
 
@@ -101,6 +105,12 @@ class ConfigManager:
 
         self._initialized = True
         logger.debug("Configuration initialized successfully")
+        
+    def reload(self):
+        """Force reload of configuration from environment variables."""
+        logger.info("Reloading configuration from environment variables")
+        self._initialized = False
+        self._initialize()
 
     def _create_directories(self) -> None:
         """Create necessary directories if they don't exist."""

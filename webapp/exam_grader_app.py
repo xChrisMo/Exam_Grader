@@ -2449,7 +2449,16 @@ def settings():
                 os.environ["MAX_FILE_SIZE_MB"] = max_file_size
                 
                 # Update SUPPORTED_FORMATS
-                formats_str = ",".join(allowed_formats)
+                # Ensure each format has a leading dot
+                normalized_formats = []
+                for fmt in allowed_formats:
+                    fmt = fmt.strip()
+                    if fmt:
+                        if not fmt.startswith("."):
+                            fmt = "." + fmt
+                        normalized_formats.append(fmt)
+                
+                formats_str = ",".join(normalized_formats)
                 dotenv.set_key(dotenv_path, "SUPPORTED_FORMATS", formats_str)
                 os.environ["SUPPORTED_FORMATS"] = formats_str
                 
@@ -2485,7 +2494,17 @@ def settings():
                 
                 # Reload configuration
                 from src.config.config_manager import ConfigManager
-                ConfigManager().__init__()
+                # Use the reload method instead of creating a new instance
+                config_manager = ConfigManager()
+                config_manager.reload()
+                
+                # Reload UnifiedConfig to update supported_formats
+                from src.config.unified_config import UnifiedConfig, load_dotenv
+                # Reload environment variables to ensure we get the latest values
+                load_dotenv(override=True)
+                global config
+                config = UnifiedConfig()
+                logger.info("UnifiedConfig reloaded with updated settings")
                 
                 # Reinitialize services with new API keys
                 if "ocr_service" in globals() and ocr_api_key:
@@ -2516,6 +2535,7 @@ def settings():
             "languages": languages,
             "service_status": get_service_status(),
             "storage_stats": get_storage_stats(),
+            "config": config,  # Pass the config object to the template
         }
         return render_template("settings.html", **context)
     except Exception as e:

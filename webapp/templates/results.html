@@ -571,7 +571,7 @@ function updateResultsUI(data) {
                             ${result.graded_at || ''}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button onclick="viewDetails('${result.submission_id}')" class="text-primary-600 hover:text-primary-900">View Details</button>
+                            <button data-submission-id="${result.submission_id}" class="view-details-btn text-primary-600 hover:text-primary-900">View Details</button>
                         </td>
                     `;
                     
@@ -631,7 +631,7 @@ function exportResults() {
 
 function viewDetails(submissionId) {
     // Find the result data for this submission
-    const results = JSON.parse(`{{ results_list|tojson|safe }}`);
+    const results = JSON.parse('{{ results_list|tojson|safe|replace("'", "\\'")|replace("`", "\\`") }}');
     const result = results.find(r => r.submission_id === submissionId);
 
     if (!result) {
@@ -747,6 +747,14 @@ document.addEventListener('keydown', function(event) {
 // Initialize auto-refresh when the page loads
 document.addEventListener('DOMContentLoaded', function() {
     initAutoRefresh();
+
+    // Attach event listeners for view details buttons
+    document.querySelectorAll('.view-details-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const submissionId = this.dataset.submissionId;
+            viewDetails(submissionId);
+        });
+    });
 });
 </script>
 {% endblock %}
