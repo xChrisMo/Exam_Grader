@@ -1001,7 +1001,7 @@ def upload_guide():
 @login_required
 def upload_submission():
     """Upload and process student submission."""
-    from .forms import UploadSubmissionForm
+    from webapp.forms import UploadSubmissionForm
     
     if not session.get('guide_uploaded'):
         return redirect(url_for('upload_guide'))
@@ -1186,6 +1186,18 @@ def upload_submission():
                 f"{failed_count} submission(s) failed to upload or process. Check logs for details.",
                 "error",
             )
+
+        # Return JSON response for AJAX requests (batch processing)
+        if (
+            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or request.content_type == "application/json"
+        ):
+            return jsonify({
+                "success": True,
+                "uploaded_count": uploaded_count,
+                "failed_count": failed_count,
+                "message": f"{uploaded_count} submission(s) uploaded successfully" + (f", {failed_count} failed" if failed_count > 0 else "")
+            }), 200
 
         return redirect(url_for("dashboard"))
 
