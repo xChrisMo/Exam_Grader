@@ -457,105 +457,48 @@ class MappingService:
                     "Using LLM to extract questions and total marks from marking guide..."
                 )
 
-                # Comprehensive multi-disciplinary question extraction system
+                # --- UPDATED SYSTEM PROMPT ---
                 system_prompt = """
-                You are an expert educational assessment analyst with deep knowledge across all academic disciplines. Your task is to intelligently identify questions in marking guides using sophisticated reasoning, regardless of format, discipline, or question type.
+                You are an expert educational assessment analyst with deep knowledge across all academic disciplines. Your task is to extract ALL distinct questions and sub-questions from marking guides, regardless of format, discipline, or question type. You must:
 
-                CORE REASONING FRAMEWORK:
+                1. Identify every instruction, prompt, or task that requires a student response, including:
+                   - Classification tasks (enumerate each item as a sub-question if multiple items are to be classified)
+                   - Multi-part questions (extract each part as a sub-question)
+                   - Case study analysis (extract each analysis prompt as a question)
+                   - Programming assignments (extract each coding or debugging task as a question)
+                   - Data analysis, calculations, essays, experiments, etc.
 
-                1. QUESTION IDENTIFICATION PRINCIPLE:
-                   A QUESTION is any task, prompt, or instruction that requires a student to produce a response, demonstrate knowledge, solve a problem, or complete an assignment.
+                2. For classification/categorization tasks:
+                   - If the instruction is to classify multiple items (e.g., 10 texts), treat each item as a separate sub-question, each with its own number and marks.
+                   - Example: "Classify each of the following 10 texts..." → 10 sub-questions, one per text.
 
-                2. MULTI-DISCIPLINARY QUESTION TYPES:
+                3. For multi-part or compound questions:
+                   - Extract each part as a sub-question, preserving the parent-child relationship if possible.
 
-                   COMPUTER SCIENCE:
-                   - Programming tasks: "Write a function to...", "Implement an algorithm for...", "Debug the following code..."
-                   - Analysis: "Explain the time complexity...", "Compare these data structures...", "Trace through this algorithm..."
-                   - Design: "Design a system that...", "Create a database schema for...", "Architect a solution for..."
+                4. For all questions, extract:
+                   - The exact question text as it appears
+                   - Marks allocated
+                   - Discipline (e.g., Computer Science, Mathematics, etc.)
+                   - Question type (e.g., Classification, Programming, Analysis, Calculation, Essay, etc.)
+                   - Reasoning for why this is a question
+                   - If a sub-question, include a parent_question_number field
 
-                   MATHEMATICS:
-                   - Problem solving: "Solve for x...", "Find the derivative of...", "Calculate the probability..."
-                   - Proofs: "Prove that...", "Show that...", "Demonstrate why..."
-                   - Applications: "Use the theorem to...", "Apply the formula to...", "Model the situation using..."
+                5. Output a flat list of all questions and sub-questions, each with a unique number (e.g., 1, 2, 3a, 3b, 4, ...).
 
-                   LITERATURE/HUMANITIES:
-                   - Analysis: "Analyze the theme of...", "Discuss the significance of...", "Interpret the meaning of..."
-                   - Essays: "Write an essay on...", "Argue for or against...", "Compare and contrast..."
-                   - Critical thinking: "Evaluate the author's argument...", "Assess the historical impact..."
-
-                   SCIENCE:
-                   - Experiments: "Design an experiment to...", "Test the hypothesis that...", "Analyze the data from..."
-                   - Explanations: "Explain why...", "Describe the process of...", "Predict what would happen if..."
-                   - Applications: "Apply the principle to...", "Use the formula to calculate...", "Identify the variables in..."
-
-                   BUSINESS:
-                   - Case studies: "Analyze the case of...", "Recommend a strategy for...", "Evaluate the decision to..."
-                   - Calculations: "Calculate the ROI...", "Determine the break-even point...", "Forecast the revenue..."
-                   - Strategy: "Develop a plan for...", "Assess the market opportunity...", "Design a business model..."
-
-                   ENGINEERING:
-                   - Design: "Design a bridge that...", "Create a circuit to...", "Engineer a solution for..."
-                   - Analysis: "Calculate the load capacity...", "Determine the stress factors...", "Analyze the efficiency of..."
-                   - Problem-solving: "Troubleshoot the system...", "Optimize the design for...", "Solve the engineering problem..."
-
-                3. INTELLIGENT CONTENT DISTINCTION:
-
-                   QUESTIONS (Extract these):
-                   - Task instructions that require student action
-                   - Problems to be solved
-                   - Analysis prompts
-                   - Design challenges
-                   - Calculation requests
-                   - Explanation demands
-                   - Evaluation tasks
-                   - Creative assignments
-
-                   SUPPORTING CONTENT (Do NOT extract as separate questions):
-                   - Reference materials, data sets, code snippets, text passages
-                   - Background information, context, examples
-                   - Tables, charts, diagrams provided for analysis
-                   - Sample outputs, expected formats
-                   - Grading rubrics, criteria descriptions
-
-                4. CONTEXTUAL REASONING RULES:
-
-                   CLASSIFICATION/CATEGORIZATION TASKS:
-                   - Instruction + Items = ONE question about classification
-                   - Example: "Classify each text into A, B, or C: [10 text items]" = ONE classification question
-
-                   MULTI-PART QUESTIONS:
-                   - Related sub-tasks under one umbrella = ONE coherent question
-                   - Example: "Explain inheritance: a) Definition b) Benefits c) Example" = ONE question with parts
-
-                   CASE STUDY ANALYSIS:
-                   - Case description + Analysis prompts = Questions are the analysis prompts
-                   - The case itself is supporting content
-
-                   PROGRAMMING ASSIGNMENTS:
-                   - Code snippets + Tasks = Tasks are questions, code is supporting material
-                   - Example: "[Code snippet] Debug this code and explain the errors" = ONE debugging question
-
-                   DATA ANALYSIS TASKS:
-                   - Dataset + Analysis instructions = Analysis instructions are questions
-                   - The dataset is supporting content
-
-                5. MARK ALLOCATION INTELLIGENCE:
-                   - Analyze mark distribution patterns to validate question identification
-                   - Equal marks often indicate separate questions of similar complexity
-                   - Unequal marks may indicate main questions vs. sub-questions
-                   - Total marks should align with identified question structure
+                6. Calculate the total marks as the sum of all extracted questions and sub-questions.
 
                 OUTPUT FORMAT:
                 Respond with ONLY valid JSON. Do not include any other text, explanations, or markdown formatting outside the JSON object. Your entire response must be a single, valid JSON object.
                 {
                     "questions": [
                         {
-                            "number": "1",
+                            "number": "1a",
+                            "parent_question_number": "1",  // optional, for sub-questions
                             "text": "Complete exact question text as it appears",
-                            "marks": 25,
+                            "marks": 10,
                             "discipline": "Computer Science",
-                            "question_type": "Programming Task",
-                            "reasoning": "Brief explanation of why this constitutes a question"
+                            "question_type": "Classification",
+                            "reasoning": "This is a classification sub-question for item 1."
                         }
                     ],
                     "total_marks": 100,
@@ -569,52 +512,18 @@ class MappingService:
                 """
 
                 user_prompt = f"""
-                Apply sophisticated multi-disciplinary reasoning to analyze this marking guide and extract all questions that require student responses.
+                Analyze the following marking guide and extract ALL distinct questions and sub-questions that require student responses, following these rules:
 
-                INTELLIGENT ANALYSIS REQUIRED:
-
-                1. IDENTIFY THE ACADEMIC DISCIPLINE:
-                   - Computer Science, Mathematics, Literature, Science, Business, Engineering, or other
-                   - This will inform the types of questions to expect
-
-                2. DETERMINE DOCUMENT STRUCTURE:
-                   - Traditional exam with numbered questions
-                   - Assignment with task descriptions
-                   - Case study with analysis prompts
-                   - Laboratory exercise with procedures and questions
-                   - Programming assignment with coding tasks
-
-                3. APPLY CONTEXTUAL REASONING:
-                   - What tasks must students actually PERFORM?
-                   - What materials are provided FOR ANALYSIS vs. what requires RESPONSE?
-                   - Are there implicit questions within instructions?
-                   - How do mark allocations validate question boundaries?
-
-                4. DISTINGUISH CONTENT TYPES:
-                   EXTRACT as questions:
-                   - Task instructions requiring student action
-                   - Problems to solve, analyses to perform
-                   - Design challenges, calculations to complete
-                   - Essays to write, arguments to make
-                   - Code to write, algorithms to implement
-                   - Experiments to design, data to interpret
-
-                   DO NOT EXTRACT as separate questions:
-                   - Reference materials, data sets, code snippets
-                   - Background information, examples, context
-                   - Items in lists that are content to be analyzed
-                   - Sample outputs, formatting instructions
-
-                5. HANDLE COMPLEX SCENARIOS:
-                   - Classification tasks: Instruction = question, items = content
-                   - Case studies: Case description = content, analysis prompts = questions
-                   - Programming: Code snippets = content, tasks = questions
-                   - Multi-part questions: Group related sub-tasks appropriately
+                - For classification tasks with multiple items, enumerate each item as a separate sub-question.
+                - For multi-part or compound questions, extract each part as a sub-question.
+                - For case studies, extract each analysis prompt as a question.
+                - For programming/data analysis/calculation/essay/experiment tasks, extract each as a question.
+                - For each question or sub-question, provide: number, parent_question_number (if applicable), text, marks, discipline, question_type, and reasoning.
+                - Output a flat list of all questions and sub-questions, each with a unique number.
+                - Calculate total marks as the sum of all extracted questions and sub-questions.
 
                 DOCUMENT TO ANALYZE:
                 {content}
-
-                Use your expertise across all academic disciplines to intelligently identify the actual questions students must answer. Consider the educational context, mark distribution, and underlying learning objectives.
 
                 Respond with ONLY valid JSON including your reasoning and analysis.
                 """
@@ -926,6 +835,10 @@ class MappingService:
                     "message": "Student submission content is empty",
                 }, "Empty student submission"
 
+            # Clean and preprocess content for better LLM understanding
+            marking_guide_content = self._preprocess_content(marking_guide_content)
+            student_submission_content = self._preprocess_content(student_submission_content)
+
             # Initialize empty mappings list
             mappings = []
 
@@ -949,75 +862,137 @@ class MappingService:
                     # Use LLM to map submission to guide based on guide type and perform grading
                     if guide_type == "questions":
                         system_prompt = f"""
-                        You are an expert at matching and grading exam questions with student answers.
-                        Your task is to analyze the raw text of a marking guide containing QUESTIONS and a student submission containing ANSWERS.
-                        You need to identify and match the best {num_questions} questions in the guide with the corresponding answers in the submission, and then grade each answer.
+                        You are an expert educational assessment AI with deep expertise in analyzing exam documents and grading student responses.
 
-                        Important guidelines:
-                        1. First, identify the questions in the marking guide
-                        2. Look for mark allocations in the marking guide (e.g., "5 marks", "[10]", "(15 points)", etc.)
-                        3. Then, identify the answers in the student submission
-                        4. Match each question with the answer that best addresses it
-                        5. Consider semantic similarity and content relevance
-                        6. Provide a high confidence score (0.8-1.0) only for very clear matches
-                        7. For partial matches, provide a lower score (0.5-0.7) and explain why
-                        8. If a question has no matching answer, do not include it in the mappings
-                        9. IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide.
-                        10. Find the best {num_questions} answers in the student submission and map them to the corresponding questions.
-                        11. If there are more potential answers, select only the best {num_questions} based on quality and completeness.
-                        12. Ensure that the final output reflects the mapping and grading for precisely {num_questions} questions.
+                        TASK: Analyze a marking guide containing QUESTIONS and a student submission containing ANSWERS to:
+                        1. Identify and match the best {num_questions} questions in the guide with corresponding answers in the submission
+                        2. Grade each matched answer comprehensively
+                        3. Provide detailed feedback and scoring breakdown
 
-                        Grading guidelines:
-                        1. For each matched question-answer pair, grade the answer based on how well it addresses the question
-                        2. Assign a score as a percentage of the maximum marks available (e.g., 8/10 = 80%)
-                        3. Consider content accuracy, completeness, and relevance when grading
-                        4. Provide brief feedback explaining the grade
-                        5. Identify key strengths and weaknesses in the answer
-                        6. The total possible score should be the sum of the maximum marks for the {num_questions} questions that were mapped
+                        CRITICAL GUIDELINES:
 
-                        Pay special attention to mark allocations:
-                        - Look for numbers followed by "marks", "points", "%" or enclosed in brackets/parentheses
-                        - Check for mark breakdowns in sub-questions (e.g., "a) 5 marks, b) 10 marks")
-                        - If marks are mentioned in a section header, apply them to all questions in that section
-                        - If no marks are explicitly stated for a question, leave max_score as null
+                        CONTENT ANALYSIS:
+                        - Work directly with the RAW TEXT provided - do not attempt to extract or restructure
+                        - Handle noisy OCR outputs gracefully by focusing on semantic meaning
+                        - Ignore minor formatting issues, typos, or OCR artifacts
+                        - Look for conceptual understanding rather than exact word matches
+                        - Consider alternative correct approaches that may differ from the model answer
 
-                        Output in JSON format with no comments.
+                        QUESTION IDENTIFICATION:
+                        - Questions may be numbered (1, 2, 3) or lettered (a, b, c) or use other formats
+                        - Multi-part questions should be treated as separate items for mapping
+                        - Look for question indicators: "Question", "Q", "Problem", "Task", "Explain", "Calculate", etc.
+                        - Pay attention to mark allocations: "(5 marks)", "[10 points]", "Total: 25 marks"
+
+                        ANSWER MAPPING:
+                        - Match answers based on semantic similarity and content relevance
+                        - Consider the context and subject matter of both guide and submission
+                        - Provide confidence scores: 0.8-1.0 for clear matches, 0.5-0.7 for partial matches
+                        - If no clear match exists, do not force a mapping
+
+                        GRADING STANDARDS:
+                        - Grade based on content accuracy, completeness, and understanding
+                        - Award partial credit for partially correct answers
+                        - Consider alternative valid approaches
+                        - Provide specific, constructive feedback
+                        - Identify both strengths and areas for improvement
+
+                        OUTPUT FORMAT:
+                        Respond with ONLY valid JSON. No comments, explanations, or markdown outside the JSON object.
+
+                        {{
+                            "mappings": [
+                                {{
+                                    "guide_id": "g1",
+                                    "guide_text": "exact question text from guide",
+                                    "guide_answer": "model answer if available",
+                                    "max_score": 10,
+                                    "parent_question": "g1a",
+                                    "submission_id": "s1",
+                                    "submission_text": "student's answer text",
+                                    "match_score": 0.85,
+                                    "match_reason": "Clear semantic match on topic X",
+                                    "grade_score": 8.5,
+                                    "grade_percentage": 85.0,
+                                    "grade_feedback": "Excellent understanding of concept X. Good explanation of Y. Could improve on Z.",
+                                    "strengths": ["Clear explanation", "Correct methodology"],
+                                    "weaknesses": ["Missing detail on Z", "Could be more specific"]
+                                }}
+                            ],
+                            "overall_grade": {{
+                                "total_score": 25.5,
+                                "max_possible_score": 30.0,
+                                "percentage": 85.0,
+                                "letter_grade": "B+"
+                            }}
+                        }}
                         """
                     else:  # guide_type == "answers"
                         system_prompt = f"""
-                        You are an expert at matching and grading exam answers between a marking guide and a student submission.
-                        Your task is to analyze the raw text of a marking guide containing MODEL ANSWERS and a student submission containing STUDENT ANSWERS.
-                        You need to identify and match the best {num_questions} answers in the student submission with the corresponding model answers in the guide, and then grade each student answer.
+                        You are an expert educational assessment AI with deep expertise in analyzing exam documents and grading student responses.
 
-                        Important guidelines:
-                        1. First, identify the model answers in the marking guide
-                        2. Look for mark allocations in the marking guide (e.g., "5 marks", "[10]", "(15 points)", etc.)
-                        3. Then, identify the student answers in the submission
-                        4. Match answers that address the same question, even if they differ in content
-                        5. Look for semantic similarity and shared key concepts
-                        6. Provide a high confidence score (0.8-1.0) only for very clear matches
-                        7. For partial matches, provide a lower score (0.5-0.7) and explain why
-                        8. If a student answer has no matching guide answer, do not include it in the mappings
-                        9. IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide.
-                        10. Find the best {num_questions} answers in the student submission and map them to the corresponding model answers.
-                        11. If there are more potential answers, select only the best {num_questions} based on quality and completeness.
-                        12. Ensure that the final output reflects the mapping and grading for precisely {num_questions} questions.
+                        TASK: Analyze a marking guide containing MODEL ANSWERS and a student submission containing STUDENT ANSWERS to:
+                        1. Identify and match the best {num_questions} student answers with corresponding model answers
+                        2. Grade each matched answer comprehensively
+                        3. Provide detailed feedback and scoring breakdown
 
-                        Grading guidelines:
-                        1. For each matched answer pair, grade the student answer based on how well it matches the model answer
-                        2. Assign a score as a percentage of the maximum marks available (e.g., 8/10 = 80%)
-                        3. Consider content accuracy, completeness, and relevance when grading
-                        4. Provide brief feedback explaining the grade
-                        5. Identify key strengths and weaknesses in the student answer compared to the model answer
-                        6. The total possible score should be the sum of the maximum marks for the {num_questions} questions that were mapped
+                        CRITICAL GUIDELINES:
 
-                        Pay special attention to mark allocations:
-                        - Look for numbers followed by "marks", "points", "%" or enclosed in brackets/parentheses
-                        - Check for mark breakdowns in sub-answers (e.g., "a) 5 marks, b) 10 marks")
-                        - If marks are mentioned in a section header, apply them to all answers in that section
-                        - If no marks are explicitly stated for an answer, leave max_score as null
+                        CONTENT ANALYSIS:
+                        - Work directly with the RAW TEXT provided - do not attempt to extract or restructure
+                        - Handle noisy OCR outputs gracefully by focusing on semantic meaning
+                        - Ignore minor formatting issues, typos, or OCR artifacts
+                        - Look for conceptual understanding rather than exact word matches
+                        - Consider alternative correct approaches that may differ from the model answer
 
-                        Output in JSON format with no comments.
+                        ANSWER IDENTIFICATION:
+                        - Model answers may be structured in various formats (bullet points, paragraphs, etc.)
+                        - Student answers may be handwritten and contain OCR artifacts
+                        - Look for answer indicators: "Answer:", "Solution:", "Response:", or content after questions
+                        - Pay attention to mark allocations: "(5 marks)", "[10 points]", "Total: 25 marks"
+
+                        ANSWER MAPPING:
+                        - Match answers that address the same question or topic
+                        - Consider semantic similarity and shared key concepts
+                        - Provide confidence scores: 0.8-1.0 for clear matches, 0.5-0.7 for partial matches
+                        - If no clear match exists, do not force a mapping
+
+                        GRADING STANDARDS:
+                        - Grade based on content accuracy, completeness, and understanding
+                        - Award partial credit for partially correct answers
+                        - Consider alternative valid approaches
+                        - Provide specific, constructive feedback
+                        - Identify both strengths and areas for improvement
+
+                        OUTPUT FORMAT:
+                        Respond with ONLY valid JSON. No comments, explanations, or markdown outside the JSON object.
+
+                        {{
+                            "mappings": [
+                                {{
+                                    "guide_id": "g1",
+                                    "guide_text": "question or section from guide",
+                                    "guide_answer": "model answer text",
+                                    "max_score": 10,
+                                    "parent_question": "g1a",
+                                    "submission_id": "s1",
+                                    "submission_text": "student's answer text",
+                                    "match_score": 0.85,
+                                    "match_reason": "Clear semantic match on topic X",
+                                    "grade_score": 8.5,
+                                    "grade_percentage": 85.0,
+                                    "grade_feedback": "Excellent understanding of concept X. Good explanation of Y. Could improve on Z.",
+                                    "strengths": ["Clear explanation", "Correct methodology"],
+                                    "weaknesses": ["Missing detail on Z", "Could be more specific"]
+                                }}
+                            ],
+                            "overall_grade": {{
+                                "total_score": 25.5,
+                                "max_possible_score": 30.0,
+                                "percentage": 85.0,
+                                "letter_grade": "B+"
+                            }}
+                        }}
                         """
 
                     # Log the mapping process
@@ -1027,122 +1002,41 @@ class MappingService:
 
                     # Pass the raw content to the LLM for mapping and grading
                     user_prompt = f"""
-                    Marking Guide Content:
-                    {marking_guide_content[:5000]}
+                    MARKING GUIDE CONTENT:
+                    {marking_guide_content[:8000]}
 
-                    Student Submission Content:
-                    {student_submission_content[:5000]}
+                    STUDENT SUBMISSION CONTENT:
+                    {student_submission_content[:8000]}
 
-                    Number of questions to answer: {num_questions}
+                    REQUIREMENTS:
+                    - Number of questions to answer: {num_questions}
+                    - Work directly with the raw text content provided above
+                    - Do not attempt to extract or restructure the content
+                    - Handle any OCR artifacts or formatting issues gracefully
+                    - Focus on semantic understanding and content relevance
+                    - Provide comprehensive grading with detailed feedback
 
-                    Please analyze both documents using ONLY the raw text content provided above.
-                    Do not attempt to extract questions and answers - work directly with the raw text.
-                    Create mappings between related parts of the guide and submission.
-
-                    IMPORTANT: The student is required to answer exactly {num_questions} questions from the marking guide.
-                    Find the best {num_questions} answers in the student submission and map them to the corresponding questions in the marking guide.
-                    If there are more potential answers, select only the best {num_questions} based on quality and completeness.
-
-                    Pay special attention to:
-
-                    1. Question structure:
-                    - Some questions may contain multiple sub-questions (e.g., Question 1 might have parts a, b, c)
-                    - Each sub-question may have its own mark allocation
-                    - Treat each question or sub-question as a separate item to be mapped and graded
-                    - Pay attention to question numbering and hierarchies (e.g., 1, 1.1, 1.2, or 1a, 1b, 1c)
-                    - A student might answer some or all parts of a multi-part question
-                    - For multi-part questions, count the entire question (with all its parts) as ONE question toward the {num_questions} total
-
-                    2. Mark allocations:
-                    - Look for numbers followed by "marks", "points", "%" or enclosed in brackets/parentheses
-                    - Include these mark allocations in the max_score field for each mapping
-                    - For questions with sub-parts, each sub-part may have its own mark allocation
-                    - The total marks for a question with sub-parts is the sum of marks for all sub-parts
-
-                    After mapping, grade each student answer based on how well it matches the expected answer:
-                    - Assign a score out of the maximum marks available
-                    - Calculate a percentage score
-                    - Provide brief feedback explaining the grade
-                    - Identify strengths and weaknesses in the answer
-
-                    Finally, calculate an overall grade by summing all scores and determining the percentage of total available marks.
-                    The total possible score should be the sum of the maximum marks for the {num_questions} questions that were mapped.
+                    IMPORTANT NOTES:
+                    1. The student is required to answer exactly {num_questions} questions from the marking guide
+                    2. Find the best {num_questions} answers in the student submission and map them to corresponding guide content
+                    3. If there are more potential answers, select only the best {num_questions} based on quality and completeness
+                    4. Pay special attention to mark allocations and question structure
+                    5. Grade each answer comprehensively with specific feedback
+                    6. Calculate overall grade based on total scores and maximum possible scores
 
                     CRITICAL INSTRUCTIONS:
-                    1. DO NOT include any comments in the JSON response
-                    2. DO NOT use # or // in your response
-                    3. DO NOT copy any example data - use ONLY the actual content from the documents
-                    4. DO NOT include the text "What is the capital of France" or "Paris" in your response unless it actually appears in the documents
-                    5. Use ONLY the actual content from the marking guide and student submission
-                    6. Be sure to identify and properly map multi-part questions and their sub-questions
-                    """
-
-                    # For deepseek-reasoner model, we need to use a different approach
-                    # since it doesn't support JSON response format
-                    logger.info(f"Using model: {self.llm_service.model}")
-
-                    # Modify the system prompt to request a specific format
-                    # Remove all the JSON examples with comments from the original system prompt
-                    system_prompt = system_prompt.replace("Output in JSON format:", "")
-                    system_prompt = re.sub(
-                        r"\{[^}]*\}", "", system_prompt, flags=re.DOTALL
-                    )
-
-                    modified_system_prompt = """
-                    You are an expert at matching and grading exam content.
-
-                    Your task is to analyze the RAW TEXT of a marking guide and a student submission.
-                    DO NOT try to extract questions and answers - work directly with the raw text provided.
-
-                    IMPORTANT: Understand the structure of exam questions:
-                    1. Some questions may contain multiple sub-questions (e.g., Question 1 might have parts a, b, c)
-                    2. Each sub-question may have its own mark allocation (e.g., 1a: 5 marks, 1b: 10 marks)
-                    3. Treat each question or sub-question as a separate item to be mapped and graded
-                    4. Pay attention to question numbering and hierarchies (e.g., 1, 1.1, 1.2, or 1a, 1b, 1c)
-                    5. A student might answer some or all parts of a multi-part question
-
-                    Your response must be valid JSON without any comments.
-
-                    Format your entire response as a JSON object with these exact fields:
-                    - mappings: an array of mapping objects
-                    - overall_grade: an object with grading information
-
-                    Each mapping object must have these fields:
-                    - guide_id: a string identifier for the guide item (use "g1", "g1a", "g1b", "g2", etc.)
-                    - guide_text: the text from the guide (a section, question, or sub-question)
-                    - guide_answer: the answer from the guide (if any)
-                    - max_score: the maximum score for this item (a number)
-                    - parent_question: (optional) if this is a sub-question, include the parent question ID
-                    - submission_id: a string identifier for the submission item (use "s1", "s1a", "s1b", "s2", etc.)
-                    - submission_text: the text from the submission (the student's answer)
-                    - match_score: a number between 0 and 1 indicating match confidence
-                    - match_reason: a string explaining the match
-                    - grade_score: the score awarded (a number)
-                    - grade_percentage: the percentage score (a number)
-                    - grade_feedback: feedback on the answer (a string)
-                    - strengths: an array of strings listing strengths
-                    - weaknesses: an array of strings listing weaknesses
-
-                    The overall_grade object must have these fields:
-                    - total_score: the total score awarded (a number)
-                    - max_possible_score: the maximum possible score (a number)
-                    - percentage: the percentage score (a number)
-                    - letter_grade: the letter grade (a string)
-
-                    CRITICAL INSTRUCTIONS:
-                    1. DO NOT include any comments in the JSON
-                    2. DO NOT use # or // in your response
-                    3. DO NOT copy any example data - use ONLY the actual content from the documents
-                    4. DO NOT include the text "What is the capital of France" or "Paris" in your response unless it actually appears in the documents
-                    5. Use ONLY the actual content from the marking guide and student submission
-                    6. Be sure to identify and properly map multi-part questions and their sub-questions
+                    1. Respond with ONLY valid JSON - no comments, explanations, or markdown outside the JSON object
+                    2. Do not use # or // in your response
+                    3. Use ONLY the actual content from the documents provided
+                    4. Ensure all JSON fields are properly formatted and complete
+                    5. Handle any OCR artifacts or formatting issues in the content gracefully
                     """
 
                     # Use a simpler prompt for the deepseek-reasoner model
                     params = {
                         "model": self.llm_service.model,
                         "messages": [
-                            {"role": "system", "content": modified_system_prompt},
+                            {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt},
                         ],
                         "temperature": 0.0,
@@ -1167,175 +1061,8 @@ class MappingService:
                     # Log the LLM response processing
                     logger.info("Processing LLM response...")
 
-                    # Try to clean up the response for models that don't properly format JSON
-                    try:
-                        # Log the raw response for debugging
-                        logger.info(f"Raw LLM response: {result[:200]}...")
-
-                        # Find JSON content between curly braces if there's text before/after
-                        json_match = re.search(r"\{.*\}", result, re.DOTALL)
-                        if json_match:
-                            result = json_match.group(0)
-                            logger.info(f"Extracted JSON: {result[:200]}...")
-
-                        # More aggressive cleaning for deepseek-reasoner model
-
-                        # First, try to extract just the JSON part if there's surrounding text
-                        json_pattern = r"(\{[\s\S]*\})"
-                        json_matches = re.findall(json_pattern, result)
-                        if json_matches:
-                            result = json_matches[0]
-                            logger.info(f"Extracted JSON object: {result[:100]}...")
-
-                        # Remove any comments in the JSON (deepseek-reasoner sometimes adds these)
-                        result = re.sub(r"//.*?$", "", result, flags=re.MULTILINE)
-                        result = re.sub(r"/\*.*?\*/", "", result, flags=re.DOTALL)
-                        result = re.sub(r"#.*?$", "", result, flags=re.MULTILINE)
-
-                        # Remove comments that appear after values (common in deepseek output)
-                        result = re.sub(r'(["}\]])(\s*#[^\n]*)', r"\1", result)
-                        result = re.sub(r"(\d+)(\s*#[^\n]*)(,|\n|})", r"\1\3", result)
-
-                        # Fix common JSON formatting issues
-                        # Replace single quotes with double quotes
-                        result = re.sub(r"'([^']*)':", r'"\1":', result)
-                        result = re.sub(r": *\'([^\']*)\'", r': "\1"', result)
-
-                        # Fix trailing commas in arrays and objects
-                        result = re.sub(r",\s*]", "]", result)
-                        result = re.sub(r",\s*}", "}", result)
-
-                        # Handle specific format issues with deepseek-reasoner
-                        # Replace any remaining instances of "key": value # comment
-                        result = re.sub(
-                            r'("[^"]+"):\s*([^,\n\]}{#]*)(\s*#[^\n]*)(,|\n|}|\])',
-                            r"\1: \2\4",
-                            result,
-                        )
-
-                        # Final pass to remove any remaining comments
-                        result = re.sub(r"#[^\n]*\n", "\n", result)
-
-                        # Log the cleaned JSON
-                        logger.info(f"Cleaned JSON: {result[:200]}...")
-
-                        try:
-                            parsed = json.loads(result)
-                            logger.info("JSON parsing successful")
-                        except json.JSONDecodeError as json_error:
-                            logger.warning(f"Initial JSON parsing failed: {str(json_error)}")
-                            logger.warning("Attempting to use _get_structured_response to fix malformed JSON")
-                            
-                            # Try to use the LLM to fix the malformed JSON
-                            try:
-                                result = self.llm_service._get_structured_response(result)
-                                logger.info(f"LLM-fixed JSON: {result[:200]}...")
-                                parsed = json.loads(result)
-                                logger.info("JSON parsing successful after LLM fix")
-                            except Exception as llm_fix_error:
-                                logger.error(f"LLM JSON fix failed: {str(llm_fix_error)}")
-                                # Re-raise the original JSON error to continue with the existing fallback logic
-                                raise json_error
-                    except json.JSONDecodeError as e:
-                        logger.error(f"JSON parsing error: {str(e)}")
-                        logger.error(f"Problematic JSON: {result}")
-
-                        # Try a more aggressive approach to extract valid JSON
-                        try:
-                            logger.info("Attempting manual JSON extraction...")
-
-                            # Try to manually construct a valid JSON object
-                            mappings = []
-
-                            # Extract mappings using regex patterns
-                            mapping_pattern = r'"guide_id"\s*:\s*"([^"]+)".*?"guide_text"\s*:\s*"([^"]+)".*?"max_score"\s*:\s*(\d+).*?"submission_id"\s*:\s*"([^"]+)".*?"submission_text"\s*:\s*"([^"]+)".*?"match_score"\s*:\s*([\d\.]+)'
-                            mapping_matches = re.findall(
-                                mapping_pattern, result, re.DOTALL
-                            )
-
-                            if mapping_matches:
-                                logger.info(
-                                    f"Found {len(mapping_matches)} mappings using regex"
-                                )
-
-                                for i, match in enumerate(mapping_matches):
-                                    (
-                                        guide_id,
-                                        guide_text,
-                                        max_score,
-                                        submission_id,
-                                        submission_text,
-                                        match_score,
-                                    ) = match
-
-                                    # Create a basic mapping
-                                    mappings.append(
-                                        {
-                                            "guide_id": guide_id,
-                                            "guide_text": guide_text,
-                                            "guide_answer": "",
-                                            "max_score": float(max_score),
-                                            "submission_id": submission_id,
-                                            "submission_text": submission_text,
-                                            "match_score": float(match_score),
-                                            "match_reason": f"Mapping extracted from LLM response",
-                                            "grade_score": float(max_score)
-                                            * 0.8,  # Assume 80% score as default
-                                            "grade_percentage": 80,
-                                            "grade_feedback": "Score estimated due to parsing issues",
-                                            "strengths": [],
-                                            "weaknesses": [],
-                                        }
-                                    )
-
-                                # Create a basic result structure
-                                parsed = {
-                                    "mappings": mappings,
-                                    "overall_grade": {
-                                        "total_score": sum(
-                                            m["grade_score"] for m in mappings
-                                        ),
-                                        "max_possible_score": sum(
-                                            m["max_score"] for m in mappings
-                                        ),
-                                        "percentage": 80,  # Assume 80% as default
-                                        "letter_grade": "B",
-                                    },
-                                }
-
-                                logger.info(
-                                    "Successfully created mappings from regex extraction"
-                                )
-                            else:
-                                # If regex extraction fails, create a minimal valid structure
-                                logger.warning(
-                                    "Regex extraction failed, using minimal valid structure"
-                                )
-
-                                # Log the JSON parsing error with fallback
-                                logger.warning(
-                                    f"JSON parsing error: {str(e)}. Using fallback mapping."
-                                )
-
-                                # Log the extraction failure
-                                logger.error(
-                                    f"JSON parsing error: {str(e)}. Unable to extract mappings."
-                                )
-
-                                # Raise the exception to stop processing
-                                raise Exception(
-                                    f"JSON parsing error: {str(e)}. Unable to extract mappings from LLM response."
-                                )
-                        except Exception as fallback_error:
-                            logger.error(
-                                f"Fallback extraction also failed: {str(fallback_error)}"
-                            )
-
-                            # Log the fallback extraction failure
-                            logger.error(f"JSON parsing error: {str(e)}")
-
-                            # Raise the exception to stop processing
-                            raise Exception(f"JSON parsing error: {str(e)}")
+                    # Enhanced JSON cleaning and validation
+                    parsed = self._clean_and_parse_llm_response(result)
 
                     # Process LLM mappings and grading
                     overall_grade = parsed.get("overall_grade", {})
@@ -1421,9 +1148,6 @@ class MappingService:
                     # Log the LLM mapping error
                     logger.error(f"LLM mapping failed: {str(e)}")
 
-                    # No need to create items for unmapped sections anymore
-                    # We'll just use the raw content
-
                     # Create a basic result with raw content
                     result = {
                         "status": "error",
@@ -1462,9 +1186,6 @@ class MappingService:
             guide_type = (
                 mappings[0].get("guide_type", "unknown") if mappings else "unknown"
             )
-
-            # We're no longer generating unmapped items
-            # Just store the raw content for display
 
             # Log finalizing mapping
             logger.info("Finalizing mapping results")
@@ -1546,6 +1267,220 @@ class MappingService:
                 "raw_guide_content": marking_guide_content,
                 "raw_submission_content": student_submission_content,
             }, error_message
+
+    def _preprocess_content(self, content: str) -> str:
+        """
+        Preprocess content to improve LLM understanding and handle OCR artifacts.
+        
+        Args:
+            content: Raw content to preprocess
+            
+        Returns:
+            str: Preprocessed content
+        """
+        if not content:
+            return ""
+            
+        # Remove excessive whitespace and normalize line breaks
+        content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
+        content = re.sub(r' +', ' ', content)
+        
+        # Fix common OCR artifacts
+        content = re.sub(r'[|]', 'I', content)  # Fix common OCR confusion
+        content = re.sub(r'[0]', 'O', content)  # Fix common OCR confusion
+        content = re.sub(r'[1]', 'l', content)  # Fix common OCR confusion
+        
+        # Remove excessive punctuation that might confuse the LLM
+        content = re.sub(r'[!]{2,}', '!', content)
+        content = re.sub(r'[?]{2,}', '?', content)
+        content = re.sub(r'[.]{3,}', '...', content)
+        
+        # Normalize quotes and apostrophes
+        content = content.replace('"', '"').replace('"', '"')
+        content = content.replace(''', "'").replace(''', "'")
+        
+        return content.strip()
+
+    def _clean_and_parse_llm_response(self, result: str) -> Dict:
+        """
+        Clean and parse LLM response with enhanced error handling.
+        
+        Args:
+            result: Raw LLM response
+            
+        Returns:
+            Dict: Parsed JSON response
+        """
+        try:
+            # Log the raw response for debugging
+            logger.info(f"Raw LLM response: {result[:200]}...")
+
+            # Find JSON content between curly braces if there's text before/after
+            json_match = re.search(r"\{.*\}", result, re.DOTALL)
+            if json_match:
+                result = json_match.group(0)
+                logger.info(f"Extracted JSON: {result[:200]}...")
+
+            # More aggressive cleaning for deepseek-reasoner model
+            # First, try to extract just the JSON part if there's surrounding text
+            json_pattern = r"(\{[\s\S]*\})"
+            json_matches = re.findall(json_pattern, result)
+            if json_matches:
+                result = json_matches[0]
+                logger.info(f"Extracted JSON object: {result[:100]}...")
+
+            # Remove any comments in the JSON (deepseek-reasoner sometimes adds these)
+            result = re.sub(r"//.*?$", "", result, flags=re.MULTILINE)
+            result = re.sub(r"/\*.*?\*/", "", result, flags=re.DOTALL)
+            result = re.sub(r"#.*?$", "", result, flags=re.MULTILINE)
+
+            # Remove comments that appear after values (common in deepseek output)
+            result = re.sub(r'(["}\]])(\s*#[^\n]*)', r"\1", result)
+            result = re.sub(r"(\d+)(\s*#[^\n]*)(,|\n|})", r"\1\3", result)
+
+            # Fix common JSON formatting issues
+            # Replace single quotes with double quotes
+            result = re.sub(r"'([^']*)':", r'"\1":', result)
+            result = re.sub(r": *\'([^\']*)\'", r': "\1"', result)
+
+            # Fix trailing commas in arrays and objects
+            result = re.sub(r",\s*]", "]", result)
+            result = re.sub(r",\s*}", "}", result)
+
+            # Handle specific format issues with deepseek-reasoner
+            # Replace any remaining instances of "key": value # comment
+            result = re.sub(
+                r'("[^"]+"):\s*([^,\n\]}{#]*)(\s*#[^\n]*)(,|\n|}|\])',
+                r"\1: \2\4",
+                result,
+            )
+
+            # Final pass to remove any remaining comments
+            result = re.sub(r"#[^\n]*\n", "\n", result)
+
+            # Log the cleaned JSON
+            logger.info(f"Cleaned JSON: {result[:200]}...")
+
+            try:
+                parsed = json.loads(result)
+                logger.info("JSON parsing successful")
+                return parsed
+            except json.JSONDecodeError as json_error:
+                logger.warning(f"Initial JSON parsing failed: {str(json_error)}")
+                logger.warning("Attempting to use _get_structured_response to fix malformed JSON")
+                
+                # Try to use the LLM to fix the malformed JSON
+                try:
+                    result = self.llm_service._get_structured_response(result)
+                    logger.info(f"LLM-fixed JSON: {result[:200]}...")
+                    parsed = json.loads(result)
+                    logger.info("JSON parsing successful after LLM fix")
+                    return parsed
+                except Exception as llm_fix_error:
+                    logger.error(f"LLM JSON fix failed: {str(llm_fix_error)}")
+                    # Re-raise the original JSON error to continue with the existing fallback logic
+                    raise json_error
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing error: {str(e)}")
+            logger.error(f"Problematic JSON: {result}")
+
+            # Try a more aggressive approach to extract valid JSON
+            try:
+                logger.info("Attempting manual JSON extraction...")
+
+                # Try to manually construct a valid JSON object
+                mappings = []
+
+                # Extract mappings using regex patterns
+                mapping_pattern = r'"guide_id"\s*:\s*"([^"]+)".*?"guide_text"\s*:\s*"([^"]+)".*?"max_score"\s*:\s*(\d+).*?"submission_id"\s*:\s*"([^"]+)".*?"submission_text"\s*:\s*"([^"]+)".*?"match_score"\s*:\s*([\d\.]+)'
+                mapping_matches = re.findall(
+                    mapping_pattern, result, re.DOTALL
+                )
+
+                if mapping_matches:
+                    logger.info(
+                        f"Found {len(mapping_matches)} mappings using regex"
+                    )
+
+                    for i, match in enumerate(mapping_matches):
+                        (
+                            guide_id,
+                            guide_text,
+                            max_score,
+                            submission_id,
+                            submission_text,
+                            match_score,
+                        ) = match
+
+                        # Create a basic mapping
+                        mappings.append(
+                            {
+                                "guide_id": guide_id,
+                                "guide_text": guide_text,
+                                "guide_answer": "",
+                                "max_score": float(max_score),
+                                "submission_id": submission_id,
+                                "submission_text": submission_text,
+                                "match_score": float(match_score),
+                                "match_reason": f"Mapping extracted from LLM response",
+                                "grade_score": float(max_score)
+                                * 0.8,  # Assume 80% score as default
+                                "grade_percentage": 80,
+                                "grade_feedback": "Score estimated due to parsing issues",
+                                "strengths": [],
+                                "weaknesses": [],
+                            }
+                        )
+
+                    # Create a basic result structure
+                    parsed = {
+                        "mappings": mappings,
+                        "overall_grade": {
+                            "total_score": sum(
+                                m["grade_score"] for m in mappings
+                            ),
+                            "max_possible_score": sum(
+                                m["max_score"] for m in mappings
+                            ),
+                            "percentage": 80,  # Assume 80% as default
+                            "letter_grade": "B",
+                        },
+                    }
+
+                    logger.info(
+                        "Successfully created mappings from regex extraction"
+                    )
+                    return parsed
+                else:
+                    # If regex extraction fails, create a minimal valid structure
+                    logger.warning(
+                        "Regex extraction failed, using minimal valid structure"
+                    )
+
+                    # Log the JSON parsing error with fallback
+                    logger.warning(
+                        f"JSON parsing error: {str(e)}. Using fallback mapping."
+                    )
+
+                    # Log the extraction failure
+                    logger.error(
+                        f"JSON parsing error: {str(e)}. Unable to extract mappings."
+                    )
+
+                    # Raise the exception to stop processing
+                    raise Exception(
+                        f"JSON parsing error: {str(e)}. Unable to extract mappings from LLM response."
+                    )
+            except Exception as fallback_error:
+                logger.error(
+                    f"Fallback extraction also failed: {str(fallback_error)}"
+                )
+
+                # Log the fallback extraction failure
+                logger.error(f"JSON parsing error: {str(e)}")
+
+                # Raise the exception to stop processing
+                raise Exception(f"JSON parsing error: {str(e)}")
 
     def _extract_keywords(self, text: str) -> List[str]:
         """

@@ -12,15 +12,19 @@
                 </p>
             </div>
             <div class="flex space-x-3">
-                <button onclick="exportResults()" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <button onclick="exportResults()"
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                     <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     Export Results
                 </button>
-                <a href="{{ url_for('dashboard') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <a href="{{ url_for('dashboard') }}"
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                     <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                     </svg>
                     Back to Dashboard
                 </a>
@@ -35,7 +39,8 @@
             <div class="p-5 text-center">
                 <div class="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mx-auto mb-3">
                     <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                 </div>
                 <dl>
@@ -49,12 +54,14 @@
             <div class="p-5 text-center">
                 <div class="w-12 h-12 bg-success-500 rounded-lg flex items-center justify-center mx-auto mb-3">
                     <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                 </div>
                 <dl>
                     <dt class="text-sm font-medium text-gray-500 mb-1">Average Score</dt>
-                    <dd class="text-lg font-medium text-gray-900">{{ batch_summary.average_score if batch_summary else 0 }}%</dd>
+                    <dd class="text-lg font-medium text-gray-900">{{ batch_summary.average_score if batch_summary else 0
+                        }}%</dd>
                 </dl>
             </div>
         </div>
@@ -63,12 +70,14 @@
             <div class="p-5 text-center">
                 <div class="w-12 h-12 bg-warning-500 rounded-lg flex items-center justify-center mx-auto mb-3">
                     <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                     </svg>
                 </div>
                 <dl>
                     <dt class="text-sm font-medium text-gray-500 mb-1">Highest Score</dt>
-                    <dd class="text-lg font-medium text-gray-900">{{ batch_summary.highest_score if batch_summary else 0 }}%</dd>
+                    <dd class="text-lg font-medium text-gray-900">{{ batch_summary.highest_score if batch_summary else 0
+                        }}%</dd>
                 </dl>
             </div>
         </div>
@@ -77,12 +86,14 @@
             <div class="p-5 text-center">
                 <div class="w-12 h-12 bg-info-500 rounded-lg flex items-center justify-center mx-auto mb-3">
                     <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
                     </svg>
                 </div>
                 <dl>
                     <dt class="text-sm font-medium text-gray-500 mb-1">Lowest Score</dt>
-                    <dd class="text-lg font-medium text-gray-900">{{ batch_summary.lowest_score if batch_summary else 0 }}%</dd>
+                    <dd class="text-lg font-medium text-gray-900">{{ batch_summary.lowest_score if batch_summary else 0
+                        }}%</dd>
                 </dl>
             </div>
         </div>
@@ -97,19 +108,24 @@
                 <table class="min-w-full divide-y divide-gray-300">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col"
+                                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Submission
                             </th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col"
+                                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Score
                             </th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col"
+                                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Grade
                             </th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col"
+                                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Questions
                             </th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col"
+                                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Graded At
                             </th>
                             <th scope="col" class="relative px-6 py-3">
@@ -123,9 +139,12 @@
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="flex items-center">
                                     <div class="flex-shrink-0 h-10 w-10">
-                                        <div class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
-                                            <svg class="h-5 w-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                        <div
+                                            class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
+                                            <svg class="h-5 w-5 text-primary-600" fill="none" stroke="currentColor"
+                                                viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                             </svg>
                                         </div>
                                     </div>
@@ -138,11 +157,13 @@
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="text-sm font-medium text-gray-900">{{ result.score }}%</div>
                                 <div class="w-16 bg-gray-200 rounded-full h-2 mt-1">
-                                    <div class="h-2 rounded-full {% if result.score >= 80 %}bg-success-500{% elif result.score >= 60 %}bg-warning-500{% else %}bg-danger-500{% endif %}" style="width: {{ result.score }}%"></div>
+                                    <div class="h-2 rounded-full {% if result.score >= 80 %}bg-success-500{% elif result.score >= 60 %}bg-warning-500{% else %}bg-danger-500{% endif %}"
+                                        style="width: {{ result.score }}%"></div>
                                 </div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if result.score >= 90 %}bg-success-100 text-success-800{% elif result.score >= 80 %}bg-success-100 text-success-800{% elif result.score >= 70 %}bg-warning-100 text-warning-800{% elif result.score >= 60 %}bg-warning-100 text-warning-800{% else %}bg-danger-100 text-danger-800{% endif %}">
+                                <span
+                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if result.score >= 90 %}bg-success-100 text-success-800{% elif result.score >= 80 %}bg-success-100 text-success-800{% elif result.score >= 70 %}bg-warning-100 text-warning-800{% elif result.score >= 60 %}bg-warning-100 text-warning-800{% else %}bg-danger-100 text-danger-800{% endif %}">
                                     {{ result.letter_grade }}
                                 </span>
                             </td>
@@ -153,10 +174,12 @@
                                 {{ result.graded_at[:10] if result.graded_at else 'Unknown' }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button onclick="viewDetails('{{ result.submission_id }}')" class="text-primary-600 hover:text-primary-900 mr-3">
+                                <button type="button" onclick="viewDetails('{{ result.submission_id }}')"
+                                    class="text-primary-600 hover:text-primary-900 mr-3">
                                     View Details
                                 </button>
-                                <a href="{{ url_for('view_submission_content', submission_id=result.submission_id) }}" class="text-info-600 hover:text-info-900">
+                                <a href="{{ url_for('view_submission_content', submission_id=result.submission_id) }}"
+                                    class="text-info-600 hover:text-info-900">
                                     View Content
                                 </a>
                             </td>
@@ -172,39 +195,47 @@
     <!-- No Results State -->
     <div class="text-center py-12">
         <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
         </svg>
         <h3 class="mt-2 text-sm font-medium text-gray-900">No grading results available</h3>
-        <p class="mt-1 text-sm text-gray-500">Upload submissions and complete the grading process to see results here.</p>
+        <p class="mt-1 text-sm text-gray-500">Upload submissions and complete the grading process to see results here.
+        </p>
         <div class="mt-6">
-            <a href="{{ url_for('upload_submission') }}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+            <a href="{{ url_for('upload_submission') }}"
+                class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                 <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
                 Upload Submissions
             </a>
         </div>
     </div>
     {% endif %}
-{% endblock %}
 
     <!-- Detailed Results Modal -->
-    <div id="detailsModal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div id="detailsModal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog"
+        aria-modal="true">
         <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onclick="closeDetailsModal()"></div>
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"
+                onclick="closeDetailsModal()"></div>
 
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
 
-            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+            <div
+                class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
                 <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <div class="flex items-start justify-between">
                         <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
                             Detailed Results
                         </h3>
-                        <button type="button" onclick="closeDetailsModal()" class="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        <button type="button" onclick="closeDetailsModal()"
+                            class="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                             <span class="sr-only">Close</span>
                             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
                     </div>
@@ -217,6 +248,8 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
 {% block extra_js %}
 <!-- Make sure app.js is loaded -->
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
@@ -226,7 +259,7 @@ if (typeof ExamGrader === 'undefined') {
     console.log('ExamGrader not defined, creating fallback notification manager');
     window.ExamGrader = {
         notificationManager: {
-            notify: function(message, type) {
+                notify: function (message, type) {
                 console.log(`Notification (${type}): ${message}`);
                 // Create a simple notification
                 const notification = document.createElement('div');
@@ -244,7 +277,7 @@ if (typeof ExamGrader === 'undefined') {
 }
 
 // Call initAutoRefresh when the page loads
-document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
     console.log('DOM loaded, initializing auto-refresh');
     try {
         initAutoRefresh();
@@ -261,9 +294,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Debug info
     console.log('Results data:', {
-        hasResults: {{ has_results|tojson }},
-        resultsCount: {{ results_list|length }},
-        batchSummary: {{ batch_summary|tojson }}
+            hasResults: {{ has_results| tojson }},
+        resultsCount: {{ results_list| length }},
+        batchSummary: {{ batch_summary| tojson }}
     });
 });
 
@@ -297,7 +330,7 @@ function initAutoRefresh() {
         // Add event listener to toggle
         const toggle = document.getElementById('auto-refresh-toggle');
         if (toggle) {
-            toggle.addEventListener('change', function() {
+                toggle.addEventListener('change', function () {
                 autoRefreshEnabled = this.checked;
                 localStorage.setItem('results_auto_refresh', autoRefreshEnabled);
                 if (autoRefreshEnabled) {
@@ -611,7 +644,7 @@ function exportResults() {
         .then(data => {
             if (data.success) {
                 const dataStr = JSON.stringify(data.data, null, 2);
-                const dataBlob = new Blob([dataStr], {type: 'application/json'});
+                    const dataBlob = new Blob([dataStr], { type: 'application/json' });
 
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(dataBlob);
@@ -629,7 +662,7 @@ function exportResults() {
         });
 }
 
-function viewDetails(submissionId) {
+window.viewDetails = function(submissionId) {
     // Find the result data for this submission
     const results = JSON.parse('{{ results_list|tojson|safe|replace("'", "\\'")|replace("`", "\\`") }}');
     const result = results.find(r => r.submission_id === submissionId);
@@ -733,24 +766,24 @@ function viewDetails(submissionId) {
     document.getElementById('detailsModal').classList.remove('hidden');
 }
 
-function closeDetailsModal() {
+window.closeDetailsModal = function() {
     document.getElementById('detailsModal').classList.add('hidden');
-}
+};
 
 // Close modal on escape key
-document.addEventListener('keydown', function(event) {
+    document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') {
         closeDetailsModal();
     }
 });
 
 // Initialize auto-refresh when the page loads
-document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
     initAutoRefresh();
 
     // Attach event listeners for view details buttons
     document.querySelectorAll('.view-details-btn').forEach(button => {
-        button.addEventListener('click', function() {
+            button.addEventListener('click', function () {
             const submissionId = this.dataset.submissionId;
             viewDetails(submissionId);
         });

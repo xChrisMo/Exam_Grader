@@ -1,4 +1,4 @@
-Check started at: 2025-07-06 17:53:01.161520
+Check started at: 2025-07-10 17:41:45.302274
 Python version: 3.13.4 (tags/v3.13.4:8a526ec, Jun  3 2025, 17:46:04) [MSC v.1943 64 bit (AMD64)]
 Current directory: C:\Users\mezac\Documents\job\Exam_Grader
 Importing modules...

@@ -110,6 +110,7 @@ class DocumentParser:
         Raises:
             Exception: If text extraction fails
         """
+        doc = None
         try:
             logger.debug(f"Opening PDF file: {file_path}")
             doc = fitz.open(file_path)
@@ -152,7 +153,8 @@ class DocumentParser:
             # The caller will handle OCR fallback
             return ""
         finally:
-            doc.close() # Ensure the document is closed
+            if doc is not None:
+                doc.close()  # Ensure the document is closed
 
     @staticmethod
     def extract_text_from_docx(file_path: str) -> str:
@@ -199,73 +201,77 @@ class DocumentParser:
 
             if is_pdf:
                 logger.debug(f"Processing PDF with OCR: {file_path}")
-                doc = fitz.open(file_path)
+                doc = None
+                try:
+                    doc = fitz.open(file_path)
 
-                if doc.page_count == 0:
-                    logger.error(f"PDF Error: PDF document has no pages")
-                    raise Exception("PDF document has no pages")
+                    if doc.page_count == 0:
+                        logger.error(f"PDF Error: PDF document has no pages")
+                        raise Exception("PDF document has no pages")
 
-                # Process each page with OCR
-                text = ""
-                for page_num, page in enumerate(doc, 1):
-                    try:
-                        logger.debug(f"Converting page {page_num} to image")
-                        # Convert page to image
-                        import tempfile
-                        # Create a temporary file for the image
-                        fd, temp_img_path = tempfile.mkstemp(suffix=".png")
-                        os.close(fd) # Close the file descriptor immediately
+                    # Process each page with OCR
+                    text = ""
+                    for page_num, page in enumerate(doc, 1):
                         try:
-                            pix = page.get_pixmap()
-                            pix.save(temp_img_path)
-                            del pix # Explicitly delete pixmap to release resources
-                        except Exception as e:
-                            logger.error(f"Error saving pixmap to temporary file {temp_img_path}: {str(e)}")
-                            if os.path.exists(temp_img_path):
-                                os.unlink(temp_img_path)
-                            raise
+                            logger.debug(f"Converting page {page_num} to image")
+                            # Convert page to image
+                            import tempfile
+                            # Create a temporary file for the image
+                            fd, temp_img_path = tempfile.mkstemp(suffix=".png")
+                            os.close(fd)  # Close the file descriptor immediately
+                            try:
+                                pix = page.get_pixmap()
+                                pix.save(temp_img_path)
+                                del pix  # Explicitly delete pixmap to release resources
+                            except Exception as e:
+                                logger.error(f"Error saving pixmap to temporary file {temp_img_path}: {str(e)}")
+                                if os.path.exists(temp_img_path):
+                                    os.unlink(temp_img_path)
+                                raise
 
-                        logger.debug(f"Processing page {page_num} with OCR")
-                        # Process image with OCR
-                        if ocr_service_instance:
-                            page_text = ocr_service_instance.extract_text_from_image(
-                                temp_img_path
-                            )
-                        else:
-                            logger.warning("OCR service not available, skipping page")
-                            page_text = ""
-                        text += page_text + "\n"
-                        logger.debug("OCR processing completed")
+                            logger.debug(f"Processing page {page_num} with OCR")
+                            # Process image with OCR
+                            if ocr_service_instance:
+                                page_text = ocr_service_instance.extract_text_from_image(
+                                    temp_img_path
+                                )
+                            else:
+                                logger.warning("OCR service not available, skipping page")
+                                page_text = ""
+                            text += page_text + "\n"
+                            logger.debug("OCR processing completed")
 
-                        # Clean up temporary image
-                        try:
-                            os.unlink(temp_img_path) # Use unlink for better cross-platform compatibility
+                            # Clean up temporary image
+                            try:
+                                os.unlink(temp_img_path)  # Use unlink for better cross-platform compatibility
+                                logger.debug(
+                                    f"Cleaned up temporary image {temp_img_path} for page {page_num}"
+                                )
+                            except Exception as e:
+                                logger.warning(
+                                    f"Failed to clean up temporary image {temp_img_path}: {str(e)}"
+                                )
+
                             logger.debug(
-                                f"Cleaned up temporary image {temp_img_path} for page {page_num}"
+                                f"Page {page_num}: OCR extracted {len(page_text)} characters"
                             )
                         except Exception as e:
-                            logger.warning(
-                                f"Failed to clean up temporary image {temp_img_path}: {str(e)}"
-                            )
+                            logger.error(f"OCR Error: Error processing page {page_num}: {str(e)}")
+                            continue
 
-                        logger.debug(
-                            f"Page {page_num}: OCR extracted {len(page_text)} characters"
+                    if not text.strip():
+                        logger.error(f"OCR Error: No text could be extracted from PDF using OCR")
+                        raise OCRServiceError(
+                            "No text content could be extracted from PDF using OCR"
                         )
-                    except Exception as e:
-                        logger.error(f"OCR Error: Error processing page {page_num}: {str(e)}")
-                        continue
 
-                if not text.strip():
-                    logger.error(f"OCR Error: No text could be extracted from PDF using OCR")
-                    raise OCRServiceError(
-                        "No text content could be extracted from PDF using OCR"
+                    logger.info(
+                        f"Successfully extracted {len(text)} characters from PDF using OCR"
                     )
-
-                logger.info(
-                    f"Successfully extracted {len(text)} characters from PDF using OCR"
-                )
-                doc.close() # Ensure the document is closed
-                return text
+                    return text
+                finally:
+                    if doc is not None:
+                        doc.close()  # Ensure the document is closed
             else:
                 # Process a regular image file
                 logger.debug(f"Starting OCR processing for image: {file_path}")
@@ -301,7 +307,7 @@ class DocumentParser:
         """
         try:
             logger.debug(f"Reading text file: {file_path}")
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
                 text = f.read()
             logger.info(f"Successfully read {len(text)} characters from text file")
             return text

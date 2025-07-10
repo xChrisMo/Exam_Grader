@@ -138,7 +138,7 @@ class OCRService:
 
     def extract_text_from_image(self, file: Union[str, Path, BinaryIO]) -> str:
         """
-        Extract text from an image using OCR with enhanced timeout handling.
+        Extract text from an image using OCR with enhanced timeout handling and error reporting.
 
         Args:
             file: Path to the image file or file object
@@ -173,7 +173,10 @@ class OCRService:
                 elapsed_time = time.time() - start_time
                 if elapsed_time > max_wait_time:
                     logger.error(f"OCR processing timed out after {elapsed_time:.1f}s")
-                    raise OCRServiceError(f"OCR processing timed out after {elapsed_time:.1f}s")
+                    raise OCRServiceError(
+                        f"OCR processing timed out after {elapsed_time:.1f}s. "
+                        "Please try again or contact support if the issue persists."
+                    )
 
                 try:
                     status = self._get_document_status(document_id)
@@ -183,7 +186,11 @@ class OCRService:
                         break
                     elif status == "failed":
                         logger.error("OCR processing failed on server")
-                        raise OCRServiceError("OCR processing failed on server")
+                        raise OCRServiceError(
+                            "OCR processing failed on the server. "
+                            "This may be due to image quality or format issues. "
+                            "Please try with a different image or contact support."
+                        )
 
                     logger.info(f"OCR processing in progress (attempt {attempt+1}/{max_retries}) - Elapsed: {elapsed_time:.0f}s")
 
@@ -194,15 +201,30 @@ class OCRService:
                 except requests.exceptions.RequestException as e:
                     logger.warning(f"Network error checking status (attempt {attempt+1}): {str(e)}")
                     if attempt == max_retries - 1:
-                        raise OCRServiceError(f"Network error during status check: {str(e)}")
+                        raise OCRServiceError(
+                            f"Network error during OCR processing: {str(e)}. "
+                            "Please check your internet connection and try again."
+                        )
                     time.sleep(retry_delay)
             else:
                 elapsed_time = time.time() - start_time
                 logger.error(f"OCR processing timed out after {max_retries} attempts ({elapsed_time:.1f}s)")
-                raise OCRServiceError(f"OCR processing timed out after {max_retries} attempts")
+                raise OCRServiceError(
+                    f"OCR processing timed out after {max_retries} attempts. "
+                    "The service may be experiencing high load. Please try again later."
+                )
 
             # Step 3: Get results
             text = self._get_document_result(document_id)
+            
+            if not text or not text.strip():
+                logger.warning("OCR completed but returned empty text")
+                raise OCRServiceError(
+                    "OCR processing completed but no text was extracted. "
+                    "This may indicate that the image contains no readable text, "
+                    "or the image quality is too low for OCR processing."
+                )
+                
             logger.info(f"OCR completed successfully. Extracted {len(text)} characters.")
             return text
 
@@ -210,10 +232,16 @@ class OCRService:
             raise
         except requests.exceptions.RequestException as e:
             logger.error(f"Network error during OCR: {str(e)}")
-            raise OCRServiceError(f"Network error during OCR: {str(e)}")
+            raise OCRServiceError(
+                f"Network error during OCR processing: {str(e)}. "
+                "Please check your internet connection and try again."
+            )
         except Exception as e:
             logger.error(f"OCR processing failed: {str(e)}")
-            raise OCRServiceError(f"OCR processing failed: {str(e)}")
+            raise OCRServiceError(
+                f"OCR processing failed: {str(e)}. "
+                "Please try again or contact support if the issue persists."
+            )
 
     def _upload_document(self, file: Union[str, Path, BinaryIO]) -> str:
         """

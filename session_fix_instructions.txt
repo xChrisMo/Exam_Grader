@@ -1,0 +1,40 @@
+
+=== MANUAL SESSION FIX INSTRUCTIONS ===
+
+1. Open your browser and go to: http://127.0.0.1:8501
+
+2. Open browser developer tools (F12)
+
+3. Go to the Console tab
+
+4. Run this JavaScript code to fix the session:
+
+fetch('/fix-session', {
+    method: 'GET',
+    credentials: 'same-origin'
+})
+.then(response => {
+    if (response.ok) {
+        console.log('Session fixed successfully');
+        window.location.href = '/results';
+    } else {
+        console.error('Failed to fix session');
+    }
+})
+.catch(error => {
+    console.error('Error:', error);
+});
+
+5. Alternatively, you can:
+   - Visit: http://127.0.0.1:8501/clear-session-guide
+   - Re-upload your marking guide: Department_of_Computer_Science2.docx
+   - Re-run the grading process
+
+=== SESSION VARIABLES NEEDED ===
+guide_id: ed833574-d3fb-4fe3-84c4-b805ee5b8a64
+guide_filename: Department_of_Computer_Science2.docx
+progress_id: 9f964c25-e4ac-4577-9ef3-f72c0a45e455
+
+=== QUICK FIX URL ===
+If the session fix route is added, visit:
+http://127.0.0.1:8501/fix-session

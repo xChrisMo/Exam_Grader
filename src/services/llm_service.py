@@ -237,102 +237,107 @@ class LLMService:
         max_score: int = 10,
     ) -> Tuple[float, str]:
         """
-        Compare a student's submission answer with the model answer from the marking guide.
-        Enhanced with caching, retry logic, and better error handling.
+        Compare student answer with guide answer using LLM.
 
         Args:
             question: The question being answered
-            guide_answer: The model answer from the marking guide
-            submission_answer: The student's submission answer
-            max_score: The maximum possible score for this question
+            guide_answer: Expected answer from marking guide
+            submission_answer: Student's submitted answer
+            max_score: Maximum possible score for this question
 
         Returns:
-            Tuple[float, str]: (Score, Feedback)
+            Tuple of (score, feedback)
 
         Raises:
-            LLMServiceError: If the API call fails after all retries
+            LLMServiceError: If comparison fails
         """
-        try:  # Added proper error handling for API operations
-            # Log the start of answer comparison
-            logger.info("Preparing to compare answers...")
+        try:
+            # Validate inputs
+            if not question or not guide_answer or not submission_answer:
+                logger.warning("Missing required inputs for answer comparison")
+                return 0, "Missing required information for grading"
 
-            # Optimize prompt length for performance
-            max_content_length = int(os.getenv("MAX_CONTENT_LENGTH", 10000))  # Configurable content length
-
-            # Truncate long content while preserving key information
-            question_truncated = question[:max_content_length] if len(question) > max_content_length else question
-            guide_answer_truncated = guide_answer[:max_content_length] if len(guide_answer) > max_content_length else guide_answer
-            submission_answer_truncated = submission_answer[:max_content_length] if len(submission_answer) > max_content_length else submission_answer
-
-            # Construct optimized prompt for faster processing
-            system_prompt = """You are an educational grading assistant. Compare a student's answer to a model answer and assign a score.
-
-            Guidelines:
-            - Score: 0 to maximum score
-            - Focus on content accuracy and key points
-            - Be objective and consistent
-
-            Response format (JSON only). Your response MUST be a valid JSON object with 'score' (numeric) and 'feedback' (string) keys. Example: {"score": 8.5, "feedback": "Good answer, but missing a key detail."}"""
-
-            user_prompt = f"""Question: {question_truncated}
-
-            Model Answer: {guide_answer_truncated}
-
-            Student Answer: {submission_answer_truncated}
-
-            Max Score: {max_score}
-
-            Evaluate and provide score with feedback."""
-
-            # Create messages for caching
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ]
+            # Create cache key
+            cache_key = f"compare_{hash(question + guide_answer + submission_answer + str(max_score))}"
 
             # Check cache first
-            cache_key = self._generate_cache_key(messages)
-            cached_response = self._get_cached_response(cache_key)
+            with self._cache_lock:
+                if cache_key in self._response_cache:
+                    cached_result = self._response_cache[cache_key]
+                    logger.debug("Using cached comparison result")
+                    return cached_result['score'], cached_result['feedback']
 
-            if cached_response:
-                logger.info("Using cached response for answer comparison")
-                response_text = cached_response
-            else:
-                logger.info("Making API call for answer comparison...")
+            # Prepare the prompt for comparison
+            system_prompt = """You are an expert educational grader. Your task is to compare a student's answer with a model answer and provide a score and detailed feedback.
 
-                # Prepare optimized API parameters
-                params = {
-                    "model": self.model,
-                    "messages": messages,
-                    "temperature": 0.0,  # Deterministic for consistency
-    
-                }
+Guidelines:
+- Score from 0 to the maximum score provided
+- Be fair and objective
+- Consider partial credit for partially correct answers
+- Provide specific, constructive feedback
+- Focus on content accuracy and understanding
+- Consider alternative correct approaches
 
-                # Ensure JSON format for Deepseek-Reasoner
-                if self.model == "deepseek-ai/deepseek-reasoner":
-                    params["response_format"] = {"type": "json_object"}
+Return ONLY a JSON object with this exact format:
+{
+    "score": <numeric_score>,
+    "feedback": "<detailed_feedback>"
+}"""
 
-                # Add seed parameter if in deterministic mode
-                if self.deterministic and self.seed is not None:
-                    params["seed"] = self.seed
+            user_prompt = f"""Question: {question}
+
+Model Answer: {guide_answer}
+
+Student Answer: {submission_answer}
+
+Maximum Score: {max_score}
+
+Please evaluate the student's answer and provide a score and feedback."""
 
                 # Make API call with retry logic
-                response = self._make_api_call_with_retry(params)
-                response_text = response.choices[0].message.content.strip()
+            response = self._make_api_call_with_retry({
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                "temperature": self.temperature,
+                "max_tokens": 1000,
+                "response_format": {"type": "json_object"} if hasattr(self, 'supports_json') and self.supports_json else None
+            })
 
-                # Cache the response
-                self._cache_response(cache_key, response_text)
+            # Extract response text
+            result_text = response.choices[0].message.content.strip()
+            logger.debug(f"Raw LLM response: {result_text[:200]}...")
 
-            # Parse and validate the response
-            logger.info("Processing LLM response...")
-
-            # Enhanced JSON parsing with multiple fallback strategies
-            result, extraction_method = self.parse_llm_response(response_text)
+            # Parse response with multiple fallback methods
+            result = None
+            extraction_method = "unknown"
             
-            # Validate required fields
-            if not all(key in result for key in ['score', 'feedback']):
-                logger.error("Missing required keys in LLM response")
-                raise LLMServiceError("Invalid response format from LLM")
+            # Method 1: Direct JSON parsing
+            try:
+                result = json.loads(result_text)
+                extraction_method = "direct_json"
+            except json.JSONDecodeError:
+                logger.warning("Direct JSON parsing failed, trying structured parsing")
+                
+                # Method 2: Structured parsing with LLM assistance
+                try:
+                    result, extraction_method = self.parse_llm_response(result_text)
+                except Exception as parse_error:
+                    logger.warning(f"Structured parsing failed: {str(parse_error)}")
+                    
+                    # Method 3: Regex extraction as final fallback
+                    try:
+                        result = self._extract_score_and_feedback_regex(result_text)
+                        extraction_method = "regex"
+                    except Exception as regex_error:
+                        logger.error(f"All parsing methods failed: {str(regex_error)}")
+                        raise LLMServiceError("Failed to parse LLM response after multiple attempts")
+
+            # Validate result structure
+            if not result or not isinstance(result, dict):
+                raise LLMServiceError("Invalid response structure from LLM")
 
             # Extract and validate score
             try:
@@ -341,6 +346,14 @@ class LLMService:
                 feedback = str(result['feedback'])
                 
                 logger.info(f"Answer comparison completed. Score: {score}/{max_score}")
+                
+                # Cache the result
+                with self._cache_lock:
+                    self._response_cache[cache_key] = {
+                        'score': score,
+                        'feedback': feedback
+                    }
+                
                 return score, f"[{extraction_method}] {feedback}"
             except (ValueError, TypeError) as e:
                 logger.error(f"Invalid score value: {str(e)}")
@@ -352,78 +365,24 @@ class LLMService:
                 logger.error(f"Unexpected error during answer comparison: {str(e)}")
                 return 0, f"System error: {str(e)}"
 
-        # Add proper error handling for the main try block
         except ConnectionError as ce:
             logger.error(f"API connection failed: {str(ce)}")
-            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
+            raise LLMServiceError(
+                f"Connection error: {str(ce)}. "
+                "Please check your internet connection and try again."
+            ) from ce
         except json.JSONDecodeError as je:
             logger.error(f"Invalid JSON response: {str(je)}")
-            raise LLMServiceError("Malformed API response") from je
+            raise LLMServiceError(
+                "Malformed API response. "
+                "Please try again or contact support if the issue persists."
+            ) from je
         except Exception as e:
             logger.error(f"Unexpected error during comparison: {str(e)}")
-            raise LLMServiceError("Comparison process failed") from e
-
-        # Add proper error handling for the main try block
-        except ConnectionError as ce:
-            logger.error(f"API connection failed: {str(ce)}")
-            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
-        except json.JSONDecodeError as je:
-            logger.error(f"Invalid JSON response: {str(je)}")
-            raise LLMServiceError("Malformed API response") from je
-        except Exception as e:
-            logger.error(f"Unexpected error during comparison: {str(e)}")
-            raise LLMServiceError("Comparison process failed") from e
-
-        except ConnectionError as ce:
-            logger.error(f"LLM API connection failed: {str(ce)}")
-            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
-        except json.JSONDecodeError as je:
-            logger.error(f"JSON parsing failed: {str(je)}")
-            raise LLMServiceError("Invalid response format from API") from je
-        except Exception as e:
-            logger.error(f"Unexpected error in LLM service: {str(e)}")
-            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
-        
-        # Add proper error handling for the outer try block
-        except ConnectionError as ce:
-            logger.error(f"API connection failed: {str(ce)}")
-            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
-        except json.JSONDecodeError as je:
-            logger.error(f"Invalid JSON response: {str(je)}")
-            raise LLMServiceError("Malformed API response") from je
-        except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
-            raise LLMServiceError("Failed to process API response") from e
-
-        except ConnectionError as ce:
-            logger.error(f"LLM API connection failed: {str(ce)}")
-            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
-        except json.JSONDecodeError as je:
-            logger.error(f"JSON parsing failed: {str(je)}")
-            raise LLMServiceError("Invalid response format from API") from je
-        except Exception as e:
-            logger.error(f"Unexpected error in LLM service: {str(e)}")
-            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
-
-        except ConnectionError as ce:
-            logger.error(f"LLM API connection failed: {str(ce)}")
-            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
-        except json.JSONDecodeError as je:
-            logger.error(f"JSON parsing failed: {str(je)}")
-            raise LLMServiceError("Invalid response format from API") from je
-        except Exception as e:
-            logger.error(f"Unexpected error in LLM service: {str(e)}")
-            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
-        
-        except ConnectionError as ce:
-            logger.error(f"LLM API connection failed: {str(ce)}")
-            raise LLMServiceError(f"Connection error: {str(ce)}") from ce
-        except json.JSONDecodeError as je:
-            logger.error(f"JSON parsing failed: {str(je)}")
-            raise LLMServiceError("Invalid response format from API") from je
-        except Exception as e:
-            logger.error(f"Unexpected error in LLM service: {str(e)}")
-            raise LLMServiceError(f"Unexpected error: {str(e)}") from e
+            raise LLMServiceError(
+                f"Comparison process failed: {str(e)}. "
+                "Please try again or contact support if the issue persists."
+            ) from e
 
     def parse_llm_response(self, response_text: str) -> Tuple[Dict, str]:
         """

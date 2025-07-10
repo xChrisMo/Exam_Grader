@@ -20,11 +20,29 @@
                     
                     <div class="mt-6 max-w-xl mx-auto">
                         <div class="w-full bg-gray-200 rounded-full h-2.5 mb-4">
-                            <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Processing progress"></div>
                         </div>
                         <p class="text-sm text-gray-500 mt-2" id="progress-text">Initializing...</p>
                         <p class="text-xs text-gray-400 mt-1" id="progress-details"></p>
                         <p class="text-xs text-gray-400 mt-1" id="progress-eta"></p>
+                        
+                        <!-- Processing steps indicator -->
+                        <div class="mt-4 text-xs text-gray-500">
+                            <div class="flex justify-center space-x-4">
+                                <div class="flex items-center">
+                                    <div id="step-ocr" class="w-2 h-2 bg-gray-300 rounded-full mr-2" role="presentation"></div>
+                                    <span>OCR Processing</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <div id="step-mapping" class="w-2 h-2 bg-gray-300 rounded-full mr-2" role="presentation"></div>
+                                    <span>Answer Mapping</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <div id="step-grading" class="w-2 h-2 bg-gray-300 rounded-full mr-2" role="presentation"></div>
+                                    <span>AI Grading</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -38,10 +56,10 @@
                     <p class="text-sm text-gray-500 mt-2">Your submissions have been processed successfully.</p>
                     
                     <div class="mt-6">
-                        <a href="{{ url_for('view_results') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        <a href="{{ url_for('view_results') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" role="button" tabindex="0">
                             View Results
                         </a>
-                        <a href="{{ url_for('dashboard') }}" class="ml-3 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        <a href="{{ url_for('dashboard') }}" class="ml-3 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" role="button" tabindex="0">
                             Return to Dashboard
                         </a>
                     </div>
@@ -57,7 +75,13 @@
                     <p class="text-sm text-gray-500 mt-2" id="error-message">An error occurred during processing.</p>
                     
                     <div class="mt-6">
-                        <a href="{{ url_for('dashboard') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        <button id="retry-button" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" role="button" tabindex="0">
+                            <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Retry Processing
+                        </button>
+                        <a href="{{ url_for('dashboard') }}" class="ml-3 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" role="button" tabindex="0">
                             Return to Dashboard
                         </a>
                     </div>
@@ -83,6 +107,14 @@
         // Start polling for progress updates
         startProgressPolling(progressId);
         
+        // Set up retry button
+        const retryButton = document.getElementById('retry-button');
+        if (retryButton) {
+            retryButton.addEventListener('click', function() {
+                retryProcessing();
+            });
+        }
+        
         function startProgressPolling(progressId) {
             console.log('Starting progress polling for ID:', progressId);
             
@@ -107,8 +139,16 @@
                     }
                 } catch (error) {
                     console.error('Error polling for progress:', error);
-                    stopProgressPolling();
-                    showError('Error checking progress: ' + error.message);
+                    // Don't stop polling immediately on network errors, retry a few times
+                    if (window.progressErrorCount === undefined) {
+                        window.progressErrorCount = 0;
+                    }
+                    window.progressErrorCount++;
+                    
+                    if (window.progressErrorCount >= 5) {
+                        stopProgressPolling();
+                        showError('Error checking progress: ' + error.message);
+                    }
                 }
             }, 2000);
         }
@@ -125,7 +165,8 @@
             const response = await fetch(`/api/progress/${progressId}`, {
                 method: 'GET',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': ExamGrader.csrf.getToken()
                 },
                 credentials: 'same-origin'
             });
@@ -139,6 +180,9 @@
             if (!data.success) {
                 throw new Error(data.error || 'Failed to get progress');
             }
+            
+            // Reset error count on successful request
+            window.progressErrorCount = 0;
             
             return data.progress;
         }
@@ -168,6 +212,9 @@
                 progressEta.textContent = `Estimated time remaining: ${eta}s`;
             }
             
+            // Update processing steps based on current operation
+            updateProcessingSteps(progress.current_operation);
+            
             // Update status color based on progress status
             if (progress.status === 'completed') {
                 progressBar.classList.remove('bg-blue-600');
@@ -175,6 +222,39 @@
             } else if (progress.status === 'error') {
                 progressBar.classList.remove('bg-blue-600');
                 progressBar.classList.add('bg-red-600');
+            }
+        }
+        
+        function updateProcessingSteps(currentOperation) {
+            const stepOcr = document.getElementById('step-ocr');
+            const stepMapping = document.getElementById('step-mapping');
+            const stepGrading = document.getElementById('step-grading');
+            
+            // Reset all steps
+            [stepOcr, stepMapping, stepGrading].forEach(step => {
+                if (step) {
+                    step.className = 'w-2 h-2 bg-gray-300 rounded-full mr-2';
+                }
+            });
+            
+            // Update based on current operation
+            if (currentOperation) {
+                const operation = currentOperation.toLowerCase();
+                
+                if (operation.includes('ocr') || operation.includes('extract') || operation.includes('image')) {
+                    if (stepOcr) stepOcr.className = 'w-2 h-2 bg-blue-600 rounded-full mr-2';
+                } else if (operation.includes('map') || operation.includes('match')) {
+                    if (stepOcr) stepOcr.className = 'w-2 h-2 bg-green-600 rounded-full mr-2';
+                    if (stepMapping) stepMapping.className = 'w-2 h-2 bg-blue-600 rounded-full mr-2';
+                } else if (operation.includes('grade') || operation.includes('score') || operation.includes('evaluate')) {
+                    if (stepOcr) stepOcr.className = 'w-2 h-2 bg-green-600 rounded-full mr-2';
+                    if (stepMapping) stepMapping.className = 'w-2 h-2 bg-green-600 rounded-full mr-2';
+                    if (stepGrading) stepGrading.className = 'w-2 h-2 bg-blue-600 rounded-full mr-2';
+                } else if (operation.includes('complete') || operation.includes('finalize')) {
+                    [stepOcr, stepMapping, stepGrading].forEach(step => {
+                        if (step) step.className = 'w-2 h-2 bg-green-600 rounded-full mr-2';
+                    });
+                }
             }
         }
         
@@ -187,6 +267,59 @@
             document.getElementById('processing-status').classList.add('hidden');
             document.getElementById('processing-error').classList.remove('hidden');
             document.getElementById('error-message').textContent = message;
+        }
+        
+        async function retryProcessing() {
+            try {
+                // Show loading state
+                const retryButton = document.getElementById('retry-button');
+                if (retryButton) {
+                    ExamGrader.utils.showButtonLoading(retryButton, 'Retrying...');
+                    retryButton.disabled = true;
+                }
+                
+                // Hide error state and show processing state
+                document.getElementById('processing-error').classList.add('hidden');
+                document.getElementById('processing-status').classList.remove('hidden');
+                
+                // Get CSRF token
+                const csrfToken = ExamGrader.csrf.getToken();
+                
+                // Retry the processing
+                const response = await fetch('/api/process-unified-ai', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({}),
+                    credentials: 'same-origin'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.progress_id) {
+                    // Start polling with new progress ID
+                    startProgressPolling(data.progress_id);
+                } else {
+                    throw new Error(data.error || 'Retry failed');
+                }
+                
+            } catch (error) {
+                console.error('Retry failed:', error);
+                showError(`Retry failed: ${error.message}`);
+                
+                // Reset retry button
+                const retryButton = document.getElementById('retry-button');
+                if (retryButton) {
+                    ExamGrader.utils.hideButtonLoading(retryButton);
+                    retryButton.disabled = false;
+                }
+            }
         }
     });
 </script>

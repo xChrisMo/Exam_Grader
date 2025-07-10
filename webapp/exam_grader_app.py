@@ -44,6 +44,11 @@ from flask_login import current_user, LoginManager
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from werkzeug.utils import secure_filename
 from flask_babel import Babel, _
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+import redis
+from celery.result import AsyncResult
+from src.services.realtime_service import socketio
 
 # Project imports
 from src.config.logging_config import create_startup_summary
@@ -205,10 +210,17 @@ def get_csrf_token():
     try:
         token = generate_csrf()
         logger.debug("Generated fresh CSRF token via API endpoint")
-        return jsonify({'csrf_token': token})
+        
+        # Set response headers to prevent caching
+        response = jsonify({'csrf_token': token})
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        return response
     except Exception as e:
         logger.error(f"Failed to generate CSRF token: {str(e)}")
-        return jsonify({'error': 'Failed to generate token'}), 500
+        return jsonify({'error': 'Failed to generate token', 'details': str(e)}), 500
 
 # Context processor to make session variables available in templates
 @app.context_processor
@@ -254,6 +266,16 @@ except Exception as e:
     grading_service = None
     file_cleanup_service = None
     sys.exit(1)
+
+# Add session fix route for debugging
+try:
+    from session_fix_route import add_session_fix_route
+    add_session_fix_route(app)
+    logger.info("Session fix route added successfully")
+except ImportError:
+    logger.warning("Session fix route module not found - this is normal in production")
+except Exception as e:
+    logger.error(f"Failed to add session fix route: {str(e)}")
 
 # Utility functions
 
@@ -479,7 +501,7 @@ def rate_limit_exceeded(e):
 
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):
-    """Handle CSRF validation errors."""
+    """Handle CSRF validation errors with improved error reporting."""
     csrf_cookie = request.cookies.get('secure_csrf_token', 'Not Present')
     csrf_header = request.headers.get('X-CSRFToken', 'Not Present')
     session_csrf = session.get('csrf_token', 'Not Present')
@@ -488,25 +510,36 @@ def handle_csrf_error(e):
     logger.warning(f"CSRF Debug - Cookie: {csrf_cookie}, Header: {csrf_header}, Session: {session_csrf}")
     logger.warning(f"Request path: {request.path}, Method: {request.method}, Referrer: {request.referrer}")
     
+    # Generate a fresh CSRF token for the response
+    try:
+        from flask_wtf.csrf import generate_csrf
+        fresh_token = generate_csrf()
+        logger.debug(f"Generated fresh CSRF token for error response: {fresh_token[:8]}...")
+    except Exception as token_error:
+        logger.error(f"Failed to generate fresh CSRF token: {str(token_error)}")
+        fresh_token = None
+    
     if request.is_json or request.path.startswith("/api/"):
-        return (
-            jsonify(
-                {
+        error_response = {
                     "error": "CSRF token validation failed",
                     "message": str(e),
                     "status_code": 400,
-                }
-            ),
-            400,
-        )
+            "csrf_token_refresh_required": True
+        }
+        
+        if fresh_token:
+            error_response["fresh_csrf_token"] = fresh_token
+            
+        return jsonify(error_response), 400
     else:
-        flash("Your form session has expired. Please try again.", "warning")
+        flash("Your form session has expired. Please refresh the page and try again.", "warning")
         return (
             render_template(
                 "error.html",
                 error_code=400,
                 error_message="CSRF token validation failed. Please refresh the page and try again.",
                 service_status=get_service_status(),
+                csrf_token=fresh_token,
             ),
             400,
         )
@@ -1352,14 +1385,36 @@ def view_results():
         # Format results for template
         results_list = []
         for submission_id, result in grading_results.items():
+            # Extract detailed feedback data
+            detailed_feedback = result.get("criteria_scores", {})
+            criteria_scores = []
+            strengths = []
+            weaknesses = []
+            suggestions = []
+            
+            # Parse detailed feedback if it exists
+            if detailed_feedback and isinstance(detailed_feedback, dict):
+                criteria_scores = detailed_feedback.get("criteria_scores", [])
+                strengths = detailed_feedback.get("strengths", [])
+                weaknesses = detailed_feedback.get("weaknesses", [])
+                suggestions = detailed_feedback.get("suggestions", [])
+            
+            # Calculate letter grade
+            score = result.get("score", 0)
+            letter_grade = get_letter_grade(score)
+            
             results_list.append(
                 {
                     "submission_id": submission_id,
                     "filename": result.get("filename", "Unknown"),
-                    "score": result.get("score", 0),
-                    "letter_grade": result.get("letter_grade", "F"),
-                    "total_questions": len(result.get("question_scores", [])),
+                    "score": score,
+                    "letter_grade": letter_grade,
+                    "total_questions": len(criteria_scores) if criteria_scores else 1,
                     "graded_at": result.get("timestamp", ""),
+                    "criteria_scores": criteria_scores,
+                    "strengths": strengths,
+                    "weaknesses": weaknesses,
+                    "suggestions": suggestions,
                 }
             )
 
@@ -1643,7 +1698,7 @@ def process_unified_ai():
 
         # Get max_questions from request, default to None if not provided
         data = request.get_json()
-        max_questions = data.get("max_questions")
+        max_questions = data.get("max_questions") if data else None
         logger.info(f"Received max_questions: {max_questions}")
 
         # Check session data with detailed logging
@@ -1666,6 +1721,7 @@ def process_unified_ai():
                     {
                         "error": "No marking guide available. Please upload a marking guide first.",
                         "details": "guide_not_uploaded",
+                        "code": "GUIDE_MISSING"
                     }
                 ),
                 400,
@@ -1678,6 +1734,7 @@ def process_unified_ai():
                     {
                         "error": "No submissions available. Please upload submissions first.",
                         "details": "no_submissions",
+                        "code": "SUBMISSIONS_MISSING"
                     }
                 ),
                 400,
@@ -1688,13 +1745,19 @@ def process_unified_ai():
         submissions = session.get("submissions", [])
 
         if not guide_id or not submissions:
-            return jsonify({"error": "Missing guide or submissions data"}), 400
+            return jsonify({
+                "error": "Missing guide or submissions data",
+                "code": "DATA_MISSING"
+            }), 400
 
         # Retrieve guide from database to ensure we have the latest content
         guide = MarkingGuide.query.get(guide_id)
         if not guide:
             logger.warning(f"Marking guide with ID {guide_id} not found in DB.")
-            return jsonify({"error": "Marking guide not found."}), 404
+            return jsonify({
+                "error": "Marking guide not found.",
+                "code": "GUIDE_NOT_FOUND"
+            }), 404
 
         # Construct guide_data from the retrieved guide object
         guide_data = {
@@ -1707,9 +1770,16 @@ def process_unified_ai():
         }
         guide_content = guide.content_text # Ensure guide_content is directly from DB
 
-        # Check if services are available
+        # Check if services are available with detailed status
+        service_status = get_service_status()
         if not mapping_service:
-            return jsonify({"error": "AI services not available"}), 503
+            logger.error("Mapping service not available")
+            return jsonify({
+                "error": "AI services not available",
+                "details": "mapping_service_unavailable",
+                "service_status": service_status,
+                "code": "SERVICE_UNAVAILABLE"
+            }), 503
 
         if not guide_content:
             logger.warning("Marking guide content is empty after retrieval from DB.")
@@ -1718,6 +1788,7 @@ def process_unified_ai():
                     {
                         "error": "Marking guide content is empty. Please ensure the guide was processed correctly.",
                         "details": "guide_content_empty",
+                        "code": "GUIDE_CONTENT_EMPTY"
                     }
                 ),
                 400,
@@ -1745,11 +1816,16 @@ def process_unified_ai():
             logger.info("Unified AI service created successfully")
         except ImportError as e:
             logger.error(f"Failed to import unified AI services: {str(e)}")
-            return jsonify({"error": f"Service import failed: {str(e)}"}), 500
+            return jsonify({
+                "error": f"Service import failed: {str(e)}",
+                "code": "IMPORT_ERROR"
+            }), 500
         except Exception as e:
             logger.error(f"Failed to create unified AI service: {str(e)}")
-            return jsonify({"error": f"Service creation failed: {str(e)}"}), 500
-
+            return jsonify({
+                "error": f"Service creation failed: {str(e)}",
+                "code": "SERVICE_CREATION_ERROR"
+            }), 500
 
         # Process with unified AI service with detailed error handling
         try:
@@ -1761,7 +1837,10 @@ def process_unified_ai():
                 logger.info(f"Progress session created: {progress_id}")
             except Exception as e:
                 logger.error(f"Error creating progress session: {str(e)}")
-                return jsonify({"error": f"Failed to create progress session: {str(e)}"}), 500
+                return jsonify({
+                    "error": f"Failed to create progress session: {str(e)}",
+                    "code": "PROGRESS_SESSION_ERROR"
+                }), 500
 
             # Store progress ID in session for frontend polling
             session["current_progress_id"] = progress_id
@@ -1781,7 +1860,13 @@ def process_unified_ai():
 
             if error:
                 logger.error(f"Unified AI processing returned error: {error}")
-                return jsonify({"error": error}), 500
+                # Mark progress as failed
+                if progress_id:
+                    progress_tracker.complete_session(progress_id, success=False, message=error)
+                return jsonify({
+                    "error": error,
+                    "code": "PROCESSING_ERROR"
+                }), 500
 
             # Save results to database
             from src.database.models import GradingResult, Mapping, Submission, db
@@ -1879,7 +1964,10 @@ def process_unified_ai():
                 )
             else:
                 logger.warning("progress_id was None in exception handler, cannot complete session.")
-            return jsonify({"error": f"Processing failed: {str(e)}"}), 500
+            return jsonify({
+                "error": f"Processing failed: {str(e)}",
+                "code": "PROCESSING_EXCEPTION"
+            }), 500
         finally:
             pass  # The complete_session is already called in try/except blocks
 
@@ -1889,6 +1977,7 @@ def process_unified_ai():
                     "success": True,
                     "progress_id": progress_id,
                     "summary": result.get("summary"),
+                    "message": "AI processing started successfully"
                 }
             ),
             200,
@@ -1896,61 +1985,65 @@ def process_unified_ai():
 
     except Exception as e:
         logger.error(f"Error in process_unified_ai: {str(e)}")
-        return jsonify({"error": f"Unified AI processing failed: {str(e)}"}), 500
+        return jsonify({
+            "error": f"Unified AI processing failed: {str(e)}",
+            "code": "GENERAL_ERROR"
+        }), 500
 
 
 @app.route("/api/progress/<progress_id>", methods=["GET"])
 @csrf.exempt
 def get_progress(progress_id):
-    """API endpoint to get real-time progress updates."""
+    """Get progress for a specific processing session."""
     try:
         from src.services.progress_tracker import progress_tracker
 
-        progress_update = progress_tracker.get_progress(progress_id)
-
-        if not progress_update:
-            return jsonify({"error": "Progress ID not found"}), 404
-
-        # Convert progress update to dictionary
-        from dataclasses import asdict
-
-        progress_data = asdict(progress_update)
-
-        return jsonify({"success": True, "progress": progress_data})
+        if not progress_id:
+            return jsonify({"success": False, "error": "Progress ID is required"}), 400
+            
+        progress = progress_tracker.get_progress(progress_id)
+        
+        if not progress:
+            return jsonify({"success": False, "error": "Progress not found"}), 404
+            
+        return jsonify({
+            "success": True,
+            "progress": progress
+        })
 
     except Exception as e:
-        logger.error(f"Error getting progress: {str(e)}")
-        return jsonify({"error": f"Failed to get progress: {str(e)}"}), 500
-
+        logger.error(f"Error getting progress for {progress_id}: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to get progress: {str(e)}"
+        }), 500
 
 @app.route("/api/progress/<progress_id>/history", methods=["GET"])
 @csrf.exempt
 def get_progress_history(progress_id):
-    """API endpoint to get full progress history."""
+    """Get progress history for a specific processing session."""
     try:
         from src.services.progress_tracker import progress_tracker
+        
+        if not progress_id:
+            return jsonify({"success": False, "error": "Progress ID is required"}), 400
 
         history = progress_tracker.get_progress_history(progress_id)
 
         if not history:
-            return jsonify({"error": "Progress ID not found"}), 404
-
-        # Convert progress updates to dictionaries
-        from dataclasses import asdict
-
-        history_data = [asdict(update) for update in history]
-
-        return jsonify(
-            {
+            return jsonify({"success": False, "error": "Progress history not found"}), 404
+            
+        return jsonify({
                 "success": True,
-                "history": history_data,
-                "total_updates": len(history_data),
-            }
-        )
+            "history": history
+        })
 
     except Exception as e:
-        logger.error(f"Error getting progress history: {str(e)}")
-        return jsonify({"error": f"Failed to get progress history: {str(e)}"}), 500
+        logger.error(f"Error getting progress history for {progress_id}: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to get progress history: {str(e)}"
+        }), 500
 
 
 def get_letter_grade(score):
@@ -2995,6 +3088,75 @@ def get_cache_stats():
             ),
             500,
         )
+
+
+# Initialize Flask-Limiter (Flask-Limiter 3.x compatible)
+limiter = Limiter(key_func=get_remote_address)
+limiter.init_app(app)
+
+@app.route('/api/health')
+@limiter.limit('5/minute')
+def health_check():
+    """Health check for DB, Redis, Celery, and SocketIO."""
+    status = {'db': False, 'redis': False, 'celery': False, 'socketio': False}
+    errors = {}
+    # DB check
+    try:
+        db.session.execute('SELECT 1')
+        status['db'] = True
+    except Exception as e:
+        errors['db'] = str(e)
+    # Redis check
+    try:
+        r = redis.Redis.from_url(os.getenv('REDIS_URL', 'redis://localhost:6379/0'))
+        r.ping()
+        status['redis'] = True
+    except Exception as e:
+        errors['redis'] = str(e)
+    # Celery check
+    try:
+        from src.services.background_tasks import celery_app
+        i = celery_app.control.inspect()
+        active = i.active()
+        if active is not None:
+            status['celery'] = True
+    except Exception as e:
+        errors['celery'] = str(e)
+    # SocketIO check
+    try:
+        if socketio.server is not None:
+            status['socketio'] = True
+    except Exception as e:
+        errors['socketio'] = str(e)
+    ok = all(status.values())
+    return jsonify({'ok': ok, 'status': status, 'errors': errors}), (200 if ok else 503)
+
+# Example: Apply rate limiting to background job endpoints
+@app.route("/api/start-background-ocr", methods=["POST"])
+@login_required
+@csrf.exempt
+@limiter.limit('10/minute')
+def start_background_ocr():
+    # ... existing code ...
+    pass
+
+@app.route("/api/start-background-grading", methods=["POST"])
+@login_required
+@csrf.exempt
+@limiter.limit('10/minute')
+def start_background_grading():
+    # ... existing code ...
+    pass
+
+@app.route("/api/download-report/<submission_id>")
+@login_required
+@csrf.exempt
+@limiter.limit('20/hour')
+def download_report(submission_id):
+    # ... existing code ...
+    pass
+
+# ... audit all endpoints for @login_required and permission checks ...
 
 
 if __name__ == "__main__":

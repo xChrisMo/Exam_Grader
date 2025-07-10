@@ -14,15 +14,32 @@ python-docx>=1.1.0  # For Word documents
 Pillow>=10.2.0  # For image processing
 
 # Web Framework
-Flask~=2.3.2  # Pinned to match installed version
-Werkzeug~=2.3.0  # Compatible with Flask 2.3.x
+Flask>=3.0.2
+Werkzeug>=3.0.1
 Jinja2>=3.1.3
-Flask-Babel>=2.0.0
+Flask-Babel>=3.1.0
+
+# Real-time Communication
+Flask-SocketIO>=5.3.6  # WebSocket support for real-time updates
+python-socketio>=5.9.0  # Socket.IO Python client
+
+# Background Job Processing
+celery>=5.3.4  # Background task queue
+redis>=5.0.1  # Redis client for Celery broker and caching
+
+# PDF Generation
+reportlab>=4.0.7  # PDF generation for detailed feedback reports
+weasyprint>=60.2  # Alternative PDF generation from HTML
 
 # Security
 Flask-WTF>=1.2.1  # CSRF protection
 Flask-Limiter>=3.5.0  # Rate limiting
 cryptography>=42.0.0  # For encryption and secure storage
+Flask-Login>=0.6.3
+Flask-Session>=0.5.0
+Flask-Caching>=2.1.0
+Flask-SQLAlchemy>=3.1.1
+Flask-Migrate>=4.0.5
 
 # Database
 Flask-SQLAlchemy>=3.1.1  # Database ORM
@@ -31,6 +48,10 @@ SQLAlchemy>=2.0.25  # Database toolkit
 # Performance and Monitoring
 Flask-Caching>=2.1.0  # Caching support
 psutil>=5.9.0  # System monitoring
+
+# Circuit Breaker and Resilience
+pybreaker>=1.0.1  # Circuit breaker pattern implementation
+tenacity>=8.2.3  # Retry library with exponential backoff
 
 # Development Dependencies
 pytest>=8.0.0
