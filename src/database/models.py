@@ -131,8 +131,10 @@ class MarkingGuide(db.Model, TimestampMixin):
     file_size = Column(Integer, nullable=False)
     file_type = Column(String(50), nullable=False)
     content_text = Column(Text)
+    content_hash = Column(String(64), index=True)  # SHA256 hash for duplicate detection
     questions = Column(JSON)  # Structured question data
     total_marks = Column(Float, default=0.0)
+    max_questions_to_answer = Column(Integer, default=None)  # Form-configured limit for AI processing
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Relationships
@@ -174,6 +176,7 @@ class Submission(db.Model, TimestampMixin):
     file_size = Column(Integer, nullable=False)
     file_type = Column(String(50), nullable=False)
     content_text = Column(Text)
+    content_hash = Column(String(64), index=True)  # SHA256 hash for duplicate detection
     answers = Column(JSON)  # Extracted answers
     ocr_confidence = Column(Float)
     processing_status = Column(
@@ -355,4 +358,57 @@ class Session(db.Model, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
             "salt": self.salt,
         }
-        processed = db.Column(db.Boolean, default=False, nullable=False)
+
+
+class GradingSession(db.Model, TimestampMixin):
+    """Tracks the overall AI processing session status by submission_id + guide_id."""
+
+    __tablename__ = "grading_sessions"
+
+    id = get_uuid_column()
+    submission_id = Column(String(36), ForeignKey("submissions.id"), nullable=False, index=True)
+    marking_guide_id = Column(String(36), ForeignKey("marking_guides.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    progress_id = Column(String(36), nullable=True, index=True)  # For real-time tracking
+    status = Column(String(50), default="not_started", nullable=False)  # not_started, in_progress, completed, failed
+    current_step = Column(String(50), nullable=True)  # text_retrieval, mapping, grading, saving
+    total_questions_mapped = Column(Integer, default=0)
+    total_questions_graded = Column(Integer, default=0)
+    max_questions_limit = Column(Integer, nullable=True)  # Copied from marking guide for this session
+    processing_start_time = Column(DateTime, nullable=True)
+    processing_end_time = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+    session_data = Column(JSON, nullable=True)  # Additional session metadata
+
+    # Relationships
+    submission = relationship("Submission", backref="grading_sessions")
+    marking_guide = relationship("MarkingGuide", backref="grading_sessions")
+    user = relationship("User", backref="grading_sessions")
+
+    # Composite indexes for performance
+    __table_args__ = (
+        db.Index('idx_submission_guide', 'submission_id', 'marking_guide_id'),
+        db.Index('idx_user_status', 'user_id', 'status'),
+        db.Index('idx_progress_status', 'progress_id', 'status'),
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "submission_id": self.submission_id,
+            "marking_guide_id": self.marking_guide_id,
+            "user_id": self.user_id,
+            "progress_id": self.progress_id,
+            "status": self.status,
+            "current_step": self.current_step,
+            "total_questions_mapped": self.total_questions_mapped,
+            "total_questions_graded": self.total_questions_graded,
+            "max_questions_limit": self.max_questions_limit,
+            "processing_start_time": self.processing_start_time.isoformat() if self.processing_start_time else None,
+            "processing_end_time": self.processing_end_time.isoformat() if self.processing_end_time else None,
+            "error_message": self.error_message,
+            "session_data": self.session_data,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }

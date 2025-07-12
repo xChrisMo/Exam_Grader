@@ -34,14 +34,15 @@
   {% endif %}
 
   <!-- Upload Form -->
-  <div class="bg-white shadow rounded-lg">
+  <div class="bg-white shadow rounded-lg" data-upload-container>
     <div class="px-4 py-5 sm:p-6">
       <!-- Message Display Area -->
+      <div class="upload-messages mb-4"></div>
       <div id="message-area" class="hidden mb-4 p-3 rounded-md text-sm" role="alert">
         <p id="message-text"></p>
       </div>
       
-      <form method="POST" enctype="multipart/form-data" id="uploadForm">
+      <form method="POST" enctype="multipart/form-data" id="uploadForm" data-upload-form>
         <!-- Use only one CSRF token implementation -->
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
         
@@ -254,6 +255,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Include duplicate detection functionality -->
+<script src="{{ url_for('static', filename='js/duplicate_detection.js') }}"></script>
 <script>
   // Initialize ExamGrader namespace if not exists
   window.ExamGrader = window.ExamGrader || {};
@@ -779,6 +782,18 @@
 
       // Initialize the upload mode
       updateUploadMode();
+
+      // Initialize duplicate detection
+      if (window.DuplicateDetectionHandler) {
+          const duplicateHandler = new DuplicateDetectionHandler({
+              uploadType: 'submission',
+              apiEndpoints: {
+                  checkDuplicate: '/api/upload/check-duplicate',
+                  validateFile: '/api/upload/validate-file'
+              }
+          });
+          duplicateHandler.init();
+      }
   });
 </script>
 {% endblock %}

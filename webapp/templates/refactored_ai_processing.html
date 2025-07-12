@@ -1,0 +1,693 @@
+{% extends "layout.html" %}
+
+{% block title %}Refactored AI Processing{% endblock %}
+
+{% block extra_css %}
+<style>
+    .ai-processing-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    .processing-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        border-radius: 15px;
+        margin-bottom: 30px;
+        text-align: center;
+    }
+    
+    .processing-form {
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        margin-bottom: 30px;
+    }
+    
+    .progress-section {
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        margin-bottom: 30px;
+        display: none;
+    }
+    
+    .progress-section.active {
+        display: block;
+    }
+    
+    .ai-progress-bar {
+        height: 20px;
+        background: linear-gradient(90deg, #4CAF50, #45a049);
+        border-radius: 10px;
+        transition: width 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .ai-progress-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        right: 0;
+        background-image: linear-gradient(
+            -45deg,
+            rgba(255, 255, 255, .2) 25%,
+            transparent 25%,
+            transparent 50%,
+            rgba(255, 255, 255, .2) 50%,
+            rgba(255, 255, 255, .2) 75%,
+            transparent 75%,
+            transparent
+        );
+        background-size: 50px 50px;
+        animation: move 2s linear infinite;
+    }
+    
+    @keyframes move {
+        0% {
+            background-position: 0 0;
+        }
+        100% {
+            background-position: 50px 50px;
+        }
+    }
+    
+    .step-indicators {
+        display: flex;
+        justify-content: space-between;
+        margin: 30px 0;
+        position: relative;
+    }
+    
+    .step-indicators::before {
+        content: '';
+        position: absolute;
+        top: 25px;
+        left: 25px;
+        right: 25px;
+        height: 2px;
+        background: #e0e0e0;
+        z-index: 1;
+    }
+    
+    .ai-step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        position: relative;
+        z-index: 2;
+        background: white;
+        padding: 10px;
+        border-radius: 10px;
+        min-width: 120px;
+    }
+    
+    .step-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        margin-bottom: 10px;
+        transition: all 0.3s ease;
+    }
+    
+    .ai-step-pending .step-icon {
+        background: #f5f5f5;
+        color: #999;
+        border: 2px solid #e0e0e0;
+    }
+    
+    .ai-step-in_progress .step-icon {
+        background: #e3f2fd;
+        color: #2196f3;
+        border: 2px solid #2196f3;
+        animation: pulse 1.5s infinite;
+    }
+    
+    .ai-step-completed .step-icon {
+        background: #e8f5e8;
+        color: #4caf50;
+        border: 2px solid #4caf50;
+    }
+    
+    .ai-step-failed .step-icon {
+        background: #ffebee;
+        color: #f44336;
+        border: 2px solid #f44336;
+    }
+    
+    @keyframes pulse {
+        0% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.7);
+        }
+        70% {
+            transform: scale(1.05);
+            box-shadow: 0 0 0 10px rgba(33, 150, 243, 0);
+        }
+        100% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(33, 150, 243, 0);
+        }
+    }
+    
+    .step-text {
+        font-weight: 600;
+        margin-bottom: 5px;
+        font-size: 14px;
+    }
+    
+    .step-status {
+        font-size: 12px;
+        color: #666;
+    }
+    
+    .processing-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin: 30px 0;
+    }
+    
+    .stat-card {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        border-left: 4px solid #2196f3;
+    }
+    
+    .stat-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #2196f3;
+        margin-bottom: 5px;
+    }
+    
+    .stat-label {
+        font-size: 14px;
+        color: #666;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .current-operation {
+        background: #e3f2fd;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 20px 0;
+        border-left: 4px solid #2196f3;
+    }
+    
+    .ai-processing-status {
+        display: inline-block;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-not_started {
+        background: #f5f5f5;
+        color: #666;
+    }
+    
+    .status-text_retrieval,
+    .status-mapping,
+    .status-grading,
+    .status-saving {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+    
+    .status-completed {
+        background: #e8f5e8;
+        color: #2e7d32;
+    }
+    
+    .status-failed {
+        background: #ffebee;
+        color: #c62828;
+    }
+    
+    .completion-section,
+    .error-section {
+        display: none;
+        margin-top: 30px;
+    }
+    
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    .form-label {
+        font-weight: 600;
+        margin-bottom: 8px;
+        display: block;
+        color: #333;
+    }
+    
+    .form-control {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 16px;
+        transition: border-color 0.3s ease;
+    }
+    
+    .form-control:focus {
+        outline: none;
+        border-color: #2196f3;
+        box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+    }
+    
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-block;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 16px;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #2196f3, #1976d2);
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(33, 150, 243, 0.3);
+    }
+    
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+    
+    .btn-warning {
+        background: #ff9800;
+        color: white;
+    }
+    
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none !important;
+        box-shadow: none !important;
+    }
+    
+    .alert {
+        padding: 15px;
+        border-radius: 8px;
+        margin: 20px 0;
+        border-left: 4px solid;
+    }
+    
+    .alert-success {
+        background: #e8f5e8;
+        color: #2e7d32;
+        border-left-color: #4caf50;
+    }
+    
+    .alert-danger {
+        background: #ffebee;
+        color: #c62828;
+        border-left-color: #f44336;
+    }
+    
+    .alert-info {
+        background: #e3f2fd;
+        color: #1976d2;
+        border-left-color: #2196f3;
+    }
+    
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #2196f3;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-right: 10px;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .real-time-log {
+        background: #1e1e1e;
+        color: #00ff00;
+        padding: 20px;
+        border-radius: 8px;
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        max-height: 300px;
+        overflow-y: auto;
+        margin: 20px 0;
+        border: 1px solid #333;
+    }
+    
+    .log-entry {
+        margin-bottom: 5px;
+        padding: 2px 0;
+    }
+    
+    .log-timestamp {
+        color: #888;
+        margin-right: 10px;
+    }
+    
+    .log-level-info {
+        color: #00ff00;
+    }
+    
+    .log-level-warning {
+        color: #ffaa00;
+    }
+    
+    .log-level-error {
+        color: #ff4444;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ai-processing-container">
+    <!-- Header -->
+    <div class="processing-header">
+        <h1><i class="fas fa-robot"></i> Refactored AI Processing</h1>
+        <p>Centralized, efficient AI grading with detailed progress tracking</p>
+    </div>
+    
+    <!-- Processing Form -->
+    <div class="processing-form">
+        <h2><i class="fas fa-cog"></i> Configure AI Processing</h2>
+        <form id="refactored-ai-form">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label" for="submission-id">
+                            <i class="fas fa-file-alt"></i> Select Submission
+                        </label>
+                        <select class="form-control" id="submission-id" name="submission_id" required>
+                            <option value="">Choose a submission...</option>
+                            {% for submission in submissions %}
+                            <option value="{{ submission.id }}">
+                                {{ submission.filename }} ({{ submission.created_at.strftime('%Y-%m-%d %H:%M') }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label" for="guide-id">
+                            <i class="fas fa-book"></i> Select Marking Guide
+                        </label>
+                        <select class="form-control" id="guide-id" name="guide_id" required>
+                            <option value="">Choose a marking guide...</option>
+                            {% for guide in marking_guides %}
+                            <option value="{{ guide.id }}" data-max-questions="{{ guide.max_questions_to_answer or 'No limit' }}">
+                                {{ guide.title }} 
+                                {% if guide.max_questions_to_answer %}
+                                    (Max: {{ guide.max_questions_to_answer }} questions)
+                                {% else %}
+                                    (No limit)
+                                {% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Processing Pipeline:</strong>
+                    Retrieve Data → Map Answers → Grade Responses → Save Results
+                </div>
+            </div>
+            
+            <div class="text-center">
+                <button type="submit" class="btn btn-primary" id="start-processing-btn">
+                    <i class="fas fa-play"></i> Start AI Processing
+                </button>
+                <button type="button" class="btn btn-secondary" id="stop-processing-btn" style="display: none;">
+                    <i class="fas fa-stop"></i> Stop Processing
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Progress Section -->
+    <div class="progress-section" id="progress-section">
+        <h2><i class="fas fa-chart-line"></i> Processing Progress</h2>
+        
+        <!-- Current Status -->
+        <div class="current-operation">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>Status:</strong> 
+                    <span class="ai-processing-status status-not_started">Not Started</span>
+                </div>
+                <div>
+                    <span class="ai-progress-percentage">0%</span>
+                </div>
+            </div>
+            <div class="mt-2">
+                <strong>Current Operation:</strong> 
+                <span class="ai-current-operation">Waiting to start...</span>
+            </div>
+        </div>
+        
+        <!-- Progress Bar -->
+        <div class="progress" style="height: 20px; background: #e0e0e0; border-radius: 10px; overflow: hidden;">
+            <div class="ai-progress-bar" style="width: 0%; height: 100%;" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        
+        <!-- Step Indicators -->
+        <div class="step-indicators">
+            <div class="ai-step ai-step-pending" data-step="text_retrieval">
+                <div class="step-icon">
+                    <i class="fas fa-database"></i>
+                </div>
+                <div class="step-text">Retrieve Data</div>
+                <div class="step-status">Pending</div>
+            </div>
+            
+            <div class="ai-step ai-step-pending" data-step="mapping">
+                <div class="step-icon">
+                    <i class="fas fa-project-diagram"></i>
+                </div>
+                <div class="step-text">Map Answers</div>
+                <div class="step-status">Pending</div>
+            </div>
+            
+            <div class="ai-step ai-step-pending" data-step="grading">
+                <div class="step-icon">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <div class="step-text">Grade Responses</div>
+                <div class="step-status">Pending</div>
+            </div>
+            
+            <div class="ai-step ai-step-pending" data-step="saving">
+                <div class="step-icon">
+                    <i class="fas fa-save"></i>
+                </div>
+                <div class="step-text">Save Results</div>
+                <div class="step-status">Pending</div>
+            </div>
+        </div>
+        
+        <!-- Processing Statistics -->
+        <div class="processing-stats">
+            <div class="stat-card">
+                <div class="stat-value stat-questions-mapped">0</div>
+                <div class="stat-label">Questions Mapped</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value stat-questions-graded">0</div>
+                <div class="stat-label">Questions Graded</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value stat-max-questions">No limit</div>
+                <div class="stat-label">Max Questions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value stat-processing-time">0s</div>
+                <div class="stat-label">Processing Time</div>
+            </div>
+        </div>
+        
+        <!-- Real-time Log -->
+        <div class="real-time-log" id="processing-log">
+            <div class="log-entry">
+                <span class="log-timestamp">[00:00:00]</span>
+                <span class="log-level-info">System ready for AI processing...</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Completion Section -->
+    <div class="completion-section ai-completion-message" id="completion-section">
+        <!-- Completion message will be inserted here -->
+    </div>
+    
+    <div class="completion-section ai-completion-actions" id="completion-actions">
+        <!-- Completion actions will be inserted here -->
+    </div>
+    
+    <!-- Error Section -->
+    <div class="error-section ai-error-message" id="error-section">
+        <!-- Error message will be inserted here -->
+    </div>
+    
+    <div class="error-section ai-error-actions" id="error-actions">
+        <!-- Error actions will be inserted here -->
+    </div>
+</div>
+
+<!-- CSRF Token -->
+<meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+
+{% block extra_js %}
+<!-- Socket.IO -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+
+<!-- Refactored AI Processor -->
+<script src="{{ url_for('static', filename='js/refactored_ai_processor.js') }}"></script>
+
+<script>
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize AI processor
+    const aiProcessor = new RefactoredAIProcessor({
+        apiBaseUrl: '/api/refactored-ai',
+        pollInterval: 2000,
+        maxRetries: 3
+    });
+    
+    // Form elements
+    const form = document.getElementById('refactored-ai-form');
+    const submissionSelect = document.getElementById('submission-id');
+    const guideSelect = document.getElementById('guide-id');
+    const startBtn = document.getElementById('start-processing-btn');
+    const stopBtn = document.getElementById('stop-processing-btn');
+    const progressSection = document.getElementById('progress-section');
+    const processingLog = document.getElementById('processing-log');
+    
+    // Update max questions display when guide changes
+    guideSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const maxQuestions = selectedOption.getAttribute('data-max-questions') || 'No limit';
+        document.querySelector('.stat-max-questions').textContent = maxQuestions;
+    });
+    
+    // Form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const submissionId = submissionSelect.value;
+        const guideId = guideSelect.value;
+        
+        if (!submissionId || !guideId) {
+            alert('Please select both a submission and marking guide.');
+            return;
+        }
+        
+        // Show progress section
+        progressSection.classList.add('active');
+        
+        // Update UI state
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-block';
+        form.style.opacity = '0.6';
+        form.style.pointerEvents = 'none';
+        
+        // Add log entry
+        addLogEntry('Starting AI processing...', 'info');
+        
+        try {
+            await aiProcessor.startProcessing(submissionId, guideId, {
+                onProgress: function(data) {
+                    addLogEntry(`Progress: ${data.current_operation || 'Processing...'}`, 'info');
+                },
+                onComplete: function(result) {
+                    addLogEntry('AI processing completed successfully!', 'info');
+                    resetFormState();
+                },
+                onError: function(error) {
+                    addLogEntry(`Error: ${error}`, 'error');
+                    resetFormState();
+                }
+            });
+        } catch (error) {
+            addLogEntry(`Failed to start processing: ${error.message}`, 'error');
+            resetFormState();
+        }
+    });
+    
+    // Stop processing
+    stopBtn.addEventListener('click', function() {
+        aiProcessor.stopProcessing();
+        addLogEntry('Processing stopped by user', 'warning');
+        resetFormState();
+    });
+    
+    // Helper function to add log entries
+    function addLogEntry(message, level = 'info') {
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = document.createElement('div');
+        logEntry.className = 'log-entry';
+        logEntry.innerHTML = `
+            <span class="log-timestamp">[${timestamp}]</span>
+            <span class="log-level-${level}">${message}</span>
+        `;
+        
+        processingLog.appendChild(logEntry);
+        processingLog.scrollTop = processingLog.scrollHeight;
+        
+        // Keep only last 50 entries
+        const entries = processingLog.querySelectorAll('.log-entry');
+        if (entries.length > 50) {
+            entries[0].remove();
+        }
+    }
+    
+    // Helper function to reset form state
+    function resetFormState() {
+        startBtn.style.display = 'inline-block';
+        stopBtn.style.display = 'none';
+        form.style.opacity = '1';
+        form.style.pointerEvents = 'auto';
+    }
+    
+    // Initialize log
+    addLogEntry('Refactored AI Processing system initialized', 'info');
+});
+</script>
+{% endblock %}

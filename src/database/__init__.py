@@ -6,7 +6,7 @@ persistent data storage replacing the session-based storage system.
 """
 
 from .migrations import MigrationManager
-from .models import GradingResult, Mapping, MarkingGuide, Session, Submission, User, db
+from .models import GradingResult, GradingSession, Mapping, MarkingGuide, Session, Submission, User, db
 from .utils import DatabaseUtils
 
 __all__ = [
@@ -16,6 +16,7 @@ __all__ = [
     "Submission",
     "Mapping",
     "GradingResult",
+    "GradingSession",
     "Session",
     "MigrationManager",
     "DatabaseUtils",

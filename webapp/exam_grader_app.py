@@ -210,6 +210,33 @@ except Exception as e:
     logger.error(f"Failed to register optimized routes: {str(e)}")
     # Don't exit - this is not critical for basic functionality
 
+# Register refactored AI processing routes blueprint
+try:
+    from webapp.refactored_routes import refactored_bp
+    app.register_blueprint(refactored_bp)
+    logger.info("Refactored AI processing routes blueprint registered")
+    
+    # Initialize progress tracker for refactored AI endpoints
+    try:
+        from src.api.refactored_ai_endpoints import init_progress_tracker
+        init_progress_tracker(socketio)
+        logger.info("Refactored AI progress tracker initialized")
+    except Exception as tracker_error:
+        logger.error(f"Failed to initialize refactored AI progress tracker: {tracker_error}")
+        
+except Exception as e:
+    logger.error(f"Failed to register refactored routes: {str(e)}")
+    # Don't exit - this is not critical for basic functionality
+
+# Register upload endpoints blueprint for duplicate detection
+try:
+    from src.api.upload_endpoints import upload_bp
+    app.register_blueprint(upload_bp, url_prefix='/api/upload')
+    logger.info("Upload endpoints blueprint registered with duplicate detection")
+except Exception as e:
+    logger.error(f"Failed to register upload endpoints: {str(e)}")
+    # Don't exit - this is not critical for basic functionality
+
 # Context processor to make csrf_token available in all templates
 @app.context_processor
 def inject_csrf_token():

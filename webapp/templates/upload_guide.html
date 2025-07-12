@@ -11,9 +11,11 @@
     </div>
 
     <!-- Upload Form -->
-    <div class="bg-white shadow rounded-lg">
+    <div class="bg-white shadow rounded-lg" data-upload-container>
         <div class="px-4 py-5 sm:p-6">
-            <form method="POST" enctype="multipart/form-data" id="upload-form">
+            <!-- Message Display Area -->
+            <div class="upload-messages mb-4"></div>
+            <form method="POST" enctype="multipart/form-data" id="upload-form" data-upload-form>
                 {% if csrf_token %}
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                 {% endif %}
@@ -119,6 +121,8 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/translations.js') }}"></script>
+<!-- Include duplicate detection functionality -->
+<script src="{{ url_for('static', filename='js/duplicate_detection.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const dropZone = document.getElementById('drop-zone');
@@ -238,6 +242,18 @@ document.addEventListener('DOMContentLoaded', function() {
             alert(ExamGrader.translate('upload_failed'));
         });
     });
+
+    // Initialize duplicate detection
+    if (window.DuplicateDetectionHandler) {
+        const duplicateHandler = new DuplicateDetectionHandler({
+            uploadType: 'marking_guide',
+            apiEndpoints: {
+                checkDuplicate: '/api/upload/check-duplicate',
+                validateFile: '/api/upload/validate-file'
+            }
+        });
+        duplicateHandler.init();
+    }
 });
 </script>
 {% endblock %}

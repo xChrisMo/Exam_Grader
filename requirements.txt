@@ -48,7 +48,7 @@ SQLAlchemy>=2.0.25  # Database toolkit
 Flask-Caching>=2.1.0  # Caching support
 psutil>=5.9.0  # System monitoring
 aiofiles>=23.2.1  # Async file operations
-concurrent-futures>=3.1.1  # Parallel processing (Python 2 backport, included in Python 3+)
+# concurrent-futures removed - included in Python 3.2+ standard library as concurrent.futures
 aiocache>=0.12.2  # Async caching
 uvloop>=0.19.0  # High-performance event loop (Unix only)
 
