@@ -12,6 +12,14 @@
                 </p>
             </div>
             <div class="flex space-x-3">
+                <a href="{{ url_for('view_results', grouped='true') }}"
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    Grouped View
+                </a>
                 <button onclick="exportResults()"
                     class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                     <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -294,7 +302,7 @@ if (typeof ExamGrader === 'undefined') {
     
     // Debug info
     console.log('Results data:', {
-            hasResults: {{ has_results| tojson }},
+        hasResults: {{ has_results| tojson }},
         resultsCount: {{ results_list| length }},
         batchSummary: {{ batch_summary| tojson }}
     });

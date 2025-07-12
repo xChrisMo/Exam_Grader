@@ -158,7 +158,7 @@ class LLMService:
                         {"role": "user", "content": "test"}
                     ],
                     "temperature": 0.0,
-                    "max_tokens": 1,
+                    # "max_tokens": 1,  # Removed token limit
                 }
 
                 # Add seed parameter if in deterministic mode
@@ -208,7 +208,7 @@ class LLMService:
                     {"role": "user", "content": user_prompt},
                 ],
                 "temperature": 0.0,
-                "max_tokens": 20,
+                # "max_tokens": 20,  # Removed token limit
             }
 
             # Add seed parameter if in deterministic mode
@@ -302,7 +302,7 @@ Please evaluate the student's answer and provide a score and feedback."""
                     {"role": "user", "content": user_prompt}
                 ],
                 "temperature": self.temperature,
-                "max_tokens": 1000,
+                # "max_tokens": 1000,  # Removed token limit
                 "response_format": {"type": "json_object"} if hasattr(self, 'supports_json') and self.supports_json else None
             })
 
@@ -568,9 +568,15 @@ Please evaluate the student's answer and provide a score and feedback."""
             return self._response_cache.get(cache_key)
     
     def _cache_response(self, cache_key: str, response: str) -> None:
-        """Cache a response for future use"""
+        """Cache a response for future use with enhanced tracking."""
         with self._cache_lock:
             self._response_cache[cache_key] = response
+            # Track cache sets for monitoring
+            if hasattr(self, '_cache_sets'):
+                self._cache_sets += 1
+            else:
+                self._cache_sets = 1
+            logger.debug(f"Cached response for key: {cache_key[:16]}... (Total cached: {self._cache_sets})")
             
     def _make_api_call_with_retry(self, params: Dict[str, Any]):
         """Make an API call with retry logic"""
@@ -594,4 +600,123 @@ Please evaluate the student's answer and provide a score and feedback."""
         # If we get here, all retries failed
         logger.error(f"API call failed after {self.max_retries} attempts")
         raise LLMServiceError(f"API call failed after {self.max_retries} attempts", original_error=last_error)
+    
+    def get_grading_stats(self) -> Dict[str, Any]:
+        """Get grading statistics."""
+        return {
+            'total_requests': getattr(self, '_total_requests', 0),
+            'cache_hits': getattr(self, '_cache_hits', 0),
+            'cache_misses': getattr(self, '_cache_misses', 0),
+            'cache_sets': getattr(self, '_cache_sets', 0),
+            'api_calls': getattr(self, '_api_calls', 0),
+            'errors': getattr(self, '_errors', 0),
+            'batch_requests': getattr(self, '_batch_requests', 0),
+            'batch_items_processed': getattr(self, '_batch_items_processed', 0)
+        }
+        
+    def process_batch_requests(self, requests: List[Dict[str, Any]], batch_size: int = 5) -> List[Dict[str, Any]]:
+        """Process multiple LLM requests in batches to reduce API calls."""
+        if not requests:
+            return []
+            
+        logger.info(f"Processing {len(requests)} requests in batches of {batch_size}")
+        
+        # Track batch processing
+        if hasattr(self, '_batch_requests'):
+            self._batch_requests += 1
+        else:
+            self._batch_requests = 1
+            
+        if hasattr(self, '_batch_items_processed'):
+            self._batch_items_processed += len(requests)
+        else:
+            self._batch_items_processed = len(requests)
+        
+        results = []
+        
+        # Group requests by type to optimize batching
+        request_groups = {}
+        for i, request in enumerate(requests):
+            request_type = request.get('type', 'default')
+            if request_type not in request_groups:
+                request_groups[request_type] = []
+            request_groups[request_type].append((i, request))
+        
+        # Process each group
+        for request_type, group_requests in request_groups.items():
+            logger.debug(f"Processing {len(group_requests)} requests of type: {request_type}")
+            
+            # Process in batches
+            for i in range(0, len(group_requests), batch_size):
+                batch = group_requests[i:i + batch_size]
+                batch_results = self._process_request_batch(batch, request_type)
+                results.extend(batch_results)
+        
+        # Sort results by original order
+        results.sort(key=lambda x: x.get('original_index', 0))
+        
+        return results
+        
+    def _process_request_batch(self, batch: List[tuple], request_type: str) -> List[Dict[str, Any]]:
+        """Process a batch of requests of the same type."""
+        batch_results = []
+        
+        for original_index, request in batch:
+            try:
+                # Check cache first
+                cache_key = self._generate_cache_key_from_request(request)
+                cached_response = self._get_cached_response(cache_key)
+                
+                if cached_response:
+                    logger.debug(f"Using cached response for batch item {original_index}")
+                    result = {
+                        'original_index': original_index,
+                        'response': cached_response,
+                        'cached': True,
+                        'request_type': request_type
+                    }
+                else:
+                    # Make API call
+                    response = self._get_llm_response(
+                        request.get('prompt', '')
+                    )
+                    
+                    # Cache the response
+                    self._cache_response(cache_key, response)
+                    
+                    result = {
+                        'original_index': original_index,
+                        'response': response,
+                        'cached': False,
+                        'request_type': request_type
+                    }
+                
+                batch_results.append(result)
+                
+            except Exception as e:
+                logger.error(f"Error processing batch item {original_index}: {e}")
+                batch_results.append({
+                    'original_index': original_index,
+                    'error': str(e),
+                    'request_type': request_type
+                })
+        
+        return batch_results
+    
+    def _generate_cache_key_from_request(self, request: Dict[str, Any]) -> str:
+        """Generate a cache key from a request dictionary"""
+        # Create a string representation of the request
+        key_parts = [
+            self.model,
+            str(self.temperature),
+            str(self.seed) if self.deterministic else "non-deterministic",
+            request.get('prompt', ''),
+            request.get('context', ''),
+            str(request.get('temperature', self.temperature))
+        ]
+        
+        # Join all parts and create a hash
+        key_str = "|".join(key_parts)
+        import hashlib
+        return hashlib.md5(key_str.encode()).hexdigest()
        

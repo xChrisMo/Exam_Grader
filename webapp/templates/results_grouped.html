@@ -1,0 +1,433 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <!-- Header Section -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2 class="mb-1">Grading Results - Grouped by Guide</h2>
+                    <p class="text-muted mb-0">Results organized by marking guide</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('view_results') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-list"></i> Standard View
+                    </a>
+                    <button class="btn btn-primary" onclick="refreshResults()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Overall Summary Card -->
+            {% if has_results %}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Overall Summary</h5>
+                    <div class="row">
+                        <div class="col-md-2 col-sm-6">
+                            <div class="text-center">
+                                <h4 class="text-primary mb-0">{{ overall_summary.total_guides }}</h4>
+                                <small class="text-muted">Marking Guides</small>
+                            </div>
+                        </div>
+                        <div class="col-md-2 col-sm-6">
+                            <div class="text-center">
+                                <h4 class="text-info mb-0">{{ overall_summary.total_submissions }}</h4>
+                                <small class="text-muted">Total Submissions</small>
+                            </div>
+                        </div>
+                        <div class="col-md-2 col-sm-6">
+                            <div class="text-center">
+                                <h4 class="text-success mb-0">{{ overall_summary.average_score }}%</h4>
+                                <small class="text-muted">Average Score</small>
+                            </div>
+                        </div>
+                        <div class="col-md-2 col-sm-6">
+                            <div class="text-center">
+                                <h4 class="text-warning mb-0">{{ overall_summary.highest_score }}%</h4>
+                                <small class="text-muted">Highest Score</small>
+                            </div>
+                        </div>
+                        <div class="col-md-2 col-sm-6">
+                            <div class="text-center">
+                                <h4 class="text-danger mb-0">{{ overall_summary.lowest_score }}%</h4>
+                                <small class="text-muted">Lowest Score</small>
+                            </div>
+                        </div>
+                        <div class="col-md-2 col-sm-6">
+                            <div class="text-center">
+                                <small class="text-muted d-block">Last Updated</small>
+                                <small class="text-muted">{{ overall_summary.last_updated }}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Grouped Results -->
+            {% if has_results %}
+                <div id="grouped-results-container">
+                    {% for guide in grouped_results %}
+                    <div class="card mb-4 guide-section" data-guide-id="{{ guide.guide_id }}">
+                        <!-- Guide Header -->
+                        <div class="card-header bg-light">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <button class="btn btn-sm btn-outline-primary me-3" type="button" 
+                                            data-bs-toggle="collapse" 
+                                            data-bs-target="#guide-{{ guide.guide_id }}-results" 
+                                            aria-expanded="true">
+                                        <i class="fas fa-chevron-down collapse-icon"></i>
+                                    </button>
+                                    <div>
+                                        <h5 class="mb-1">{{ guide.guide_title }}</h5>
+                                        <small class="text-muted">
+                                            <i class="fas fa-file-alt"></i> {{ guide.guide_filename }}
+                                            {% if guide.guide_total_marks %}
+                                            | <i class="fas fa-star"></i> {{ guide.guide_total_marks }} total marks
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="guide-summary">
+                                    <span class="badge bg-primary me-2">{{ guide.summary.total_submissions }} submissions</span>
+                                    <span class="badge bg-success me-2">{{ guide.summary.average_score }}% avg</span>
+                                    <span class="badge bg-info">{{ guide.summary.highest_score }}% - {{ guide.summary.lowest_score }}%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Guide Results -->
+                        <div class="collapse show" id="guide-{{ guide.guide_id }}-results">
+                            <div class="card-body p-0">
+                                {% if guide.results %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Submission</th>
+                                                <th>Score</th>
+                                                <th>Grade</th>
+                                                <th>Questions</th>
+                                                <th>Graded</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for result in guide.results %}
+                                            <tr>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-file-text text-muted me-2"></i>
+                                                        <div>
+                                                            <div class="fw-medium">{{ result.filename }}</div>
+                                                            <small class="text-muted">ID: {{ result.submission_id }}</small>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="progress me-2" style="width: 60px; height: 8px;">
+                                                            <div class="progress-bar 
+                                                                {% if result.score >= 90 %}bg-success
+                                                                {% elif result.score >= 80 %}bg-info
+                                                                {% elif result.score >= 70 %}bg-warning
+                                                                {% else %}bg-danger{% endif %}"
+                                                                style="width: {{ result.score }}%"></div>
+                                                        </div>
+                                                        <span class="fw-medium">{{ result.score }}%</span>
+                                                    </div>
+                                                    <small class="text-muted">{{ result.raw_score }}/{{ result.max_score }}</small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge 
+                                                        {% if result.letter_grade == 'A' %}bg-success
+                                                        {% elif result.letter_grade == 'B' %}bg-info
+                                                        {% elif result.letter_grade == 'C' %}bg-warning
+                                                        {% elif result.letter_grade == 'D' %}bg-orange
+                                                        {% else %}bg-danger{% endif %}">{{ result.letter_grade }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-secondary">{{ result.total_questions }} questions</span>
+                                                </td>
+                                                <td>
+                                                    <small class="text-muted">{{ result.graded_at[:16] if result.graded_at else 'N/A' }}</small>
+                                                </td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary" 
+                                                            onclick="showResultDetails('{{ result.submission_id }}', '{{ guide.guide_title }}', {{ result | tojson | safe }})">
+                                                        <i class="fas fa-eye"></i> Details
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% else %}
+                                <div class="text-center py-4">
+                                    <i class="fas fa-inbox text-muted fa-3x mb-3"></i>
+                                    <p class="text-muted">No results found for this marking guide.</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <!-- No Results Message -->
+                <div class="text-center py-5">
+                    <i class="fas fa-chart-bar text-muted fa-4x mb-4"></i>
+                    <h4 class="text-muted mb-3">No Grading Results Available</h4>
+                    <p class="text-muted mb-4">Start grading submissions to see results grouped by marking guide.</p>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Results Modal -->
+<div class="modal fade" id="detailedResultsModal" tabindex="-1" aria-labelledby="detailedResultsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detailedResultsModalLabel">Detailed Results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="detailedResultsContent">
+                <!-- Content will be populated by JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Toggle collapse icons
+document.addEventListener('DOMContentLoaded', function() {
+    const collapseElements = document.querySelectorAll('[data-bs-toggle="collapse"]');
+    
+    collapseElements.forEach(function(element) {
+        const target = document.querySelector(element.getAttribute('data-bs-target'));
+        const icon = element.querySelector('.collapse-icon');
+        
+        target.addEventListener('show.bs.collapse', function() {
+            icon.classList.remove('fa-chevron-right');
+            icon.classList.add('fa-chevron-down');
+        });
+        
+        target.addEventListener('hide.bs.collapse', function() {
+            icon.classList.remove('fa-chevron-down');
+            icon.classList.add('fa-chevron-right');
+        });
+    });
+});
+
+// Show detailed results in modal
+function showResultDetails(submissionId, guideTitle, resultData) {
+    const modal = new bootstrap.Modal(document.getElementById('detailedResultsModal'));
+    const modalTitle = document.getElementById('detailedResultsModalLabel');
+    const modalContent = document.getElementById('detailedResultsContent');
+    
+    modalTitle.textContent = `Detailed Results - ${resultData.filename} (${guideTitle})`;
+    
+    let html = `
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h6>Overall Score</h6>
+                <div class="d-flex align-items-center mb-2">
+                    <div class="progress me-3" style="width: 200px; height: 20px;">
+                        <div class="progress-bar bg-primary" style="width: ${resultData.score}%"></div>
+                    </div>
+                    <span class="fw-bold">${resultData.score}% (${resultData.letter_grade})</span>
+                </div>
+                <small class="text-muted">${resultData.raw_score}/${resultData.max_score} points</small>
+            </div>
+            <div class="col-md-6">
+                <h6>Submission Info</h6>
+                <p class="mb-1"><strong>File:</strong> ${resultData.filename}</p>
+                <p class="mb-1"><strong>Graded:</strong> ${resultData.graded_at || 'N/A'}</p>
+                <p class="mb-0"><strong>Questions:</strong> ${resultData.total_questions}</p>
+            </div>
+        </div>
+    `;
+    
+    if (resultData.criteria_scores && resultData.criteria_scores.length > 0) {
+        html += `
+            <h6>Question Breakdown</h6>
+            <div class="table-responsive mb-4">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Question</th>
+                            <th>Score</th>
+                            <th>Feedback</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        resultData.criteria_scores.forEach(function(criteria) {
+            html += `
+                <tr>
+                    <td>
+                        <strong>${criteria.description}</strong>
+                        ${criteria.question_id !== 'default' ? `<br><small class="text-muted">ID: ${criteria.question_id}</small>` : ''}
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="progress me-2" style="width: 60px; height: 8px;">
+                                <div class="progress-bar bg-info" style="width: ${criteria.percentage}%"></div>
+                            </div>
+                            <span>${criteria.percentage}%</span>
+                        </div>
+                        <small class="text-muted">${criteria.points_earned}/${criteria.points_possible}</small>
+                    </td>
+                    <td>
+                        <small>${criteria.feedback || 'No feedback'}</small>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+    
+    if (resultData.strengths && resultData.strengths.length > 0) {
+        html += `
+            <h6 class="text-success">Strengths</h6>
+            <ul class="list-unstyled mb-3">
+        `;
+        resultData.strengths.forEach(function(strength) {
+            html += `<li><i class="fas fa-check-circle text-success me-2"></i>${strength}</li>`;
+        });
+        html += `</ul>`;
+    }
+    
+    if (resultData.weaknesses && resultData.weaknesses.length > 0) {
+        html += `
+            <h6 class="text-warning">Areas for Improvement</h6>
+            <ul class="list-unstyled mb-3">
+        `;
+        resultData.weaknesses.forEach(function(weakness) {
+            html += `<li><i class="fas fa-exclamation-triangle text-warning me-2"></i>${weakness}</li>`;
+        });
+        html += `</ul>`;
+    }
+    
+    if (resultData.suggestions && resultData.suggestions.length > 0) {
+        html += `
+            <h6 class="text-info">Suggestions</h6>
+            <ul class="list-unstyled mb-3">
+        `;
+        resultData.suggestions.forEach(function(suggestion) {
+            html += `<li><i class="fas fa-lightbulb text-info me-2"></i>${suggestion}</li>`;
+        });
+        html += `</ul>`;
+    }
+    
+    if (resultData.feedback) {
+        html += `
+            <h6>Overall Feedback</h6>
+            <div class="alert alert-light">
+                ${resultData.feedback}
+            </div>
+        `;
+    }
+    
+    modalContent.innerHTML = html;
+    modal.show();
+}
+
+// Refresh results function
+function refreshResults() {
+    window.location.reload();
+}
+
+// Auto-refresh functionality (optional)
+let autoRefreshEnabled = false;
+let refreshInterval;
+
+function toggleAutoRefresh() {
+    autoRefreshEnabled = !autoRefreshEnabled;
+    
+    if (autoRefreshEnabled) {
+        refreshInterval = setInterval(refreshResults, 30000); // Refresh every 30 seconds
+        console.log('Auto-refresh enabled');
+    } else {
+        clearInterval(refreshInterval);
+        console.log('Auto-refresh disabled');
+    }
+}
+</script>
+
+<style>
+.guide-section {
+    border-left: 4px solid #007bff;
+}
+
+.guide-section:nth-child(even) {
+    border-left-color: #28a745;
+}
+
+.guide-section:nth-child(3n) {
+    border-left-color: #ffc107;
+}
+
+.guide-section:nth-child(4n) {
+    border-left-color: #dc3545;
+}
+
+.collapse-icon {
+    transition: transform 0.2s ease;
+}
+
+.progress {
+    background-color: #e9ecef;
+}
+
+.badge.bg-orange {
+    background-color: #fd7e14 !important;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.card-header {
+    border-bottom: 2px solid #dee2e6;
+}
+
+.guide-summary .badge {
+    font-size: 0.75rem;
+}
+
+@media (max-width: 768px) {
+    .guide-summary {
+        margin-top: 0.5rem;
+    }
+    
+    .guide-summary .badge {
+        display: block;
+        margin-bottom: 0.25rem;
+    }
+}
+</style>
+{% endblock %}

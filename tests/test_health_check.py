@@ -7,6 +7,6 @@ def test_health_check(client):
     data = response.get_json()
     assert 'status' in data
     assert 'db' in data['status']
-    assert 'redis' in data['status']
+    # Redis removed - no longer checked
     assert 'celery' in data['status']
-    assert 'socketio' in data['status'] 
+    assert 'socketio' in data['status']

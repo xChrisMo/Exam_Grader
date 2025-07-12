@@ -44,9 +44,9 @@ from flask_login import current_user, LoginManager
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from werkzeug.utils import secure_filename
 from flask_babel import Babel, _
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-import redis
+# from flask_limiter import Limiter
+# from flask_limiter.util import get_remote_address
+# Redis removed - no longer needed
 from celery.result import AsyncResult
 from src.services.realtime_service import socketio
 
@@ -76,6 +76,7 @@ try:
     from utils.logger import logger
     from utils.input_sanitizer import sanitize_form_data, validate_file_upload
     from utils.loading_states import loading_manager, get_loading_state_for_template
+    from utils import is_guide_in_use
     from webapp.auth import init_auth, login_required, get_current_user
 
 except ImportError as e:
@@ -191,6 +192,24 @@ except Exception as e:
     sys.stderr.write(f"CRITICAL ERROR: Failed to initialize authentication: {e}\n")
     sys.exit(1)
 
+# Initialize SocketIO for real-time features
+try:
+    from src.services.realtime_service import init_realtime_service
+    init_realtime_service(app)
+    logger.info("SocketIO real-time service initialized")
+except Exception as e:
+    logger.error(f"Failed to initialize SocketIO service: {str(e)}")
+    # Don't exit - this is not critical for basic functionality
+
+# Register optimized routes blueprint
+try:
+    from webapp.optimized_routes import optimized_bp
+    app.register_blueprint(optimized_bp)
+    logger.info("Optimized routes blueprint registered")
+except Exception as e:
+    logger.error(f"Failed to register optimized routes: {str(e)}")
+    # Don't exit - this is not critical for basic functionality
+
 # Context processor to make csrf_token available in all templates
 @app.context_processor
 def inject_csrf_token():
@@ -288,15 +307,51 @@ def get_file_size_mb(file_path: str) -> float:
         return 0.0
 
 
-def get_storage_stats() -> Dict[str, Any]:
-    """Get storage statistics."""
+@app.route("/optimized-dashboard")
+@login_required
+def optimized_dashboard():
+    """Optimized AI processing dashboard route."""
     try:
-        temp_size = 0
-        output_size = 0
+        # Get current user
+        current_user = get_current_user()
+        if not current_user:
+            flash("Please log in to access the optimized dashboard.", "error")
+            return redirect(url_for("auth.login"))
 
+        # Get marking guides for selection
+        marking_guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
+        
+        # Get submissions for processing
+        submissions = Submission.query.filter_by(user_id=current_user.id).order_by(Submission.created_at.desc()).all()
+        
+        context = {
+            "page_title": "Optimized AI Dashboard",
+            "marking_guides": marking_guides,
+            "submissions": submissions,
+        }
+        
+        return render_template("optimized_dashboard.html", **context)
+        
+    except Exception as e:
+        logger.error(f"Error loading optimized dashboard: {str(e)}")
+        flash("Error loading optimized dashboard. Please try again.", "error")
+        return render_template(
+             "optimized_dashboard.html",
+             page_title="Optimized AI Dashboard",
+             marking_guides=[],
+             submissions=[],
+         )
+
+
+def get_storage_stats():
+    """Get storage statistics for temp and output directories."""
+    try:
         temp_dir = str(config.files.temp_dir)
         output_dir = str(config.files.output_dir)
-
+        
+        temp_size = 0
+        output_size = 0
+        
         if os.path.exists(temp_dir):
             temp_size = sum(
                 os.path.getsize(os.path.join(dirpath, filename))
@@ -472,31 +527,32 @@ def internal_error(e):
     )
 
 
-@app.errorhandler(429)
-def rate_limit_exceeded(e):
-    """Handle rate limit exceeded errors."""
-    logger.warning(f"Rate limit exceeded: {request.remote_addr}")
-    if request.is_json or request.path.startswith("/api/"):
-        return (
-            jsonify(
-                {
-                    "error": "Rate limit exceeded",
-                    "message": "Too many requests. Please wait before trying again.",
-                    "status_code": 429,
-                }
-            ),
-            429,
-        )
-    else:
-        flash("Too many requests. Please wait before trying again.", "warning")
-        return (
-            render_template(
-                "error.html",
-                error_code=429,
-                error_message="Rate limit exceeded. Please wait before trying again.",
-            ),
-            429,
-        )
+# Rate limiting removed - no 429 error handler needed
+# @app.errorhandler(429)
+# def rate_limit_exceeded(e):
+#     """Handle rate limit exceeded errors."""
+#     logger.warning(f"Rate limit exceeded: {request.remote_addr}")
+#     if request.is_json or request.path.startswith("/api/"):
+#         return (
+#             jsonify(
+#                 {
+#                     "error": "Rate limit exceeded",
+#                     "message": "Too many requests. Please wait before trying again.",
+#                     "status_code": 429,
+#                 }
+#             ),
+#             429,
+#         )
+#     else:
+#         flash("Too many requests. Please wait before trying again.", "warning")
+#         return (
+#             render_template(
+#                 "error.html",
+#                 error_code=429,
+#                 error_message="Rate limit exceeded. Please wait before trying again.",
+#             ),
+#             429,
+#         )
 
 
 @app.errorhandler(CSRFError)
@@ -632,44 +688,8 @@ def dashboard():
         # Use session data for dashboard statistics if available
         from src.database.models import Submission, MarkingGuide, GradingResult
         
-        # Get values from session first
-        total_submissions = session.get("total_submissions")
-        processed_submissions = session.get("processed_submissions")
-        
-        # If not in session, calculate from database
-        if total_submissions is None or processed_submissions is None:
-            # Single optimized query to get all submission statistics
-            submission_stats = (
-                db.session.query(
-                    db.func.count(Submission.id).label("total"),
-                    db.func.count(
-                        db.case((Submission.processed == True, 1))
-                    ).label("processed"),
-                )
-                .filter(Submission.user_id == current_user.id)
-                .filter_by(archived=False)
-                .first()
-            )
-
-            total_submissions = submission_stats.total if submission_stats else 0
-            processed_submissions = submission_stats.processed if submission_stats else 0
-
-            # If no database submissions, check session data as fallback
-            if total_submissions == 0:
-                session_submissions = session.get("submissions", [])
-                total_submissions = len(session_submissions)
-                processed_submissions = len(
-                    [s for s in session_submissions if s.get("processed", False)]
-                )
-                logger.info(
-                    f"Dashboard: Using session data fallback. Total: {total_submissions}, Processed: {processed_submissions}"
-                )
-                logger.info(f"Dashboard: Raw session['submissions']: {session_submissions}")
-
-            # Update session with calculated values
-            session["total_submissions"] = total_submissions
-            session["processed_submissions"] = processed_submissions
-            session.modified = True
+        # Always sync session counts with database for consistency
+        total_submissions, processed_submissions = sync_session_submission_counts(current_user.id)
 
         logger.info(
             f"Dashboard: Using total_submissions: {total_submissions}, processed_submissions: {processed_submissions}"
@@ -705,7 +725,12 @@ def dashboard():
             logger.info(f"Using session activity: {len(recent_activity)} items")
 
         # Ensure session['submissions'] is updated with database submissions for UI visibility
+        # Also ensure session counts match database counts for consistency
         session["submissions"] = [s.to_dict() for s in recent_submissions]
+        
+        # Force session counts to match database counts to prevent UI inconsistencies
+        session["total_submissions"] = total_submissions
+        session["processed_submissions"] = processed_submissions
 
         # Get last score from session if available
         last_score = session.get("last_score")
@@ -1173,13 +1198,18 @@ def upload_submission():
             )
             logger.info(f"{uploaded_count} submission(s) uploaded successfully.")
             
-            # Update submission counts in session
-            current_total = session.get("total_submissions", 0)
-            current_processed = session.get("processed_submissions", 0)
-            session["total_submissions"] = current_total + uploaded_count
-            session["processed_submissions"] = current_processed + uploaded_count  # All uploads are marked as processed
-            session.modified = True
-            logger.info(f"Updated session: total_submissions={session['total_submissions']}, processed_submissions={session['processed_submissions']}")
+            # Sync submission counts in session with database for consistency
+            current_user = get_current_user()
+            if current_user:
+                sync_session_submission_counts(current_user.id)
+            else:
+                # Fallback to manual update if user not available
+                current_total = session.get("total_submissions", 0)
+                current_processed = session.get("processed_submissions", 0)
+                session["total_submissions"] = current_total + uploaded_count
+                session["processed_submissions"] = current_processed + uploaded_count  # All uploads are marked as processed
+                session.modified = True
+                logger.info(f"Updated session: total_submissions={session['total_submissions']}, processed_submissions={session['processed_submissions']}")
             
         if failed_count > 0:
             flash(
@@ -1267,6 +1297,8 @@ def view_submissions():
                 logger.info(f"Loaded {len(db_submissions)} submissions from database")
                 # Update session with database submissions for UI visibility
                 session["submissions"] = [s.to_dict() for s in db_submissions]
+                # Sync session counts with database for consistency
+                sync_session_submission_counts(current_user.id)
             except Exception as db_error:
                 logger.warning(f"Error loading database submissions: {str(db_error)}")
 
@@ -1278,6 +1310,40 @@ def view_submissions():
         logger.error(f"Error viewing submissions: {str(e)}")
         flash("Error loading submissions. Please try again.", "error")
         return redirect(url_for("dashboard"))
+
+
+def sync_session_submission_counts(current_user_id):
+    """Synchronize session submission counts with database to prevent UI inconsistencies."""
+    try:
+        from src.database.models import Submission
+        
+        # Get accurate counts from database
+        submission_stats = (
+            db.session.query(
+                db.func.count(Submission.id).label("total"),
+                db.func.count(
+                    db.case((Submission.processed == True, 1))
+                ).label("processed"),
+            )
+            .filter(Submission.user_id == current_user_id)
+            .filter_by(archived=False)
+            .first()
+        )
+        
+        total_submissions = submission_stats.total if submission_stats else 0
+        processed_submissions = submission_stats.processed if submission_stats else 0
+        
+        # Update session with accurate counts
+        session["total_submissions"] = total_submissions
+        session["processed_submissions"] = processed_submissions
+        session.modified = True
+        
+        logger.info(f"Synced session counts: total={total_submissions}, processed={processed_submissions}")
+        return total_submissions, processed_submissions
+        
+    except Exception as e:
+        logger.error(f"Error syncing session submission counts: {str(e)}")
+        return session.get("total_submissions", 0), session.get("processed_submissions", 0)
 
 
 def get_letter_grade(score):
@@ -1307,13 +1373,30 @@ def processing():
     return render_template('processing.html')
 
 
+@app.route("/unified-processing")
+@login_required
+def unified_processing():
+    """Show the unified AI processing page with enhanced real-time progress tracking."""
+    # Get progress_id from query parameter or session
+    progress_id = request.args.get('progress_id') or session.get('current_progress_id')
+    
+    if not progress_id:
+        flash('No processing task found.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    return render_template('unified_processing.html')
+
+
 @app.route("/results")
 @login_required
 def view_results():
     """View grading results."""
     try:
+        # Check if grouped view is requested
+        grouped_view = request.args.get('grouped', 'false').lower() == 'true'
+        
         # Add timestamp for data freshness tracking
-        from src.database.models import GradingResult
+        from src.database.models import GradingResult, MarkingGuide
         
         # Log all relevant session variables for debugging
         last_progress_id = session.get("last_grading_progress_id")
@@ -1323,6 +1406,7 @@ def view_results():
         logger.info(f"view_results: last_progress_id from session: {last_progress_id}")
         logger.info(f"view_results: session['last_grading_result'] is {last_grading_result}")
         logger.info(f"view_results: session['guide_id'] is {guide_id}")
+        logger.info(f"view_results: grouped_view requested: {grouped_view}")
         
         # If last_grading_result is None, set it to True if we have a progress_id
         # This helps recover from situations where the session variable wasn't properly set
@@ -1330,6 +1414,10 @@ def view_results():
             logger.info(f"Setting session['last_grading_result'] to True since we have a progress_id")
             session['last_grading_result'] = True
             session.modified = True
+        
+        # Handle grouped view
+        if grouped_view:
+            return render_grouped_results()
         
         # Allow access to results page even if no recent grading results, the template will handle the display.
 
@@ -1365,7 +1453,30 @@ def view_results():
         data_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         grading_results = {}
+        skipped_results = 0
+        duplicate_results = 0
+
         for res in all_grading_results:
+            # Check if submission exists
+            if not res.submission:
+                logger.warning(f"Skipping grading result {res.id} - no associated submission found")
+                skipped_results += 1
+                continue
+            
+            # Only keep the latest result per submission_id to avoid duplicates
+            if res.submission_id in grading_results:
+                # Compare timestamps and keep the more recent one
+                existing_timestamp = grading_results[res.submission_id].get("updated_at", "")
+                current_timestamp = res.updated_at.isoformat() if res.updated_at else ""
+                
+                if current_timestamp > existing_timestamp:
+                    # Current result is newer, replace the existing one
+                    duplicate_results += 1
+                else:
+                    # Existing result is newer or same, skip current one
+                    duplicate_results += 1
+                    continue
+                
             grading_results[res.submission_id] = {
                 "filename": res.submission.filename if res.submission else "Unknown",
                 "status": "completed",
@@ -1379,6 +1490,8 @@ def view_results():
                 "mappings": [],  # Mappings are part of the Mapping model, not directly in GradingResult
                 "metadata": {},
             }
+        
+        logger.info(f"view_results: Processed {len(grading_results)} unique results, skipped {skipped_results} due to missing submissions, found {duplicate_results} duplicate results")
 
         # Calculate batch summary
         total_submissions = len(grading_results)
@@ -1387,41 +1500,124 @@ def view_results():
         highest_score = max(scores) if scores else 0
         lowest_score = min(scores) if scores else 0
 
-        # Grade distribution
+        # Grade distribution - calculate based on percentages
         grade_distribution = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
-        for score in scores:
-            letter = get_letter_grade(score)[0]  # Get first character (A, B, C, D, F)
+        for submission_id, result in grading_results.items():
+            score = result.get("score", 0)
+            max_score = result.get("max_score", 100)
+            percentage = result.get("percentage", 0)
+            if percentage == 0 and max_score > 0:
+                percentage = (score / max_score) * 100
+            letter = get_letter_grade(percentage)[0]  # Get first character (A, B, C, D, F)
             if letter in grade_distribution:
                 grade_distribution[letter] += 1
 
         # Format results for template
         results_list = []
         for submission_id, result in grading_results.items():
-            # Extract detailed feedback data
-            detailed_feedback = result.get("criteria_scores", {})
+            # Get all grading results for this submission to count actual questions
+            submission_grading_results = GradingResult.query.filter_by(
+                submission_id=submission_id,
+                marking_guide_id=guide_id
+            ).all()
+            
+            # Extract detailed feedback data and build criteria_scores from all grading results
             criteria_scores = []
             strengths = []
             weaknesses = []
             suggestions = []
+            total_score = 0
+            total_max_score = 0
             
-            # Parse detailed feedback if it exists
-            if detailed_feedback and isinstance(detailed_feedback, dict):
-                criteria_scores = detailed_feedback.get("criteria_scores", [])
-                strengths = detailed_feedback.get("strengths", [])
-                weaknesses = detailed_feedback.get("weaknesses", [])
-                suggestions = detailed_feedback.get("suggestions", [])
+            # Process each grading result (one per question)
+            for gr in submission_grading_results:
+                detailed_feedback = gr.detailed_feedback or {}
+                
+                # Calculate percentage for this question
+                points_earned = gr.score or 0
+                points_possible = gr.max_score or 1
+                percentage = (points_earned / points_possible * 100) if points_possible > 0 else 0
+                
+                # Get mapping information if available
+                mapping = gr.mapping
+                question_text = mapping.guide_question_text if mapping else "Question"
+                student_answer = mapping.submission_answer if mapping else ""
+                
+                criteria_scores.append({
+                    "question_id": mapping.guide_question_id if mapping else f"q_{len(criteria_scores)+1}",
+                    "description": question_text,
+                    "points_earned": points_earned,
+                    "points_possible": points_possible,
+                    "percentage": round(percentage, 1),
+                    "feedback": gr.feedback or "",
+                    "detailed_feedback": detailed_feedback,
+                    "guide_answer": "",
+                    "student_answer": student_answer,
+                    "match_score": mapping.match_score if mapping else 0,
+                    "match_reason": mapping.match_reason if mapping else ""
+                })
+                
+                total_score += points_earned
+                total_max_score += points_possible
+                
+                # Extract strengths, weaknesses, suggestions from detailed_feedback
+                if isinstance(detailed_feedback, dict):
+                    if "strengths" in detailed_feedback:
+                        strengths.extend(detailed_feedback.get("strengths", []))
+                    if "weaknesses" in detailed_feedback:
+                        weaknesses.extend(detailed_feedback.get("weaknesses", []))
+                    if "suggestions" in detailed_feedback:
+                        suggestions.extend(detailed_feedback.get("suggestions", []))
+                    elif "improvement_suggestions" in detailed_feedback:
+                        suggestions.extend(detailed_feedback.get("improvement_suggestions", []))
             
-            # Calculate letter grade
+            # Remove duplicates from feedback lists
+            strengths = list(set(strengths))
+            weaknesses = list(set(weaknesses))
+            suggestions = list(set(suggestions))
+            
+            # If no criteria_scores found, create a default one
+            if not criteria_scores:
+                criteria_scores = [{
+                    "question_id": "default",
+                    "description": "Overall Assessment",
+                    "points_earned": result.get("score", 0),
+                    "points_possible": result.get("max_score", 100),
+                    "feedback": result.get("feedback", "No detailed feedback available"),
+                    "detailed_feedback": {},
+                    "guide_answer": "",
+                    "student_answer": "",
+                    "match_score": 0,
+                    "match_reason": ""
+                }]
+                total_score = result.get("score", 0)
+                total_max_score = result.get("max_score", 100)
+            
+            # Update the result with corrected totals
+            if total_max_score > 0:
+                corrected_percentage = (total_score / total_max_score) * 100
+                result["score"] = total_score
+                result["max_score"] = total_max_score
+                result["percentage"] = corrected_percentage
+            
+            # Calculate letter grade based on percentage, not raw score
             score = result.get("score", 0)
-            letter_grade = get_letter_grade(score)
+            max_score = result.get("max_score", 100)
+            # Calculate percentage if not already stored or if stored percentage is 0
+            percentage = result.get("percentage", 0)
+            if percentage == 0 and max_score > 0:
+                percentage = (score / max_score) * 100
+            letter_grade = get_letter_grade(percentage)
             
             results_list.append(
                 {
                     "submission_id": submission_id,
                     "filename": result.get("filename", "Unknown"),
-                    "score": score,
+                    "score": percentage,  # Use calculated percentage for display
+                    "raw_score": score,  # Keep raw score for reference
+                    "max_score": max_score,
                     "letter_grade": letter_grade,
-                    "total_questions": len(criteria_scores) if criteria_scores else 1,
+                    "total_questions": len(criteria_scores),
                     "graded_at": result.get("timestamp", ""),
                     "criteria_scores": criteria_scores,
                     "strengths": strengths,
@@ -1471,21 +1667,263 @@ def view_results():
         return redirect(url_for("dashboard"))
 
 
+def render_grouped_results():
+    """Render results grouped by marking guide."""
+    try:
+        from src.database.models import GradingResult, MarkingGuide
+        from sqlalchemy import func
+        
+        # Get all grading results with their associated marking guides for current user
+        results_query = db.session.query(
+            GradingResult,
+            MarkingGuide.title.label('guide_title'),
+            MarkingGuide.filename.label('guide_filename'),
+            MarkingGuide.total_marks.label('guide_total_marks')
+        ).join(
+            MarkingGuide, GradingResult.marking_guide_id == MarkingGuide.id
+        ).filter(
+            MarkingGuide.user_id == current_user.id
+        ).order_by(
+            MarkingGuide.title,
+            GradingResult.updated_at.desc()
+        ).all()
+        
+        # Group results by marking guide
+        grouped_results = {}
+        total_submissions = 0
+        all_scores = []
+        
+        for result, guide_title, guide_filename, guide_total_marks in results_query:
+            guide_id = result.marking_guide_id
+            
+            if guide_id not in grouped_results:
+                grouped_results[guide_id] = {
+                    "guide_id": guide_id,
+                    "guide_title": guide_title,
+                    "guide_filename": guide_filename,
+                    "guide_total_marks": guide_total_marks,
+                    "results": [],
+                    "summary": {
+                        "total_submissions": 0,
+                        "average_score": 0,
+                        "highest_score": 0,
+                        "lowest_score": 100
+                    }
+                }
+            
+            # Check if submission exists
+            if not result.submission:
+                continue
+                
+            # Only keep the latest result per submission_id to avoid duplicates
+            existing_result = next(
+                (r for r in grouped_results[guide_id]["results"] 
+                 if r["submission_id"] == result.submission_id), None
+            )
+            
+            if existing_result:
+                # Compare timestamps and keep the more recent one
+                existing_updated = datetime.fromisoformat(existing_result["updated_at"].replace('Z', '+00:00').replace('+00:00', ''))
+                if result.updated_at > existing_updated:
+                    # Remove the older result
+                    grouped_results[guide_id]["results"].remove(existing_result)
+                else:
+                    # Skip this older result
+                    continue
+            
+            # Get all grading results for this submission to count actual questions
+            submission_grading_results = GradingResult.query.filter_by(
+                submission_id=result.submission_id,
+                marking_guide_id=guide_id
+            ).all()
+            
+            # Build criteria_scores from all grading results for this submission
+            criteria_scores = []
+            strengths = []
+            weaknesses = []
+            suggestions = []
+            total_score = 0
+            total_max_score = 0
+            
+            # Process each grading result (one per question)
+            for gr in submission_grading_results:
+                detailed_feedback = gr.detailed_feedback or {}
+                
+                # Calculate percentage for this question
+                points_earned = gr.score or 0
+                points_possible = gr.max_score or 1
+                percentage = (points_earned / points_possible * 100) if points_possible > 0 else 0
+                
+                # Get mapping information if available
+                mapping = gr.mapping
+                question_text = mapping.guide_question_text if mapping else "Question"
+                student_answer = mapping.submission_answer if mapping else ""
+                
+                criteria_scores.append({
+                    "question_id": mapping.guide_question_id if mapping else f"q_{len(criteria_scores)+1}",
+                    "description": question_text,
+                    "points_earned": points_earned,
+                    "points_possible": points_possible,
+                    "percentage": round(percentage, 1),
+                    "feedback": gr.feedback or "",
+                    "detailed_feedback": detailed_feedback,
+                    "guide_answer": "",
+                    "student_answer": student_answer,
+                    "match_score": mapping.match_score if mapping else 0,
+                    "match_reason": mapping.match_reason if mapping else ""
+                })
+                
+                total_score += points_earned
+                total_max_score += points_possible
+                
+                # Extract strengths, weaknesses, suggestions from detailed_feedback
+                if isinstance(detailed_feedback, dict):
+                    if "strengths" in detailed_feedback:
+                        strengths.extend(detailed_feedback.get("strengths", []))
+                    if "weaknesses" in detailed_feedback:
+                        weaknesses.extend(detailed_feedback.get("weaknesses", []))
+                    if "suggestions" in detailed_feedback:
+                        suggestions.extend(detailed_feedback.get("suggestions", []))
+                    elif "improvement_suggestions" in detailed_feedback:
+                        suggestions.extend(detailed_feedback.get("improvement_suggestions", []))
+            
+            # Remove duplicates from feedback lists
+            strengths = list(set(strengths))
+            weaknesses = list(set(weaknesses))
+            suggestions = list(set(suggestions))
+            
+            # If no criteria_scores found, create a default one
+            if not criteria_scores:
+                criteria_scores = [{
+                    "question_id": "default",
+                    "description": "Overall Assessment",
+                    "points_earned": result.score,
+                    "points_possible": result.max_score,
+                    "percentage": result.percentage,
+                    "feedback": result.feedback or "No detailed feedback available",
+                    "detailed_feedback": {},
+                    "guide_answer": "",
+                    "student_answer": "",
+                    "match_score": 0,
+                    "match_reason": ""
+                }]
+                total_score = result.score
+                total_max_score = result.max_score
+            
+            # Calculate corrected percentage based on actual totals
+            corrected_percentage = (total_score / total_max_score * 100) if total_max_score > 0 else 0
+            
+            # Calculate letter grade using corrected percentage
+            letter_grade = get_letter_grade(corrected_percentage)
+            
+            result_data = {
+                "submission_id": result.submission_id,
+                "filename": result.submission.filename,
+                "score": corrected_percentage,
+                "raw_score": total_score,
+                "max_score": total_max_score,
+                "letter_grade": letter_grade,
+                "total_questions": len(criteria_scores),
+                "graded_at": result.created_at.isoformat() if result.created_at else "",
+                "updated_at": result.updated_at.isoformat() if result.updated_at else "",
+                "criteria_scores": criteria_scores,
+                "strengths": strengths,
+                "weaknesses": weaknesses,
+                "suggestions": suggestions,
+                "feedback": result.feedback
+            }
+            
+            grouped_results[guide_id]["results"].append(result_data)
+            all_scores.append(corrected_percentage)
+            total_submissions += 1
+        
+        # Calculate summaries for each guide
+        for guide_data in grouped_results.values():
+            results = guide_data["results"]
+            if results:
+                scores = [r["score"] for r in results]
+                guide_data["summary"] = {
+                    "total_submissions": len(results),
+                    "average_score": round(sum(scores) / len(scores), 1),
+                    "highest_score": max(scores),
+                    "lowest_score": min(scores)
+                }
+                
+                # Sort results within each guide by score (highest first)
+                guide_data["results"].sort(key=lambda x: x["score"], reverse=True)
+        
+        # Convert to list format and sort by guide title
+        grouped_results_list = sorted(grouped_results.values(), key=lambda x: x["guide_title"])
+        
+        # Calculate overall summary
+        overall_summary = {
+            "total_submissions": total_submissions,
+            "total_guides": len(grouped_results_list),
+            "average_score": round(sum(all_scores) / len(all_scores), 1) if all_scores else 0,
+            "highest_score": max(all_scores) if all_scores else 0,
+            "lowest_score": min(all_scores) if all_scores else 0,
+            "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        context = {
+            "page_title": "Grading Results - Grouped by Guide",
+            "has_results": bool(grouped_results_list),
+            "grouped_results": grouped_results_list,
+            "overall_summary": overall_summary,
+            "grouped_view": True
+        }
+        
+        # Check if this is an AJAX request
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                "success": True,
+                "has_results": bool(grouped_results_list),
+                "grouped_results": grouped_results_list,
+                "overall_summary": overall_summary
+            })
+        
+        # Return HTML response for normal requests
+        return render_template("results_grouped.html", **context)
+        
+    except Exception as e:
+        logger.error(f"Error rendering grouped results: {str(e)}")
+        flash("Error loading grouped results. Please try again.", "error")
+        return redirect(url_for("dashboard"))
+
+
+
+
+
 @app.route("/api/process-ai-grading", methods=["POST"])
 @csrf.exempt
 def process_ai_grading():
     max_questions = request.json.get("max_questions", None)
     """API endpoint to process unified AI-powered mapping and grading with progress tracking."""
     try:
-        guide_id = request.json.get("guide_id")
+        # Get the currently selected guide from session instead of request
+        session_guide_id = session.get("guide_id")
+        if not session_guide_id:
+            return jsonify({
+                "error": "No marking guide selected. Please select a guide using 'Use Guide' button first.",
+                "code": "NO_GUIDE_SELECTED"
+            }), 400
+            
+        # Still get submission_ids from request as these can vary
         submission_ids = request.json.get("submission_ids", [])
+        if not submission_ids:
+            return jsonify({"error": "Missing submission IDs"}), 400
 
-        if not guide_id or not submission_ids:
-            return jsonify({"error": "Missing guide ID or submission IDs"}), 400
-
-        guide = MarkingGuide.query.get(guide_id)
+        # Use the session guide_id instead of request guide_id
+        guide = MarkingGuide.query.get(session_guide_id)
         if not guide:
-            return jsonify({"error": "Marking guide not found"}), 404
+            return jsonify({"error": "Selected marking guide not found"}), 404
+            
+        # Verify guide is not currently in use
+        if is_guide_in_use(session_guide_id):
+            return jsonify({
+                "error": "Marking guide is currently being used for processing. Please wait for current operations to complete.",
+                "code": "GUIDE_IN_USE"
+            }), 409
 
         submissions = Submission.query.filter(Submission.id.in_(submission_ids)).all()
         if not submissions:
@@ -1756,11 +2194,40 @@ def process_unified_ai():
         guide_id = session.get("guide_id")
         submissions = session.get("submissions", [])
 
-        if not guide_id or not submissions:
+        # Enhanced logging for debugging
+        logger.info(f"Session validation - guide_id: {guide_id}, submissions count: {len(submissions)}")
+        logger.info(f"Session keys: {list(session.keys())}")
+        
+        if not guide_id:
+            logger.warning("No guide selected in session")
             return jsonify({
-                "error": "Missing guide or submissions data",
-                "code": "DATA_MISSING"
+                "error": "No marking guide selected. Please select a guide using 'Use Guide' button first.",
+                "code": "NO_GUIDE_SELECTED"
             }), 400
+            
+        if not submissions:
+            logger.warning("submissions are missing from session, attempting to recover from database")
+            # Try to get submissions for the current user as fallback
+            current_user = get_current_user()
+            if current_user:
+                db_submissions = Submission.query.filter_by(user_id=current_user.id).order_by(Submission.created_at.desc()).all()
+                if db_submissions:
+                    submissions = [s.to_dict() for s in db_submissions]
+                    session['submissions'] = submissions
+                    session.modified = True
+                    logger.info(f"Recovered {len(submissions)} submissions from database")
+                else:
+                    logger.warning("No submissions found in database for current user")
+                    return jsonify({
+                        "error": "No submissions found. Please upload submissions first.",
+                        "code": "NO_SUBMISSIONS_FOUND"
+                    }), 400
+            else:
+                logger.warning("Current user not found when recovering submissions")
+                return jsonify({
+                    "error": "Authentication required. Please log in again.",
+                    "code": "AUTH_REQUIRED"
+                }), 401
 
         # Retrieve guide from database to ensure we have the latest content
         guide = MarkingGuide.query.get(guide_id)
@@ -1770,6 +2237,14 @@ def process_unified_ai():
                 "error": "Marking guide not found.",
                 "code": "GUIDE_NOT_FOUND"
             }), 404
+            
+        # Verify guide is not currently in use
+        if is_guide_in_use(guide_id):
+            logger.warning(f"Attempted to process guide {guide_id} while it's in use")
+            return jsonify({
+                "error": "Marking guide is currently being used for processing. Please wait for current operations to complete.",
+                "code": "GUIDE_IN_USE"
+            }), 409
 
         # Construct guide_data from the retrieved guide object
         guide_data = {
@@ -2055,6 +2530,77 @@ def get_progress_history(progress_id):
         return jsonify({
             "success": False,
             "error": f"Failed to get progress history: {str(e)}"
+        }), 500
+
+
+@app.route("/api/cache/stats", methods=["GET"])
+@csrf.exempt
+def get_cache_stats():
+    """Get cache statistics from AI services."""
+    try:
+        stats = {}
+        
+        # Get unified AI service cache stats
+        if 'unified_ai_service' in globals() and unified_ai_service:
+            stats['unified_ai_service'] = unified_ai_service.get_cache_stats()
+        
+        # Get LLM service cache stats if available
+        if 'llm_service' in globals() and llm_service and hasattr(llm_service, '_response_cache'):
+            stats['llm_service'] = {
+                'response_cache_size': len(llm_service._response_cache)
+            }
+        
+        return jsonify({
+            "success": True,
+            "cache_stats": stats,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting cache stats: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to get cache stats: {str(e)}"
+        }), 500
+
+
+@app.route("/api/cache/clear", methods=["POST"])
+@csrf.exempt
+def clear_cache():
+    """Clear AI service caches."""
+    try:
+        cache_type = request.json.get('cache_type', 'all') if request.json else 'all'
+        cleared_caches = []
+        
+        # Clear unified AI service caches
+        if 'unified_ai_service' in globals() and unified_ai_service:
+            if cache_type in ['all', 'unified_ai']:
+                unified_ai_service.clear_cache()
+                cleared_caches.append('unified_ai_service')
+            elif cache_type == 'guide_type':
+                unified_ai_service.clear_guide_type_cache()
+                cleared_caches.append('unified_ai_service.guide_type')
+            elif cache_type == 'content':
+                unified_ai_service.clear_content_cache()
+                cleared_caches.append('unified_ai_service.content')
+        
+        # Clear LLM service cache if available
+        if cache_type in ['all', 'llm'] and 'llm_service' in globals() and llm_service and hasattr(llm_service, '_response_cache'):
+            llm_service._response_cache.clear()
+            cleared_caches.append('llm_service.response_cache')
+        
+        return jsonify({
+            "success": True,
+            "message": f"Cleared caches: {', '.join(cleared_caches)}",
+            "cleared_caches": cleared_caches,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error clearing cache: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to clear cache: {str(e)}"
         }), 500
 
 
@@ -2376,6 +2922,71 @@ def clear_session_guide():
         return redirect(url_for("marking_guides"))
 
 
+@app.route("/reprocess-submissions")
+@login_required
+def reprocess_submissions():
+    """Reprocess submissions with empty content_text fields."""
+    try:
+        from src.database.models import Submission
+        
+        current_user = get_current_user()
+        if not current_user:
+            flash("Authentication required.", "error")
+            return redirect(url_for("login"))
+        
+        # Find submissions with empty or null content_text
+        submissions_to_process = Submission.query.filter(
+            Submission.user_id == current_user.id,
+            db.or_(
+                Submission.content_text.is_(None),
+                Submission.content_text == ""
+            )
+        ).all()
+        
+        if not submissions_to_process:
+            flash("No submissions need reprocessing.", "info")
+            return redirect(url_for("view_submissions"))
+        
+        processed_count = 0
+        failed_count = 0
+        
+        for submission in submissions_to_process:
+            try:
+                if submission.file_path and os.path.exists(submission.file_path):
+                    # Reprocess the file
+                    answers, raw_text, error = parse_student_submission(submission.file_path)
+                    
+                    if raw_text and not error:
+                        submission.content_text = raw_text
+                        if answers:
+                            submission.answers = answers
+                        processed_count += 1
+                        logger.info(f"Reprocessed submission {submission.id}: {len(raw_text)} characters extracted")
+                    else:
+                        failed_count += 1
+                        logger.warning(f"Failed to reprocess submission {submission.id}: {error}")
+                else:
+                    failed_count += 1
+                    logger.warning(f"File not found for submission {submission.id}: {submission.file_path}")
+            except Exception as e:
+                failed_count += 1
+                logger.error(f"Error reprocessing submission {submission.id}: {str(e)}")
+        
+        if processed_count > 0:
+            db.session.commit()
+            flash(f"Successfully reprocessed {processed_count} submission(s).", "success")
+        
+        if failed_count > 0:
+            flash(f"{failed_count} submission(s) could not be reprocessed.", "warning")
+        
+        return redirect(url_for("view_submissions"))
+        
+    except Exception as e:
+        logger.error(f"Error in reprocess_submissions: {str(e)}")
+        flash("An error occurred while reprocessing submissions.", "error")
+        return redirect(url_for("view_submissions"))
+
+
 @app.route("/view-submission/<submission_id>")
 @login_required
 def view_submission_content(submission_id):
@@ -2421,10 +3032,10 @@ def view_submission_content(submission_id):
         raw_text = ""
         extracted_answers = {}
         try:
-            if hasattr(submission, 'raw_text') and submission.raw_text:
-                raw_text = submission.raw_text
-            if hasattr(submission, 'extracted_answers') and submission.extracted_answers:
-                extracted_answers = submission.extracted_answers
+            if hasattr(submission, 'content_text') and submission.content_text:
+                raw_text = submission.content_text
+            if hasattr(submission, 'answers') and submission.answers:
+                extracted_answers = submission.answers
         except (AttributeError, TypeError) as e:
             logger.warning(f"Could not process text content for submission {submission_id}: {str(e)}")
 
@@ -2463,7 +3074,7 @@ def settings():
         current_llm_api_key = os.getenv("DEEPSEEK_API_KEY", "")
         current_llm_model = os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner")
         current_llm_seed = os.getenv("DEEPSEEK_SEED", "42")
-        current_llm_token_limit = os.getenv("DEEPSEEK_TOKEN_LIMIT", "2048")
+        # current_llm_token_limit = os.getenv("DEEPSEEK_TOKEN_LIMIT", "2048")  # Token limits removed
         current_ocr_api_key = os.getenv("HANDWRITING_OCR_API_KEY", "")
         current_ocr_api_url = os.getenv("HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3")
         
@@ -2484,7 +3095,7 @@ def settings():
             "llm_api_key": current_llm_api_key,
             "llm_model": current_llm_model,
             "llm_seed": current_llm_seed,
-            "llm_token_limit": current_llm_token_limit,
+            # "llm_token_limit": current_llm_token_limit,  # Token limits removed
             "ocr_api_key": current_ocr_api_key,
             "ocr_api_url": current_ocr_api_url,
         }
@@ -2529,7 +3140,7 @@ def settings():
                 llm_api_key = request.form.get("llm_api_key", "")
                 llm_model = request.form.get("llm_model", "deepseek-reasoner")
                 llm_seed = request.form.get("llm_seed", "42")
-                llm_token_limit = request.form.get("llm_token_limit", "2048")
+                # llm_token_limit = request.form.get("llm_token_limit", "2048")  # Token limits removed
                 ocr_api_key = request.form.get("ocr_api_key", "")
                 ocr_api_url = request.form.get("ocr_api_url", "https://www.handwritingocr.com/api/v3")
                 
@@ -2577,8 +3188,8 @@ def settings():
                 dotenv.set_key(dotenv_path, "DEEPSEEK_SEED", llm_seed)
                 os.environ["DEEPSEEK_SEED"] = llm_seed
                 
-                dotenv.set_key(dotenv_path, "DEEPSEEK_TOKEN_LIMIT", llm_token_limit)
-                os.environ["DEEPSEEK_TOKEN_LIMIT"] = llm_token_limit
+                # dotenv.set_key(dotenv_path, "DEEPSEEK_TOKEN_LIMIT", llm_token_limit)  # Token limits removed
+                # os.environ["DEEPSEEK_TOKEN_LIMIT"] = llm_token_limit  # Token limits removed
                 
                 # Update OCR configuration
                 dotenv.set_key(dotenv_path, "HANDWRITING_OCR_API_KEY", ocr_api_key)
@@ -2622,7 +3233,7 @@ def settings():
                     llm_service = LLMService(api_key=llm_api_key, model=llm_model, seed=int(llm_seed))
                     mapping_service = MappingService(llm_service=llm_service)
                     grading_service = GradingService(llm_service=llm_service, mapping_service=mapping_service)
-                    logger.info("LLM services reinitialized with new API key, seed, and token limit")
+                    logger.info("LLM services reinitialized with new API key and seed")
                 
                 flash("Settings updated successfully.", "success")
                 return redirect(url_for("settings"))
@@ -2998,6 +3609,150 @@ def delete_submission():
         return jsonify({"success": False, "message": "Internal server error."}), 500
 
 
+@app.route("/api/results-grouped", methods=["GET"])
+@login_required
+def get_grouped_results():
+    """API endpoint to get grading results grouped by marking guide."""
+    try:
+        from src.database.models import GradingResult, MarkingGuide
+        from sqlalchemy import func
+        
+        # Get all grading results with their associated marking guides
+        results_query = db.session.query(
+            GradingResult,
+            MarkingGuide.title.label('guide_title'),
+            MarkingGuide.filename.label('guide_filename'),
+            MarkingGuide.total_marks.label('guide_total_marks')
+        ).join(
+            MarkingGuide, GradingResult.marking_guide_id == MarkingGuide.id
+        ).filter(
+            MarkingGuide.user_id == current_user.id
+        ).order_by(
+            MarkingGuide.title,
+            GradingResult.updated_at.desc()
+        ).all()
+        
+        # Group results by marking guide
+        grouped_results = {}
+        
+        for result, guide_title, guide_filename, guide_total_marks in results_query:
+            guide_id = result.marking_guide_id
+            
+            if guide_id not in grouped_results:
+                grouped_results[guide_id] = {
+                    "guide_id": guide_id,
+                    "guide_title": guide_title,
+                    "guide_filename": guide_filename,
+                    "guide_total_marks": guide_total_marks,
+                    "results": [],
+                    "summary": {
+                        "total_submissions": 0,
+                        "average_score": 0,
+                        "highest_score": 0,
+                        "lowest_score": 100
+                    }
+                }
+            
+            # Check if submission exists
+            if not result.submission:
+                continue
+                
+            # Only keep the latest result per submission_id to avoid duplicates
+            existing_result = next(
+                (r for r in grouped_results[guide_id]["results"] 
+                 if r["submission_id"] == result.submission_id), None
+            )
+            
+            if existing_result:
+                # Compare timestamps and keep the more recent one
+                if result.updated_at > datetime.fromisoformat(existing_result["updated_at"].replace('Z', '+00:00')):
+                    # Remove the older result
+                    grouped_results[guide_id]["results"].remove(existing_result)
+                else:
+                    # Skip this older result
+                    continue
+            
+            # Parse detailed feedback for question breakdown
+            detailed_feedback = result.detailed_feedback or {}
+            criteria_scores = []
+            
+            if detailed_feedback and isinstance(detailed_feedback, dict):
+                if "criteria_scores" in detailed_feedback:
+                    criteria_scores = detailed_feedback.get("criteria_scores", [])
+                elif "mappings" in detailed_feedback:
+                    mappings = detailed_feedback.get("mappings", [])
+                    for mapping in mappings:
+                        if isinstance(mapping, dict):
+                            points_earned = mapping.get("grade_score", 0)
+                            points_possible = mapping.get("max_score", 1)
+                            percentage = (points_earned / points_possible * 100) if points_possible > 0 else 0
+                            
+                            criteria_scores.append({
+                                "question_id": mapping.get("guide_id", ""),
+                                "description": mapping.get("guide_text", "Question"),
+                                "points_earned": points_earned,
+                                "points_possible": points_possible,
+                                "percentage": round(percentage, 1),
+                                "feedback": mapping.get("feedback", "")
+                            })
+            
+            # If no criteria_scores found, create a default one
+            if not criteria_scores:
+                criteria_scores = [{
+                    "question_id": "default",
+                    "description": "Overall Assessment",
+                    "points_earned": result.score,
+                    "points_possible": result.max_score,
+                    "percentage": result.percentage,
+                    "feedback": result.feedback or "No detailed feedback available"
+                }]
+            
+            # Calculate letter grade
+            letter_grade = get_letter_grade(result.percentage)
+            
+            result_data = {
+                "submission_id": result.submission_id,
+                "filename": result.submission.filename,
+                "score": result.percentage,
+                "raw_score": result.score,
+                "max_score": result.max_score,
+                "letter_grade": letter_grade,
+                "total_questions": len(criteria_scores),
+                "graded_at": result.created_at.isoformat() if result.created_at else "",
+                "updated_at": result.updated_at.isoformat() if result.updated_at else "",
+                "criteria_scores": criteria_scores,
+                "feedback": result.feedback
+            }
+            
+            grouped_results[guide_id]["results"].append(result_data)
+        
+        # Calculate summaries for each guide
+        for guide_data in grouped_results.values():
+            results = guide_data["results"]
+            if results:
+                scores = [r["score"] for r in results]
+                guide_data["summary"] = {
+                    "total_submissions": len(results),
+                    "average_score": round(sum(scores) / len(scores), 1),
+                    "highest_score": max(scores),
+                    "lowest_score": min(scores)
+                }
+        
+        # Convert to list format for frontend
+        response_data = list(grouped_results.values())
+        
+        return jsonify({
+            "success": True,
+            "grouped_results": response_data,
+            "total_guides": len(response_data),
+            "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching grouped results: {str(e)}")
+        return jsonify({"success": False, "error": "Failed to fetch grouped results"}), 500
+
+
 @app.route("/api/delete-grading-result", methods=["POST"])
 @csrf.exempt
 def delete_grading_result():
@@ -3042,72 +3797,23 @@ def delete_grading_result():
         return jsonify({"success": False, "message": "Internal server error."}), 500
 
 
-@app.route("/api/clear-cache", methods=["POST"])
-@csrf.exempt
-def clear_cache():
-    """API endpoint to clear application cache."""
-    try:
-        from utils.cache import cache_clear, cache_stats
-
-        # Get cache stats before clearing
-        stats_before = cache_stats()
-
-        # Clear the cache
-        cache_clear()
-
-        # Get stats after clearing
-        stats_after = cache_stats()
-
-        logger.info(
-            f"Cache cleared successfully. Entries before: {stats_before.get('total_entries', 0)}, after: {stats_after.get('total_entries', 0)}"
-        )
-
-        return jsonify(
-            {
-                "success": True,
-                "message": "Cache cleared successfully",
-                "stats": {
-                    "entries_cleared": stats_before.get("total_entries", 0),
-                    "cache_size_before": stats_before.get("total_entries", 0),
-                    "cache_size_after": stats_after.get("total_entries", 0),
-                },
-            }
-        )
-
-    except Exception as e:
-        logger.error(f"Error clearing cache: {str(e)}")
-        return (
-            jsonify({"success": False, "message": f"Error clearing cache: {str(e)}"}),
-            500,
-        )
+# Duplicate route removed - using /api/cache/clear instead
 
 
-@app.route("/api/cache/stats", methods=["GET"])
-def get_cache_stats():
-    """API endpoint to get cache statistics."""
-    try:
-        from utils.cache import cache_stats
-
-        stats = cache_stats()
-
-        return jsonify({"status": "ok", "cache_stats": stats})
-
-    except Exception as e:
-        logger.error(f"Error getting cache stats: {str(e)}")
-        return (
-            jsonify(
-                {"status": "error", "message": f"Error getting cache stats: {str(e)}"}
-            ),
-            500,
-        )
+# Duplicate route removed - using earlier /api/cache/stats definition
 
 
-# Initialize Flask-Limiter (Flask-Limiter 3.x compatible)
-limiter = Limiter(key_func=get_remote_address)
-limiter.init_app(app)
+# Flask-Limiter removed - no limits on LLM functions
+# limiter = Limiter(key_func=get_remote_address)
+# limiter.init_app(app)
+
+@app.route('/cache-management')
+@login_required
+def cache_management():
+    """Cache management interface for AI optimization monitoring"""
+    return render_template('cache_management.html')
 
 @app.route('/api/health')
-@limiter.limit('5/minute')
 def health_check():
     """Health check for DB, Redis, Celery, and SocketIO."""
     status = {'db': False, 'redis': False, 'celery': False, 'socketio': False}
@@ -3118,13 +3824,8 @@ def health_check():
         status['db'] = True
     except Exception as e:
         errors['db'] = str(e)
-    # Redis check
-    try:
-        r = redis.Redis.from_url(os.getenv('REDIS_URL', 'redis://localhost:6379/0'))
-        r.ping()
-        status['redis'] = True
-    except Exception as e:
-        errors['redis'] = str(e)
+    # Redis check - removed
+    status['redis'] = True  # Always true since Redis is no longer used
     # Celery check
     try:
         from src.services.background_tasks import celery_app
@@ -3143,11 +3844,10 @@ def health_check():
     ok = all(status.values())
     return jsonify({'ok': ok, 'status': status, 'errors': errors}), (200 if ok else 503)
 
-# Example: Apply rate limiting to background job endpoints
+# Rate limiting removed from background job endpoints
 @app.route("/api/start-background-ocr", methods=["POST"])
 @login_required
 @csrf.exempt
-@limiter.limit('10/minute')
 def start_background_ocr():
     # ... existing code ...
     pass
@@ -3155,7 +3855,6 @@ def start_background_ocr():
 @app.route("/api/start-background-grading", methods=["POST"])
 @login_required
 @csrf.exempt
-@limiter.limit('10/minute')
 def start_background_grading():
     # ... existing code ...
     pass
@@ -3163,7 +3862,6 @@ def start_background_grading():
 @app.route("/api/download-report/<submission_id>")
 @login_required
 @csrf.exempt
-@limiter.limit('20/hour')
 def download_report(submission_id):
     # ... existing code ...
     pass

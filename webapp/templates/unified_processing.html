@@ -1,0 +1,419 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Main Processing Container -->
+    <div id="unified-progress-container" class="bg-white shadow-xl overflow-hidden sm:rounded-lg">
+        <!-- Header -->
+        <div class="px-6 py-5 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900">Unified AI Processing</h2>
+                    <p class="mt-1 text-sm text-gray-600">Real-time progress tracking for your submissions</p>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <!-- Connection Status -->
+                    <div class="flex items-center space-x-2">
+                        <div id="unified-connection-status" class="w-2 h-2 bg-gray-300 rounded-full" title="Connection status"></div>
+                        <span class="text-xs text-gray-500">Connection</span>
+                    </div>
+                    <!-- Processing Speed -->
+                    <div id="unified-progress-speed" class="text-xs text-gray-500 hidden"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Processing Status Container -->
+        <div id="processing-status" class="px-6 py-8">
+            <!-- Main Progress Section -->
+            <div class="text-center mb-8">
+                <!-- Animated Icon -->
+                <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 mb-6">
+                    <svg class="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </div>
+                
+                <!-- Progress Title -->
+                <h3 id="unified-progress-text" class="text-xl font-semibold text-gray-900 mb-2">Initializing AI Processing...</h3>
+                
+                <!-- Progress Bar -->
+                <div class="max-w-2xl mx-auto mb-4">
+                    <div class="w-full bg-gray-200 rounded-full h-3 shadow-inner">
+                        <div id="unified-progress-bar" 
+                             class="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out" 
+                             style="width: 0%" 
+                             role="progressbar" 
+                             aria-valuenow="0" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100" 
+                             aria-label="Processing progress">
+                        </div>
+                    </div>
+                    <div class="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>0%</span>
+                        <span id="unified-progress-percentage">0%</span>
+                        <span>100%</span>
+                    </div>
+                </div>
+                
+                <!-- Progress Details -->
+                <div class="space-y-2 text-sm text-gray-600">
+                    <p id="unified-progress-details">Preparing for processing...</p>
+                    <p id="unified-submission-counter" class="text-xs text-gray-500"></p>
+                    <p id="unified-progress-eta" class="text-xs text-blue-600 font-medium"></p>
+                </div>
+            </div>
+
+            <!-- Stage Indicators -->
+            <div class="mb-8">
+                <h4 class="text-sm font-medium text-gray-700 mb-4 text-center">Processing Stages</h4>
+                <div class="flex justify-center items-center space-x-8">
+                    <!-- OCR Stage -->
+                    <div class="flex flex-col items-center space-y-2">
+                        <div class="relative">
+                            <div id="stage-ocr" class="w-4 h-4 bg-gray-300 rounded-full transition-all duration-300"></div>
+                            <div class="absolute -inset-1 rounded-full border-2 border-transparent transition-all duration-300" id="stage-ocr-ring"></div>
+                        </div>
+                        <span class="text-xs text-gray-600 font-medium">OCR</span>
+                        <span class="text-xs text-gray-500">Text Extraction</span>
+                    </div>
+                    
+                    <!-- Connection Line -->
+                    <div class="w-8 h-0.5 bg-gray-300 transition-all duration-300" id="line-ocr-mapping"></div>
+                    
+                    <!-- Mapping Stage -->
+                    <div class="flex flex-col items-center space-y-2">
+                        <div class="relative">
+                            <div id="stage-mapping" class="w-4 h-4 bg-gray-300 rounded-full transition-all duration-300"></div>
+                            <div class="absolute -inset-1 rounded-full border-2 border-transparent transition-all duration-300" id="stage-mapping-ring"></div>
+                        </div>
+                        <span class="text-xs text-gray-600 font-medium">Mapping</span>
+                        <span class="text-xs text-gray-500">Answer Alignment</span>
+                    </div>
+                    
+                    <!-- Connection Line -->
+                    <div class="w-8 h-0.5 bg-gray-300 transition-all duration-300" id="line-mapping-grading"></div>
+                    
+                    <!-- Grading Stage -->
+                    <div class="flex flex-col items-center space-y-2">
+                        <div class="relative">
+                            <div id="stage-grading" class="w-4 h-4 bg-gray-300 rounded-full transition-all duration-300"></div>
+                            <div class="absolute -inset-1 rounded-full border-2 border-transparent transition-all duration-300" id="stage-grading-ring"></div>
+                        </div>
+                        <span class="text-xs text-gray-600 font-medium">Grading</span>
+                        <span class="text-xs text-gray-500">AI Assessment</span>
+                    </div>
+                    
+                    <!-- Connection Line -->
+                    <div class="w-8 h-0.5 bg-gray-300 transition-all duration-300" id="line-grading-finalization"></div>
+                    
+                    <!-- Finalization Stage -->
+                    <div class="flex flex-col items-center space-y-2">
+                        <div class="relative">
+                            <div id="stage-finalization" class="w-4 h-4 bg-gray-300 rounded-full transition-all duration-300"></div>
+                            <div class="absolute -inset-1 rounded-full border-2 border-transparent transition-all duration-300" id="stage-finalization-ring"></div>
+                        </div>
+                        <span class="text-xs text-gray-600 font-medium">Finalization</span>
+                        <span class="text-xs text-gray-500">Results Compilation</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Statistics (Optional) -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <h4 class="text-sm font-medium text-gray-700 mb-3">Processing Statistics</h4>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                    <div>
+                        <div id="stat-submissions-processed" class="text-lg font-semibold text-blue-600">0</div>
+                        <div class="text-xs text-gray-500">Submissions Processed</div>
+                    </div>
+                    <div>
+                        <div id="stat-questions-graded" class="text-lg font-semibold text-green-600">0</div>
+                        <div class="text-xs text-gray-500">Questions Graded</div>
+                    </div>
+                    <div>
+                        <div id="stat-processing-time" class="text-lg font-semibold text-purple-600">0s</div>
+                        <div class="text-xs text-gray-500">Processing Time</div>
+                    </div>
+                    <div>
+                        <div id="stat-avg-score" class="text-lg font-semibold text-orange-600">-</div>
+                        <div class="text-xs text-gray-500">Average Score</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex justify-center space-x-4">
+                <button id="unified-cancel-button" 
+                        class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                    Cancel Processing
+                </button>
+            </div>
+        </div>
+
+        <!-- Completion Status Container -->
+        <div id="complete-status" class="hidden px-6 py-8 text-center">
+            <!-- Success Icon -->
+            <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-6">
+                <svg class="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            
+            <h3 class="text-2xl font-bold text-gray-900 mb-2">Processing Complete!</h3>
+            <p class="text-gray-600 mb-6">Your submissions have been successfully processed by AI.</p>
+            
+            <!-- Completion Statistics -->
+            <div class="bg-green-50 rounded-lg p-4 mb-6 max-w-md mx-auto">
+                <div class="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                        <div id="final-submissions-count" class="text-xl font-bold text-green-700">0</div>
+                        <div class="text-sm text-green-600">Submissions</div>
+                    </div>
+                    <div>
+                        <div id="final-processing-time" class="text-xl font-bold text-green-700">0s</div>
+                        <div class="text-sm text-green-600">Total Time</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex justify-center space-x-4">
+                <a href="{{ url_for('view_results') }}" 
+                   class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                    <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    View Results
+                </a>
+                <a href="{{ url_for('dashboard') }}" 
+                   class="inline-flex items-center px-6 py-3 border border-gray-300 shadow-sm text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                    <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+                    </svg>
+                    Return to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- Error Status Container -->
+        <div id="error-status" class="hidden px-6 py-8 text-center">
+            <!-- Error Icon -->
+            <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-6">
+                <svg class="h-8 w-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </div>
+            
+            <h3 class="text-2xl font-bold text-gray-900 mb-2">Processing Failed</h3>
+            <p class="error-message text-gray-600 mb-6">An error occurred during processing.</p>
+            
+            <!-- Error Details -->
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 max-w-md mx-auto">
+                <div class="text-sm text-red-700">
+                    <strong>Error Details:</strong>
+                    <div class="mt-1 error-details">Please check your inputs and try again.</div>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex justify-center space-x-4">
+                <button id="unified-retry-button" 
+                        class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                    <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Retry Processing
+                </button>
+                <a href="{{ url_for('dashboard') }}" 
+                   class="inline-flex items-center px-6 py-3 border border-gray-300 shadow-sm text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                    <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+                    </svg>
+                    Return to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Additional Information Panel -->
+    <div class="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div class="flex items-start">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                </svg>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-blue-800">Processing Information</h3>
+                <div class="mt-2 text-sm text-blue-700">
+                    <ul class="list-disc list-inside space-y-1">
+                        <li>Processing time varies based on submission complexity and length</li>
+                        <li>Real-time updates are provided via WebSocket connection</li>
+                        <li>You can safely close this page and return later to check results</li>
+                        <li>Processing will continue in the background even if you navigate away</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Include Socket.IO for real-time updates -->
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+<!-- Include the Unified Progress Tracker -->
+<script src="{{ url_for('static', filename='js/unified_progress_tracker.js') }}"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get progress ID from URL parameter or session
+    const urlParams = new URLSearchParams(window.location.search);
+    const progressId = urlParams.get('progress_id') || '{{ session.get("current_progress_id", "") }}';
+    
+    if (!progressId) {
+        showError('No progress ID found. Please return to the dashboard and try again.');
+        return;
+    }
+    
+    // Initialize the unified progress tracker
+    const progressTracker = new UnifiedProgressTracker({
+        pollingInterval: 2000,
+        maxRetries: 5,
+        enableWebSocket: true,
+        enablePolling: true,
+        autoRetry: true,
+        showDetailedStats: true
+    });
+    
+    // Set up callbacks
+    progressTracker.setCallbacks({
+        onProgress: function(progress) {
+            updateStatistics(progress);
+            updateProgressPercentage(progress.percentage);
+        },
+        onComplete: function(data) {
+            updateFinalStatistics(data);
+            // Auto-redirect after 5 seconds
+            setTimeout(() => {
+                window.location.href = '{{ url_for("view_results") }}';
+            }, 5000);
+        },
+        onError: function(data) {
+            console.error('Processing error:', data);
+        },
+        onStageChange: function(newStage, oldStage) {
+            console.log(`Stage changed from ${oldStage} to ${newStage}`);
+            updateStageConnections(newStage);
+        }
+    });
+    
+    // Start tracking
+    progressTracker.start(progressId);
+    
+    // Store reference for cleanup
+    window.progressTracker = progressTracker;
+    
+    // Helper functions
+    function updateStatistics(progress) {
+        // Update submission counter
+        const submissionsProcessed = document.getElementById('stat-submissions-processed');
+        if (submissionsProcessed) {
+            submissionsProcessed.textContent = progress.submission_index || 0;
+        }
+        
+        // Update questions graded (estimated)
+        const questionsGraded = document.getElementById('stat-questions-graded');
+        if (questionsGraded && progress.current_step && progress.total_steps) {
+            const estimated = Math.floor((progress.current_step / progress.total_steps) * 100);
+            questionsGraded.textContent = estimated;
+        }
+        
+        // Update processing time
+        const processingTime = document.getElementById('stat-processing-time');
+        if (processingTime && progress.processing_time) {
+            processingTime.textContent = formatTime(progress.processing_time);
+        }
+    }
+    
+    function updateProgressPercentage(percentage) {
+        const percentageElement = document.getElementById('unified-progress-percentage');
+        if (percentageElement) {
+            percentageElement.textContent = `${Math.round(percentage || 0)}%`;
+        }
+    }
+    
+    function updateStageConnections(currentStage) {
+        const connections = {
+            'line-ocr-mapping': ['mapping', 'grading', 'finalization'],
+            'line-mapping-grading': ['grading', 'finalization'],
+            'line-grading-finalization': ['finalization']
+        };
+        
+        Object.entries(connections).forEach(([lineId, stages]) => {
+            const line = document.getElementById(lineId);
+            if (line) {
+                if (stages.includes(currentStage)) {
+                    line.classList.remove('bg-gray-300');
+                    line.classList.add('bg-blue-500');
+                } else {
+                    line.classList.remove('bg-blue-500');
+                    line.classList.add('bg-green-500');
+                }
+            }
+        });
+    }
+    
+    function updateFinalStatistics(data) {
+        const finalSubmissions = document.getElementById('final-submissions-count');
+        const finalTime = document.getElementById('final-processing-time');
+        
+        if (finalSubmissions && data.total_submissions) {
+            finalSubmissions.textContent = data.total_submissions;
+        }
+        
+        if (finalTime && data.total_time) {
+            finalTime.textContent = formatTime(data.total_time);
+        }
+    }
+    
+    function formatTime(seconds) {
+        if (seconds < 60) {
+            return `${seconds}s`;
+        } else if (seconds < 3600) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}m ${remainingSeconds}s`;
+        } else {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return `${hours}h ${minutes}m`;
+        }
+    }
+    
+    function showError(message) {
+        const errorStatus = document.getElementById('error-status');
+        const processingStatus = document.getElementById('processing-status');
+        const errorMessage = errorStatus.querySelector('.error-message');
+        
+        if (processingStatus) processingStatus.classList.add('hidden');
+        if (errorStatus) errorStatus.classList.remove('hidden');
+        if (errorMessage) errorMessage.textContent = message;
+    }
+    
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', function() {
+        if (window.progressTracker) {
+            window.progressTracker.destroy();
+        }
+    });
+});
+</script>
+{% endblock %}

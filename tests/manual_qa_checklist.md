@@ -37,8 +37,8 @@
 
 ## 7. Health & Monitoring
 - [ ] Call /api/health and confirm all components are healthy
-- [ ] Simulate Redis/Celery/DB down and confirm health endpoint reports error
+- [ ] Simulate Celery/DB down and confirm health endpoint reports error
 
 ---
 
-**Record all issues found and steps to reproduce. Attach screenshots for UI/UX bugs.** 
+**Record all issues found and steps to reproduce. Attach screenshots for UI/UX bugs.**

@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimized AI Grading Dashboard - Exam Grader</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="{{ url_for('static', filename='css/dashboard.css') }}" rel="stylesheet">
+    
+    <style>
+        .processing-container {
+            display: none;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .progress-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .progress {
+            height: 25px;
+            border-radius: 12px;
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .progress-bar {
+            border-radius: 12px;
+            transition: width 0.3s ease;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 15px;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            display: block;
+        }
+        
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+        
+        .submission-card {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .submission-card:hover {
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        .submission-card.selected {
+            border-color: #007bff;
+            background-color: #f8f9ff;
+        }
+        
+        .results-container {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .alerts-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            width: 400px;
+            z-index: 1050;
+        }
+        
+        .performance-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #28a745;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+        }
+        
+        .stage-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        
+        .stage-step {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 0 5px;
+            background: rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .stage-step.active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+        
+        .stage-step.completed {
+            background: rgba(40, 167, 69, 0.8);
+        }
+    </style>
+</head>
+<body>
+    <!-- Connection Status Indicator -->
+    <div class="connection-status">
+        <i class="fas fa-circle text-secondary"></i> Connecting...
+    </div>
+    
+    <!-- Alerts Container -->
+    <div class="alerts-container"></div>
+    
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
+                <div class="position-sticky pt-3">
+                    <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                        <span>AI Processing</span>
+                        <span class="performance-badge">Optimized</span>
+                    </h6>
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#">
+                                <i class="fas fa-tachometer-alt"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showPerformanceStats()">
+                                <i class="fas fa-chart-line"></i> Performance Stats
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('main.dashboard') }}">
+                                <i class="fas fa-arrow-left"></i> Back to Main
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+            
+            <!-- Main Content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">
+                        <i class="fas fa-robot"></i> Optimized AI Grading Dashboard
+                    </h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <button type="button" class="btn btn-success btn-process-optimized">
+                            <i class="fas fa-rocket"></i> Start Optimized Processing
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Processing Status Container -->
+                <div class="processing-container">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5><i class="fas fa-cogs"></i> AI Processing Pipeline</h5>
+                        <button type="button" class="btn btn-outline-light btn-sm btn-cancel-processing">
+                            <i class="fas fa-stop"></i> Cancel
+                        </button>
+                    </div>
+                    
+                    <!-- Stage Indicator -->
+                    <div class="stage-indicator">
+                        <div class="stage-step" data-stage="ocr">
+                            <i class="fas fa-eye"></i><br>
+                            <small>OCR</small>
+                        </div>
+                        <div class="stage-step" data-stage="mapping">
+                            <i class="fas fa-map"></i><br>
+                            <small>Mapping</small>
+                        </div>
+                        <div class="stage-step" data-stage="grading">
+                            <i class="fas fa-graduation-cap"></i><br>
+                            <small>Grading</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Progress Container -->
+                    <div class="progress-container">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="processing-status">Ready to process</span>
+                            <span class="progress-elapsed">0s</span>
+                        </div>
+                        
+                        <div class="progress mb-3">
+                            <div class="progress-bar bg-info" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                0%
+                            </div>
+                        </div>
+                        
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <small>Stage:</small><br>
+                                <strong class="progress-stage">Initializing</strong>
+                            </div>
+                            <div class="col-md-3">
+                                <small>Submission:</small><br>
+                                <strong class="progress-submission">0/0</strong>
+                            </div>
+                            <div class="col-md-3">
+                                <small class="progress-errors" style="display: none;">Errors:</small><br>
+                                <strong class="progress-errors" style="display: none;">0</strong>
+                            </div>
+                            <div class="col-md-3">
+                                <small class="progress-warnings" style="display: none;">Warnings:</small><br>
+                                <strong class="progress-warnings" style="display: none;">0</strong>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-2">
+                            <small class="progress-message text-light"></small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Configuration Panel -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6><i class="fas fa-file-alt"></i> Marking Guide</h6>
+                            </div>
+                            <div class="card-body">
+                                <select class="form-select" id="marking-guide-select">
+                                    <option value="">Select a marking guide...</option>
+                                    {% for guide in marking_guides %}
+                                    <option value="{{ guide.id }}">{{ guide.title }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6><i class="fas fa-sliders-h"></i> Processing Options</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="batch-processing" checked>
+                                    <label class="form-check-label" for="batch-processing">
+                                        Enable batch processing
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="cache-ocr" checked>
+                                    <label class="form-check-label" for="cache-ocr">
+                                        Use OCR caching
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Submissions Panel -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6><i class="fas fa-file-upload"></i> Submissions ({{ submissions|length }})</h6>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllSubmissions()">
+                                Select All
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearSelection()">
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        {% if submissions %}
+                        <div class="row">
+                            {% for submission in submissions %}
+                            <div class="col-md-6 col-lg-4 mb-3">
+                                <div class="submission-card" onclick="toggleSubmission({{ submission.id }})">
+                                    <div class="form-check">
+                                        <input class="form-check-input submission-checkbox" type="checkbox" value="{{ submission.id }}" id="submission-{{ submission.id }}">
+                                        <label class="form-check-label" for="submission-{{ submission.id }}">
+                                            <strong>{{ submission.filename or 'Submission ' + submission.id|string }}</strong>
+                                        </label>
+                                    </div>
+                                    <div class="mt-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-calendar"></i> {{ submission.created_at.strftime('%Y-%m-%d %H:%M') }}<br>
+                                            <i class="fas fa-info-circle"></i> Status: 
+                                            <span class="badge badge-{{ 'success' if submission.status == 'graded' else 'secondary' }}">
+                                                {{ submission.status.replace('_', ' ').title() }}
+                                            </span>
+                                        </small>
+                                    </div>
+                                    {% if submission.raw_text %}
+                                    <div class="mt-2">
+                                        <small class="text-success">
+                                            <i class="fas fa-check"></i> Text extracted ({{ submission.raw_text|length }} chars)
+                                        </small>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No submissions found</h5>
+                            <p class="text-muted">Upload some submissions to get started with AI grading.</p>
+                            <a href="{{ url_for('main.upload') }}" class="btn btn-primary">
+                                <i class="fas fa-upload"></i> Upload Submissions
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Results Container -->
+                <div class="results-container"></div>
+            </main>
+        </div>
+    </div>
+    
+    <!-- Performance Stats Modal -->
+    <div class="modal fade" id="performanceStatsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-chart-line"></i> Performance Statistics
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Content will be populated by JavaScript -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/optimized_processing.js') }}"></script>
+    
+    <script>
+        // Submission selection functions
+        function toggleSubmission(submissionId) {
+            const checkbox = document.getElementById(`submission-${submissionId}`);
+            const card = checkbox.closest('.submission-card');
+            
+            checkbox.checked = !checkbox.checked;
+            
+            if (checkbox.checked) {
+                card.classList.add('selected');
+            } else {
+                card.classList.remove('selected');
+            }
+        }
+        
+        function selectAllSubmissions() {
+            document.querySelectorAll('.submission-checkbox').forEach(checkbox => {
+                checkbox.checked = true;
+                checkbox.closest('.submission-card').classList.add('selected');
+            });
+        }
+        
+        function clearSelection() {
+            document.querySelectorAll('.submission-checkbox').forEach(checkbox => {
+                checkbox.checked = false;
+                checkbox.closest('.submission-card').classList.remove('selected');
+            });
+        }
+        
+        // Update stage indicators based on progress
+        function updateStageIndicators(currentStage) {
+            const stages = ['ocr', 'mapping', 'grading'];
+            const currentIndex = stages.indexOf(currentStage);
+            
+            stages.forEach((stage, index) => {
+                const element = document.querySelector(`[data-stage="${stage}"]`);
+                
+                if (index < currentIndex) {
+                    element.classList.add('completed');
+                    element.classList.remove('active');
+                } else if (index === currentIndex) {
+                    element.classList.add('active');
+                    element.classList.remove('completed');
+                } else {
+                    element.classList.remove('active', 'completed');
+                }
+            });
+        }
+        
+        // Set up custom progress callback
+        optimizedProcessing.setCallbacks(
+            // Progress callback
+            function(data) {
+                updateStageIndicators(data.stage);
+            },
+            // Completion callback
+            function(data) {
+                updateStageIndicators('completed');
+                // Show success notification
+                const alert = `
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <i class="fas fa-check-circle"></i> Processing completed successfully!
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+                document.querySelector('.alerts-container').innerHTML = alert;
+            },
+            // Error callback
+            function(data) {
+                updateStageIndicators('error');
+            }
+        );
+        
+        // Initialize tooltips
+        document.addEventListener('DOMContentLoaded', function() {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+</body>
+</html>

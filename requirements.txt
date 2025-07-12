@@ -25,7 +25,6 @@ python-socketio>=5.9.0  # Socket.IO Python client
 
 # Background Job Processing
 celery>=5.3.4  # Background task queue
-redis>=5.0.1  # Redis client for Celery broker and caching
 
 # PDF Generation
 reportlab>=4.0.7  # PDF generation for detailed feedback reports
@@ -48,6 +47,10 @@ SQLAlchemy>=2.0.25  # Database toolkit
 # Performance and Monitoring
 Flask-Caching>=2.1.0  # Caching support
 psutil>=5.9.0  # System monitoring
+aiofiles>=23.2.1  # Async file operations
+concurrent-futures>=3.1.1  # Parallel processing (Python 2 backport, included in Python 3+)
+aiocache>=0.12.2  # Async caching
+uvloop>=0.19.0  # High-performance event loop (Unix only)
 
 # Circuit Breaker and Resilience
 pybreaker>=1.0.1  # Circuit breaker pattern implementation

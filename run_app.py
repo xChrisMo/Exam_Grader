@@ -87,7 +87,14 @@ def check_version_compatibility():
         import werkzeug
         
         print(f"[INFO] Flask version: {flask.__version__}")
-        print(f"[INFO] Flask-Babel version: {flask_babel.__version__}")
+        
+        # Handle Flask-Babel version check (newer versions may not have __version__)
+        try:
+            babel_version = getattr(flask_babel, '__version__', 'unknown')
+            print(f"[INFO] Flask-Babel version: {babel_version}")
+        except AttributeError:
+            print("[INFO] Flask-Babel version: installed (version info unavailable)")
+            
         print(f"[INFO] Werkzeug version: {werkzeug.__version__}")
         
         # Check Flask and Flask-Babel compatibility

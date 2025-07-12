@@ -362,7 +362,7 @@
                 <span
                   class="ml-auto bg-primary-100 text-primary-600 py-0.5 px-2 rounded-full text-xs font-medium"
                 >
-                  {{ session.get('submissions', [])|length }}
+                  {{ session.get('total_submissions', 0) }}
                 </span>
               </a>
               {% endif %} {% if session.get('last_grading_result') %}

@@ -261,6 +261,11 @@
         function showComplete() {
             document.getElementById('processing-status').classList.add('hidden');
             document.getElementById('processing-complete').classList.remove('hidden');
+            
+            // Auto-redirect to dashboard after 3 seconds to clear button loading state
+            setTimeout(() => {
+                window.location.href = '{{ url_for("dashboard") }}';
+            }, 3000);
         }
         
         function showError(message) {

@@ -34,8 +34,8 @@ class SecurityConfig:
     secret_key: str = ""
     session_timeout: int = 3600  # 1 hour
     csrf_enabled: bool = True
-    rate_limit_enabled: bool = True
-    max_requests_per_hour: int = 1000
+    rate_limit_enabled: bool = False  # Disabled rate limiting
+    max_requests_per_hour: int = 0  # No limit
     secure_cookies: bool = True
     session_cookie_httponly: bool = True
     session_cookie_secure: bool = False # Changed to False for local HTTP development
@@ -146,12 +146,12 @@ class CacheConfig:
     cache_type: str = "simple"
     cache_default_timeout: int = 3600
     cache_threshold: int = 500
-    redis_url: Optional[str] = None
 
     def __post_init__(self):
         """Validate cache configuration."""
-        if self.cache_type == "redis" and not self.redis_url:
-            raise ValueError("redis_url is required when cache_type is 'redis'")
+        valid_types = ["simple", "memory"]
+        if self.cache_type not in valid_types:
+            raise ValueError(f"cache_type must be one of {valid_types}")
 
 
 @dataclass
@@ -285,7 +285,6 @@ class UnifiedConfig:
         # Cache configuration
         self.cache = CacheConfig(
             cache_type=os.getenv("CACHE_TYPE", "simple"),
-            redis_url=os.getenv("REDIS_URL"),
         )
 
         # Logging configuration

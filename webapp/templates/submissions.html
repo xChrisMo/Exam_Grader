@@ -38,6 +38,26 @@
           </svg>
           Clear Cache
         </button>
+        <a
+           href="{{ url_for('reprocess_submissions') }}"
+           class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+           title="Reprocess submissions with missing text content"
+         >
+          <svg
+            class="mr-2 h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          Reprocess
+        </a>
         <div class="flex items-center text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-md">
           <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
@@ -566,25 +586,12 @@
       );
       ExamGrader.utils.showButtonLoading(gradeButton, "Grading...");
       
-      // Get the current guide ID from session
-      const guideId = document.querySelector('meta[name="guide-id"]')?.getAttribute('content');
-      
-      if (!guideId) {
-        ExamGrader.utils.hideButtonLoading(gradeButton, "Grade");
-        ExamGrader.notificationManager.notify(
-          "No marking guide selected. Please select a guide first.",
-          "error"
-        );
-        return;
-      }
-      
       ExamGrader.utils
         .apiRequest(
           "/api/process-ai-grading",
           {
             method: "POST",
             body: { 
-              guide_id: guideId,
               submission_ids: [submissionId]
             }
           }

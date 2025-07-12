@@ -22,10 +22,10 @@ from utils.logger import logger
 # Initialize Celery
 celery_app = Celery('exam_grader')
 
-# Configure Celery
+# Configure Celery (using database instead of Redis)
 celery_app.conf.update(
-    broker_url=os.getenv('REDIS_URL', 'redis://localhost:6379/0'),
-    result_backend=os.getenv('REDIS_URL', 'redis://localhost:6379/0'),
+    broker_url='sqla+sqlite:///celery_broker.db',
+    result_backend='db+sqlite:///celery_results.db',
     task_serializer='json',
     accept_content=['json'],
     result_serializer='json',
@@ -406,4 +406,4 @@ def process_batch_grading_task(self, submission_ids: List[str], marking_guide_id
 def init_background_tasks(app):
     """Initialize background task service with Flask app."""
     background_service.init_services()
-    return background_service 
+    return background_service
