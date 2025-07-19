@@ -1,0 +1,25 @@
+{
+  "name": "exam-grader",
+  "version": "1.0.0",
+  "description": "AI-powered educational assessment platform",
+  "main": "index.js",
+  "scripts": {
+    "build-css": "tailwindcss -i ./webapp/static/css/input.css -o ./webapp/static/css/tailwind.css --watch",
+    "build-css-prod": "tailwindcss -i ./webapp/static/css/input.css -o ./webapp/static/css/tailwind.css --minify",
+    "dev": "npm run build-css",
+    "build": "npm run build-css-prod"
+  },
+  "keywords": [
+    "education",
+    "ai",
+    "grading",
+    "assessment"
+  ],
+  "author": "Exam Grader Team",
+  "license": "MIT",
+  "devDependencies": {
+    "tailwindcss": "^3.4.0",
+    "@tailwindcss/forms": "^0.5.7",
+    "@tailwindcss/typography": "^0.5.10"
+  }
+}

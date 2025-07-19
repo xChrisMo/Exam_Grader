@@ -27,8 +27,23 @@ import fitz  # PyMuPDF
 from docx import Document
 
 from src.config.config_manager import ConfigManager
-from src.services.ocr_service import OCRService, OCRServiceError
+from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRService, OCRServiceError
 from utils.logger import logger
+
+# Import the PDF helper for better error messages
+try:
+    from src.parsing.pdf_helper import get_helpful_error_message
+except ImportError:
+    # Fallback if helper module doesn't exist
+    def get_helpful_error_message(file_path, original_error):
+        return f"Error processing PDF: {original_error}"
+
+# Import fallback OCR service if available
+try:
+    from src.services.fallback_ocr_service import FallbackOCRService
+    fallback_ocr_available = True
+except ImportError:
+    fallback_ocr_available = False
 
 # Initialize configuration
 config = ConfigManager()
@@ -137,11 +152,15 @@ class DocumentParser:
                     continue
 
             # Check if we got meaningful text (more than just whitespace or a few characters)
-            if not text.strip() or len(text.strip()) < 10:
+            if not text.strip():
                 logger.warning(
-                    "PDF text extraction yielded insufficient text, OCR may be needed"
+                    "PDF text extraction yielded no text, OCR may be needed"
                 )
-                # We'll let the caller handle OCR fallback
+                return ""
+            elif len(text.strip()) < 5:
+                logger.warning(
+                    f"PDF text extraction yielded very little text ({len(text.strip())} chars), OCR may be needed"
+                )
                 return ""
 
             logger.info(f"Successfully extracted {len(text)} characters from PDF")
@@ -216,41 +235,59 @@ class DocumentParser:
                             logger.debug(f"Converting page {page_num} to image")
                             # Convert page to image
                             import tempfile
-                            # Create a temporary file for the image
-                            fd, temp_img_path = tempfile.mkstemp(suffix=".png")
-                            os.close(fd)  # Close the file descriptor immediately
+                            # Create a temporary file for the image with better cleanup
+                            import tempfile
+                            import time
+                            
+                            temp_img_path = None
+                            pix = None
+                            
                             try:
+                                # Create temporary file with unique name to avoid conflicts
+                                temp_dir = tempfile.gettempdir()
+                                temp_filename = f"pdf_page_{page_num}_{int(time.time() * 1000)}_{os.getpid()}.png"
+                                temp_img_path = os.path.join(temp_dir, temp_filename)
+                                
+                                # Convert page to image
                                 pix = page.get_pixmap()
                                 pix.save(temp_img_path)
-                                del pix  # Explicitly delete pixmap to release resources
+                                
+                                logger.debug(f"Processing page {page_num} with OCR")
+                                # Process image with OCR
+                                if ocr_service_instance:
+                                    page_text = ocr_service_instance.extract_text_from_image(
+                                        temp_img_path
+                                    )
+                                else:
+                                    logger.warning("OCR service not available, skipping page")
+                                    page_text = ""
+                                text += page_text + "\n"
+                                logger.debug("OCR processing completed")
+                                
                             except Exception as e:
-                                logger.error(f"Error saving pixmap to temporary file {temp_img_path}: {str(e)}")
-                                if os.path.exists(temp_img_path):
-                                    os.unlink(temp_img_path)
-                                raise
-
-                            logger.debug(f"Processing page {page_num} with OCR")
-                            # Process image with OCR
-                            if ocr_service_instance:
-                                page_text = ocr_service_instance.extract_text_from_image(
-                                    temp_img_path
-                                )
-                            else:
-                                logger.warning("OCR service not available, skipping page")
+                                logger.error(f"Error processing page {page_num}: {str(e)}")
                                 page_text = ""
-                            text += page_text + "\n"
-                            logger.debug("OCR processing completed")
-
-                            # Clean up temporary image
-                            try:
-                                os.unlink(temp_img_path)  # Use unlink for better cross-platform compatibility
-                                logger.debug(
-                                    f"Cleaned up temporary image {temp_img_path} for page {page_num}"
-                                )
-                            except Exception as e:
-                                logger.warning(
-                                    f"Failed to clean up temporary image {temp_img_path}: {str(e)}"
-                                )
+                            finally:
+                                # Clean up resources
+                                if pix:
+                                    try:
+                                        del pix  # Explicitly delete pixmap to release resources
+                                    except:
+                                        pass
+                                
+                                # Clean up temporary image with retry logic for Windows
+                                if temp_img_path and os.path.exists(temp_img_path):
+                                    for attempt in range(3):  # Try up to 3 times
+                                        try:
+                                            time.sleep(0.1)  # Small delay to allow file handles to close
+                                            os.unlink(temp_img_path)
+                                            logger.debug(f"Cleaned up temporary image {temp_img_path} for page {page_num}")
+                                            break
+                                        except (OSError, PermissionError) as e:
+                                            if attempt == 2:  # Last attempt
+                                                logger.warning(f"Failed to clean up temporary image {temp_img_path} after 3 attempts: {str(e)}")
+                                            else:
+                                                time.sleep(0.5)  # Wait longer before retry
 
                             logger.debug(
                                 f"Page {page_num}: OCR extracted {len(page_text)} characters"
@@ -391,14 +428,29 @@ def parse_student_submission(
             (not raw_text or not raw_text.strip())
             and not ocr_used
             and file_type != "text/plain"
-            and ocr_service_instance  # Only try OCR if service is available
         ):
+            if not ocr_service_instance:
+                logger.error("OCR service not available - cannot process document without extractable text")
+                return (
+                    {},
+                    None,
+                    "Document contains no extractable text and OCR service is not configured. Please ensure the document contains readable text or configure OCR service.",
+                )
+            
             try:
                 logger.info("Attempting OCR as fallback for text extraction")
                 raw_text = DocumentParser.extract_text_from_image(file_path)
-                logger.info(
-                    f"OCR fallback successful, extracted {len(raw_text)} characters"
-                )
+                if raw_text and raw_text.strip():
+                    logger.info(
+                        f"OCR fallback successful, extracted {len(raw_text)} characters"
+                    )
+                else:
+                    logger.warning("OCR completed but returned empty text")
+                    return (
+                        {},
+                        None,
+                        "OCR processing completed but no readable text was found in the document. The document may be blank, contain only images, or have text that is too unclear to read.",
+                    )
             except Exception as ocr_error:
                 logger.error(f"OCR fallback also failed: {str(ocr_error)}")
                 return (

@@ -11,10 +11,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from celery import Celery
 from flask import current_app
 
-from src.services.ocr_service import OCRService
-from src.services.llm_service import LLMService
-from src.services.mapping_service import MappingService
-from src.services.grading_service import GradingService
+from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRService
+from src.services.consolidated_llm_service import ConsolidatedLLMService as LLMService
+from src.services.consolidated_mapping_service import ConsolidatedMappingService as MappingService
+from src.services.consolidated_grading_service import ConsolidatedGradingService as GradingService
 from src.services.realtime_service import realtime_service
 from src.database.models import db, Submission, GradingResult, Mapping, MarkingGuide
 from utils.logger import logger

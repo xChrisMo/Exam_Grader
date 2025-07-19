@@ -125,6 +125,19 @@ def login():
         return render_template("auth/login.html", page_title="Login", form=form)
 
     try:
+        # Validate form first (including CSRF token) before clearing session
+        if not form.validate_on_submit():
+            # Form validation failed (including CSRF)
+            for field, errors in form.errors.items():
+                for error in errors:
+                    flash(f"{field}: {error}", "error")
+            return render_template("auth/login.html", page_title="Login", form=form)
+
+        # Get form data
+        username = form.username.data.strip()
+        password = form.password.data
+        remember_me = form.remember_me.data
+
         # Preserve CSRF token before clearing session
         from flask_wtf.csrf import generate_csrf
         csrf_token = None
@@ -136,11 +149,6 @@ def login():
             
         # Clear any existing session data to prevent mixing old and new session info
         session.clear()
-
-        # Get form data
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        remember_me = request.form.get("remember_me") == "on"
 
         # Validate input
         if not username or not password:
@@ -223,6 +231,11 @@ def login():
         session.permanent = remember_me
         session.new = True  # Explicitly mark as new so save_session creates a new cookie
         session.modified = True  # Mark as modified to ensure it gets saved
+        
+        # Log the user in with Flask-Login
+        from flask_login import login_user
+        login_user(user, remember=remember_me)
+        logger.debug(f"Flask-Login user logged in: {user.username}")
         
         # Update user data in session
         _update_user_data_in_session(user.id)
@@ -358,6 +371,11 @@ def logout():
         if session_id and session_manager:
             session_manager.invalidate_session(session_id)
 
+        # Log out from Flask-Login
+        from flask_login import logout_user
+        logout_user()
+        logger.debug(f"Flask-Login user logged out: {username}")
+
         # Clear Flask session
         session.clear()
 
@@ -480,6 +498,7 @@ def get_current_user():
 def login_required(f):
     """Decorator to require login for routes."""
     from functools import wraps
+    from flask import current_app, request
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -487,17 +506,40 @@ def login_required(f):
         session_sid = session.sid
         logger.debug(f"login_required: Checking session. user_id: {user_id}, session.sid: {session_sid}")
 
-        if not user_id or not session_sid:
+        if not user_id:
             logger.debug(
-                f"login_required: Missing session data. Redirecting to login. Next URL: {request.url}"
+                f"login_required: Missing user_id. Redirecting to login. Next URL: {request.url}"
             )
-            logger.warning("login_required: Clearing session due to missing user_id or session.sid.")
+            logger.warning("login_required: Clearing session due to missing user_id.")
             flash("Please log in to access this page.", "warning")
             # Clear any invalid session data
             session.clear()
             return redirect(url_for("auth.login", next=request.url))
         
+        # If session.sid is None, try to get it from the session cookie
+        if not session_sid:
+            session_cookie_name = current_app.config.get('SESSION_COOKIE_NAME', 'session')
+            session_sid = request.cookies.get(session_cookie_name)
+            if session_sid:
+                session.sid = session_sid
+                logger.debug(f"login_required: Retrieved session.sid from cookie: {session_sid}")
+            else:
+                logger.debug(
+                    f"login_required: No session.sid found. Redirecting to login. Next URL: {request.url}"
+                )
+                logger.warning("login_required: Clearing session due to missing session.sid.")
+                flash("Please log in to access this page.", "warning")
+                session.clear()
+                return redirect(url_for("auth.login", next=request.url))
+        
         try:
+            # Check if session_manager is available
+            if session_manager is None:
+                logger.error("login_required: session_manager is None! Authentication system not properly initialized.")
+                session.clear()
+                flash("Authentication system error. Please log in again.", "error")
+                return redirect(url_for("auth.login"))
+                
             # Validate secure session
             secure_session = session_manager.get_session(session_sid)
             logger.debug(f"login_required: Got secure session: {secure_session is not None}, type: {type(secure_session).__name__ if secure_session else 'None'}")

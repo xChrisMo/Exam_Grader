@@ -9,6 +9,12 @@ from .migrations import MigrationManager
 from .models import GradingResult, GradingSession, Mapping, MarkingGuide, Session, Submission, User, db
 from .utils import DatabaseUtils
 
+# Import optimized models as well
+try:
+    from . import optimized_models
+except ImportError:
+    optimized_models = None
+
 __all__ = [
     "db",
     "User",
@@ -20,4 +26,5 @@ __all__ = [
     "Session",
     "MigrationManager",
     "DatabaseUtils",
+    "optimized_models",
 ]

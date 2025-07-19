@@ -1,30 +1,43 @@
 """
 Unified Configuration Management System for Exam Grader Application.
 
-This module consolidates all configuration settings from config.py and config_manager.py
-into a single, centralized system with environment-specific settings and validation.
+This module consolidates all configuration settings into a single, centralized system 
+with environment-specific settings, validation, and migration utilities.
 """
 
 import os
 import secrets
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from dotenv import load_dotenv
 
 # Import logger with fallback
 try:
     from utils.logger import Logger
+    logger = Logger().get_logger()
 except ImportError:
     import logging
-
     logger = logging.getLogger(__name__)
 
-logger = Logger().get_logger()
+# Load environment variables from multiple sources
+def load_environment_variables():
+    """Load environment variables from multiple .env files with priority."""
+    # Load from instance/.env first (highest priority)
+    instance_env = Path("instance/.env")
+    if instance_env.exists():
+        load_dotenv(instance_env, override=True)
+        logger.debug("Loaded environment variables from instance/.env")
+    
+    # Load from root .env (lower priority)
+    root_env = Path(".env")
+    if root_env.exists():
+        load_dotenv(root_env, override=False)  # Don't override instance settings
+        logger.debug("Loaded environment variables from .env")
 
-# Load environment variables
-load_dotenv()
+load_environment_variables()
 
 
 @dataclass
@@ -52,7 +65,7 @@ class SecurityConfig:
 class DatabaseConfig:
     """Database configuration settings."""
 
-    database_url: str = "sqlite:///exam_grader.db"
+    database_url: str = "sqlite:///c:/Users/mezac/Documents/job/Exam_Grader/exam_grader.db"
     database_pool_size: int = 10
     database_pool_timeout: int = 30
     database_pool_recycle: int = 3600
@@ -187,12 +200,103 @@ class ServerConfig:
             raise ValueError("port must be between 1 and 65535")
 
 
+class ConfigurationMigrator:
+    """Handles migration of deprecated environment variables to new names."""
+    
+    # Mapping of old variable names to new ones
+    VARIABLE_MIGRATIONS = {
+        "DATABASE_URI": "DATABASE_URL",
+        "DEEPSEEK_SEED": "DEEPSEEK_RANDOM_SEED",
+        "DEEPSEEK_TOKEN_LIMIT": "DEEPSEEK_MAX_TOKENS",
+        "NOTIFICATION_LEVEL": "LOG_LEVEL",
+    }
+    
+    @classmethod
+    def migrate_environment_variables(cls):
+        """Migrate deprecated environment variables to new names."""
+        migrated = []
+        
+        for old_var, new_var in cls.VARIABLE_MIGRATIONS.items():
+            old_value = os.getenv(old_var)
+            new_value = os.getenv(new_var)
+            
+            if old_value and not new_value:
+                # Migrate the old variable to the new one
+                os.environ[new_var] = old_value
+                migrated.append(f"{old_var} -> {new_var}")
+                logger.warning(f"Migrated deprecated environment variable: {old_var} -> {new_var}")
+        
+        if migrated:
+            logger.info(f"Migrated {len(migrated)} deprecated environment variables")
+        
+        return migrated
+
+
+class ConfigurationValidator:
+    """Validates configuration settings and provides helpful error messages."""
+    
+    @staticmethod
+    def validate_api_keys(api_config: 'APIConfig') -> List[str]:
+        """Validate API key configuration and return warnings."""
+        warnings = []
+        
+        if not api_config.handwriting_ocr_api_key:
+            warnings.append("HandwritingOCR API key not configured - OCR features will be limited")
+        
+        if not api_config.deepseek_api_key:
+            warnings.append("DeepSeek API key not configured - LLM features will be limited")
+        
+        if not api_config.handwriting_ocr_api_key and not api_config.deepseek_api_key:
+            warnings.append("No API keys configured - application will run in limited mode")
+        
+        return warnings
+    
+    @staticmethod
+    def validate_directories(file_config: 'FileConfig') -> List[str]:
+        """Validate directory configuration and return warnings."""
+        warnings = []
+        
+        for dir_name, directory in [
+            ("temp", file_config.temp_dir),
+            ("output", file_config.output_dir),
+            ("upload", file_config.upload_dir)
+        ]:
+            if not directory.exists():
+                try:
+                    directory.mkdir(parents=True, exist_ok=True)
+                    logger.info(f"Created {dir_name} directory: {directory}")
+                except Exception as e:
+                    warnings.append(f"Failed to create {dir_name} directory {directory}: {e}")
+            elif not os.access(directory, os.W_OK):
+                warnings.append(f"{dir_name.title()} directory is not writable: {directory}")
+        
+        return warnings
+    
+    @staticmethod
+    def validate_database_url(database_url: str) -> List[str]:
+        """Validate database URL and return warnings."""
+        warnings = []
+        
+        if database_url.startswith("sqlite:///"):
+            db_path = database_url.replace("sqlite:///", "")
+            db_dir = Path(db_path).parent
+            
+            if not db_dir.exists():
+                try:
+                    db_dir.mkdir(parents=True, exist_ok=True)
+                    logger.info(f"Created database directory: {db_dir}")
+                except Exception as e:
+                    warnings.append(f"Failed to create database directory {db_dir}: {e}")
+        
+        return warnings
+
+
 class UnifiedConfig:
     """
     Unified configuration manager that consolidates all application settings.
 
     This class provides a single point of configuration management with
-    environment-specific settings and proper validation.
+    environment-specific settings, validation, and migration utilities.
     """
 
     def __init__(self, environment: str = None):
@@ -203,7 +307,15 @@ class UnifiedConfig:
             environment: Environment name (development, testing, production)
         """
         self.environment = environment or os.getenv("FLASK_ENV", "development")
+        
+        # Migrate deprecated environment variables
+        ConfigurationMigrator.migrate_environment_variables()
+        
+        # Load configuration
         self._load_configuration()
+        
+        # Validate configuration
+        self._validate_configuration()
 
     def _load_configuration(self):
         """Load configuration based on environment."""
@@ -222,7 +334,7 @@ class UnifiedConfig:
 
         # Database configuration
         self.database = DatabaseConfig(
-            database_url=os.getenv("DATABASE_URL", "sqlite:///exam_grader.db"),
+            database_url=os.getenv("DATABASE_URL", "sqlite:///c:/Users/mezac/Documents/job/Exam_Grader/exam_grader.db"),
             database_echo=os.getenv("DATABASE_ECHO", "False").lower() == "true",
         )
 
@@ -347,8 +459,39 @@ class UnifiedConfig:
                 "pool_timeout": self.database.database_pool_timeout,
                 "pool_recycle": self.database.database_pool_recycle,
                 "echo": self.database.database_echo,
+                # SQLite-specific optimizations to reduce locking
+                "connect_args": {
+                    "check_same_thread": False,
+                    "timeout": 30,  # 30 second timeout for database operations
+                } if self.database.database_url.startswith("sqlite") else {},
+                "poolclass": None if self.database.database_url.startswith("sqlite") else None,
             },
         }
+
+    def _validate_configuration(self):
+        """Validate all configuration settings and log warnings."""
+        validation_warnings = []
+        
+        # Validate API keys
+        api_warnings = ConfigurationValidator.validate_api_keys(self.api)
+        validation_warnings.extend(api_warnings)
+        
+        # Validate directories
+        dir_warnings = ConfigurationValidator.validate_directories(self.files)
+        validation_warnings.extend(dir_warnings)
+        
+        # Validate database
+        db_warnings = ConfigurationValidator.validate_database_url(self.database.database_url)
+        validation_warnings.extend(db_warnings)
+        
+        # Log all warnings
+        for warning in validation_warnings:
+            logger.warning(warning)
+        
+        if validation_warnings:
+            logger.info(f"Configuration loaded with {len(validation_warnings)} warnings")
+        else:
+            logger.info("Configuration loaded successfully with no warnings")
 
     def validate(self) -> bool:
         """
@@ -361,7 +504,7 @@ class UnifiedConfig:
             ValueError: If any configuration is invalid
         """
         try:
-            # All validation is done in __post_init__ methods
+            # Validation is done during initialization
             logger.info(
                 f"Configuration validated successfully for environment: {self.environment}"
             )
@@ -369,6 +512,117 @@ class UnifiedConfig:
         except Exception as e:
             logger.error(f"Configuration validation failed: {str(e)}")
             raise
+    
+    def get_configuration_summary(self) -> Dict[str, Any]:
+        """
+        Get a summary of current configuration settings.
+        
+        Returns:
+            Dictionary containing configuration summary
+        """
+        return {
+            "environment": self.environment,
+            "server": {
+                "host": self.server.host,
+                "port": self.server.port,
+                "debug": self.server.debug,
+                "testing": self.server.testing,
+            },
+            "database": {
+                "type": "sqlite" if self.database.database_url.startswith("sqlite") else "other",
+                "echo": self.database.database_echo,
+            },
+            "files": {
+                "max_size_mb": self.files.max_file_size_mb,
+                "supported_formats": len(self.files.supported_formats),
+                "temp_dir": str(self.files.temp_dir),
+                "output_dir": str(self.files.output_dir),
+                "upload_dir": str(self.files.upload_dir),
+            },
+            "api": {
+                "ocr_configured": bool(self.api.handwriting_ocr_api_key),
+                "llm_configured": bool(self.api.deepseek_api_key),
+                "deepseek_model": self.api.deepseek_model,
+            },
+            "security": {
+                "csrf_enabled": self.security.csrf_enabled,
+                "secure_cookies": self.security.session_cookie_secure,
+                "session_timeout": self.security.session_timeout,
+            },
+            "logging": {
+                "level": self.logging.log_level,
+                "file": self.logging.log_file,
+            },
+        }
+    
+    def reload(self):
+        """Reload configuration from environment variables."""
+        logger.info("Reloading configuration from environment variables")
+        
+        # Reload environment variables
+        load_environment_variables()
+        
+        # Migrate any new deprecated variables
+        ConfigurationMigrator.migrate_environment_variables()
+        
+        # Reload configuration
+        self._load_configuration()
+        
+        # Re-validate configuration
+        self._validate_configuration()
+        
+        logger.info("Configuration reloaded successfully")
+    
+    def export_environment_template(self, include_values: bool = False) -> str:
+        """
+        Export environment variable template.
+        
+        Args:
+            include_values: Whether to include current values (for backup)
+            
+        Returns:
+            String containing environment variable template
+        """
+        template_lines = [
+            "# Exam Grader Application Configuration",
+            "# Generated environment variable template",
+            "",
+            "# Security Settings",
+            f"SECRET_KEY={'=' + self.security.secret_key if include_values else '=your_secret_key_here'}",
+            f"SESSION_TIMEOUT={'=' + str(self.security.session_timeout) if include_values else '=3600'}",
+            f"CSRF_ENABLED={'=' + str(self.security.csrf_enabled) if include_values else '=True'}",
+            "",
+            "# Database Settings", 
+            f"DATABASE_URL={'=' + self.database.database_url if include_values else '=sqlite:///exam_grader.db'}",
+            f"DATABASE_ECHO={'=' + str(self.database.database_echo) if include_values else '=False'}",
+            "",
+            "# File Processing Settings",
+            f"MAX_FILE_SIZE_MB={'=' + str(self.files.max_file_size_mb) if include_values else '=20'}",
+            f"SUPPORTED_FORMATS={'=' + ','.join(self.files.supported_formats) if include_values else '=.pdf,.docx,.jpg,.png'}",
+            f"TEMP_DIR={'=' + str(self.files.temp_dir) if include_values else '=temp'}",
+            f"OUTPUT_DIR={'=' + str(self.files.output_dir) if include_values else '=output'}",
+            f"UPLOAD_DIR={'=' + str(self.files.upload_dir) if include_values else '=uploads'}",
+            "",
+            "# API Settings",
+            f"HANDWRITING_OCR_API_KEY={'=' + self.api.handwriting_ocr_api_key if include_values else '=your_ocr_api_key'}",
+            f"HANDWRITING_OCR_API_URL={'=' + self.api.handwriting_ocr_api_url if include_values else '=https://www.handwritingocr.com/api/v3'}",
+            f"DEEPSEEK_API_KEY={'=' + self.api.deepseek_api_key if include_values else '=your_deepseek_api_key'}",
+            f"DEEPSEEK_MODEL={'=' + self.api.deepseek_model if include_values else '=deepseek-chat'}",
+            "",
+            "# Server Settings",
+            f"HOST={'=' + self.server.host if include_values else '=127.0.0.1'}",
+            f"PORT={'=' + str(self.server.port) if include_values else '=5000'}",
+            f"DEBUG={'=' + str(self.server.debug) if include_values else '=False'}",
+            "",
+            "# Logging Settings",
+            f"LOG_LEVEL={'=' + self.logging.log_level if include_values else '=INFO'}",
+            f"LOG_FILE={'=' + (self.logging.log_file or '') if include_values else '='}",
+            "",
+            "# Cache Settings",
+            f"CACHE_TYPE={'=' + self.cache.cache_type if include_values else '=simple'}",
+        ]
+        
+        return "\n".join(template_lines)
 
 
 # Global configuration instance

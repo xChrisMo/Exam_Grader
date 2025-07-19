@@ -1,7 +1,6 @@
 """Optimized Mapping Service with batching, structured templates, and enhanced LLM efficiency."""
 
 import json
-import re
 from typing import Dict, List, Optional, Tuple, Any
 
 from src.services.mapping_service import MappingService
@@ -17,30 +16,50 @@ class OptimizedMappingService(MappingService):
         self.batch_size = 10  # Process multiple Q&A pairs at once
         
     def _clean_and_deduplicate_content(self, content: str) -> str:
-        """Clean and deduplicate content to reduce LLM input size."""
+        """Clean and deduplicate content using LLM to reduce input size."""
         if not content:
             return ""
         
-        # Remove excessive whitespace
-        content = re.sub(r'\s+', ' ', content.strip())
-        
-        # Remove duplicate lines (common in OCR)
-        lines = content.split('\n')
-        seen_lines = set()
-        unique_lines = []
-        
-        for line in lines:
-            line_clean = line.strip().lower()
-            if line_clean and line_clean not in seen_lines:
-                seen_lines.add(line_clean)
-                unique_lines.append(line.strip())
-        
-        # Remove common OCR artifacts
-        content = '\n'.join(unique_lines)
-        content = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\xff]', '', content)  # Remove control chars
-        content = re.sub(r'\b(page|\d+|scan|copy|image)\b', '', content, flags=re.IGNORECASE)
-        
-        return content
+        try:
+            if self.llm_service:
+                # Use LLM to clean and deduplicate content
+                system_prompt = """
+You are a text cleaning expert. Clean and optimize the provided text by:
+1. Removing excessive whitespace and normalizing formatting
+2. Removing duplicate lines and redundant content
+3. Removing OCR artifacts like page numbers, scan references, etc.
+4. Preserving all meaningful content and structure
+5. Return only the cleaned text without any explanations
+"""
+                
+                user_prompt = f"Clean and deduplicate this text:\n\n{content[:2000]}"
+                
+                response = self.llm_service.generate_response(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    temperature=0.1
+                )
+                
+                return response.strip() if response else content
+            else:
+                # Basic fallback cleaning without regex
+                lines = content.split('\n')
+                seen_lines = set()
+                unique_lines = []
+                
+                for line in lines:
+                    line_clean = line.strip().lower()
+                    if line_clean and line_clean not in seen_lines:
+                        seen_lines.add(line_clean)
+                        unique_lines.append(line.strip())
+                
+                return '\n'.join(unique_lines)
+                
+        except Exception as e:
+            logger.warning(f"Content cleaning failed: {e}, using basic cleanup")
+            # Basic fallback
+            lines = content.split('\n')
+            return '\n'.join(line.strip() for line in lines if line.strip())
     
     def _create_structured_mapping_prompt(self, guide_content: str, submission_content: str, guide_type: str) -> str:
         """Create optimized, structured prompt for mapping."""
@@ -153,14 +172,31 @@ Return JSON format:
             return self._fallback_mapping(guide_content, submission_content)
     
     def _parse_and_validate_mapping_response(self, response: str, guide_type: str) -> Optional[Dict[str, Any]]:
-        """Parse and validate LLM mapping response."""
+        """Parse and validate LLM mapping response using LLM-only approach."""
         try:
-            # Extract JSON from response
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            if not json_match:
-                return None
-            
-            result = json.loads(json_match.group())
+            # First attempt: direct JSON parsing
+            try:
+                result = json.loads(response.strip())
+            except json.JSONDecodeError:
+                # Second attempt: use LLM to extract and clean JSON
+                if self.llm_service:
+                    system_prompt = """
+You are a JSON extraction expert. Extract valid JSON from the provided text.
+Return only the JSON object, no explanations or additional text.
+Ensure the JSON is properly formatted and valid.
+"""
+                    
+                    user_prompt = f"Extract valid JSON from this text:\n\n{response}"
+                    
+                    cleaned_response = self.llm_service.generate_response(
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                        temperature=0.1
+                    )
+                    
+                    result = json.loads(cleaned_response.strip())
+                else:
+                    return None
             
             # Validate structure
             if 'mappings' not in result or not isinstance(result['mappings'], list):
@@ -313,13 +349,31 @@ Be concise and accurate."""
         return prompt
     
     def _parse_batch_response(self, response: str, submissions: List[Dict]) -> List[Dict[str, Any]]:
-        """Parse batch LLM response."""
+        """Parse batch LLM response using LLM-only approach."""
         try:
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            if not json_match:
-                raise ValueError("No JSON found in response")
-            
-            result = json.loads(json_match.group())
+            # First attempt: direct JSON parsing
+            try:
+                result = json.loads(response.strip())
+            except json.JSONDecodeError:
+                # Second attempt: use LLM to extract and clean JSON
+                if self.llm_service:
+                    system_prompt = """
+You are a JSON extraction expert. Extract valid JSON from the provided text.
+Return only the JSON object, no explanations or additional text.
+Ensure the JSON is properly formatted and valid.
+"""
+                    
+                    user_prompt = f"Extract valid JSON from this text:\n\n{response}"
+                    
+                    cleaned_response = self.llm_service.generate_response(
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                        temperature=0.1
+                    )
+                    
+                    result = json.loads(cleaned_response.strip())
+                else:
+                    raise ValueError("No LLM service available for JSON extraction")
             
             if 'results' not in result:
                 raise ValueError("No results field in response")
@@ -345,30 +399,46 @@ Be concise and accurate."""
             ]
     
     def _fallback_mapping(self, guide_content: str, submission_content: str) -> Dict[str, Any]:
-        """Fallback mapping using regex when LLM fails."""
+        """LLM-only fallback mapping when primary mapping fails."""
         try:
-            # Use parent class fallback method if available
-            if hasattr(super(), '_fallback_mapping'):
-                return super()._fallback_mapping(guide_content, submission_content)
+            if not self.llm_service:
+                logger.warning("No LLM service available for fallback mapping")
+                return {'mappings': []}
             
-            # Simple regex-based fallback
-            mappings = []
+            # Simplified LLM prompt for fallback
+            system_prompt = """
+You are an expert at extracting and mapping question-answer pairs from text.
+
+Extract clear question-answer pairs from the submission text.
+Return only confident mappings in JSON format:
+{
+  "mappings": [
+    {
+      "question_id": "Q1",
+      "question_text": "extracted question",
+      "answer_text": "extracted answer",
+      "confidence": 0.8
+    }
+  ]
+}
+"""
             
-            # Extract question patterns
-            question_patterns = re.findall(r'(?:question|q)\s*(\d+)[:.\s]*(.*?)(?=(?:question|q)\s*\d+|$)', 
-                                         submission_content, re.IGNORECASE | re.DOTALL)
+            user_prompt = f"""Extract question-answer pairs from this text:
+
+{submission_content}
+
+Return structured JSON with clear mappings."""
             
-            for i, (q_num, answer) in enumerate(question_patterns[:5]):  # Limit to 5
-                if answer.strip():
-                    mappings.append({
-                        'question_id': f"Q{q_num or i+1}",
-                        'question_text': f"Question {q_num or i+1}",
-                        'answer_text': answer.strip()[:500],  # Limit length
-                        'confidence': 0.5  # Low confidence for fallback
-                    })
+            response = self.llm_service.generate_response(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.2
+            )
             
-            return {'mappings': mappings}
+            # Parse response
+            result = self._parse_and_validate_mapping_response(response, "questions")
+            return result if result else {'mappings': []}
             
         except Exception as e:
-            logger.error(f"Fallback mapping failed: {e}")
+            logger.error(f"LLM fallback mapping failed: {e}")
             return {'mappings': []}

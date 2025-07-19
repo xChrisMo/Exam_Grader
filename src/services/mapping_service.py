@@ -5,10 +5,6 @@ questions and answers in student submissions.
 """
 
 import json
-import re
-import re
-import re
-import re
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -85,7 +81,7 @@ class MappingService:
             Please analyze this marking guide and determine if it primarily contains questions or answers.
 
             Marking guide content:
-            {marking_guide_content[:10000]}  # Limit to first 10000 chars for efficiency
+            {marking_guide_content}
             """
 
             # Log the request
@@ -317,122 +313,88 @@ class MappingService:
 
                 # Try to clean up the response for models that don't properly format JSON
                 try:
-                    # Find JSON content between curly braces if there's text before/after
-                    json_match = re.search(r"\{.*\}", result, re.DOTALL)
-                    if json_match:
-                        result = json_match.group(0)
-                    else:
-                        logger.warning("No JSON object found in LLM response.")
-                        logger.error(
-                            f"Raw LLM response that failed JSON extraction: {result}"
-                        )
-                        # Instead of immediately falling back to regex, try to fix the response using LLM
-                        if self.llm_service and hasattr(self.llm_service, "_get_structured_response"):
-                            logger.info("Attempting to fix malformed JSON using LLM...")
-                            try:
-                                # Use LLM to fix and structure the response
-                                sanitized_response = self.llm_service._get_structured_response(result)
-                                result = sanitized_response
-                                logger.info(f"LLM-fixed JSON: {result[:500]}...")
-                            except Exception as fix_error:
-                                logger.error(f"Failed to fix JSON with LLM: {str(fix_error)}")
-                                # Return an empty list to trigger the fallback extraction
-                                return []
-                        else:
-                            # Return an empty list to trigger the fallback extraction
-                            return []
-
+                    # First attempt direct JSON parsing
                     parsed = json.loads(result)
-
-                    # Log successful extraction
                     logger.info(
                         f"Successfully extracted {len(parsed.get('items', []))} items from content"
                     )
-
                     return parsed.get("items", [])
-                except json.JSONDecodeError as e:
-                    logger.warning(
-                        f"JSON parsing error in extract_questions_and_answers: {str(e)}"
-                    )
-
-                    # Log JSON parsing error
-                    logger.warning(
-                        f"JSON parsing error: {str(e)}. Falling back to regex extraction."
-                    )
-
-                    # Return an empty list to trigger the fallback extraction
-                    return []
+                except json.JSONDecodeError:
+                    # Use LLM to extract and clean JSON
+                    logger.info("Direct JSON parsing failed, using LLM to extract JSON...")
+                    try:
+                        json_extraction_prompt = f"""
+                        Extract and clean the JSON from this response. Return only valid JSON without any additional text:
+                        
+                        {result}
+                        """
+                        
+                        json_response = self.llm_service.client.chat.completions.create(
+                            model=self.llm_service.model,
+                            messages=[
+                                {"role": "system", "content": "You are a JSON extraction expert. Extract and return only valid JSON from the given text. Do not include any explanations or additional text."},
+                                {"role": "user", "content": json_extraction_prompt}
+                            ],
+                            temperature=0.0
+                        )
+                        
+                        cleaned_result = json_response.choices[0].message.content.strip()
+                        parsed = json.loads(cleaned_result)
+                        logger.info(
+                            f"Successfully extracted {len(parsed.get('items', []))} items using LLM JSON extraction"
+                        )
+                        return parsed.get("items", [])
+                    except Exception as json_error:
+                        logger.error(f"LLM JSON extraction failed: {str(json_error)}")
+                        return []
 
             except Exception as e:
                 logger.warning(
-                    f"LLM extraction failed, falling back to regex: {str(e)}"
+                    f"LLM extraction failed: {str(e)}"
                 )
+                return []
 
-        # Fallback to regex-based extraction
-        items = []
-        content = re.sub(r"\n{3,}", "\n\n", content.strip())
-        content = re.sub(
-            r"([^\n])(\s*)(Question|Q)\s+(\d+)",
-            r"\1\n\n\3 \4",
-            content,
-            flags=re.IGNORECASE,
-        )
-
-        question_matches = list(
-            re.finditer(
-                r"(?:^|\n+)((?:Question|Q)[.\s]*\d+[.\s]*:?[.\s]*)(.*?)(?=(?:\n+(?:Question|Q)[.\s]*\d+[.\s]*:?)|$)",
-                content,
-                re.IGNORECASE | re.DOTALL,
-            )
-        )
-
-        if not question_matches:
-            items.append({"id": "item1", "text": content.strip(), "type": "unknown"})
-            return items
-
-        for i, match in enumerate(question_matches):
-            current_id = i + 1
-            # Extract question content from the match
-            question_content = match.group(2).strip()
-
-            answer_match = re.search(
-                r"(?:^|\n+)((?:Answer|A|Solution|Sol)[.\s]*:?[.\s]*)(.*)",
-                question_content,
-                re.IGNORECASE | re.DOTALL,
-            )
-
-            if answer_match:
-                question_text = question_content[: answer_match.start()].strip()
-                answer_text = answer_match.group(2).strip()
-            else:
-                question_text = question_content
-                answer_text = ""
-
-            # Try to extract max score with more patterns
-            max_score = None
-            score_patterns = [
-                r"(?:max|maximum|total)[.\s]*(?:score|points|marks)[.\s]*:?\s*(\d+)",
-                r"\((\d+)\s*(?:marks|points)\)",
-                r"(\d+)\s*(?:marks|points)\s*(?:each|total|maximum)?",
-                r"(?:worth|total|maximum)\s*(?:of\s*)?(\d+)\s*(?:marks|points)",
-            ]
-
-            for pattern in score_patterns:
-                max_score_match = re.search(pattern, question_content, re.IGNORECASE)
-                if max_score_match:
-                    max_score = int(max_score_match.group(1))
-                    break
-
-                items.append(
-                    {
-                        "id": f"q{current_id}",
-                        "text": question_text,
-                        "answer": answer_text,
-                        "max_score": max_score,  # Will be None if no marks found
-                    }
+        # LLM-based fallback extraction
+        if self.llm_service:
+            try:
+                logger.info("Using LLM fallback for content extraction...")
+                
+                fallback_prompt = f"""
+                Extract questions and answers from this content. Return a JSON array with items containing id, text, answer, and max_score fields:
+                
+                {content}
+                """
+                
+                fallback_response = self.llm_service.client.chat.completions.create(
+                    model=self.llm_service.model,
+                    messages=[
+                        {"role": "system", "content": "Extract questions and answers from content. Return JSON array with items containing id, text, answer, and max_score fields."},
+                        {"role": "user", "content": fallback_prompt}
+                    ],
+                    temperature=0.0
                 )
-
-        return items
+                
+                fallback_result = fallback_response.choices[0].message.content.strip()
+                
+                try:
+                    parsed = json.loads(fallback_result)
+                    if isinstance(parsed, list):
+                        return parsed
+                    elif isinstance(parsed, dict) and 'items' in parsed:
+                        return parsed['items']
+                    else:
+                        return []
+                except json.JSONDecodeError:
+                    logger.error("Fallback LLM extraction also failed to produce valid JSON")
+                    return []
+                    
+            except Exception as fallback_error:
+                logger.error(f"LLM fallback extraction failed: {str(fallback_error)}")
+                return []
+        
+        # Final fallback - return content as single item
+        logger.warning("All extraction methods failed, returning content as single item")
+        return [{"id": "item1", "text": content.strip(), "type": "unknown", "answer": "", "max_score": None}]
 
     def extract_questions_and_total_marks(self, content: str) -> Dict:
         """
@@ -693,104 +655,75 @@ class MappingService:
         logger.error("No LLM service available")
         return {"questions": [], "total_marks": 0, "extraction_method": "no_llm"}
 
-    def _extract_questions_regex_enhanced(self, content: str) -> Dict:
+    def _extract_questions_llm_only(self, content: str) -> Dict:
         """
-        Enhanced regex-based question extraction with better mark detection.
+        LLM-only question extraction with comprehensive understanding.
         """
-        questions = []
-        total_marks = 0
+        if not self.llm_service:
+            logger.error("LLM service not available for question extraction")
+            return {"questions": [], "total_marks": 0, "extraction_method": "none"}
 
-        # Enhanced question patterns to match various formats
-        question_patterns = [
-            # QUESTION 1: ... (25 marks)
-            r"(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^(]*?)\s*\((\d+)\s*marks?\)",
-            # Question 1: ... [10 marks]
-            r"(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^[]*?)\s*\[(\d+)\s*marks?\]",
-            # a) Define object-oriented programming... (10 marks)
-            r"(?:^|\n)\s*([a-z])\)\s*([^(]*?)\s*\((\d+)\s*marks?\)",
-            # Question 1: ... 10 marks
-            r"(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^0-9]*?)(\d+)\s*marks?",
-        ]
+        try:
+            logger.info("Using LLM-only extraction for questions and marks...")
+            
+            system_prompt = """
+You are an expert at analyzing exam documents and extracting structured information.
 
-        for pattern in question_patterns:
-            matches = re.findall(
-                pattern, content, re.IGNORECASE | re.MULTILINE | re.DOTALL
+Your task is to identify ALL questions in the provided marking guide content and extract:
+1. Question text (complete question statement)
+2. Mark allocation for each question
+3. Question numbering/identification
+4. Total marks for the entire document
+
+IMPORTANT GUIDELINES:
+- Work with the raw text as provided - handle OCR artifacts gracefully
+- Questions may be formatted as "Question 1:", "Q1.", "a)", "1.", etc.
+- Mark allocations may appear as "(10 marks)", "[5 points]", "10 marks", etc.
+- Some questions may not have explicit marks - estimate based on complexity
+- Extract the complete question text, not just the first line
+- Maintain original question numbering where possible
+
+Output format (JSON only):
+{
+  "questions": [
+    {
+      "number": 1,
+      "text": "Complete question text here",
+      "marks": 10,
+      "criteria": "Any marking criteria if present",
+      "type": "question"
+    }
+  ],
+  "total_marks": 50,
+  "extraction_method": "llm"
+}
+"""
+
+            user_prompt = f"""Extract all questions and their mark allocations from this marking guide content:
+
+{content}
+
+Provide the structured JSON output as specified."""
+
+            response = self.llm_service.generate_response(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.1
             )
-            if matches:
-                logger.info(f"Found {len(matches)} questions using regex pattern")
-                for match in matches:
-                    if len(match) == 3:
-                        q_num, q_text, marks_str = match
-                        try:
-                            marks = int(marks_str)
-                            question_data = {
-                                "number": len(questions) + 1,
-                                "text": f"Question {q_num}: {q_text.strip()}",
-                                "marks": marks,
-                                "criteria": "",
-                                "type": "question",
-                            }
-                            questions.append(question_data)
-                            total_marks += marks
-                        except ValueError:
-                            continue
-                break  # Use first successful pattern
 
-        # If no questions found with marks, try general patterns
-        if not questions:
-            logger.info(
-                "No questions with marks found, trying general question patterns..."
-            )
-            general_patterns = [
-                r"(?:^|\n)\s*(?:QUESTION|Question|Q)\s*(\d+)[:\s]*([^\n]+)",
-                r"(?:^|\n)\s*([a-z])\)\s*([^\n]+)",
-            ]
-
-            for pattern in general_patterns:
-                matches = re.findall(pattern, content, re.IGNORECASE | re.MULTILINE)
-                if matches:
-                    logger.info(
-                        f"Found {len(matches)} questions without explicit marks"
-                    )
-                    for match in matches:
-                        q_num, q_text = match
-                        # Assign default marks based on question complexity
-                        if len(q_text) > 100:
-                            marks = 25  # Complex question
-                        elif len(q_text) > 50:
-                            marks = 15  # Medium question
-                        else:
-                            marks = 10  # Simple question
-
-                        question_data = {
-                            "number": len(questions) + 1,
-                            "text": f"Question {q_num}: {q_text.strip()}",
-                            "marks": marks,
-                            "criteria": "",
-                            "type": "question",
-                        }
-                        questions.append(question_data)
-                        total_marks += marks
-                    break
-
-        # Try to extract total marks from the document
-        if not total_marks and questions:
-            total_marks_match = re.search(
-                r"total[:\s]*(\d+)\s*marks?", content, re.IGNORECASE
-            )
-            if total_marks_match:
-                total_marks = int(total_marks_match.group(1))
-                logger.info(f"Found total marks in document: {total_marks}")
-
-        logger.info(
-            f"Regex extraction complete: {len(questions)} questions, {total_marks} total marks"
-        )
-
-        return {
-            "questions": questions,
-            "total_marks": total_marks,
-            "extraction_method": "regex",
-        }
+            # Parse the LLM response
+            result = self._clean_and_parse_llm_response(response)
+            
+            if result and "questions" in result:
+                logger.info(f"LLM extraction successful: {len(result['questions'])} questions, {result.get('total_marks', 0)} total marks")
+                return result
+            else:
+                logger.warning("LLM extraction failed to return valid structure")
+                return {"questions": [], "total_marks": 0, "extraction_method": "llm_failed"}
+                
+        except Exception as e:
+            logger.error(f"LLM question extraction failed: {str(e)}")
+            return {"questions": [], "total_marks": 0, "extraction_method": "llm_error"}
 
     def map_submission_to_guide(
         self,
@@ -1003,10 +936,10 @@ class MappingService:
                     # Pass the raw content to the LLM for mapping and grading
                     user_prompt = f"""
                     MARKING GUIDE CONTENT:
-                    {marking_guide_content[:8000]}
+                    {marking_guide_content}
 
                     STUDENT SUBMISSION CONTENT:
-                    {student_submission_content[:8000]}
+                    {student_submission_content}
 
                     REQUIREMENTS:
                     - Number of questions to answer: {num_questions}
@@ -1281,19 +1214,55 @@ class MappingService:
         if not content:
             return ""
             
-        # Remove excessive whitespace and normalize line breaks
-        content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
-        content = re.sub(r' +', ' ', content)
+        # Use LLM to clean and preprocess content
+        try:
+            if self.llm_service and len(content) > 50:  # Only use LLM for substantial content
+                preprocessing_prompt = f"""
+                Clean and improve this text by:
+                1. Normalizing whitespace and line breaks
+                2. Fixing common OCR errors (| to I, 0 to O, 1 to l where appropriate)
+                3. Removing excessive punctuation
+                4. Normalizing quotes and apostrophes
+                
+                Text to clean:
+                {content}
+                """
+                
+                response = self.llm_service.client.chat.completions.create(
+                    model=self.llm_service.model,
+                    messages=[
+                        {"role": "system", "content": "You are a text cleaning expert. Clean and improve the provided text while preserving its meaning and structure. Return only the cleaned text without explanations."},
+                        {"role": "user", "content": preprocessing_prompt}
+                    ],
+                    temperature=0.0
+                )
+                
+                cleaned_content = response.choices[0].message.content.strip()
+                if cleaned_content and len(cleaned_content) > 10:  # Basic validation
+                    content = cleaned_content
+                    logger.info("LLM content preprocessing successful")
+                else:
+                    logger.warning("LLM preprocessing returned insufficient content, using fallback")
+                    # Continue to basic fallback below
+            
+        except Exception as e:
+            logger.error(f"LLM preprocessing failed: {str(e)}, using basic fallback")
+            # Continue to basic fallback below
         
-        # Fix common OCR artifacts
-        content = re.sub(r'[|]', 'I', content)  # Fix common OCR confusion
-        content = re.sub(r'[0]', 'O', content)  # Fix common OCR confusion
-        content = re.sub(r'[1]', 'l', content)  # Fix common OCR confusion
+        # Basic fallback preprocessing
+        # Simple whitespace normalization
+        lines = content.split('\n')
+        cleaned_lines = []
+        for line in lines:
+            line = ' '.join(line.split())  # Normalize spaces
+            if line:  # Skip empty lines
+                cleaned_lines.append(line)
         
-        # Remove excessive punctuation that might confuse the LLM
-        content = re.sub(r'[!]{2,}', '!', content)
-        content = re.sub(r'[?]{2,}', '?', content)
-        content = re.sub(r'[.]{3,}', '...', content)
+        # Rejoin with proper spacing
+        content = '\n'.join(cleaned_lines)
+        
+        # Basic character fixes
+        content = content.replace('|', 'I')
         
         # Normalize quotes and apostrophes
         content = content.replace('"', '"').replace('"', '"')
@@ -1315,37 +1284,114 @@ class MappingService:
             # Log the raw response for debugging
             logger.info(f"Raw LLM response: {result[:200]}...")
 
-            # Find JSON content between curly braces if there's text before/after
-            json_match = re.search(r"\{.*\}", result, re.DOTALL)
-            if json_match:
-                result = json_match.group(0)
-                logger.info(f"Extracted JSON: {result[:200]}...")
+            # Try direct JSON parsing first
+            try:
+                parsed = json.loads(result)
+                logger.info("Direct JSON parsing successful")
+                return parsed
+            except json.JSONDecodeError:
+                logger.info("Direct parsing failed, attempting LLM-based JSON extraction")
+                
+                # Use LLM to extract JSON from potentially malformed response
+                try:
+                    json_extraction_prompt = f"""
+                    Extract the JSON content from this response. Return ONLY the JSON object without any additional text.
+                    
+                    Response:
+                    {result}
+                    """
+                    
+                    extracted_result = self.llm_service._get_structured_response(json_extraction_prompt)
+                    result = extracted_result
+                    logger.info(f"LLM-extracted JSON: {result[:200]}...")
+                except Exception as extraction_error:
+                    logger.warning(f"LLM JSON extraction failed: {str(extraction_error)}")
+                    # Continue with original result
 
-            # More aggressive cleaning for deepseek-reasoner model
-            # First, try to extract just the JSON part if there's surrounding text
-            json_pattern = r"(\{[\s\S]*\})"
-            json_matches = re.findall(json_pattern, result)
-            if json_matches:
-                result = json_matches[0]
-                logger.info(f"Extracted JSON object: {result[:100]}...")
+            # Use LLM for additional JSON cleaning if needed
+            try:
+                json_cleaning_prompt = f"""
+                Clean this JSON content by removing comments, fixing quotes, and ensuring valid format.
+                Return ONLY the cleaned JSON.
+                
+                Content: {result}
+                """
+                cleaned_result = self.llm_service._get_structured_response(json_cleaning_prompt)
+                result = cleaned_result
+                logger.info(f"LLM-cleaned JSON: {result[:100]}...")
+            except Exception:
+                # Basic fallback cleaning
+                result = result.replace("'", '"')
+                logger.info(f"Basic cleaned JSON: {result[:100]}...")
 
-            # Remove any comments in the JSON (deepseek-reasoner sometimes adds these)
-            result = re.sub(r"//.*?$", "", result, flags=re.MULTILINE)
-            result = re.sub(r"/\*.*?\*/", "", result, flags=re.DOTALL)
-            result = re.sub(r"#.*?$", "", result, flags=re.MULTILINE)
+            # Remove comments using basic string operations
+            lines = result.split('\n')
+            cleaned_lines = []
+            for line in lines:
+                if '#' in line:
+                    line = line.split('#')[0]
+                if '//' in line:
+                    line = line.split('//')[0]
+                cleaned_lines.append(line.strip())
+            result = '\n'.join(cleaned_lines)
 
             # Remove comments that appear after values (common in deepseek output)
-            result = re.sub(r'(["}\]])(\s*#[^\n]*)', r"\1", result)
-            result = re.sub(r"(\d+)(\s*#[^\n]*)(,|\n|})", r"\1\3", result)
+            # Basic comment removal after closing characters
+            lines = result.split('\n')
+            for i, line in enumerate(lines):
+                if '#' in line and ('"' in line or '}' in line or ']' in line):
+                    hash_pos = line.find('#')
+                    if hash_pos > 0:
+                        lines[i] = line[:hash_pos].rstrip()
+            result = '\n'.join(lines)
+            # Remove comments after numbers
+            lines = result.split('\n')
+            for i, line in enumerate(lines):
+                if '#' in line and any(c.isdigit() for c in line):
+                    hash_pos = line.find('#')
+                    if hash_pos > 0:
+                        before_hash = line[:hash_pos].rstrip()
+                        after_hash = line[hash_pos:]
+                        # Keep trailing punctuation like comma or brace
+                        if after_hash and any(c in after_hash for c in ',}]'):
+                            trailing = ''.join(c for c in after_hash if c in ',}]\n')
+                            lines[i] = before_hash + trailing
+                        else:
+                            lines[i] = before_hash
+            result = '\n'.join(lines)
 
             # Fix common JSON formatting issues
             # Replace single quotes with double quotes
-            result = re.sub(r"'([^']*)':", r'"\1":', result)
-            result = re.sub(r": *\'([^\']*)\'", r': "\1"', result)
+            # Replace single quotes around keys with double quotes
+            result = result.replace("':", '":')
+            if "': " in result:
+                result = result.replace("': ", '": ')
+            # Replace single quotes around values with double quotes
+            result = result.replace(": '", ': "')
+            # Handle cases where there might be spaces
+            if ":'" in result:
+                result = result.replace(":'" , ':"')
+            # Simple replacement for trailing single quotes in values
+            lines = result.split('\n')
+            for i, line in enumerate(lines):
+                if line.count("'") >= 2 and '"' in line:
+                    # Replace remaining single quotes that are likely around values
+                    line = line.replace("'", '"')
+                    lines[i] = line
+            result = '\n'.join(lines)
 
-            # Fix trailing commas in arrays and objects
-            result = re.sub(r",\s*]", "]", result)
-            result = re.sub(r",\s*}", "}", result)
+            # Fix trailing commas in arrays and objects using basic string operations
+            result = result.replace(",]", "]").replace(", ]", "]")
+            result = result.replace(",}", "}").replace(", }", "}")
+            # Handle cases with whitespace and newlines
+            lines = result.split('\n')
+            for i, line in enumerate(lines):
+                line = line.strip()
+                if line.endswith(',') and i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()
+                    if next_line.startswith(']') or next_line.startswith('}'):
+                        lines[i] = line[:-1]  # Remove trailing comma
+            result = '\n'.join(lines)
 
             # Handle specific format issues with deepseek-reasoner
             # Replace any remaining instances of "key": value # comment
@@ -1391,11 +1437,50 @@ class MappingService:
                 # Try to manually construct a valid JSON object
                 mappings = []
 
-                # Extract mappings using regex patterns
-                mapping_pattern = r'"guide_id"\s*:\s*"([^"]+)".*?"guide_text"\s*:\s*"([^"]+)".*?"max_score"\s*:\s*(\d+).*?"submission_id"\s*:\s*"([^"]+)".*?"submission_text"\s*:\s*"([^"]+)".*?"match_score"\s*:\s*([\d\.]+)'
-                mapping_matches = re.findall(
-                    mapping_pattern, result, re.DOTALL
-                )
+                # Use LLM to extract mappings from malformed response
+                try:
+                    extraction_prompt = f"""
+                    Extract mapping information from this malformed JSON response. Look for guide_id, guide_text, max_score, submission_id, submission_text, and match_score values.
+                    Return a valid JSON array of mappings in this format:
+                    [
+                        {{
+                            "guide_id": "extracted_guide_id",
+                            "guide_text": "extracted_guide_text", 
+                            "max_score": extracted_max_score,
+                            "submission_id": "extracted_submission_id",
+                            "submission_text": "extracted_submission_text",
+                            "match_score": extracted_match_score
+                        }}
+                    ]
+                    
+                    Malformed response:
+                    {result}
+                    """
+                    
+                    extraction_response = self.llm_service.client.chat.completions.create(
+                        model=self.llm_service.model,
+                        messages=[
+                            {"role": "system", "content": "You are a data extraction expert. Extract structured information from malformed text and return valid JSON. Only return the JSON array, no explanations."},
+                            {"role": "user", "content": extraction_prompt}
+                        ],
+                        temperature=0.0
+                    )
+                    
+                    extracted_mappings_str = extraction_response.choices[0].message.content.strip()
+                    extracted_mappings = json.loads(extracted_mappings_str)
+                    
+                    if extracted_mappings and isinstance(extracted_mappings, list):
+                        mapping_matches = [(m.get('guide_id', ''), m.get('guide_text', ''), str(m.get('max_score', 0)), 
+                                          m.get('submission_id', ''), m.get('submission_text', ''), str(m.get('match_score', 0))) 
+                                         for m in extracted_mappings]
+                        logger.info(f"LLM extracted {len(mapping_matches)} mappings")
+                    else:
+                        mapping_matches = []
+                        logger.warning("LLM extraction returned no valid mappings")
+                        
+                except Exception as extraction_error:
+                    logger.error(f"LLM mapping extraction failed: {str(extraction_error)}")
+                    mapping_matches = []
 
                 if mapping_matches:
                     logger.info(
@@ -1482,9 +1567,9 @@ class MappingService:
                 # Raise the exception to stop processing
                 raise Exception(f"JSON parsing error: {str(e)}")
 
-    def _extract_keywords(self, text: str) -> List[str]:
+    def _extract_keywords_llm(self, text: str) -> List[str]:
         """
-        Extract important keywords from text.
+        Extract important keywords from text using LLM understanding.
 
         Args:
             text: Text to extract keywords from
@@ -1492,450 +1577,147 @@ class MappingService:
         Returns:
             List[str]: List of keywords
         """
-        if not text:
+        if not text or not self.llm_service:
             return []
 
-        # Split text into words
-        words = re.findall(r"\b\w+\b", text.lower())
+        try:
+            system_prompt = """
+You are an expert at analyzing text and extracting key concepts and terms.
 
-        # Remove common stop words
-        stop_words = {
-            "a",
-            "an",
-            "the",
-            "and",
-            "or",
-            "but",
-            "if",
-            "because",
-            "as",
-            "what",
-            "when",
-            "where",
-            "how",
-            "why",
-            "which",
-            "who",
-            "whom",
-            "this",
-            "that",
-            "these",
-            "those",
-            "is",
-            "are",
-            "was",
-            "were",
-            "be",
-            "been",
-            "being",
-            "have",
-            "has",
-            "had",
-            "having",
-            "do",
-            "does",
-            "did",
-            "doing",
-            "to",
-            "from",
-            "in",
-            "out",
-            "on",
-            "off",
-            "over",
-            "under",
-            "again",
-            "further",
-            "then",
-            "once",
-            "here",
-            "there",
-            "all",
-            "any",
-            "both",
-            "each",
-            "few",
-            "more",
-            "most",
-            "other",
-            "some",
-            "such",
-            "no",
-            "nor",
-            "not",
-            "only",
-            "own",
-            "same",
-            "so",
-            "than",
-            "too",
-            "very",
-            "can",
-            "will",
-            "just",
-            "should",
-            "now",
-        }
+Extract the most important keywords, phrases, and concepts from the provided text.
+Focus on:
+- Subject-specific terminology
+- Key concepts and ideas
+- Important numerical values
+- Technical terms
+- Main topics and themes
 
-        # Filter out stop words and short words
-        filtered_words = [
-            word for word in words if word not in stop_words and len(word) > 3
-        ]
+Return only a JSON array of strings, no other text:
+["keyword1", "keyword2", "phrase example", "123"]
+"""
 
-        # Count word frequencies
-        word_counts = {}
-        for word in filtered_words:
-            word_counts[word] = word_counts.get(word, 0) + 1
+            user_prompt = f"Extract keywords from this text:\n\n{text[:1000]}"
 
-        # Extract phrases (2-3 word combinations)
-        phrases = []
-        words = text.lower().split()
-        for i in range(len(words) - 1):
-            if words[i] not in stop_words and words[i + 1] not in stop_words:
-                phrases.append(f"{words[i]} {words[i+1]}")
-
-        # Get top keywords by frequency
-        sorted_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)
-        keywords = [word for word, _ in sorted_words[:10]]
-
-        # Add important phrases
-        keywords.extend(phrases[:5])
-
-        # Add any numerical values as they're often important
-        numbers = re.findall(r"\b\d+(?:\.\d+)?\b", text)
-        keywords.extend(numbers)
-
-        # Remove duplicates and return
-        return list(set(keywords))
-
-    def _text_based_mapping(
-        self, guide_items: List[Dict], submission_items: List[Dict]
-    ) -> List[Dict]:
-        """Fallback method for text-based question matching with improved accuracy."""
-        mappings = []
-
-        # Simple text preprocessing function without NLTK dependency
-        def preprocess_text(text):
-            if not text:
-                return []
-            # Convert to lowercase
-            text = text.lower()
-            # Remove special characters and digits
-            text = re.sub(r"[^\w\s]", " ", text)
-            text = re.sub(r"\d+", " ", text)
-            # Split into words
-            words = text.split()
-            # Remove common stopwords
-            common_stopwords = {
-                "i",
-                "me",
-                "my",
-                "myself",
-                "we",
-                "our",
-                "ours",
-                "ourselves",
-                "you",
-                "you're",
-                "you've",
-                "you'll",
-                "you'd",
-                "your",
-                "yours",
-                "yourself",
-                "yourselves",
-                "he",
-                "him",
-                "his",
-                "himself",
-                "she",
-                "she's",
-                "her",
-                "hers",
-                "herself",
-                "it",
-                "it's",
-                "its",
-                "itself",
-                "they",
-                "them",
-                "their",
-                "theirs",
-                "themselves",
-                "what",
-                "which",
-                "who",
-                "whom",
-                "this",
-                "that",
-                "that'll",
-                "these",
-                "those",
-                "am",
-                "is",
-                "are",
-                "was",
-                "were",
-                "be",
-                "been",
-                "being",
-                "have",
-                "has",
-                "had",
-                "having",
-                "do",
-                "does",
-                "did",
-                "doing",
-                "a",
-                "an",
-                "the",
-                "and",
-                "but",
-                "if",
-                "or",
-                "because",
-                "as",
-                "until",
-                "while",
-                "of",
-                "at",
-                "by",
-                "for",
-                "with",
-                "about",
-                "against",
-                "between",
-                "into",
-                "through",
-                "during",
-                "before",
-                "after",
-                "above",
-                "below",
-                "to",
-                "from",
-                "up",
-                "down",
-                "in",
-                "out",
-                "on",
-                "off",
-                "over",
-                "under",
-                "again",
-                "further",
-                "then",
-                "once",
-            }
-            return [w for w in words if w not in common_stopwords and len(w) > 1]
-
-        # Function to calculate Jaccard similarity
-        def jaccard_similarity(set1, set2):
-            if not set1 or not set2:
-                return 0
-            intersection = len(set(set1).intersection(set(set2)))
-            union = len(set(set1).union(set(set2)))
-            return intersection / union if union > 0 else 0
-
-        # Function to calculate cosine similarity using TF-IDF approach
-        def cosine_similarity_tokens(tokens1, tokens2):
-            if not tokens1 or not tokens2:
-                return 0
-
-            # Count term frequencies
-            counts1 = {}
-            counts2 = {}
-
-            for token in tokens1:
-                counts1[token] = counts1.get(token, 0) + 1
-
-            for token in tokens2:
-                counts2[token] = counts2.get(token, 0) + 1
-
-            # Find all unique terms
-            unique_terms = set(counts1.keys()).union(set(counts2.keys()))
-
-            # Calculate dot product and magnitudes
-            dot_product = 0
-            magnitude1 = 0
-            magnitude2 = 0
-
-            for term in unique_terms:
-                tf1 = counts1.get(term, 0)
-                tf2 = counts2.get(term, 0)
-                dot_product += tf1 * tf2
-                magnitude1 += tf1**2
-                magnitude2 += tf2**2
-
-            # Prevent division by zero
-            if magnitude1 == 0 or magnitude2 == 0:
-                return 0
-
-            return dot_product / ((magnitude1**0.5) * (magnitude2**0.5))
-
-        # Preprocess all guide items and submission items
-        guide_tokens = {}
-        submission_tokens = {}
-
-        for guide_item in guide_items:
-            guide_text = guide_item.get("text", "")
-            guide_tokens[guide_item.get("id")] = preprocess_text(guide_text)
-
-        for submission_item in submission_items:
-            submission_text = submission_item.get("text", "")
-            submission_tokens[submission_item.get("id")] = preprocess_text(
-                submission_text
+            response = self.llm_service.generate_response(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.1
             )
 
-        # For each guide item, find the best match in submission items
-        for guide_item in guide_items:
-            guide_id = guide_item.get("id")
-            guide_text_tokens = guide_tokens[guide_id]
-
-            best_score = 0
-            best_match = None
-
-            for submission_item in submission_items:
-                # Skip if already mapped
-                if any(
-                    m.get("submission_id") == submission_item.get("id")
-                    for m in mappings
-                ):
-                    continue
-
-                submission_id = submission_item.get("id")
-                submission_text_tokens = submission_tokens[submission_id]
-
-                # Calculate similarity scores
-                jaccard_score = jaccard_similarity(
-                    guide_text_tokens, submission_text_tokens
-                )
-                cosine_score = cosine_similarity_tokens(
-                    guide_text_tokens, submission_text_tokens
-                )
-
-                # Combine scores (weighted average favoring cosine similarity)
-                combined_score = (0.3 * jaccard_score) + (0.7 * cosine_score)
-
-                # Check exact ID match (e.g., "Question 1" matching with "1.")
-                guide_id_match = re.search(r"(\d+)", guide_item.get("text", ""))
-                submission_id_match = re.search(
-                    r"(\d+)", submission_item.get("text", "")
-                )
-
-                if guide_id_match and submission_id_match:
-                    if guide_id_match.group(1) == submission_id_match.group(1):
-                        # Boost score for ID match
-                        combined_score = max(combined_score, 0.6)
-
-                # Also match by guide answer and submission answer if available
-                if guide_item.get("answer") and submission_item.get("answer"):
-                    guide_answer_tokens = preprocess_text(guide_item.get("answer", ""))
-                    submission_answer_tokens = preprocess_text(
-                        submission_item.get("answer", "")
+            # Parse JSON response using LLM-based approach
+            import json
+            try:
+                # First attempt direct JSON parsing
+                keywords = json.loads(response)
+                return keywords[:15]  # Limit to 15 keywords
+            except json.JSONDecodeError:
+                # Use LLM to extract JSON array
+                try:
+                    json_extraction_prompt = f"""
+                    Extract the JSON array from this response and return only the valid JSON array:
+                    
+                    {response}
+                    """
+                    
+                    json_response = self.llm_service.client.chat.completions.create(
+                        model=self.llm_service.model,
+                        messages=[
+                            {"role": "system", "content": "Extract and return only the JSON array from the given text. No explanations, just the JSON array."},
+                            {"role": "user", "content": json_extraction_prompt}
+                        ],
+                        temperature=0.0
                     )
+                    
+                    cleaned_response = json_response.choices[0].message.content.strip()
+                    keywords = json.loads(cleaned_response)
+                    return keywords[:15]  # Limit to 15 keywords
+                except Exception as extraction_error:
+                    logger.error(f"LLM JSON extraction failed: {str(extraction_error)}")
+                    return []
+            
+            return []
+            
+        except Exception as e:
+            logger.warning(f"LLM keyword extraction failed: {e}")
+            return []
 
-                    answer_jaccard = jaccard_similarity(
-                        guide_answer_tokens, submission_answer_tokens
-                    )
-                    answer_cosine = cosine_similarity_tokens(
-                        guide_answer_tokens, submission_answer_tokens
-                    )
+    def _llm_based_mapping(
+        self, guide_items: List[Dict], submission_items: List[Dict]
+    ) -> List[Dict]:
+        """LLM-only method for intelligent question-answer mapping."""
+        if not self.llm_service:
+            logger.error("LLM service not available for mapping")
+            return []
 
-                    # Calculate a more detailed answer similarity score
-                    answer_score = (0.3 * answer_jaccard) + (0.7 * answer_cosine)
+        try:
+            logger.info("Using LLM-only mapping for question-answer pairs...")
+            
+            # Prepare guide and submission content for LLM
+            guide_content = "\n\n".join([
+                f"ID: {item.get('id', 'unknown')}\nText: {item.get('text', '')}"
+                for item in guide_items
+            ])
+            
+            submission_content = "\n\n".join([
+                f"ID: {item.get('id', 'unknown')}\nText: {item.get('text', '')}"
+                for item in submission_items
+            ])
+            
+            system_prompt = """
+You are an expert at mapping student answers to exam questions based on semantic similarity and content relevance.
 
-                    # Calculate keyword match score
-                    guide_keywords = self._extract_keywords(
-                        guide_item.get("answer", "")
-                    )
-                    submission_keywords = self._extract_keywords(
-                        submission_item.get("answer", "")
-                    )
+Analyze the provided guide items and submission items to create intelligent mappings.
 
-                    # Calculate keyword match percentage
-                    keyword_matches = [
-                        kw
-                        for kw in guide_keywords
-                        if any(
-                            kw.lower() in sub_kw.lower()
-                            for sub_kw in submission_keywords
-                        )
-                    ]
-                    keyword_score = (
-                        len(keyword_matches) / max(len(guide_keywords), 1)
-                        if guide_keywords
-                        else 0
-                    )
+For each mapping, consider:
+- Semantic similarity between question and answer
+- Subject matter relevance
+- Conceptual alignment
+- Content completeness
 
-                    # Generate reason for match based on keywords
-                    match_reason = f"Matched {len(keyword_matches)} of {len(guide_keywords)} key concepts"
-                    if keyword_matches:
-                        match_reason += f": {', '.join(keyword_matches[:3])}"
-                        if len(keyword_matches) > 3:
-                            match_reason += f" and {len(keyword_matches) - 3} more"
+Output format (JSON only):
+{
+  "mappings": [
+    {
+      "guide_id": "guide_item_id",
+      "submission_id": "submission_item_id",
+      "confidence": 0.85,
+      "reasoning": "Brief explanation of the mapping"
+    }
+  ]
+}
+"""
 
-                    # Store the answer score for later use in grading
-                    submission_item["answer_score"] = answer_score
-                    submission_item["keyword_score"] = keyword_score
-                    submission_item["match_reason"] = match_reason
+            user_prompt = f"""Map the most relevant submission items to guide items:
 
-                    # Consider answer similarity in overall score with higher weight
-                    combined_score = (
-                        (0.5 * combined_score)
-                        + (0.3 * answer_score)
-                        + (0.2 * keyword_score)
-                    )
+GUIDE ITEMS:
+{guide_content}
 
-                if combined_score > best_score:
-                    best_score = combined_score
-                    best_match = (submission_item, combined_score)
+SUBMISSION ITEMS:
+{submission_content}
 
-            if (
-                best_match and best_score > 0.2
-            ):  # Only map if similarity exceeds threshold
-                submission_item, match_score = best_match
+Provide the mapping in the specified JSON format."""
 
-                # Get the match reason if available
-                match_reason = submission_item.get("match_reason", "")
-                if not match_reason:
-                    match_reason = f"Similarity score: {match_score:.2f}"
+            response = self.llm_service.generate_response(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.1
+            )
 
-                # Get the answer score if available
-                answer_score = submission_item.get("answer_score", 0)
-                keyword_score = submission_item.get("keyword_score", 0)
+            # Parse the LLM response
+            result = self._clean_and_parse_llm_response(response)
+            
+            if result and "mappings" in result:
+                logger.info(f"LLM mapping successful: {len(result['mappings'])} mappings created")
+                return result["mappings"]
+            else:
+                logger.warning("LLM mapping failed to return valid structure")
+                return []
+                
+        except Exception as e:
+            logger.error(f"LLM mapping failed: {str(e)}")
+            return []
 
-                # Calculate a grade based on similarity
-                grade_score = 0
-                if guide_item.get("max_score"):
-                    # Use answer_score with higher weight if available
-                    if answer_score > 0:
-                        grade_score = (
-                            0.6 * answer_score + 0.4 * keyword_score
-                        ) * float(guide_item.get("max_score"))
-                    else:
-                        grade_score = match_score * float(guide_item.get("max_score"))
-                    grade_score = round(grade_score, 1)
 
-                mappings.append(
-                    {
-                        "guide_id": guide_item.get("id"),
-                        "guide_text": guide_item.get("text"),
-                        "guide_answer": guide_item.get("answer", ""),
-                        "max_score": guide_item.get("max_score"),  # No default value
-                        "submission_id": submission_item.get("id"),
-                        "submission_text": submission_item.get("text"),
-                        "submission_answer": submission_item.get("answer", ""),
-                        "match_score": match_score,
-                        "answer_score": answer_score,
-                        "keyword_score": keyword_score,
-                        "grade_score": grade_score,
-                        "match_reason": match_reason,
-                    }
-                )
-
-        return mappings
 
     def _get_letter_grade(self, percent_score: float) -> str:
         """

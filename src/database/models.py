@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import UserMixin
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -48,7 +49,7 @@ class TimestampMixin:
     )
 
 
-class User(db.Model, TimestampMixin):
+class User(UserMixin, db.Model, TimestampMixin):
     """User model for authentication and session management."""
 
     __tablename__ = "users"
@@ -98,6 +99,19 @@ class User(db.Model, TimestampMixin):
         """Unlock account."""
         self.locked_until = None
         self.failed_login_attempts = 0
+
+    # Flask-Login required methods
+    def get_id(self):
+        """Return the user ID as a string for Flask-Login."""
+        return str(self.id)
+
+    def is_authenticated(self):
+        """Return True if the user is authenticated."""
+        return True
+
+    def is_anonymous(self):
+        """Return False as this is not an anonymous user."""
+        return False
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -283,8 +297,12 @@ class GradingResult(db.Model, TimestampMixin):
     feedback = Column(Text)
     detailed_feedback = Column(JSON)
     progress_id = Column(String(36), nullable=True, index=True)
+    grading_session_id = Column(String(36), ForeignKey("grading_sessions.id"), nullable=True, index=True)
     grading_method = Column(String(50), default="llm")  # llm, similarity, manual
     confidence = Column(Float)
+
+    # Relationship to GradingSession
+    grading_session = relationship("GradingSession", backref="grading_results")
 
     # Relationships
     submission = relationship("Submission", back_populates="grading_results")

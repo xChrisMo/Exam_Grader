@@ -17,7 +17,7 @@ from utils.logger import logger
 class BatchProcessingService:
     """Service for batch processing multiple submissions with OCR support."""
 
-    def __init__(self, parse_function=None, ocr_service=None, max_workers=3):
+    def __init__(self, parse_function=None, ocr_service=None, max_workers=3, **kwargs):
         """
         Initialize batch processing service.
 
@@ -25,10 +25,15 @@ class BatchProcessingService:
             parse_function: Function to parse individual submissions
             ocr_service: OCR service for image processing
             max_workers: Maximum number of parallel workers
+            **kwargs: Additional arguments for backward compatibility
         """
         self.parse_function = parse_function
         self.ocr_service = ocr_service
         self.max_workers = max_workers
+        
+        # Handle additional arguments for backward compatibility
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def process_files_batch(
         self,

@@ -260,7 +260,7 @@
 
 {% block extra_js %}
 <!-- Make sure app.js is loaded -->
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ range(1000, 9999) | random }}"></script>
 <script>
 // Create a simple notification manager if ExamGrader is not defined
 if (typeof ExamGrader === 'undefined') {

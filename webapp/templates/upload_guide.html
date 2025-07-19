@@ -43,6 +43,20 @@
                     </div>
                 </div>
 
+                <!-- Title Input -->
+                <div class="mb-6">
+                    <label for="title" class="block text-sm font-medium text-gray-700 mb-2" data-i18n="marking_guide_title">
+                        Title <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" id="title" name="title" required 
+                           class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                           placeholder="Enter a title for your marking guide" 
+                           data-i18n-placeholder="marking_guide_title_placeholder">
+                    <p class="mt-1 text-xs text-gray-500" data-i18n="marking_guide_title_help">
+                        Provide a descriptive title to help identify this marking guide
+                    </p>
+                </div>
+
                 <!-- File Preview -->
                 <div id="file-preview" class="hidden mb-6">
                     <div class="bg-gray-50 rounded-lg p-4">
@@ -200,9 +214,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const formData = new FormData(uploadForm);
         
+        // Debug: Log form data
+        console.log('Form data being submitted:');
+        for (let [key, value] of formData.entries()) {
+            console.log(key, value);
+        }
+        
         // Add CSRF token to form data
         const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
         formData.append('csrf_token', csrfToken);
+        
+        // Validate required fields before submission
+        const titleField = document.getElementById('title');
+        if (!titleField.value.trim()) {
+            alert('Please enter a title for your marking guide.');
+            uploadProgress.classList.add('hidden');
+            submitBtn.disabled = false;
+            ExamGrader.utils.hideButtonLoading(submitBtn, ExamGrader.translate('upload_guide_button'));
+            return;
+        }
 
         // Show progress
         uploadProgress.classList.remove('hidden');
@@ -222,16 +252,44 @@ document.addEventListener('DOMContentLoaded', function() {
             method: 'POST',
             body: formData
         })
-        .then(response => {
+        .then(async response => {
             clearInterval(progressInterval);
             progressBar.style.width = '100%';
             
             if (response.ok) {
-                setTimeout(() => {
-                    window.location.href = response.url || '{{ url_for("dashboard") }}';
-                }, 500);
+                // Check if response is a redirect
+                if (response.redirected) {
+                    window.location.href = response.url;
+                } else {
+                    // Handle JSON response
+                    try {
+                        const result = await response.json();
+                        if (result.success) {
+                            window.location.href = result.redirect_url || '{{ url_for("dashboard") }}';
+                        } else {
+                            throw new Error(result.error || 'Upload failed');
+                        }
+                    } catch (e) {
+                        // If not JSON, assume success and redirect
+                        window.location.href = '{{ url_for("dashboard") }}';
+                    }
+                }
             } else {
-                throw new Error('Upload failed');
+                // Handle HTTP errors
+                let errorMessage = 'Upload failed';
+                try {
+                    const errorData = await response.text();
+                    // Try to extract error message from HTML response
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(errorData, 'text/html');
+                    const flashMessages = doc.querySelectorAll('.flash-message');
+                    if (flashMessages.length > 0) {
+                        errorMessage = flashMessages[0].textContent.trim();
+                    }
+                } catch (e) {
+                    console.error('Error parsing response:', e);
+                }
+                throw new Error(errorMessage);
             }
         })
         .catch(error => {
@@ -239,7 +297,11 @@ document.addEventListener('DOMContentLoaded', function() {
             uploadProgress.classList.add('hidden');
             submitBtn.disabled = false;
             ExamGrader.utils.hideButtonLoading(submitBtn, ExamGrader.translate('upload_guide_button'));
-            alert(ExamGrader.translate('upload_failed'));
+            
+            // Show more specific error message
+            const errorMsg = error.message || ExamGrader.translate('upload_failed');
+            alert(errorMsg);
+            console.error('Upload error:', error);
         });
     });
 

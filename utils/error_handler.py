@@ -1,15 +1,28 @@
-"""
-Error handling utilities for the Exam Grader application.
+"""Error handling utilities for the Exam Grader application.
 
 This module provides error handling, progress tracking, and
 user notification functionality.
+
+Note: This module is maintained for backward compatibility.
+New code should use src.exceptions.enhanced_error_handler for
+standardized error handling.
 """
 
 import logging
 import traceback
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from flask import session, flash
+
+# Import new standardized error handling
+try:
+    from src.exceptions.enhanced_error_handler import enhanced_error_handler
+    from src.exceptions.application_errors import ApplicationError
+    ENHANCED_ERROR_HANDLING_AVAILABLE = True
+except ImportError:
+    ENHANCED_ERROR_HANDLING_AVAILABLE = False
+    enhanced_error_handler = None
+    ApplicationError = None
 
 logger = logging.getLogger(__name__)
 
@@ -21,25 +34,52 @@ class ErrorHandler:
         """Initialize error handler."""
         self.error_log = []
     
-    def log_error(self, error: Exception, context: str = "", user_id: str = None):
+    def log_error(self, error: Union[Exception, ApplicationError], context: str = "", user_id: str = None):
         """Log error with context information.
         
         Args:
-            error: Exception that occurred
+            error: Exception or ApplicationError that occurred
             context: Context where error occurred
             user_id: User ID if available
         """
+        # Extract error information
+        if hasattr(error, 'error_id'):
+            # ApplicationError
+            error_type = error.__class__.__name__
+            error_message = error.message
+            error_code = getattr(error, 'error_code', None)
+            error_id = getattr(error, 'error_id', None)
+        else:
+            # Standard Exception
+            error_type = type(error).__name__
+            error_message = str(error)
+            error_code = None
+            error_id = None
+        
         error_info = {
             'timestamp': datetime.now().isoformat(),
-            'error_type': type(error).__name__,
-            'error_message': str(error),
+            'error_type': error_type,
+            'error_message': error_message,
+            'error_code': error_code.value if error_code else None,
+            'error_id': error_id,
             'context': context,
             'user_id': user_id,
             'traceback': traceback.format_exc()
         }
         
         self.error_log.append(error_info)
-        logger.error(f"Error in {context}: {str(error)}")
+        
+        # Log with appropriate level based on error type
+        if hasattr(error, 'severity'):
+            severity = error.severity.value if hasattr(error.severity, 'value') else str(error.severity)
+            if severity in ['critical', 'high']:
+                logger.error(f"[{severity.upper()}] Error in {context}: {error_message}")
+            elif severity == 'medium':
+                logger.warning(f"[{severity.upper()}] Error in {context}: {error_message}")
+            else:
+                logger.info(f"[{severity.upper()}] Error in {context}: {error_message}")
+        else:
+            logger.error(f"Error in {context}: {error_message}")
         
         # Keep only last 100 errors to prevent memory issues
         if len(self.error_log) > 100:
@@ -173,21 +213,41 @@ error_handler = ErrorHandler()
 progress_tracker = ProgressTracker()
 
 
-def handle_error(error: Exception, context: str = "", user_message: str = None, flash_message: bool = True):
+def handle_error(error: Union[Exception, ApplicationError], context: str = "", user_message: str = None, flash_message: bool = True, user_id: str = None):
     """Handle error with logging and user notification.
     
     Args:
-        error: Exception that occurred
+        error: Exception or ApplicationError that occurred
         context: Context where error occurred
         user_message: Custom message for user (uses error message if None)
         flash_message: Whether to flash message to user
+        user_id: User ID if available
     """
-    # Log the error
-    error_handler.log_error(error, context)
+    # Use enhanced error handling if available
+    if ENHANCED_ERROR_HANDLING_AVAILABLE and enhanced_error_handler:
+        try:
+            context_dict = {'legacy_context': context} if context else {}
+            enhanced_error_handler.handle_error(
+                error=error,
+                context=context_dict,
+                user_id=user_id,
+                flash_message=flash_message
+            )
+            return
+        except Exception as e:
+            logger.warning(f"Enhanced error handling failed, falling back to legacy: {e}")
+    
+    # Fallback to legacy error handling
+    error_handler.log_error(error, context, user_id)
     
     # Flash message to user if requested
     if flash_message:
-        message = user_message or f"An error occurred: {str(error)}"
+        if user_message:
+            message = user_message
+        elif hasattr(error, 'user_message') and error.user_message:
+            message = error.user_message
+        else:
+            message = format_error_for_user(error)
         flash(message, 'error')
 
 
@@ -270,29 +330,51 @@ def validate_input(value: Any, validator_func, error_message: str = "Invalid inp
         raise
 
 
-def format_error_for_user(error: Exception) -> str:
+def format_error_for_user(error: Union[Exception, ApplicationError]) -> str:
     """Format error message for user display.
     
     Args:
-        error: Exception to format
+        error: Exception or ApplicationError to format
         
     Returns:
         User-friendly error message
     """
+    # If it's an ApplicationError with user_message, use that
+    if hasattr(error, 'user_message') and error.user_message:
+        return error.user_message
+    
+    # Use enhanced error handling if available
+    if ENHANCED_ERROR_HANDLING_AVAILABLE and enhanced_error_handler:
+        try:
+            return enhanced_error_handler.get_user_friendly_message(error)
+        except Exception:
+            pass  # Fall back to legacy handling
+    
+    # Legacy error formatting
     error_type = type(error).__name__
     
-    # Map technical errors to user-friendly messages
+    # Common error types with user-friendly messages
     user_friendly_messages = {
         'FileNotFoundError': 'The requested file could not be found.',
-        'PermissionError': 'Permission denied. Please check file permissions.',
-        'ConnectionError': 'Connection error. Please check your internet connection.',
-        'TimeoutError': 'Operation timed out. Please try again.',
-        'ValueError': 'Invalid input provided. Please check your data.',
+        'PermissionError': 'You do not have permission to access this resource.',
+        'ValueError': 'Invalid input provided. Please check your data and try again.',
+        'ConnectionError': 'Unable to connect to the service. Please try again later.',
+        'TimeoutError': 'The operation timed out. Please try again.',
+        'ValidationError': 'The provided data is invalid. Please check and try again.',
+        'AuthenticationError': 'Authentication failed. Please check your credentials.',
+        'AuthorizationError': 'You are not authorized to perform this action.',
+        'NotFoundError': 'The requested resource was not found.',
+        'ProcessingError': 'An error occurred while processing your request.',
+        'ServiceUnavailableError': 'The service is currently unavailable. Please try again later.',
+        'RateLimitError': 'Too many requests. Please wait before trying again.',
+        'ConfigurationError': 'A configuration error occurred. Please contact support.',
+        'FileOperationError': 'An error occurred while processing the file.',
+        'DatabaseError': 'A database error occurred. Please try again later.',
         'KeyError': 'Required information is missing.',
         'AttributeError': 'System configuration error. Please contact support.'
     }
     
-    return user_friendly_messages.get(error_type, f"An error occurred: {str(error)}")
+    return user_friendly_messages.get(error_type, f"An unexpected error occurred: {str(error)}")
 
 
 def add_recent_activity(activity_type: str, message: str, icon: str = 'info'):

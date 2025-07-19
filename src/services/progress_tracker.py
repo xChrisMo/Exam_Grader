@@ -12,6 +12,7 @@ from dataclasses import dataclass, asdict
 from threading import Lock
 
 from utils.logger import logger
+from .websocket_manager import WebSocketManager, MessagePriority
 
 
 @dataclass
@@ -41,11 +42,13 @@ class ProgressTracker:
     Manages real-time progress updates and status tracking.
     """
     
-    def __init__(self):
+    def __init__(self, websocket_manager: Optional[WebSocketManager] = None):
         """Initialize the progress tracker"""
         self.active_sessions: Dict[str, Dict] = {}
         self.progress_history: Dict[str, List[ProgressUpdate]] = {}
         self.session_lock = Lock()
+        self.websocket_manager = websocket_manager
+        self._realtime_service = None  # Will be set by realtime service
         
         logger.info("Progress Tracker initialized")
     
@@ -143,8 +146,54 @@ class ProgressTracker:
             if len(self.progress_history[progress_id]) > 50:
                 self.progress_history[progress_id] = self.progress_history[progress_id][-50:]
         
+        # Emit real-time update via WebSocket manager or fallback
+        self._emit_progress_update(session['session_id'], progress_update)
+        
         logger.debug(f"Progress update for {progress_id}: Step {current_step}/{session['total_steps']} ({calculated_percentage:.1f}%) - {current_operation}")
         return progress_update
+    
+    def set_realtime_service(self, realtime_service):
+        """Set the realtime service for progress updates.
+        
+        Args:
+            realtime_service: RealtimeService instance
+        """
+        self._realtime_service = realtime_service
+    
+    def _emit_progress_update(self, session_id: str, progress_update: ProgressUpdate):
+        """Emit progress update via available channels.
+        
+        Args:
+            session_id: Session ID
+            progress_update: Progress update data
+        """
+        update_data = asdict(progress_update)
+        
+        # Try WebSocket manager first
+        if self.websocket_manager:
+            room = f'progress_{session_id}'
+            success = self.websocket_manager.emit_to_room(
+                room, 'progress_update', update_data, MessagePriority.NORMAL
+            )
+            if success:
+                return
+        
+        # Try realtime service
+        if self._realtime_service:
+            try:
+                self._realtime_service.emit_progress_update(session_id, update_data)
+                return
+            except Exception as e:
+                logger.warning(f"Failed to emit via realtime service: {e}")
+        
+        # Fallback to direct SocketIO
+        try:
+            from flask_socketio import emit
+            emit('progress_update', update_data, 
+                 room=f'progress_{session_id}', namespace='/')
+        except (ImportError, RuntimeError):
+            # SocketIO not available or not in request context
+            logger.debug(f"Could not emit progress update for session {session_id}")
     
     def complete_session(self, progress_id: str, success: bool = True, message: str = None) -> ProgressUpdate:
         """

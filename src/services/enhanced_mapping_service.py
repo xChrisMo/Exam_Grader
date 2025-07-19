@@ -4,7 +4,6 @@ This service provides better prompt formatting, OCR artifact handling, and JSON 
 """
 
 import json
-import re
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -21,7 +20,7 @@ class EnhancedMappingService:
 
     def preprocess_content(self, content: str) -> str:
         """
-        Preprocess content to improve LLM understanding and handle OCR artifacts.
+        Preprocess content using LLM to improve understanding and handle OCR artifacts.
         
         Args:
             content: Raw content to preprocess
@@ -32,29 +31,51 @@ class EnhancedMappingService:
         if not content:
             return ""
             
-        # Remove excessive whitespace and normalize line breaks
-        content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
-        content = re.sub(r' +', ' ', content)
-        
-        # Fix common OCR artifacts
-        content = re.sub(r'[|]', 'I', content)  # Fix common OCR confusion
-        content = re.sub(r'[0]', 'O', content)  # Fix common OCR confusion
-        content = re.sub(r'[1]', 'l', content)  # Fix common OCR confusion
-        
-        # Remove excessive punctuation that might confuse the LLM
-        content = re.sub(r'[!]{2,}', '!', content)
-        content = re.sub(r'[?]{2,}', '?', content)
-        content = re.sub(r'[.]{3,}', '...', content)
-        
-        # Normalize quotes and apostrophes
-        content = content.replace('"', '"').replace('"', '"')
-        content = content.replace(''', "'").replace(''', "'")
-        
+        # For short content, return as-is to avoid unnecessary LLM calls
+        if len(content.strip()) < 100:
+            return content.strip()
+            
+        # Use LLM to clean and normalize content
+        try:
+            if self.llm_service:
+                system_prompt = """
+                You are a text preprocessing assistant. Your task is to clean and normalize text content while preserving all meaningful information.
+                
+                Tasks:
+                1. Fix common OCR artifacts and character recognition errors
+                2. Normalize excessive whitespace and line breaks
+                3. Fix punctuation and quote formatting
+                4. Preserve all original content meaning and structure
+                5. Do not add, remove, or interpret content - only clean formatting
+                
+                Return only the cleaned text without any explanations or comments.
+                """
+                
+                user_prompt = f"Clean and normalize this text content:\n\n{content}"
+                
+                params = {
+                    "model": self.llm_service.model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0.0,
+                }
+                
+                response = self.llm_service.client.chat.completions.create(**params)
+                cleaned_content = response.choices[0].message.content.strip()
+                
+                logger.info("Content preprocessing completed using LLM")
+                return cleaned_content
+        except Exception as e:
+            logger.warning(f"LLM preprocessing failed: {str(e)}, using basic cleanup")
+            
+        # Fallback to basic cleanup if LLM fails
         return content.strip()
 
     def clean_and_parse_llm_response(self, result: str) -> Dict:
         """
-        Clean and parse LLM response with enhanced error handling.
+        Clean and parse LLM response using LLM-only approach for JSON extraction.
         
         Args:
             result: Raw LLM response
@@ -66,172 +87,126 @@ class EnhancedMappingService:
             # Log the raw response for debugging
             logger.info(f"Raw LLM response: {result[:200]}...")
 
-            # Find JSON content between curly braces if there's text before/after
-            json_match = re.search(r"\{.*\}", result, re.DOTALL)
-            if json_match:
-                result = json_match.group(0)
-                logger.info(f"Extracted JSON: {result[:200]}...")
-
-            # More aggressive cleaning for deepseek-reasoner model
-            # First, try to extract just the JSON part if there's surrounding text
-            json_pattern = r"(\{[\s\S]*\})"
-            json_matches = re.findall(json_pattern, result)
-            if json_matches:
-                result = json_matches[0]
-                logger.info(f"Extracted JSON object: {result[:100]}...")
-
-            # Remove any comments in the JSON (deepseek-reasoner sometimes adds these)
-            result = re.sub(r"//.*?$", "", result, flags=re.MULTILINE)
-            result = re.sub(r"/\*.*?\*/", "", result, flags=re.DOTALL)
-            result = re.sub(r"#.*?$", "", result, flags=re.MULTILINE)
-
-            # Remove comments that appear after values (common in deepseek output)
-            result = re.sub(r'(["}\]])(\s*#[^\n]*)', r"\1", result)
-            result = re.sub(r"(\d+)(\s*#[^\n]*)(,|\n|})", r"\1\3", result)
-
-            # Fix common JSON formatting issues
-            # Replace single quotes with double quotes
-            result = re.sub(r"'([^']*)':", r'"\1":', result)
-            result = re.sub(r": *\'([^\']*)\'", r': "\1"', result)
-
-            # Fix trailing commas in arrays and objects
-            result = re.sub(r",\s*]", "]", result)
-            result = re.sub(r",\s*}", "}", result)
-
-            # Handle specific format issues with deepseek-reasoner
-            # Replace any remaining instances of "key": value # comment
-            result = re.sub(
-                r'("[^"]+"):\s*([^,\n\]}{#]*)(\s*#[^\n]*)(,|\n|}|\])',
-                r"\1: \2\4",
-                result,
-            )
-
-            # Final pass to remove any remaining comments
-            result = re.sub(r"#[^\n]*\n", "\n", result)
-
-            # Log the cleaned JSON
-            logger.info(f"Cleaned JSON: {result[:200]}...")
-
-            try:
-                parsed = json.loads(result)
-                logger.info("JSON parsing successful")
-                return parsed
-            except json.JSONDecodeError as json_error:
-                logger.warning(f"Initial JSON parsing failed: {str(json_error)}")
-                logger.warning("Attempting to use _get_structured_response to fix malformed JSON")
-                
-                # Try to use the LLM to fix the malformed JSON
+            # Second attempt: use LLM to clean and extract valid JSON
+            if self.llm_service:
                 try:
-                    result = self.llm_service._get_structured_response(result)
-                    logger.info(f"LLM-fixed JSON: {result[:200]}...")
-                    parsed = json.loads(result)
-                    logger.info("JSON parsing successful after LLM fix")
-                    return parsed
-                except Exception as llm_fix_error:
-                    logger.error(f"LLM JSON fix failed: {str(llm_fix_error)}")
-                    # Re-raise the original JSON error to continue with the existing fallback logic
-                    raise json_error
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON parsing error: {str(e)}")
-            logger.error(f"Problematic JSON: {result}")
-
-            # Try a more aggressive approach to extract valid JSON
-            try:
-                logger.info("Attempting manual JSON extraction...")
-
-                # Try to manually construct a valid JSON object
-                mappings = []
-
-                # Extract mappings using regex patterns
-                mapping_pattern = r'"guide_id"\s*:\s*"([^"]+)".*?"guide_text"\s*:\s*"([^"]+)".*?"max_score"\s*:\s*(\d+).*?"submission_id"\s*:\s*"([^"]+)".*?"submission_text"\s*:\s*"([^"]+)".*?"match_score"\s*:\s*([\d\.]+)'
-                mapping_matches = re.findall(
-                    mapping_pattern, result, re.DOTALL
-                )
-
-                if mapping_matches:
-                    logger.info(
-                        f"Found {len(mapping_matches)} mappings using regex"
-                    )
-
-                    for i, match in enumerate(mapping_matches):
-                        (
-                            guide_id,
-                            guide_text,
-                            max_score,
-                            submission_id,
-                            submission_text,
-                            match_score,
-                        ) = match
-
-                        # Create a basic mapping
-                        mappings.append(
-                            {
-                                "guide_id": guide_id,
-                                "guide_text": guide_text,
-                                "guide_answer": "",
-                                "max_score": float(max_score),
-                                "submission_id": submission_id,
-                                "submission_text": submission_text,
-                                "match_score": float(match_score),
-                                "match_reason": f"Mapping extracted from LLM response",
-                                "grade_score": float(max_score)
-                                * 0.8,  # Assume 80% score as default
-                                "grade_percentage": 80,
-                                "grade_feedback": "Score estimated due to parsing issues",
-                                "strengths": [],
-                                "weaknesses": [],
-                            }
-                        )
-
-                    # Create a basic result structure
-                    parsed = {
-                        "mappings": mappings,
-                        "overall_grade": {
-                            "total_score": sum(
-                                m["grade_score"] for m in mappings
-                            ),
-                            "max_possible_score": sum(
-                                m["max_score"] for m in mappings
-                            ),
-                            "percentage": 80,  # Assume 80% as default
-                            "letter_grade": "B",
-                        },
+                    system_prompt = """
+                    You are a JSON extraction and cleaning assistant. Your task is to extract valid JSON from text that may contain formatting issues, comments, or extra content.
+                    
+                    Rules:
+                    1. Extract only the JSON object from the provided text
+                    2. Remove any comments, explanations, or non-JSON content
+                    3. Fix common JSON formatting issues (trailing commas, quote issues, etc.)
+                    4. Ensure the output is valid, parseable JSON
+                    5. Preserve all data content - only fix formatting
+                    6. Return ONLY the cleaned JSON object, no explanations
+                    
+                    The expected JSON structure should contain:
+                    - "mappings" array with question-answer mappings
+                    - "overall_grade" object with scoring information
+                    """
+                    
+                    user_prompt = f"Extract and clean the JSON from this text:\n\n{result}"
+                    
+                    params = {
+                        "model": self.llm_service.model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        "temperature": 0.0,
                     }
-
-                    logger.info(
-                        "Successfully created mappings from regex extraction"
-                    )
+                    
+                    response = self.llm_service.client.chat.completions.create(**params)
+                    cleaned_result = response.choices[0].message.content.strip()
+                    
+                    logger.info(f"LLM-cleaned JSON: {cleaned_result[:200]}...")
+                    
+                    # Try parsing the cleaned result
+                    parsed = json.loads(cleaned_result)
+                    logger.info("JSON parsing successful after LLM cleaning")
                     return parsed
-                else:
-                    # If regex extraction fails, create a minimal valid structure
-                    logger.warning(
-                        "Regex extraction failed, using minimal valid structure"
-                    )
+                    
+                except Exception as llm_error:
+                    logger.error(f"LLM JSON cleaning failed: {str(llm_error)}")
 
-                    # Log the JSON parsing error with fallback
-                    logger.warning(
-                        f"JSON parsing error: {str(e)}. Using fallback mapping."
-                    )
+            # Third attempt: use LLM to reconstruct the JSON from scratch
+            if self.llm_service:
+                try:
+                    system_prompt = """
+                    You are a data extraction assistant. The provided text contains information about question-answer mappings and grading, but the JSON format is corrupted.
+                    
+                    Your task is to extract the meaningful data and reconstruct it as valid JSON with this structure:
+                    {
+                        "mappings": [
+                            {
+                                "guide_id": "string",
+                                "guide_text": "string", 
+                                "guide_answer": "string",
+                                "max_score": number,
+                                "submission_id": "string",
+                                "submission_text": "string",
+                                "match_score": number,
+                                "match_reason": "string",
+                                "grade_score": number,
+                                "grade_percentage": number,
+                                "grade_feedback": "string",
+                                "strengths": ["string"],
+                                "weaknesses": ["string"]
+                            }
+                        ],
+                        "overall_grade": {
+                            "total_score": number,
+                            "max_possible_score": number,
+                            "percentage": number,
+                            "letter_grade": "string"
+                        }
+                    }
+                    
+                    Extract all available information and provide reasonable defaults for missing fields.
+                    Return ONLY the JSON object, no explanations.
+                    """
+                    
+                    user_prompt = f"Reconstruct valid JSON from this corrupted data:\n\n{result}"
+                    
+                    params = {
+                        "model": self.llm_service.model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        "temperature": 0.0,
+                    }
+                    
+                    response = self.llm_service.client.chat.completions.create(**params)
+                    reconstructed_result = response.choices[0].message.content.strip()
+                    
+                    logger.info(f"LLM-reconstructed JSON: {reconstructed_result[:200]}...")
+                    
+                    # Try parsing the reconstructed result
+                    parsed = json.loads(reconstructed_result)
+                    logger.info("JSON parsing successful after LLM reconstruction")
+                    return parsed
+                    
+                except Exception as reconstruction_error:
+                    logger.error(f"LLM JSON reconstruction failed: {str(reconstruction_error)}")
 
-                    # Log the extraction failure
-                    logger.error(
-                        f"JSON parsing error: {str(e)}. Unable to extract mappings."
-                    )
-
-                    # Raise the exception to stop processing
-                    raise Exception(
-                        f"JSON parsing error: {str(e)}. Unable to extract mappings from LLM response."
-                    )
-            except Exception as fallback_error:
-                logger.error(
-                    f"Fallback extraction also failed: {str(fallback_error)}"
-                )
-
-                # Log the fallback extraction failure
-                logger.error(f"JSON parsing error: {str(e)}")
-
-                # Raise the exception to stop processing
-                raise Exception(f"JSON parsing error: {str(e)}")
+            # Final fallback: create minimal valid structure
+            logger.warning("All JSON parsing attempts failed, creating minimal valid structure")
+            
+            return {
+                "mappings": [],
+                "overall_grade": {
+                    "total_score": 0,
+                    "max_possible_score": 0,
+                    "percentage": 0,
+                    "letter_grade": "F"
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Critical error in JSON parsing: {str(e)}")
+            raise Exception(f"Unable to parse LLM response: {str(e)}")
 
     def get_enhanced_system_prompt(self, guide_type: str, num_questions: int) -> str:
         """
@@ -393,10 +368,10 @@ class EnhancedMappingService:
         """
         return f"""
         MARKING GUIDE CONTENT:
-        {marking_guide_content[:8000]}
+        {marking_guide_content}
 
         STUDENT SUBMISSION CONTENT:
-        {student_submission_content[:8000]}
+        {student_submission_content}
 
         REQUIREMENTS:
         - Number of questions to answer: {num_questions}
@@ -623,4 +598,4 @@ class EnhancedMappingService:
         elif percent_score >= 40:
             return "D"
         else:
-            return "F" 
+            return "F"

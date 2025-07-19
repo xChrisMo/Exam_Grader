@@ -11,7 +11,7 @@ import importlib.metadata
 import json
 import os
 import random
-import re
+# Removed regex import - using LLM-based approaches instead
 import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -451,7 +451,7 @@ Please evaluate the student's answer and provide a score and feedback."""
             "items": [
                 {{"question": "...", "answer": "..."}} OR {{"section": "...", "answer": "..."}}
             ]
-        }}""".format(guide=guide_text[:5000])
+        }}""".format(guide=guide_text)
 
         response = self._get_llm_response(prompt)
         return json.loads(response)
@@ -476,7 +476,7 @@ Please evaluate the student's answer and provide a score and feedback."""
             Dict: Grading result with scores and feedback
         """
         # Import here to avoid circular imports
-        from src.services.mapping_service import MappingService
+        from src.services.consolidated_mapping_service import ConsolidatedMappingService as MappingService
 
         # Create mapping service if needed
         mapping_service = MappingService(llm_service=self)
@@ -490,7 +490,7 @@ Please evaluate the student's answer and provide a score and feedback."""
             return {"status": "error", "message": f"Mapping error: {mapping_error}"}
 
         # Create grading service
-        from src.services.grading_service import GradingService
+        from src.services.consolidated_grading_service import ConsolidatedGradingService as GradingService
 
         grading_service = GradingService(
             llm_service=self, mapping_service=mapping_service
@@ -525,7 +525,7 @@ Please evaluate the student's answer and provide a score and feedback."""
             Tuple[Dict, Optional[str]]: (Mapping result, Error message if any)
         """
         # Import here to avoid circular imports
-        from src.services.mapping_service import MappingService
+        from src.services.consolidated_mapping_service import ConsolidatedMappingService as MappingService
 
         # Create mapping service
         mapping_service = MappingService(llm_service=self)

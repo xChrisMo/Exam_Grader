@@ -5,12 +5,13 @@ content validation, duplicate detection, and enhanced error handling.
 """
 
 from flask import Blueprint, request, jsonify, session, current_app
+from flask_wtf.csrf import validate_csrf
 from werkzeug.utils import secure_filename
 import os
 from typing import Dict, Any
 
 from src.services.enhanced_upload_service import EnhancedUploadService
-from src.services.ocr_service import OCRService
+from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRService
 from src.database.models import db, User, MarkingGuide
 from utils.logger import logger
 from utils.input_sanitizer import InputSanitizer
@@ -83,6 +84,17 @@ def upload_submission():
                 'error': 'Authentication required',
                 'code': 'AUTH_REQUIRED'
             }), 401
+        
+        # Validate CSRF token
+        try:
+            validate_csrf(request.headers.get('X-CSRFToken'))
+        except Exception as e:
+            logger.warning(f"CSRF validation failed: {e}")
+            return jsonify({
+                'success': False,
+                'error': 'CSRF token validation failed',
+                'code': 'CSRF_ERROR'
+            }), 400
         
         # Validate request
         if 'file' not in request.files:
@@ -197,6 +209,17 @@ def upload_marking_guide():
                 'error': 'Authentication required',
                 'code': 'AUTH_REQUIRED'
             }), 401
+        
+        # Validate CSRF token
+        try:
+            validate_csrf(request.headers.get('X-CSRFToken'))
+        except Exception as e:
+            logger.warning(f"CSRF validation failed: {e}")
+            return jsonify({
+                'success': False,
+                'error': 'CSRF token validation failed',
+                'code': 'CSRF_ERROR'
+            }), 400
         
         # Validate request
         if 'file' not in request.files:

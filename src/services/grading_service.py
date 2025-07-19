@@ -63,7 +63,7 @@ class GradingService:
         else:
             # Fallback if mapping service is not available, instantiate one to extract answers
             logger.warning("Mapping service not initialized. Instantiating a temporary MappingService to extract answers.")
-            from src.services.mapping_service import MappingService
+            from src.services.consolidated_mapping_service import ConsolidatedMappingService as MappingService
             temp_mapping_service = MappingService(llm_service=self.llm_service) # Pass LLM service if available
             parsed_student_submission = temp_mapping_service.extract_questions_and_answers(student_submission_content)
             if not parsed_student_submission:
@@ -139,7 +139,7 @@ class GradingService:
                     mappings = mapping_result.get("mappings", [])
                 else:
                     # Initialize mapping service if none was provided
-                    from src.services.mapping_service import MappingService
+                    from src.services.consolidated_mapping_service import ConsolidatedMappingService as MappingService
 
                     temp_mapping_service = MappingService()
                     mapping_result, mapping_error = (
@@ -355,31 +355,43 @@ class GradingService:
                         except json.JSONDecodeError as json_error:
                             logger.warning(f"Direct JSON parsing failed: {str(json_error)}")
 
-                            # Try to extract JSON from the response
-                            json_match = re.search(r'\{.*\}', result, re.DOTALL)
-                            if json_match:
-                                try:
-                                    parsed = json.loads(json_match.group(0))
-                                    logger.info("Successfully extracted JSON from response")
-                                except json.JSONDecodeError:
-                                    logger.warning("JSON extraction also failed, using manual extraction")
-                                    # Manual extraction fallback
-                                    score_match = re.search(r'(?:score|points?)[:\s]*(\d+(?:\.\d+)?)', result, re.IGNORECASE)
-                                    score = float(score_match.group(1)) if score_match else 0
+                            # Use LLM to extract JSON and score information
+                            try:
+                                if self.llm_service:
+                                    extraction_prompt = f"""
+                                    Extract grading information from this response and return valid JSON with score and feedback:
+                                    
+                                    {result}
+                                    
+                                    Return format: {{"score": number, "feedback": "text"}}
+                                    """
+                                    
+                                    extraction_response = self.llm_service.client.chat.completions.create(
+                                        model=self.llm_service.model,
+                                        messages=[
+                                            {"role": "system", "content": "Extract grading information and return valid JSON. Include score (0-100) and feedback text."},
+                                            {"role": "user", "content": extraction_prompt}
+                                        ],
+                                        temperature=0.0
+                                    )
+                                    
+                                    extracted_result = extraction_response.choices[0].message.content.strip()
+                                    parsed = json.loads(extracted_result)
+                                    logger.info("Successfully extracted grading info using LLM")
+                                else:
+                                    # Basic fallback without regex
                                     parsed = {
-                                        "score": score,
+                                        "score": 0,
                                         "feedback": result.strip(),
-                                        "extraction_method": "manual"
+                                        "extraction_method": "basic_fallback"
                                     }
-                            else:
-                                logger.warning("No JSON found in response, using manual extraction")
-                                # Manual extraction fallback
-                                score_match = re.search(r'(?:score|points?)[:\s]*(\d+(?:\.\d+)?)', result, re.IGNORECASE)
-                                score = float(score_match.group(1)) if score_match else 0
+                            except Exception as extraction_error:
+                                logger.error(f"LLM extraction failed: {str(extraction_error)}")
+                                # Basic fallback without regex
                                 parsed = {
-                                    "score": score,
+                                    "score": 0,
                                     "feedback": result.strip(),
-                                    "extraction_method": "manual"
+                                    "extraction_method": "basic_fallback"
                                 }
 
                         # Extract detailed grading information with safe defaults
@@ -554,9 +566,10 @@ class GradingService:
         if not guide_answer or not submission_answer:
             return 0.0
 
-        # Remove punctuation and convert to lowercase for comparison
-        guide_clean = re.sub(r"[^\w\s]", "", guide_answer.lower())
-        submission_clean = re.sub(r"[^\w\s]", "", submission_answer.lower())
+        # Remove punctuation and convert to lowercase for comparison using basic string operations
+        import string
+        guide_clean = ''.join(c for c in guide_answer.lower() if c.isalnum() or c.isspace())
+        submission_clean = ''.join(c for c in submission_answer.lower() if c.isalnum() or c.isspace())
 
         # Split into words
         guide_words = guide_clean.split()

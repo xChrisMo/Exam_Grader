@@ -13,7 +13,7 @@ from werkzeug.utils import secure_filename
 
 from src.database.models import db, Submission, MarkingGuide, User
 from src.services.content_validation_service import ContentValidationService
-from src.services.ocr_service import OCRService
+from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRService
 from utils.logger import logger
 from utils.file_processor import FileProcessor
 
@@ -239,6 +239,28 @@ class EnhancedUploadService:
                 
                 logger.info(f"Submission uploaded successfully: {submission.id}")
                 
+                # Trigger enhanced processing for the submission
+                processing_triggered = False
+                try:
+                    from src.services.enhanced_processing_service import EnhancedProcessingService
+                    from src.services.consolidated_llm_service import ConsolidatedLLMService as LLMService
+                    
+                    processing_service = EnhancedProcessingService(LLMService(), self.ocr_service)
+                    submission_result, submission_error = processing_service.process_submission(
+                        submission_id=submission.id,
+                        file_path=final_path,
+                        marking_guide_id=marking_guide_id
+                    )
+                    
+                    if not submission_error:
+                        processing_triggered = True
+                        logger.info(f"Enhanced processing completed for submission {submission.id}")
+                    else:
+                        logger.warning(f"Enhanced processing failed for submission {submission.id}: {submission_error}")
+                        
+                except Exception as processing_error:
+                    logger.error(f"Error triggering enhanced processing for submission {submission.id}: {processing_error}")
+                
                 return {
                     'success': True,
                     'submission_id': submission.id,
@@ -247,7 +269,8 @@ class EnhancedUploadService:
                     'content_hash': content_hash,
                     'text_length': len(text_content) if text_content else 0,
                     'confidence': confidence,
-                    'message': 'Submission uploaded successfully'
+                    'message': 'Submission uploaded successfully',
+                    'processing_triggered': processing_triggered
                 }
                 
             except Exception as e:
@@ -361,6 +384,28 @@ class EnhancedUploadService:
                 
                 logger.info(f"Marking guide uploaded successfully: {marking_guide.id}")
                 
+                # Trigger enhanced processing for the guide
+                processing_triggered = False
+                try:
+                    from src.services.enhanced_processing_service import EnhancedProcessingService
+                    from src.services.consolidated_llm_service import ConsolidatedLLMService as LLMService
+                    
+                    processing_service = EnhancedProcessingService(LLMService(), self.ocr_service)
+                    guide_result, guide_error = processing_service.process_marking_guide(
+                        guide_id=marking_guide.id,
+                        file_path=final_path,
+                        raw_content=text_content
+                    )
+                    
+                    if not guide_error:
+                        processing_triggered = True
+                        logger.info(f"Enhanced processing completed for guide {marking_guide.id}")
+                    else:
+                        logger.warning(f"Enhanced processing failed for guide {marking_guide.id}: {guide_error}")
+                        
+                except Exception as processing_error:
+                    logger.error(f"Error triggering enhanced processing for guide {marking_guide.id}: {processing_error}")
+                
                 return {
                     'success': True,
                     'guide_id': marking_guide.id,
@@ -370,7 +415,8 @@ class EnhancedUploadService:
                     'content_hash': content_hash,
                     'text_length': len(text_content) if text_content else 0,
                     'confidence': confidence,
-                    'message': 'Marking guide uploaded successfully'
+                    'message': 'Marking guide uploaded successfully',
+                    'processing_triggered': processing_triggered
                 }
                 
             except Exception as e:

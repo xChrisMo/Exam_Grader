@@ -9,7 +9,7 @@ Provides endpoints for:
 
 from flask import Blueprint, render_template, request, jsonify, session, current_app
 from flask_login import login_required, current_user
-from src.database.models import Submission, MarkingGuide, GradingSession
+from src.database.models import Submission, MarkingGuide, GradingSession, GradingResult
 from src.database import db
 from src.services.refactored_unified_ai_service import RefactoredUnifiedAIService
 from datetime import datetime
@@ -365,10 +365,50 @@ def dashboard():
             'recent_sessions': recent_sessions
         }
         
+        # Get additional context data
+        from flask_wtf.csrf import generate_csrf
+        from flask import session
+        
+        # Get submissions for the user
+        submissions = Submission.query.filter_by(user_id=current_user.id).all()
+        
+        # Calculate last score from recent grading results
+        last_grading_result = GradingResult.query.join(
+            Submission, GradingResult.submission_id == Submission.id
+        ).filter(
+            Submission.user_id == current_user.id
+        ).order_by(GradingResult.created_at.desc()).first()
+        
+        last_score = last_grading_result.score if last_grading_result else 0
+        
+        # Create recent activity from sessions
+        recent_activity = []
+        for session_item in recent_sessions[:5]:
+            recent_activity.append({
+                'type': 'grading_session',
+                'icon': 'check' if session_item.status == 'completed' else 'document',
+                'message': f'Grading session {session_item.status}',
+                'timestamp': session_item.created_at,
+                'id': session_item.id
+            })
+        
         return render_template(
-            'refactored_dashboard.html',
-            dashboard_data=dashboard_data,
-            page_title='Refactored AI Dashboard'
+            'dashboard.html',
+            total_submissions=dashboard_data['total_submissions'],
+            processed_submissions=dashboard_data['completed_sessions'],
+            guide_uploaded=dashboard_data['total_guides'] > 0,
+            last_score=last_score,
+            avg_score=0,
+            recent_activity=recent_activity,
+            submissions=submissions,
+            service_status={'ocr_status': True, 'llm_status': True, 'storage_status': True},
+            guide_storage_available=True,
+            submission_storage_available=True,
+            page_title='Dashboard',
+            csrf_token=generate_csrf(),
+            max_file_size=16,
+            app_version='1.0.0',
+            current_year=2025
         )
         
     except Exception as e:

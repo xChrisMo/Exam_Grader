@@ -132,14 +132,18 @@
                                                 </td>
                                                 <td>
                                                     <div class="d-flex align-items-center">
-                                                        <div class="progress me-2" style="width: 60px; height: 8px;">
-                                                            <div class="progress-bar 
-                                                                {% if result.score >= 90 %}bg-success
-                                                                {% elif result.score >= 80 %}bg-info
-                                                                {% elif result.score >= 70 %}bg-warning
-                                                                {% else %}bg-danger{% endif %}"
-                                                                style="width: {{ result.score }}%"></div>
-                                                        </div>
+                                                        <div class="w-15 h-2 bg-gray-200 rounded-full overflow-hidden me-2">
+                                            <div class="h-full transition-all duration-300
+                                                {% if result.score >= 90 %}bg-green-500
+                                                {% elif result.score >= 80 %}bg-blue-500
+                                                {% elif result.score >= 70 %}bg-yellow-500
+                                                {% else %}bg-red-500{% endif %}"
+                                                role="progressbar"
+                                                aria-valuenow="{{ result.score }}"
+                                                aria-valuemin="0"
+                                                aria-valuemax="100"
+                                                style="width: {{ result.score }}%"></div>
+                                        </div>
                                                         <span class="fw-medium">{{ result.score }}%</span>
                                                     </div>
                                                     <small class="text-muted">{{ result.raw_score }}/{{ result.max_score }}</small>
@@ -247,8 +251,8 @@ function showResultDetails(submissionId, guideTitle, resultData) {
             <div class="col-md-6">
                 <h6>Overall Score</h6>
                 <div class="d-flex align-items-center mb-2">
-                    <div class="progress me-3" style="width: 200px; height: 20px;">
-                        <div class="progress-bar bg-primary" style="width: ${resultData.score}%"></div>
+                    <div class="w-48 h-5 bg-gray-200 rounded-full overflow-hidden me-3">
+                    <div class="h-full bg-primary-500 transition-all duration-300" style="width: ${resultData.score}%"></div>
                     </div>
                     <span class="fw-bold">${resultData.score}% (${resultData.letter_grade})</span>
                 </div>
@@ -287,8 +291,8 @@ function showResultDetails(submissionId, guideTitle, resultData) {
                     </td>
                     <td>
                         <div class="d-flex align-items-center">
-                            <div class="progress me-2" style="width: 60px; height: 8px;">
-                                <div class="progress-bar bg-info" style="width: ${criteria.percentage}%"></div>
+                            <div class="w-15 h-2 bg-gray-200 rounded-full overflow-hidden me-2">
+                            <div class="h-full bg-blue-500 transition-all duration-300" style="width: ${criteria.percentage}%"></div>
                             </div>
                             <span>${criteria.percentage}%</span>
                         </div>
@@ -376,58 +380,5 @@ function toggleAutoRefresh() {
 }
 </script>
 
-<style>
-.guide-section {
-    border-left: 4px solid #007bff;
-}
-
-.guide-section:nth-child(even) {
-    border-left-color: #28a745;
-}
-
-.guide-section:nth-child(3n) {
-    border-left-color: #ffc107;
-}
-
-.guide-section:nth-child(4n) {
-    border-left-color: #dc3545;
-}
-
-.collapse-icon {
-    transition: transform 0.2s ease;
-}
-
-.progress {
-    background-color: #e9ecef;
-}
-
-.badge.bg-orange {
-    background-color: #fd7e14 !important;
-}
-
-.table th {
-    border-top: none;
-    font-weight: 600;
-    font-size: 0.875rem;
-}
-
-.card-header {
-    border-bottom: 2px solid #dee2e6;
-}
-
-.guide-summary .badge {
-    font-size: 0.75rem;
-}
-
-@media (max-width: 768px) {
-    .guide-summary {
-        margin-top: 0.5rem;
-    }
-    
-    .guide-summary .badge {
-        display: block;
-        margin-bottom: 0.25rem;
-    }
-}
-</style>
+<!-- Results grouped styles are now included in consolidated-styles.css -->
 {% endblock %}

@@ -4,13 +4,13 @@ Provides better OCR preprocessing, standardized prompts, and robust output valid
 """
 
 import json
-import re
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from utils.logger import logger
+from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRService
 
 
 class EnhancedLLMService:
@@ -23,7 +23,7 @@ class EnhancedLLMService:
     
     def preprocess_ocr_text(self, text: str) -> str:
         """
-        Preprocess OCR text to improve LLM understanding.
+        Preprocess OCR text using LLM to improve understanding.
         
         Args:
             text: Raw OCR text
@@ -34,34 +34,56 @@ class EnhancedLLMService:
         if not text:
             return ""
         
-        # Remove excessive whitespace and normalize line breaks
-        text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
-        text = re.sub(r' +', ' ', text)
-        
-        # Fix common OCR artifacts
-        text = re.sub(r'[|]', 'I', text)  # Fix common OCR confusion
-        text = re.sub(r'[0]', 'O', text)  # Fix common OCR confusion
-        text = re.sub(r'[1]', 'l', text)  # Fix common OCR confusion
-        text = re.sub(r'[5]', 'S', text)  # Fix common OCR confusion
-        text = re.sub(r'[8]', 'B', text)  # Fix common OCR confusion
-        
-        # Remove excessive punctuation that might confuse the LLM
-        text = re.sub(r'[!]{2,}', '!', text)
-        text = re.sub(r'[?]{2,}', '?', text)
-        text = re.sub(r'[.]{3,}', '...', text)
-        
-        # Normalize quotes and apostrophes
-        text = text.replace('"', '"').replace('"', '"')
-        text = text.replace(''', "'").replace(''', "'")
-        
-        # Remove headers, footers, and page numbers
-        text = re.sub(r'Page \d+', '', text, flags=re.IGNORECASE)
-        text = re.sub(r'^\d+\s*$', '', text, flags=re.MULTILINE)
-        
-        # Remove watermarks and irrelevant text
-        text = re.sub(r'CONFIDENTIAL|DRAFT|COPY|WATERMARK', '', text, flags=re.IGNORECASE)
-        
-        return text.strip()
+        try:
+            if self.llm_service:
+                # Use LLM to preprocess OCR text
+                system_prompt = """
+You are an OCR text preprocessing expert. Clean and improve the provided OCR text by:
+1. Fixing common OCR artifacts and character recognition errors
+2. Normalizing whitespace and line breaks
+3. Removing headers, footers, page numbers, and watermarks
+4. Fixing punctuation and quote normalization
+5. Preserving all meaningful content and structure
+6. Return only the cleaned text without any explanations
+
+Common OCR fixes:
+- | → I (vertical bar to letter I)
+- 0 → O (zero to letter O when appropriate)
+- 1 → l (one to lowercase L when appropriate)
+- 5 → S (five to letter S when appropriate)
+- 8 → B (eight to letter B when appropriate)
+"""
+                
+                user_prompt = f"Clean and preprocess this OCR text:\n\n{text}"
+                
+                response = self.llm_service.generate_response(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    temperature=0.1
+                )
+                
+                return response.strip() if response else text
+            else:
+                # Basic fallback preprocessing without regex
+                lines = text.split('\n')
+                cleaned_lines = []
+                
+                for line in lines:
+                    line = line.strip()
+                    if line and not line.isdigit():  # Skip page numbers
+                         # Basic character fixes
+                         line = line.replace('|', 'I')
+                         line = line.replace('"', '"').replace('"', '"')
+                         line = line.replace(''', "'").replace(''', "'")
+                         cleaned_lines.append(line)
+                 
+                    return '\n'.join(cleaned_lines)
+                 
+        except Exception as e:
+            logger.warning(f"OCR text preprocessing failed: {e}, using basic cleanup")
+            # Basic fallback
+            lines = text.split('\n')
+            return '\n'.join(line.strip() for line in lines if line.strip())
     
     def get_standardized_grading_prompt(self, guide_type: str, num_questions: int) -> str:
         """
@@ -199,28 +221,55 @@ SPECIFIC GUIDELINES FOR ANSWER-BASED GRADING:
             return {}, errors
     
     def _clean_json_output(self, output: str) -> str:
-        """Clean JSON output from LLM."""
-        # Remove any text before the first {
-        start_idx = output.find('{')
-        if start_idx != -1:
-            output = output[start_idx:]
-        
-        # Remove any text after the last }
-        end_idx = output.rfind('}')
-        if end_idx != -1:
-            output = output[:end_idx + 1]
-        
-        # Remove comments
-        output = re.sub(r'//.*?$', '', output, flags=re.MULTILINE)
-        output = re.sub(r'#.*?$', '', output, flags=re.MULTILINE)
-        
-        # Fix common JSON issues
-        output = re.sub(r"'([^']*)':", r'"\1":', output)  # Single quotes to double quotes
-        output = re.sub(r": *'([^']*)'", r': "\1"', output)
-        output = re.sub(r",\s*]", "]", output)  # Remove trailing commas
-        output = re.sub(r",\s*}", "}", output)
-        
-        return output
+        """Clean JSON output from LLM using LLM-only approach."""
+        try:
+            if self.llm_service:
+                # Use LLM to clean and extract JSON
+                system_prompt = """
+You are a JSON cleaning expert. Extract and clean valid JSON from the provided text.
+Rules:
+1. Extract only the JSON object from the text
+2. Remove any comments or explanations
+3. Fix common JSON formatting issues
+4. Convert single quotes to double quotes
+5. Remove trailing commas
+6. Return only valid JSON, no explanations
+"""
+                
+                user_prompt = f"Extract and clean valid JSON from this text:\n\n{output}"
+                
+                response = self.llm_service.generate_response(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    temperature=0.1
+                )
+                
+                return response.strip() if response else output
+            else:
+                # Basic fallback cleaning without regex
+                # Remove any text before the first {
+                start_idx = output.find('{')
+                if start_idx != -1:
+                    output = output[start_idx:]
+                
+                # Remove any text after the last }
+                end_idx = output.rfind('}')
+                if end_idx != -1:
+                    output = output[:end_idx + 1]
+                
+                # Basic quote fixes
+                output = output.replace("'", '"')
+                
+                return output
+                
+        except Exception as e:
+            logger.warning(f"JSON cleaning failed: {e}, using basic extraction")
+            # Basic fallback
+            start_idx = output.find('{')
+            end_idx = output.rfind('}')
+            if start_idx != -1 and end_idx != -1:
+                return output[start_idx:end_idx + 1]
+            return output
     
     def _validate_mapping(self, mapping: Dict[str, Any], index: int) -> List[str]:
         """Validate individual mapping."""
@@ -331,10 +380,10 @@ SPECIFIC GUIDELINES FOR ANSWER-BASED GRADING:
             # Create user prompt
             user_prompt = f"""
 MARKING GUIDE CONTENT:
-{marking_guide_content[:8000]}
+{marking_guide_content}
 
 STUDENT SUBMISSION CONTENT:
-{student_submission_content[:8000]}
+{student_submission_content}
 
 REQUIREMENTS:
 - Grade exactly {num_questions} questions/answers
@@ -392,4 +441,4 @@ def init_enhanced_llm_service(llm_service):
     """Initialize enhanced LLM service."""
     global enhanced_llm_service
     enhanced_llm_service = EnhancedLLMService(llm_service)
-    return enhanced_llm_service 
+    return enhanced_llm_service

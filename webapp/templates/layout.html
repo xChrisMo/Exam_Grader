@@ -21,86 +21,11 @@
       type="image/x-icon"
     />
 
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              primary: {
-                50: "#eff6ff",
-                100: "#dbeafe",
-                200: "#bfdbfe",
-                300: "#93c5fd",
-                400: "#60a5fa",
-                500: "#3b82f6",
-                600: "#2563eb",
-                700: "#1d4ed8",
-                800: "#1e40af",
-                900: "#1e3a8a",
-              },
-              success: {
-                50: "#f0fdf4",
-                100: "#dcfce7",
-                200: "#bbf7d0",
-                300: "#86efac",
-                400: "#4ade80",
-                500: "#22c55e",
-                600: "#16a34a",
-                700: "#15803d",
-                800: "#166534",
-                900: "#14532d",
-              },
-              warning: {
-                50: "#fffbeb",
-                100: "#fef3c7",
-                200: "#fde68a",
-                300: "#fcd34d",
-                400: "#fbbf24",
-                500: "#f59e0b",
-                600: "#d97706",
-                700: "#b45309",
-                800: "#92400e",
-                900: "#78350f",
-              },
-              danger: {
-                50: "#fef2f2",
-                100: "#fee2e2",
-                200: "#fecaca",
-                300: "#fca5a5",
-                400: "#f87171",
-                500: "#ef4444",
-                600: "#dc2626",
-                700: "#b91c1c",
-                800: "#991b1b",
-                900: "#7f1d1d",
-              },
-            },
-            fontFamily: {
-              sans: ["Inter", "system-ui", "sans-serif"],
-              display: ["Inter", "system-ui", "sans-serif"],
-            },
-            animation: {
-              "fade-in": "fadeIn 0.5s ease-in-out",
-              "slide-up": "slideUp 0.3s ease-out",
-              "pulse-slow": "pulse 3s infinite",
-            },
-            keyframes: {
-              fadeIn: {
-                "0%": { opacity: "0" },
-                "100%": { opacity: "1" },
-              },
-              slideUp: {
-                "0%": { transform: "translateY(10px)", opacity: "0" },
-                "100%": { transform: "translateY(0)", opacity: "1" },
-              },
-            },
-          },
-        },
-      };
-    </script>
+    <!-- Tailwind CSS - Production Build -->
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/tailwind.css') }}?v={{ range(1000, 9999) | random }}"
+    />
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -110,11 +35,7 @@
       rel="stylesheet"
     />
 
-    <!-- Custom CSS -->
-    <link
-      rel="stylesheet"
-      href="{{ url_for('static', filename='css/custom.css') }}"
-    />
+    <!-- Consolidated CSS removed to prevent conflicts with Tailwind CSS -->
 
     <!-- Security Headers -->
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
@@ -124,14 +45,9 @@
     <!-- DOMPurify XSS Protection -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 
-    <!-- CSRF Token for JavaScript -->
-    {% if csrf_token %}
-    <meta name="csrf-token" content="{{ csrf_token }}">
-    {% endif %}
-
     {% block extra_css %}{% endblock %}
   </head>
-  <body class="h-full overflow-hidden font-sans antialiased" data-theme="{{ settings.theme if settings and settings.theme else 'light' }}">
+  <body class="h-full font-sans antialiased" data-theme="{{ settings.theme if settings and settings.theme else 'light' }}">
     <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %} {% if
     messages %}
@@ -365,7 +281,30 @@
                   {{ session.get('total_submissions', 0) }}
                 </span>
               </a>
-              {% endif %} {% if session.get('last_grading_result') %}
+              {% endif %}
+              
+              <!-- Enhanced Processing -->
+              <a
+                href="{{ url_for('enhanced_processing') }}"
+                class="nav-link {% if request.endpoint == 'enhanced_processing' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md"
+              >
+                <svg
+                  class="{% if request.endpoint == 'enhanced_processing' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  />
+                </svg>
+                <span data-i18n="nav_enhanced_processing">Enhanced AI Processing</span>
+              </a>
+              
+              {% if session.get('last_grading_result') %}
               <a
                 href="{{ url_for('view_results') }}"
                 class="nav-link {% if request.endpoint == 'view_results' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md"
@@ -611,15 +550,27 @@
 
     <!-- Custom JavaScript -->
     <script src="{{ url_for('static', filename='js/translations.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v={{ range(1000, 9999) | random }}"></script>
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+    
+    <!-- UI Components and Systems -->
+    <script src="{{ url_for('static', filename='js/ui-components.js') }}"></script>
+    <!-- Removed form-components.js and navigation-component.js due to invalid @apply directives in runtime CSS injection -->
+    <!-- These components inject CSS with @apply directives that only work at build time, not runtime -->
+    <script src="{{ url_for('static', filename='js/drag-drop-upload.js') }}"></script>
+    <!-- Removed responsive-layout.js due to invalid @apply directives in runtime CSS injection -->
+    <script src="{{ url_for('static', filename='js/state-manager.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ui-workflows.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app-integration.js') }}?v={{ range(1000, 9999) | random }}"></script>
 
     <!-- Initialize client config from server -->
+    {% set max_file_size = (config.max_file_size_mb if config and config.max_file_size_mb else 20) * 1024 * 1024 %}
+    {% set allowed_types = config.supported_formats if config and config.supported_formats else ['.pdf', '.docx', '.doc', '.txt', '.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.gif'] %}
     <script>
       // Initialize ExamGrader config from server data
       if (typeof ExamGrader !== 'undefined') {
-        ExamGrader.config.maxFileSize = "{{ (config.max_file_size_mb if config and config.max_file_size_mb else 20) * 1024 * 1024 }}";
-        ExamGrader.config.allowedFileTypes = {{ (config.supported_formats if config and config.supported_formats else ['.pdf', '.docx', '.doc', '.txt', '.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.gif']) | tojson }};
+        ExamGrader.config.maxFileSize = {{ max_file_size }};
+        ExamGrader.config.allowedFileTypes = {{ allowed_types | tojson | safe }};
       }
     </script>
 

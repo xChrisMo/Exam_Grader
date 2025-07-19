@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JavaScript Syntax Test</title>
+</head>
+<body>
+    <h1>JavaScript Syntax Test</h1>
+    <div id="test-output"></div>
+    
+    <script>
+        // Test the basic JavaScript syntax
+        try {
+            console.log('JavaScript syntax test starting...');
+            
+            // Test try-catch blocks
+            try {
+                console.log('Try-catch test 1 passed');
+            } catch (error) {
+                console.error('Try-catch test 1 failed:', error);
+            }
+            
+            // Test async/await
+            async function testAsync() {
+                try {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    console.log('Async test passed');
+                } catch (error) {
+                    console.error('Async test failed:', error);
+                }
+            }
+            
+            testAsync();
+            
+            document.getElementById('test-output').innerHTML = 'JavaScript syntax test completed - check console for results';
+            
+        } catch (error) {
+            console.error('Main test failed:', error);
+            document.getElementById('test-output').innerHTML = 'JavaScript syntax test failed: ' + error.message;
+        }
+    </script>
+</body>
+</html>

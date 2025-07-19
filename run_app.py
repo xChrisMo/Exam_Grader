@@ -8,9 +8,14 @@ import argparse
 import os
 import subprocess
 import sys
+import signal
 from pathlib import Path
 from flask import Flask
 import codecs
+try:
+    from importlib.metadata import version
+except ImportError:
+    from importlib_metadata import version
 
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer)
@@ -18,6 +23,14 @@ sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer)
 
 from dotenv import load_dotenv
 from src.utils import logging_config
+
+
+def signal_handler(sig, frame):
+    """Handle Ctrl+C gracefully."""
+    print("\n[STOP] Application stopped by user (Ctrl+C)")
+    print("[INFO] Shutting down gracefully...")
+    # Force exit to ensure the application terminates
+    os._exit(0)
 
 
 def check_python_version():
@@ -86,19 +99,35 @@ def check_version_compatibility():
         import flask_babel
         import werkzeug
         
-        print(f"[INFO] Flask version: {flask.__version__}")
-        
-        # Handle Flask-Babel version check (newer versions may not have __version__)
+        # Use importlib.metadata for version checking
         try:
+            flask_version = version('flask')
+            print(f"[INFO] Flask version: {flask_version}")
+        except Exception:
+            flask_version = getattr(flask, '__version__', 'unknown')
+            print(f"[INFO] Flask version: {flask_version}")
+        
+        # Handle Flask-Babel version check
+        try:
+            babel_version = version('flask-babel')
+            print(f"[INFO] Flask-Babel version: {babel_version}")
+        except Exception:
             babel_version = getattr(flask_babel, '__version__', 'unknown')
             print(f"[INFO] Flask-Babel version: {babel_version}")
-        except AttributeError:
-            print("[INFO] Flask-Babel version: installed (version info unavailable)")
             
-        print(f"[INFO] Werkzeug version: {werkzeug.__version__}")
+        # Handle Werkzeug version check
+        try:
+            werkzeug_version = version('werkzeug')
+            print(f"[INFO] Werkzeug version: {werkzeug_version}")
+        except Exception:
+            werkzeug_version = getattr(werkzeug, '__version__', 'unknown')
+            print(f"[INFO] Werkzeug version: {werkzeug_version}")
         
         # Check Flask and Flask-Babel compatibility
-        flask_major, flask_minor = map(int, flask.__version__.split('.')[:2])
+        if flask_version != 'unknown':
+            flask_major, flask_minor = map(int, flask_version.split('.')[:2])
+        else:
+            flask_major, flask_minor = 2, 3  # Default assumption
         
         # Flask 3.x changed how extensions register functions
         if flask_major >= 3:
@@ -144,6 +173,9 @@ def create_directories():
 
 def run_application(host: str = None, port: int = None, debug: bool = None):
     """Run the Flask application with configuration from .env file."""
+    # Register signal handler for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    
     try:
         # Load environment variables from instance/.env first, then fallback to root .env
         project_root = Path(__file__).parent
@@ -187,21 +219,31 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
         # Initialize and run database migrations
         config = UnifiedConfig()
         db_url = config.database.database_url
+        print(f"[DEBUG] Database URL: {db_url}")
+        print(f"[DEBUG] Database URL type: {type(db_url)}")
+        
         if db_url:
             # Ensure app context is available for database operations
-            # Add before migration_manager.migrate()
             from src.database.models import db  # Add proper DB import
             
             with app.app_context():
-                MigrationManager(db.engine.url).migrate()
+                try:
+                    # Check if db engine is available
+                    if hasattr(db, 'engine') and db.engine is not None:
+                        print(f"[DEBUG] Using db.engine.url: {db.engine.url}")
+                        MigrationManager(str(db.engine.url)).migrate()
+                    else:
+                        # Use the database URL directly if engine is not available
+                        print(f"[DEBUG] Using config database URL: {db_url}")
+                        MigrationManager(str(db_url)).migrate()
+                except Exception as e:
+                    print(f"[ERROR] Migration failed: {e}")
+                    print(f"[DEBUG] Exception type: {type(e)}")
+                    import traceback
+                    traceback.print_exc()
         else:
             print("[ERROR] Database URL not found in configuration. Exiting.")
             sys.exit(1)
-
-
-
-
-
 
         print("\n" + "=" * 50)
         print("🎓 EXAM GRADER - AI-POWERED ASSESSMENT PLATFORM")
@@ -211,7 +253,12 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
         from src.utils.logging_config import setup_application_logging
         app_logging_config = setup_application_logging()
 
-        print(app_logging_config.create_startup_summary(host=host, port=port))
+        # Handle case where logging config might be None
+        if app_logging_config and hasattr(app_logging_config, 'create_startup_summary'):
+            print(app_logging_config.create_startup_summary(host=host, port=port))
+        else:
+            print(f"🚀 Server starting on {host}:{port}")
+            print(f"📝 Logging: Basic configuration active")
         print(f"🔧 Debug mode: {'ON' if debug else 'OFF'}")
         print("📁 Storage: temp/ & output/")
         print(f"📊 Max file size: {os.getenv('MAX_FILE_SIZE_MB', '20')}MB")
@@ -233,7 +280,6 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
             port=port,
             debug=debug,
             use_reloader=False,  # Disable reloader to prevent double initialization
-            threaded=True,
         )
 
     except ImportError as e:
@@ -249,7 +295,8 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
         sys.exit(1)
     except KeyboardInterrupt:
         print("\n[STOP] Application stopped by user")
-        sys.exit(0)
+        print("[INFO] Shutting down gracefully...")
+        os._exit(0)
     except Exception as e:
         print(f"[ERROR] Unexpected error: {e}")
         sys.exit(1)

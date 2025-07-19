@@ -8,10 +8,10 @@ from typing import Dict, List, Optional, Any
 from celery import Celery
 from celery.utils.log import get_task_logger
 
-from src.services.optimized_ocr_service import OptimizedOCRService
-from src.services.optimized_mapping_service import OptimizedMappingService
-from src.services.optimized_grading_service import OptimizedGradingService
-from src.services.llm_service import LLMService
+from src.services.consolidated_ocr_service import ConsolidatedOCRService as OptimizedOCRService
+from src.services.consolidated_mapping_service import ConsolidatedMappingService as OptimizedMappingService
+from src.services.consolidated_grading_service import ConsolidatedGradingService as OptimizedGradingService
+from src.services.consolidated_llm_service import ConsolidatedLLMService as LLMService
 from src.database.models import Submission, MarkingGuide, GradingResult, Mapping
 from src.database.models import db
 from utils.logger import logger
@@ -237,8 +237,9 @@ def process_optimized_full_pipeline(self, submission_ids: List[int], marking_gui
         
         # Initialize optimized unified service
         try:
-            from src.services.optimized_unified_ai_service import OptimizedUnifiedAIService
-            unified_service = OptimizedUnifiedAIService(
+            from src.services.unified_ai_service import UnifiedAIService as ConsolidatedUnifiedAIService
+            # Use consolidated service with backward compatibility
+            unified_service = ConsolidatedUnifiedAIService(
                 mapping_service=mapping_service,
                 grading_service=grading_service,
                 llm_service=llm_service

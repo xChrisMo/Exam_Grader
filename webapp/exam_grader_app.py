@@ -4,6 +4,8 @@ Exam Grader Flask Web Application
 Modern educational assessment platform with AI-powered grading capabilities.
 """
 
+print("[DEBUG] Starting exam_grader_app.py initialization...")
+
 import os
 import sys
 import json
@@ -13,18 +15,29 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any
 
+print("[DEBUG] Basic imports completed")
+
 from utils.error_handler import add_recent_activity
+
+print("[DEBUG] Error handler import completed")
 
 # Load environment variables
 from dotenv import load_dotenv
 
+print("[DEBUG] dotenv import completed")
+
 load_dotenv()
+
+print("[DEBUG] Environment variables loaded")
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+print("[DEBUG] Project root added to path")
+
 # Flask imports
+print("[DEBUG] Starting Flask imports...")
 from flask import (
     Flask,
     render_template,
@@ -36,25 +49,40 @@ from flask import (
     jsonify,
     abort,
 )
+print("[DEBUG] Flask core imports completed")
 from sqlalchemy.exc import SQLAlchemyError
+print("[DEBUG] SQLAlchemy imports completed")
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField
 from wtforms.validators import DataRequired
+print("[DEBUG] WTForms imports completed")
 from flask_login import current_user, LoginManager
+print("[DEBUG] Flask-Login imports completed")
 from flask_wtf.csrf import CSRFProtect, CSRFError
+print("[DEBUG] Flask-WTF CSRF imports completed")
 from werkzeug.utils import secure_filename
+print("[DEBUG] Werkzeug imports completed")
 from flask_babel import Babel, _
+print("[DEBUG] Flask-Babel imports completed")
 # from flask_limiter import Limiter
 # from flask_limiter.util import get_remote_address
 # Redis removed - no longer needed
 from celery.result import AsyncResult
+print("[DEBUG] Celery imports completed")
 from src.services.realtime_service import socketio
+print("[DEBUG] Realtime service imports completed")
+
+print("[DEBUG] Flask and external imports completed")
 
 # Project imports
 from src.config.logging_config import create_startup_summary
 
+print("[DEBUG] Logging config import completed")
+
 try:
-    from src.config.unified_config import config
+    print("[DEBUG] Starting main project imports...")
+    from src.config.unified_config import UnifiedConfig
+    print("[DEBUG] UnifiedConfig imported")
     from src.database import (
         db,
         User,
@@ -63,29 +91,68 @@ try:
         GradingResult,
         DatabaseUtils,
     )
+    print("[DEBUG] Database imports completed")
     from src.security.session_manager import SecureSessionManager
     from src.security.secrets_manager import secrets_manager, initialize_secrets
     from src.security.flask_session_interface import SecureSessionInterface
+    print("[DEBUG] Security imports completed")
     from src.services.ocr_service import OCRService
     from src.services.llm_service import LLMService
     from src.services.mapping_service import MappingService
     from src.services.grading_service import GradingService
     from src.services.file_cleanup_service import FileCleanupService
+    print("[DEBUG] Service imports completed")
     from src.parsing.parse_submission import parse_student_submission
     from src.parsing.parse_guide import parse_marking_guide
+    print("[DEBUG] Parsing imports completed")
     from utils.logger import logger
+    # Handle case where logger might be None
+    if logger is None:
+        import logging
+        logger = logging.getLogger(__name__)
     from utils.input_sanitizer import sanitize_form_data, validate_file_upload
     from utils.loading_states import loading_manager, get_loading_state_for_template
-    from utils import is_guide_in_use
+    print("[DEBUG] Utils imports completed")
     from webapp.auth import init_auth, login_required, get_current_user
+    print("[DEBUG] Auth imports completed")
 
 except ImportError as e:
     # Use stderr for critical errors before logger is initialized
     sys.stderr.write(f"ERROR: Failed to import required modules: {e}\n")
     sys.exit(1)
 
+# Temporary inline function to avoid import issues
+def is_guide_in_use(guide_id):
+    """Check if a marking guide is currently being used for processing."""
+    try:
+        from src.database.models import Submission, GradingResult
+        from datetime import datetime, timedelta
+        
+        # Check for submissions currently being processed with this guide
+        active_submissions = Submission.query.filter(
+            Submission.marking_guide_id == guide_id,
+            Submission.processing_status.in_(['processing', 'pending'])
+        ).count()
+        
+        if active_submissions > 0:
+            return True
+            
+        # Check for recent grading results (within last 5 minutes)
+        recent_threshold = datetime.utcnow() - timedelta(minutes=5)
+        recent_results = GradingResult.query.filter(
+            GradingResult.marking_guide_id == guide_id,
+            GradingResult.created_at >= recent_threshold
+        ).count()
+        
+        return recent_results > 0
+        
+    except Exception as e:
+        logger.error(f"Error checking if guide {guide_id} is in use: {str(e)}")
+        return False
+
 # Initialize Flask application
-app = Flask(__name__)
+# Configure static folder path relative to webapp directory
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 # Configure Babel settings
 app.config['BABEL_DEFAULT_LOCALE'] = 'en'
@@ -109,6 +176,7 @@ babel.locale_selector_func = get_locale
 
 # Load and validate configuration
 try:
+    config = UnifiedConfig()
     config.validate()
     app.config.update(config.get_flask_config())
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or "dev-key-123"  # Fallback for development
@@ -138,29 +206,71 @@ except Exception as e:
     sys.stderr.write(f"CRITICAL ERROR: Failed to initialize CSRF protection: {e}\n")
     sys.exit(1)
 
+# Initialize comprehensive logging system
+try:
+    from src.logging.flask_integration import setup_flask_logging
+    from src.exceptions.flask_error_integration import FlaskErrorIntegration
+    
+    # Setup comprehensive logging
+    logging_integration = setup_flask_logging(
+        app=app,
+        logger_name='exam_grader_app',
+        log_level=getattr(config, 'LOG_LEVEL', 'INFO'),
+        log_requests=True,
+        log_responses=True,
+        log_performance=True,
+        exclude_paths=['/health', '/favicon.ico', '/static']
+    )
+    
+    # Setup error handling integration
+    error_integration = FlaskErrorIntegration(app)
+    
+    logger.info("Comprehensive logging and error handling initialized")
+except Exception as e:
+    logger.error(f"Failed to initialize comprehensive logging: {str(e)}")
+    # Don't exit - use fallback logging
+
 # Initialize database
 try:
     db.init_app(app)
+    
+    # Create database tables if they don't exist
+    with app.app_context():
+        db.create_all()
+        logger.info("Database tables created/verified")
+    
     logger.info("Database initialized")
 except Exception as e:
     logger.critical(f"Failed to initialize database: {str(e)}")
     sys.stderr.write(f"CRITICAL ERROR: Failed to initialize database: {e}\n")
     sys.exit(1)
 
-# Initialize security components
+# Initialize enhanced security system
+# Initialize session_manager as None first to ensure it's always defined
+session_manager = None
 try:
-    # Configure security settings using app's secret key
+    # Initialize security configuration
+    from src.security.security_config import init_security_config
+    from src.security.security_middleware import SecurityMiddleware
+    from src.security.auth_system import init_auth_manager
+    from src.security.secure_file_service import init_secure_file_service
+    
+    # Load security configuration based on environment
+    environment = os.getenv('FLASK_ENV', 'production')
+    security_config = init_security_config(environment=environment)
+    
+    # Configure security settings using enhanced configuration
     app.config.update(
         SESSION_COOKIE_NAME='secure_session',
-        SESSION_COOKIE_HTTPONLY=True,
-        SESSION_COOKIE_SECURE=False,
-        SESSION_COOKIE_SAMESITE='Lax'
+        SESSION_COOKIE_HTTPONLY=security_config.session.session_cookie_httponly,
+        SESSION_COOKIE_SECURE=security_config.session.session_cookie_secure,
+        SESSION_COOKIE_SAMESITE=security_config.session.session_cookie_samesite
     )
     
     # Initialize session manager with app's secret key
     session_manager = SecureSessionManager(
         app.config["SECRET_KEY"],
-        int(os.getenv("SESSION_TIMEOUT", "3600"))
+        security_config.session.session_timeout_minutes * 60
     )
     
     # Configure session interface using Flask's standard cookie settings
@@ -168,23 +278,100 @@ try:
         session_manager=session_manager,
         app_secret_key=app.config["SECRET_KEY"]
     )
-
+    
+    # Initialize enhanced authentication manager
+    auth_manager = init_auth_manager(
+        session_timeout=security_config.authentication.lockout_duration_minutes,
+        max_failed_attempts=security_config.authentication.max_failed_attempts,
+        lockout_duration=security_config.authentication.lockout_duration_minutes
+    )
+    
+    # Initialize secure file service
+    upload_path = os.path.join(app.config.get('UPLOAD_FOLDER', 'uploads'), 'secure')
+    secure_file_service = init_secure_file_service(
+        storage_path=upload_path,
+        enable_malware_scan=security_config.file_upload.scan_for_malware
+    )
+    
+    # Initialize security middleware
+    security_middleware = SecurityMiddleware(app, security_config)
+    
     login_manager = LoginManager()
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
 
     @login_manager.user_loader
     def load_user(user_id):
-        return User.query.get(user_id)
+        # Validate session using custom session manager
+        from flask import session
+        
+        logger.debug(f"user_loader called with user_id: {user_id}")
+        
+        session_user_id = session.get("user_id")
+        session_sid = getattr(session, 'sid', None)
+        
+        logger.debug(f"user_loader: session_user_id={session_user_id}, session_sid={session_sid}")
+        
+        # Check if user_id matches session and session is valid
+        if not session_user_id or str(session_user_id) != str(user_id):
+            logger.debug(f"user_loader: user_id mismatch or missing session_user_id")
+            return None
+            
+        if not session_sid:
+            logger.debug(f"user_loader: missing session_sid")
+            return None
+            
+        try:
+            # Use the local session_manager instead of importing from webapp.auth
+            if not session_manager:
+                logger.error("Session manager not initialized in user_loader")
+                return None
+                
+            secure_session = session_manager.get_session(session_sid)
+            logger.debug(f"user_loader: secure_session exists: {secure_session is not None}")
+            
+            if not secure_session or secure_session.get('user_id') != session_user_id:
+                logger.debug(f"user_loader: invalid secure session or user_id mismatch")
+                return None
+                
+            user = User.query.get(user_id)
+            logger.debug(f"user_loader: returning user: {user.username if user else None}")
+            return user
+        except Exception as e:
+            logger.error(f"Error in user_loader: {str(e)}")
+            return None
 
-    logger.info("Security components initialized")
+    logger.info("Enhanced security system initialized")
 except Exception as e:
-    logger.critical(f"Failed to initialize security: {str(e)}")
-    sys.stderr.write(f"CRITICAL ERROR: Failed to initialize security: {e}\n")
+    logger.critical(f"Failed to initialize enhanced security: {str(e)}")
+    sys.stderr.write(f"CRITICAL ERROR: Failed to initialize enhanced security: {e}\n")
     sys.exit(1)
+
+# Initialize performance optimization system
+try:
+    from src.performance.optimization_manager import init_performance_optimizer
+    
+    # Get Redis URL from environment or use None for memory-only caching
+    redis_url = os.getenv('REDIS_URL')
+    
+    # Initialize performance optimizer
+    performance_optimizer = init_performance_optimizer(app, redis_url)
+    
+    logger.info(f"Performance optimization system initialized (Redis: {'enabled' if redis_url else 'disabled'})")
+except Exception as e:
+    logger.error(f"Failed to initialize performance optimization: {str(e)}")
+    # Don't exit - this is not critical for basic functionality
 
 # Initialize authentication system
 try:
+    if session_manager is None:
+        logger.warning("Session manager not initialized, creating fallback session manager")
+        # Create a fallback session manager if security initialization failed
+        session_manager = SecureSessionManager(
+            app.config["SECRET_KEY"],
+            3600  # 1 hour timeout as fallback
+        )
+    
     init_auth(app, session_manager)
     logger.info("Authentication system initialized")
 except Exception as e:
@@ -195,8 +382,10 @@ except Exception as e:
 # Initialize SocketIO for real-time features
 try:
     from src.services.realtime_service import init_realtime_service
+    
+    # Initialize real-time service (it will create its own WebSocket manager)
     init_realtime_service(app)
-    logger.info("SocketIO real-time service initialized")
+    logger.info("SocketIO real-time service with WebSocket manager initialized")
 except Exception as e:
     logger.error(f"Failed to initialize SocketIO service: {str(e)}")
     # Don't exit - this is not critical for basic functionality
@@ -220,6 +409,25 @@ try:
     try:
         from src.api.refactored_ai_endpoints import init_progress_tracker
         init_progress_tracker(socketio)
+        
+        # Set WebSocket manager for progress tracker if available
+        try:
+            from src.services.progress_tracker import progress_tracker
+            if 'websocket_manager' in locals():
+                progress_tracker.websocket_manager = websocket_manager
+                logger.info("Progress tracker WebSocket manager integration completed")
+        except Exception as ws_error:
+            logger.warning(f"Could not integrate WebSocket manager with progress tracker: {ws_error}")
+        
+        # Initialize persistent progress tracker
+        try:
+            from src.services.persistent_progress_tracker import persistent_progress_tracker
+            if 'websocket_manager' in locals():
+                persistent_progress_tracker.websocket_manager = websocket_manager
+                logger.info("Persistent progress tracker WebSocket manager integration completed")
+        except Exception as persistent_error:
+            logger.warning(f"Could not integrate WebSocket manager with persistent progress tracker: {persistent_error}")
+            
         logger.info("Refactored AI progress tracker initialized")
     except Exception as tracker_error:
         logger.error(f"Failed to initialize refactored AI progress tracker: {tracker_error}")
@@ -230,12 +438,62 @@ except Exception as e:
 
 # Register upload endpoints blueprint for duplicate detection
 try:
-    from src.api.upload_endpoints import upload_bp
+    from src.api.upload_endpoints import upload_bp, init_upload_services
     app.register_blueprint(upload_bp, url_prefix='/api/upload')
-    logger.info("Upload endpoints blueprint registered with duplicate detection")
+    
+    # Initialize upload services
+    init_upload_services(app)
+    
+    logger.info("Upload endpoints blueprint registered with duplicate detection and services initialized")
 except Exception as e:
     logger.error(f"Failed to register upload endpoints: {str(e)}")
     # Don't exit - this is not critical for basic functionality
+
+# Register enhanced processing endpoints blueprint
+try:
+    from src.api.enhanced_processing_endpoints import enhanced_processing_bp, init_enhanced_processing_services
+    app.register_blueprint(enhanced_processing_bp)
+    init_enhanced_processing_services(app)
+    logger.info("Enhanced processing endpoints blueprint registered")
+except Exception as e:
+    logger.error(f"Failed to register enhanced processing endpoints: {str(e)}")
+    # Don't exit - this is not critical for basic functionality
+
+# Register basic API endpoints blueprint
+try:
+    from src.api.basic_endpoints import basic_api_bp, init_basic_api_services
+    app.register_blueprint(basic_api_bp)
+    init_basic_api_services(app)
+    logger.info("Basic API endpoints blueprint registered")
+except Exception as e:
+    logger.error(f"Failed to register basic API endpoints: {str(e)}")
+    # Don't exit - this is not critical for basic functionality
+
+# Register unified API router with consolidated endpoints
+try:
+    from src.api.unified_router import init_unified_api
+    from src.api.consolidated_endpoints import init_consolidated_services
+    
+    # Initialize unified API router
+    init_unified_api(app)
+    
+    # Initialize consolidated services
+    init_consolidated_services(app)
+    
+    logger.info("Unified API router registered with consolidated endpoints")
+except Exception as e:
+    logger.error(f"Failed to register unified API router: {str(e)}")
+    # Don't exit - this is not critical for basic functionality
+
+# Register monitoring endpoints blueprint
+try:
+    from src.api.monitoring_endpoints import init_monitoring_endpoints
+    init_monitoring_endpoints(app)
+    logger.info("Monitoring endpoints blueprint registered")
+except ImportError as e:
+    logger.warning(f"Failed to import monitoring endpoints: {str(e)}")
+except Exception as e:
+    logger.error(f"Failed to register monitoring endpoints: {str(e)}")
 
 # Context processor to make csrf_token available in all templates
 @app.context_processor
@@ -248,6 +506,31 @@ def inject_csrf_token():
     except Exception as e:
         logger.error(f"Failed to inject CSRF token: {str(e)}")
         return dict(csrf_token=None)
+
+# Route for monitoring dashboard
+@app.route('/admin/monitoring')
+def monitoring_dashboard():
+    """Serve the monitoring dashboard for administrators."""
+    try:
+        # Check if user is authenticated and has admin role
+        from flask import g, render_template, redirect, url_for, flash
+        
+        if not hasattr(g, 'current_user') or not g.current_user:
+            flash('Please log in to access the monitoring dashboard.', 'warning')
+            return redirect(url_for('login'))
+        
+        # Check admin role
+        user_role = getattr(g.current_user, 'role', None)
+        if not user_role or user_role.value not in ['admin', 'super_admin']:
+            flash('Admin access required for monitoring dashboard.', 'error')
+            return redirect(url_for('index'))
+        
+        return render_template('admin/monitoring_dashboard.html')
+        
+    except Exception as e:
+        logger.error(f"Error serving monitoring dashboard: {str(e)}")
+        flash('Error loading monitoring dashboard.', 'error')
+        return redirect(url_for('index'))
 
 # Route to get a fresh CSRF token via AJAX
 @app.route('/get-csrf-token', methods=['GET'])
@@ -289,21 +572,39 @@ def allowed_file(filename):
 
 # Initialize services
 try:
+    print("[DEBUG] Starting service initialization...")
     ocr_api_key = secrets_manager.get_secret("HANDWRITING_OCR_API_KEY")
     llm_api_key = secrets_manager.get_secret("DEEPSEEK_API_KEY")
+    print(f"[DEBUG] API keys retrieved: OCR={bool(ocr_api_key)}, LLM={bool(llm_api_key)}")
 
+    print("[DEBUG] Initializing OCR service...")
     ocr_service = OCRService(api_key=ocr_api_key) if ocr_api_key else None
+    print(f"[DEBUG] OCR service initialized: {ocr_service is not None}")
+    
+    print("[DEBUG] Initializing LLM service...")
     llm_service = LLMService(api_key=llm_api_key) if llm_api_key else None
+    print(f"[DEBUG] LLM service initialized: {llm_service is not None}")
+    
+    print("[DEBUG] Initializing mapping service...")
     mapping_service = MappingService(llm_service=llm_service)
+    print(f"[DEBUG] Mapping service initialized: {mapping_service is not None}")
+    
+    print("[DEBUG] Initializing grading service...")
     grading_service = GradingService(
         llm_service=llm_service, mapping_service=mapping_service
     )
+    print(f"[DEBUG] Grading service initialized: {grading_service is not None}")
 
+    print("[DEBUG] Initializing file cleanup service...")
     file_cleanup_service = FileCleanupService(config)
     file_cleanup_service.start_scheduled_cleanup()
+    print("[DEBUG] File cleanup service initialized")
 
     logger.info("Services initialized")
 except Exception as e:
+    print(f"[DEBUG] Service initialization failed at: {e}")
+    import traceback
+    traceback.print_exc()
     logger.critical(f"Failed to initialize services: {str(e)}")
     sys.stderr.write(f"CRITICAL ERROR: Failed to initialize services: {e}\n")
     ocr_service = None
@@ -834,20 +1135,37 @@ def upload_guide():
     logger.info(f"UPLOAD GUIDE: CSRF Cookie: {csrf_cookie}, X-CSRFToken Header: {csrf_header}")
 
     try:
+        # Import validation utilities
+        from src.utils.validation_utils import ValidationUtils
+        from src.services.content_validation_service import ContentValidationService
+        
         if "guide_file" not in request.files:
             flash("No file selected.", "error")
             return redirect(request.url)
 
         file = request.files["guide_file"]
-        if file.filename == "":
-            flash("No file selected.", "error")
+        
+        # Comprehensive file validation
+        file_validation = ValidationUtils.validate_file_upload(file)
+        if not file_validation['success']:
+            flash(file_validation['error'], "error")
             return redirect(request.url)
-
-        if not allowed_file(file.filename):
-            flash(
-                "File type not supported. Please upload a PDF, Word document, or image file.",
-                "error",
-            )
+            
+        # Get form data for metadata validation
+        title = request.form.get('title', '').strip()
+        description = request.form.get('description', '').strip()
+        
+        # Debug: Log form data received
+        logger.info(f"UPLOAD GUIDE DEBUG: Form data received:")
+        logger.info(f"UPLOAD GUIDE DEBUG: title='{title}'")
+        logger.info(f"UPLOAD GUIDE DEBUG: description='{description}'")
+        logger.info(f"UPLOAD GUIDE DEBUG: All form keys: {list(request.form.keys())}")
+        
+        # Validate metadata
+        metadata_validation = ValidationUtils.validate_marking_guide_metadata(title, description)
+        if not metadata_validation['success']:
+            for issue in metadata_validation['issues']:
+                flash(issue['message'], "error")
             return redirect(request.url)
 
         # Create temp directory if it doesn't exist
@@ -976,6 +1294,54 @@ def upload_guide():
             os.remove(file_path)
             return redirect(request.url)
 
+        # Content validation and duplicate detection
+        logger.info("Performing content validation and duplicate detection.")
+        try:
+            content_validation_service = ContentValidationService()
+            
+            # Validate and check for duplicates
+            validation_result = content_validation_service.validate_and_check_duplicates(
+                file_path, 
+                'marking_guide',
+                user_id=get_current_user().id if get_current_user() else None,
+                check_type='marking_guide'
+            )
+            
+            if not validation_result['success']:
+                flash(f"Content validation failed: {validation_result['error']}", "error")
+                os.remove(file_path)
+                return redirect(request.url)
+                
+            # Check content quality
+            content_quality = ValidationUtils.validate_content_quality(
+                validation_result['text_content'],
+                validation_result.get('confidence', 1.0)
+            )
+            
+            # Handle duplicate detection based on policy
+            duplicate_policy = 'warn'  # Can be made configurable
+            duplicate_validation = ValidationUtils.validate_duplicate_policy(
+                validation_result.get('duplicate_check', {}),
+                duplicate_policy
+            )
+            
+            if not duplicate_validation['success']:
+                flash(duplicate_validation['message'], "error")
+                os.remove(file_path)
+                return redirect(request.url)
+            elif duplicate_validation.get('warning'):
+                flash(duplicate_validation['message'], "warning")
+                
+            # Show content quality warnings
+            for warning in content_quality.get('warnings', []):
+                flash(warning['message'], "warning")
+                
+        except Exception as validation_error:
+            logger.error(f"Content validation error: {str(validation_error)}")
+            flash(f"Content validation error: {str(validation_error)}", "error")
+            os.remove(file_path)
+            return redirect(request.url)
+
         # Store guide in database
         logger.info("Storing guide in database.")
         try:
@@ -988,28 +1354,37 @@ def upload_guide():
                 os.remove(file_path)
                 return redirect(url_for("auth.login"))
 
+            # Use validated metadata
+            sanitized_data = metadata_validation['sanitized_data']
+            guide_title = sanitized_data['title'] if sanitized_data['title'] else filename
+            guide_description = sanitized_data['description']
+            
             # Create enhanced description with extraction information
             questions_count = len(guide_data.get("questions", []))
             total_marks = guide_data.get("total_marks", 0.0)
             extraction_method = guide_data.get("extraction_method", "none")
 
             if extraction_method == "llm" and questions_count > 0:
-                description = f"Uploaded guide: {filename} | LLM-extracted {questions_count} questions | Total marks: {total_marks}"
+                auto_description = f"LLM-extracted {questions_count} questions | Total marks: {total_marks}"
             elif extraction_method == "regex" and questions_count > 0:
-                description = f"Uploaded guide: {filename} | Regex-extracted {questions_count} questions | Total marks: {total_marks}"
+                auto_description = f"Regex-extracted {questions_count} questions | Total marks: {total_marks}"
             else:
-                description = f"Uploaded guide: {filename} | No questions extracted"
+                auto_description = "No questions extracted"
+                
+            # Combine user description with auto description
+            final_description = f"{guide_description} | {auto_description}" if guide_description else auto_description
 
-            # Create marking guide record
+            # Create marking guide record with content hash for duplicate detection
             marking_guide = MarkingGuide(
                 user_id=current_user.id,
-                title=guide_data.get("title", filename),
-                content_text=guide_data.get("raw_content", ""),
-                description=description,
+                title=guide_title,
+                content_text=validation_result['text_content'],
+                content_hash=validation_result['content_hash'],
+                description=final_description,
                 filename=filename,
                 file_path=file_path,  # Keep the file path for now
-                file_size=os.path.getsize(file_path),
-                file_type=filename.split(".")[-1].lower(),
+                file_size=validation_result['file_size'],
+                file_type=validation_result['file_type'],
                 questions=guide_data.get("questions", []),
                 total_marks=total_marks,
             )
@@ -1060,16 +1435,25 @@ def upload_submission():
         
     form = UploadSubmissionForm()
     
-    if form.validate_on_submit():
+    # If it's a GET request, render the template
+    if request.method == 'GET':
+        guide_id = session.get('guide_id')
+        return render_template('upload_submission.html', form=form, guide_id=guide_id)
+
+    # For POST requests, check if it's an AJAX request or regular form submission
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    
+    # For regular form submissions, validate the form
+    if not is_ajax and form.validate_on_submit():
         file = form.file.data
-        # Process file upload here
+        # Process file upload here using form data
         # ...
     
-    # If it's a GET request or form validation fails, render the template
-    if request.method == 'GET':
-        return render_template('upload_submission.html', form=form)
-
+    # For AJAX requests or when form validation fails, process files manually
     try:
+        logger.info(f"Upload submission endpoint called - Method: {request.method}, AJAX: {is_ajax}")
+        logger.info(f"Request form data: {dict(request.form)}")
+        logger.info(f"Request files: {list(request.files.keys())}")
 
         files = request.files.getlist("file")
         if not files or all(f.filename == "" for f in files):
@@ -1088,27 +1472,47 @@ def upload_submission():
         failed_count = 0
         submissions_data = session.get("submissions", [])
 
-        for file in files:
-            if file.filename == "":
-                continue
-
-            if not allowed_file(file.filename):
+        # Import validation utilities
+        from src.utils.validation_utils import ValidationUtils
+        from src.services.content_validation_service import ContentValidationService
+        
+        # Get submission metadata from form
+        student_name = request.form.get('student_name', '').strip()
+        student_id = request.form.get('student_id', '').strip()
+        marking_guide_id = request.form.get('marking_guide_id', '').strip()
+        
+        # Validate submission metadata if provided
+        if student_name or student_id or marking_guide_id:
+            metadata_validation = ValidationUtils.validate_submission_metadata(
+                student_name, student_id, marking_guide_id
+            )
+            if not metadata_validation['success']:
+                error_messages = [issue['message'] for issue in metadata_validation['issues']]
                 if (
                     request.headers.get("X-Requested-With") == "XMLHttpRequest"
                     or request.content_type == "application/json"
                 ):
-                    return (
-                        jsonify(
-                            {
-                                "success": False,
-                                "error": f"File type not supported for {file.filename}. Skipping.",
-                            }
-                        ),
-                        400,
-                    )
-                flash(
-                    f"File type not supported for {file.filename}. Skipping.", "error"
-                )
+                    return jsonify({
+                        "success": False, 
+                        "error": "; ".join(error_messages)
+                    }), 400
+                for message in error_messages:
+                    flash(message, "error")
+                return redirect(request.url)
+
+        for file in files:
+            # Comprehensive file validation
+            file_validation = ValidationUtils.validate_file_upload(file)
+            if not file_validation['success']:
+                if (
+                    request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                    or request.content_type == "application/json"
+                ):
+                    return jsonify({
+                        "success": False,
+                        "error": file_validation['error']
+                    }), 400
+                flash(file_validation['error'], "error")
                 failed_count += 1
                 continue
 
@@ -1156,40 +1560,152 @@ def upload_submission():
 
                 submission_id = str(uuid.uuid4())
 
-                # Try to store in database first, fallback to session
+                # Content validation and duplicate detection
                 try:
-                    from src.database.models import Submission
-                    from flask import current_app
+                    content_validation_service = ContentValidationService()
+                    
+                    # Get file extension for validation
+                    file_extension = filename.split('.')[-1].lower() if '.' in filename else 'unknown'
+                    
+                    # Validate and check for duplicates
+                    validation_result = content_validation_service.validate_and_check_duplicates(
+                        file_path, 
+                        file_extension,
+                        user_id=get_current_user().id if get_current_user() else None,
+                        check_type='submission',
+                        marking_guide_id=marking_guide_id if marking_guide_id else None
+                    )
+                    
+                    if not validation_result['success']:
+                        if (
+                            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                            or request.content_type == "application/json"
+                        ):
+                            return jsonify({
+                                "success": False,
+                                "error": f"Content validation failed for {filename}: {validation_result['error']}"
+                            }), 400
+                        flash(f"Content validation failed for {filename}: {validation_result['error']}", "error")
+                        failed_count += 1
+                        os.remove(file_path)
+                        continue
+                        
+                    # Check content quality
+                    content_quality = ValidationUtils.validate_content_quality(
+                        validation_result['text_content'],
+                        validation_result.get('confidence', 1.0)
+                    )
+                    
+                    # Handle duplicate detection based on policy
+                    duplicate_policy = 'warn'  # Can be made configurable
+                    duplicate_validation = ValidationUtils.validate_duplicate_policy(
+                        validation_result.get('duplicate_check', {}),
+                        duplicate_policy
+                    )
+                    
+                    if not duplicate_validation['success']:
+                        if (
+                            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                            or request.content_type == "application/json"
+                        ):
+                            return jsonify({
+                                "success": False,
+                                "error": f"Duplicate detected for {filename}: {duplicate_validation['message']}"
+                            }), 400
+                        flash(f"Duplicate detected for {filename}: {duplicate_validation['message']}", "error")
+                        failed_count += 1
+                        os.remove(file_path)
+                        continue
+                    elif duplicate_validation.get('warning'):
+                        logger.warning(f"Duplicate warning for {filename}: {duplicate_validation['message']}")
+                        
+                    # Log content quality warnings
+                    for warning in content_quality.get('warnings', []):
+                        logger.warning(f"Content quality warning for {filename}: {warning['message']}")
+                        
+                except Exception as validation_error:
+                    logger.error(f"Content validation error for {filename}: {str(validation_error)}")
+                    if (
+                        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                        or request.content_type == "application/json"
+                    ):
+                        return jsonify({
+                            "success": False,
+                            "error": f"Validation error for {filename}: {str(validation_error)}"
+                        }), 400
+                    flash(f"Validation error for {filename}: {str(validation_error)}", "error")
+                    failed_count += 1
+                    os.remove(file_path)
+                    continue
 
+                # Try to store in database first, fallback to session
+                database_storage_success = False
+                try:
                     current_user = get_current_user()
                     if current_user:
-                        # Get file info for database storage
-                        file_size = (
-                            get_file_size_mb(file_path) * 1024 * 1024
-                        )  # Convert to bytes
-                        file_type = Path(filename).suffix.lower()
+                        # Use validated metadata
+                        sanitized_metadata = metadata_validation['sanitized_data'] if 'metadata_validation' in locals() else {
+                            'student_name': student_name,
+                            'student_id': student_id,
+                            'marking_guide_id': marking_guide_id
+                        }
 
-                        # Store in database with all required fields
+                        # Store in database with all required fields including content hash
                         submission = Submission(
                             user_id=current_user.id,
+                            student_name=sanitized_metadata['student_name'] or None,
+                            student_id=sanitized_metadata['student_id'] or None,
+                            marking_guide_id=sanitized_metadata['marking_guide_id'] or None,
                             filename=filename,
                             file_path=file_path,  # Store the path
-                            file_size=int(file_size),
-                            file_type=file_type,
-                            content_text=raw_text,
+                            file_size=validation_result['file_size'],
+                            file_type=validation_result['file_type'],
+                            content_text=validation_result['text_content'],
+                            content_hash=validation_result['content_hash'],
                             answers=answers,
+                            ocr_confidence=validation_result.get('confidence', 1.0),
                             processing_status="completed",
                             archived=False,  # Add archived field with default value
                         )
                         db.session.add(submission)
                         db.session.commit()
                         submission_id = str(submission.id)
+                        database_storage_success = True
                         logger.info(
                             f"Stored submission in database with ID: {submission_id}"
                         )
+                    else:
+                        logger.error("No current user found - cannot save to database")
+                        raise Exception("Authentication required for database storage")
 
                 except Exception as storage_error:
-                    logger.warning(f"Database storage failed: {str(storage_error)}")
+                    logger.error(f"Database storage failed: {str(storage_error)}")
+                    # Rollback any partial transaction
+                    try:
+                        db.session.rollback()
+                    except:
+                        pass
+                    
+                    # Return error response for failed database storage
+                    if (
+                        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                        or request.content_type == "application/json"
+                    ):
+                        return jsonify({
+                            "success": False,
+                            "error": f"Failed to save submission to database: {str(storage_error)}"
+                        }), 500
+                    flash(f"Failed to save submission to database: {str(storage_error)}", "error")
+                    failed_count += 1
+                    os.remove(file_path)
+                    continue
+                
+                # Only proceed if database storage was successful
+                if not database_storage_success:
+                    logger.error("Database storage was not successful")
+                    failed_count += 1
+                    os.remove(file_path)
+                    continue
 
                 uploaded_count += 1
 
@@ -1412,6 +1928,18 @@ def unified_processing():
         return redirect(url_for('dashboard'))
     
     return render_template('unified_processing.html')
+
+
+@app.route("/enhanced-processing")
+@login_required
+def enhanced_processing():
+    """Show the enhanced LLM-driven processing pipeline interface."""
+    from flask_wtf.csrf import generate_csrf
+    return render_template(
+        'enhanced_processing.html', 
+        page_title="Enhanced AI Processing Pipeline",
+        csrf_token=generate_csrf()
+    )
 
 
 @app.route("/results")
@@ -2173,10 +2701,8 @@ def process_unified_ai():
     try:
         logger.info("Starting unified AI processing endpoint")
 
-        # Get max_questions from request, default to None if not provided
+        # Get request data
         data = request.get_json()
-        max_questions = data.get("max_questions") if data else None
-        logger.info(f"Received max_questions: {max_questions}")
 
         # Check session data with detailed logging
         guide_uploaded = session.get("guide_uploaded", False)
@@ -2315,7 +2841,9 @@ def process_unified_ai():
         # Initialize unified AI service with error handling
         try:
             logger.info("Importing unified AI services...")
-            from src.services.unified_ai_service import UnifiedAIService
+            from src.services.unified_ai_service import UnifiedAIService as ConsolidatedUnifiedAIService
+            # Alias for backward compatibility
+            UnifiedAIService = ConsolidatedUnifiedAIService
             from src.services.progress_tracker import progress_tracker
 
             logger.info("Services imported successfully")
@@ -2368,7 +2896,6 @@ def process_unified_ai():
                 marking_guide_content=guide_data,
                 submissions=submissions,
                 progress_callback=progress_callback,
-                max_questions=max_questions,
             )
             logger.info("Unified AI processing completed")
 
@@ -3377,7 +3904,27 @@ def delete_guide(guide_id):
         current_guide_id = session.get("guide_id")
         was_active_guide = str(current_guide_id) == str(guide_id)
 
-        # Delete the guide
+        # Delete related records first to avoid foreign key constraint violations
+        # Import required models
+        from src.database.models import GradingSession, Mapping
+        
+        # Delete grading sessions related to this guide
+        GradingSession.query.filter_by(marking_guide_id=guide_id).delete()
+        
+        # Delete grading results related to this guide
+        GradingResult.query.filter_by(marking_guide_id=guide_id).delete()
+        
+        # Delete submissions related to this guide (and their mappings will be deleted via cascade)
+        submissions = Submission.query.filter_by(marking_guide_id=guide_id).all()
+        for submission in submissions:
+            # Delete mappings for this submission
+            Mapping.query.filter_by(submission_id=submission.id).delete()
+            # Delete grading results for this submission
+            GradingResult.query.filter_by(submission_id=submission.id).delete()
+            # Delete the submission
+            db.session.delete(submission)
+        
+        # Now delete the guide
         db.session.delete(guide)
         db.session.commit()
 
@@ -3453,7 +4000,27 @@ def api_delete_guide():
         current_guide_id = session.get("guide_id")
         was_active_guide = str(current_guide_id) == str(guide_id)
 
-        # Delete the guide
+        # Delete related records first to avoid foreign key constraint violations
+        # Import required models
+        from src.database.models import GradingSession, Mapping
+        
+        # Delete grading sessions related to this guide
+        GradingSession.query.filter_by(marking_guide_id=guide_id).delete()
+        
+        # Delete grading results related to this guide
+        GradingResult.query.filter_by(marking_guide_id=guide_id).delete()
+        
+        # Delete submissions related to this guide (and their mappings will be deleted via cascade)
+        submissions = Submission.query.filter_by(marking_guide_id=guide_id).all()
+        for submission in submissions:
+            # Delete mappings for this submission
+            Mapping.query.filter_by(submission_id=submission.id).delete()
+            # Delete grading results for this submission
+            GradingResult.query.filter_by(submission_id=submission.id).delete()
+            # Delete the submission
+            db.session.delete(submission)
+        
+        # Now delete the guide
         db.session.delete(guide)
         db.session.commit()
 

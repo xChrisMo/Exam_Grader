@@ -46,6 +46,11 @@
         <!-- Use only one CSRF token implementation -->
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
         
+        <!-- Hidden field for marking guide ID -->
+        {% if guide_id %}
+        <input type="hidden" name="marking_guide_id" value="{{ guide_id }}">
+        {% endif %}
+        
         <!-- Upload Mode Selection -->
         <div class="mb-6">
           <label class="block text-sm font-medium text-gray-700 mb-3" data-i18n="upload_mode">Upload Mode</label>
@@ -121,6 +126,9 @@
             </div>
           </div>
         </div>
+
+        <!-- Student Information section removed as requested -->
+
 
         <!-- File Preview (Single Mode) -->
         <div id="file-preview" class="hidden mb-6">
@@ -342,10 +350,16 @@
           return;
       }
 
+      // Function to check if marking guide is available
+      function isMarkingGuideAvailable() {
+          const markingGuideInput = document.querySelector('input[name="marking_guide_id"]');
+          return markingGuideInput && markingGuideInput.value;
+      }
+      
       // Check if guide is uploaded
       const guideUploaded = {{ 'true' if session.get('guide_uploaded') else 'false' }};
 
-      if (!guideUploaded) {
+      if (!guideUploaded || !isMarkingGuideAvailable()) {
           uploadButton.disabled = true;
           uploadButton.innerHTML = '<svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>Upload Guide First';
           return;
@@ -355,13 +369,19 @@
       uploadModeRadios.forEach(radio => {
           radio.addEventListener('change', function() {
               isMultipleMode = this.value === 'multiple';
+              // Clear any existing file selections when switching modes
+              fileInput.value = '';
+              selectedFiles = [];
               updateUploadMode();
+              console.log('Upload mode changed to:', isMultipleMode ? 'multiple' : 'single');
+              console.log('File input multiple attribute:', fileInput.hasAttribute('multiple'));
           });
       });
 
       function updateUploadMode() {
           if (isMultipleMode) {
               fileInput.setAttribute('multiple', 'multiple');
+              fileInput.removeAttribute('required'); // Remove required for multiple mode
               uploadLabel.textContent = 'Student Submission Files (Multiple)';
               uploadText.textContent = 'Upload files';
               uploadHint.textContent = 'PDF, Word documents, or images up to 16MB each. Select multiple files for batch processing.';
@@ -369,6 +389,7 @@
               updateButtonText();
           } else {
               fileInput.removeAttribute('multiple');
+              fileInput.setAttribute('required', 'required'); // Add required back for single mode
               uploadLabel.textContent = 'Student Submission File';
               uploadText.textContent = 'Upload a file';
               uploadHint.textContent = 'PDF, Word documents, or images up to 16MB';
@@ -416,6 +437,7 @@
       // File input change
       fileInput.addEventListener('change', function(e) {
           const files = Array.from(e.target.files);
+          console.log('File input changed, files selected:', files.length);
           if (files.length > 0) {
               if (isMultipleMode) {
                   addFilesToSelection(files);
@@ -424,6 +446,16 @@
               }
           }
       });
+
+      // Ensure file input click works properly
+      const uploadTextElement = document.getElementById('upload-text');
+      if (uploadTextElement) {
+          uploadTextElement.addEventListener('click', function(e) {
+              e.preventDefault();
+              console.log('Upload text clicked, triggering file input');
+              fileInput.click();
+          });
+      }
 
       // Clear files button
       if (clearFilesBtn) {
@@ -563,6 +595,12 @@
       uploadForm.addEventListener('submit', function(e) {
           e.preventDefault();
 
+          // Check if marking guide ID is available
+          if (!isMarkingGuideAvailable()) {
+              ExamGrader.utils.displayMessage('Marking guide is required. Please upload a marking guide first before submitting student work.', 'error');
+              return;
+          }
+
           if (isMultipleMode) {
               if (selectedFiles.length === 0) {
                   ExamGrader.utils.displayMessage('Please select files to upload.', 'error');
@@ -580,6 +618,12 @@
 
       // Process single file
       function processSingleFile() {
+          // Check if marking guide ID is available
+          if (!isMarkingGuideAvailable()) {
+              ExamGrader.utils.displayMessage('Marking guide is required. Please upload a marking guide first before submitting student work.', 'error');
+              return;
+          }
+          
           const formData = new FormData(uploadForm);
 
           // Show progress
@@ -631,6 +675,12 @@
 
       // Process batch of files
       async function processBatch() {
+          // Check if marking guide ID is available
+          if (!isMarkingGuideAvailable()) {
+              ExamGrader.utils.displayMessage('Marking guide is required. Please upload a marking guide first before submitting student work.', 'error');
+              return;
+          }
+          
           const parallelProcessing = document.getElementById('parallel-processing').checked;
           const batchSize = parseInt(document.getElementById('batch-size').value);
 
@@ -731,12 +781,17 @@
               const formData = new FormData();
               formData.append('file', file);
 
-              // Add student name if available
-              const studentNameInput = document.getElementById('studentName');
-              if (studentNameInput && studentNameInput.value) {
-                  formData.append('student_name', studentNameInput.value);
-              } else {
-                  formData.append('student_name', `Student_${index + 1}`);
+              // Add upload_mode field to satisfy form validation
+              formData.append('upload_mode', 'multiple');
+
+              // Auto-generate student name and ID since input fields were removed
+              formData.append('student_name', `Student_${index + 1}`);
+              formData.append('student_id', `ID_${index + 1}`);
+
+              // Add marking guide ID
+              const markingGuideInput = document.querySelector('input[name="marking_guide_id"]');
+              if (markingGuideInput && markingGuideInput.value) {
+                  formData.append('marking_guide_id', markingGuideInput.value);
               }
 
               // Add batch processing parameters

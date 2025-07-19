@@ -4,6 +4,7 @@ Logging configuration for the application.
 
 import logging
 import os
+import sys
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -56,11 +57,33 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
             log_dir.mkdir(exist_ok=True)
             log_file = log_dir / "app.log"
 
-        file_handler = RotatingFileHandler(
-            str(log_file),  # Convert Path to string
-            maxBytes=10 * 1024 * 1024,  # 10MB
-            backupCount=5,
-        )
+        # Use a Windows-compatible approach to avoid file locking issues
+        if sys.platform.startswith('win'):
+            try:
+                # On Windows, use a custom rotating handler that handles file locking better
+                from logging.handlers import TimedRotatingFileHandler
+                file_handler = TimedRotatingFileHandler(
+                    str(log_file),
+                    when='midnight',
+                    interval=1,
+                    backupCount=7,
+                    delay=True,
+                    encoding='utf-8'
+                )
+            except Exception as e:
+                # Fallback to basic file handler if rotation fails
+                temp_logger = logging.getLogger("setup_fallback")
+                temp_logger.warning(f"Failed to create rotating file handler: {e}, using basic file handler")
+                file_handler = logging.FileHandler(str(log_file), mode='a', delay=True, encoding='utf-8')
+        else:
+            # Unix systems can use the standard rotating handler
+            file_handler = RotatingFileHandler(
+                str(log_file),
+                maxBytes=10 * 1024 * 1024,  # 10MB
+                backupCount=5,
+                delay=True,
+                encoding='utf-8'
+            )
         file_handler.setFormatter(file_formatter)
         file_handler.setLevel(getattr(logging, log_level, logging.DEBUG)) # Ensure file handler respects debug level
         logger.addHandler(file_handler)

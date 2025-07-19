@@ -1,7 +1,7 @@
 """Optimized Grading Service with batch processing, deterministic prompts, and enhanced efficiency."""
 
 import json
-import re
+# Removed regex import - using LLM-based approaches instead
 from typing import Dict, List, Optional, Any, Tuple
 
 from src.services.grading_service import GradingService
@@ -53,7 +53,7 @@ GRADE THESE ANSWERS:
             user_prompt += f"\n{i}. QUESTION: {question[:200]}"
             if expected:
                 user_prompt += f"\n   EXPECTED: {expected[:150]}"
-            user_prompt += f"\n   STUDENT: {answer[:300]}\n"
+            user_prompt += f"\n   STUDENT: {answer}\n"
         
         user_prompt += "\nReturn JSON format:\n{\n  \"grades\": [\n    {\n      \"question_id\": 1,\n      \"score\": 85,\n      \"feedback\": \"Good understanding, minor error in calculation\",\n      \"strengths\": [\"Clear explanation\"],\n      \"weaknesses\": [\"Calculation error\"]\n    }\n  ]\n}"
         
@@ -177,12 +177,35 @@ GRADE THESE ANSWERS:
         """Parse and validate LLM grading response."""
         
         try:
-            # Extract JSON from response
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            if not json_match:
-                return None
-            
-            result = json.loads(json_match.group())
+            # Extract JSON from response using LLM-based approach
+            try:
+                # First attempt direct JSON parsing
+                result = json.loads(response)
+            except json.JSONDecodeError:
+                # Use LLM to extract and clean JSON
+                try:
+                    if hasattr(self, 'llm_service') and self.llm_service:
+                        json_cleaning_prompt = f"""
+                        Extract and clean the JSON from this response. Return only valid JSON:
+                        
+                        {response}
+                        """
+                        
+                        json_response = self.llm_service.client.chat.completions.create(
+                            model=self.llm_service.model,
+                            messages=[
+                                {"role": "system", "content": "Extract and return only valid JSON from the given text. No explanations."},
+                                {"role": "user", "content": json_cleaning_prompt}
+                            ],
+                            temperature=0.0
+                        )
+                        
+                        cleaned_response = json_response.choices[0].message.content.strip()
+                        result = json.loads(cleaned_response)
+                    else:
+                        return None
+                except Exception:
+                    return None
             
             if 'grades' not in result or not isinstance(result['grades'], list):
                 return None
@@ -237,8 +260,8 @@ GRADE THESE ANSWERS:
         if not isinstance(feedback, str):
             return "No feedback provided"
         
-        # Remove excessive whitespace and limit length
-        feedback = re.sub(r'\s+', ' ', feedback.strip())
+        # Remove excessive whitespace and limit length using basic string operations
+        feedback = ' '.join(feedback.strip().split())
         return feedback[:200] if len(feedback) > 200 else feedback
     
     def _clean_list_field(self, items: Any) -> List[str]:

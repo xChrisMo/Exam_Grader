@@ -49,13 +49,13 @@ const SettingsManager = {
     // Translate the page based on current language
     translatePage: function() {
         // Skip if translations are not available
-        if (typeof Translations === 'undefined' || !Translations[this.currentLanguage]) {
+        if (typeof ExamGrader === 'undefined' || !ExamGrader.translations || !ExamGrader.translations[this.currentLanguage]) {
             console.warn('Translations not available for', this.currentLanguage);
             return;
         }
         
         // Get the translation dictionary for current language
-        const dictionary = Translations[this.currentLanguage];
+        const dictionary = ExamGrader.translations[this.currentLanguage];
         
         // Find all elements with data-i18n attribute
         const elements = document.querySelectorAll('[data-i18n]');
