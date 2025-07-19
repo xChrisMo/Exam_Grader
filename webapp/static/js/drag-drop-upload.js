@@ -545,8 +545,21 @@ class DragDropUpload {
                     }
                     this.reset();
                 } else {
-                    const error = `Upload failed: ${xhr.statusText}`;
-                    this.handleUploadError(error);
+                    // Try to parse error response for detailed message
+                    let errorMessage = `Upload failed: ${xhr.statusText}`;
+                    try {
+                        const errorResponse = JSON.parse(xhr.responseText);
+                        if (errorResponse.error) {
+                            errorMessage = errorResponse.error;
+                            // Add details if available
+                            if (errorResponse.details) {
+                                errorMessage += `\n\n${errorResponse.details}`;
+                            }
+                        }
+                    } catch (e) {
+                        // Keep default error message if JSON parsing fails
+                    }
+                    this.handleUploadError(errorMessage);
                 }
             });
 
@@ -554,7 +567,7 @@ class DragDropUpload {
             xhr.addEventListener('error', () => {
                 this.uploading = false;
                 this.hideProgress();
-                this.handleUploadError('Upload failed: Network error');
+                this.handleUploadError('Upload failed: Network error. Please check your internet connection and try again.');
             });
 
             // Send request

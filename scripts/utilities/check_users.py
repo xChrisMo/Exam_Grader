@@ -2,7 +2,7 @@ import sqlite3
 import os
 
 def check_users():
-    db_path = 'instance/instance/exam_grader.db'
+    db_path = 'instance/exam_grader.db'
     
     if not os.path.exists(db_path):
         print(f"Database not found: {db_path}")

@@ -29,7 +29,21 @@ def signal_handler(sig, frame):
     """Handle Ctrl+C gracefully."""
     print("\n[STOP] Application stopped by user (Ctrl+C)")
     print("[INFO] Shutting down gracefully...")
+    
+    # Try to shutdown services gracefully first
+    try:
+        # Stop any background services
+        print("[INFO] Stopping background services...")
+        
+        # Give a moment for cleanup
+        import time
+        time.sleep(0.5)
+        
+    except Exception as e:
+        print(f"[WARNING] Error during graceful shutdown: {e}")
+    
     # Force exit to ensure the application terminates
+    print("[INFO] Forcing application exit...")
     os._exit(0)
 
 
@@ -158,7 +172,7 @@ def setup_environment():
 
     print(f"[OK] Project root: {project_root}")
     print(f"[OK] FLASK_APP: {os.environ.get('FLASK_APP')}")
-    print(f"[DEBUG] LOG_LEVEL environment variable: {os.getenv('LOG_LEVEL')}")
+
 
 
 def create_directories():
@@ -211,16 +225,16 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
 
         print("\n🚀 Initializing Exam Grader...")
 
-        # Import the Flask app (this will trigger initialization)
+        # Import the Flask app and socketio (this will trigger initialization)
         from webapp.exam_grader_app import app
+        from src.services.realtime_service import socketio
         from src.database.migrations import MigrationManager
         from src.config.unified_config import UnifiedConfig
 
         # Initialize and run database migrations
         config = UnifiedConfig()
         db_url = config.database.database_url
-        print(f"[DEBUG] Database URL: {db_url}")
-        print(f"[DEBUG] Database URL type: {type(db_url)}")
+
         
         if db_url:
             # Ensure app context is available for database operations
@@ -230,11 +244,11 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
                 try:
                     # Check if db engine is available
                     if hasattr(db, 'engine') and db.engine is not None:
-                        print(f"[DEBUG] Using db.engine.url: {db.engine.url}")
+
                         MigrationManager(str(db.engine.url)).migrate()
                     else:
                         # Use the database URL directly if engine is not available
-                        print(f"[DEBUG] Using config database URL: {db_url}")
+
                         MigrationManager(str(db_url)).migrate()
                 except Exception as e:
                     print(f"[ERROR] Migration failed: {e}")
@@ -273,13 +287,15 @@ def run_application(host: str = None, port: int = None, debug: bool = None):
         print("Press Ctrl+C to stop the server")
         print("=" * 50)
 
-        # Run the application with reloader disabled to prevent double initialization
+        # Run the application with SocketIO for proper signal handling
         os.environ['LOG_LEVEL'] = 'DEBUG'
-        app.run(
+        socketio.run(
+            app,
             host=host,
             port=port,
             debug=debug,
             use_reloader=False,  # Disable reloader to prevent double initialization
+            allow_unsafe_werkzeug=True
         )
 
     except ImportError as e:

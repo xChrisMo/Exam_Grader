@@ -257,7 +257,7 @@ class DuplicateDetectionHandler {
             console.error('Error uploading file:', error);
             this.hideProgress(container);
             this.setFormEnabled(form, true);
-            this.showError(container, 'Upload failed due to a network error');
+            this.showError(container, error.message || 'Upload failed due to a network error. Please check your internet connection and try again.');
         }
     }
     

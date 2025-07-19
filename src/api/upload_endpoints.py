@@ -182,11 +182,29 @@ def upload_submission():
         
     except Exception as e:
         logger.error(f"Error in upload_submission endpoint: {e}")
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error',
-            'code': 'INTERNAL_ERROR'
-        }), 500
+        
+        # Check if it's a network-related error from OCR service
+        error_message = str(e)
+        if any(keyword in error_message.lower() for keyword in ['network error', 'connection', 'timeout', 'aborted']):
+            return jsonify({
+                'success': False,
+                'error': f'Network error during document processing: {error_message}',
+                'code': 'NETWORK_ERROR',
+                'details': 'Please check your internet connection and try again. The OCR service may be temporarily unavailable.'
+            }), 400
+        elif 'ocr' in error_message.lower():
+            return jsonify({
+                'success': False,
+                'error': f'Document processing failed: {error_message}',
+                'code': 'OCR_ERROR',
+                'details': 'There was an issue processing your document. Please try again or contact support if the problem persists.'
+            }), 400
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Internal server error',
+                'code': 'INTERNAL_ERROR'
+            }), 500
 
 @upload_bp.route('/marking-guide', methods=['POST'])
 def upload_marking_guide():

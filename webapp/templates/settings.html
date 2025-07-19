@@ -25,10 +25,10 @@
                         </label>
                         <div class="flex items-center space-x-3">
                             <input type="range" id="max_file_size" name="max_file_size" 
-                                   min="1" max="100" value="{{ settings.max_file_size }}"
+                                   min="1" max="100" value="{{ settings.max_file_size or 100 }}"
                                    class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
                             <span id="file_size_display" class="text-sm font-medium text-gray-900 min-w-[3rem]">
-                                {{ settings.max_file_size }}MB
+                                {{ settings.max_file_size or 100 }}MB
                             </span>
                         </div>
                         <p class="mt-1 text-sm text-gray-500" data-i18n="max_file_size_description">
@@ -376,6 +376,25 @@ document.addEventListener('DOMContentLoaded', function() {
             SettingsManager.applyTheme();
             SettingsManager.applyLanguage();
         }
+    });
+});
+</script>
+{% endblock %}
+        }
+        
+        // Save settings to localStorage
+        const notificationLevel = document.getElementById('notification_level').value;
+        const theme = document.getElementById('theme').value;
+        const language = document.getElementById('language').value;
+        
+        localStorage.setItem('notification_level', notificationLevel);
+        localStorage.setItem('theme', theme);
+        localStorage.setItem('language', language);
+        
+        // Apply theme and language immediately
+        if (typeof SettingsManager !== 'undefined') {
+            SettingsManager.applyTheme();
+            SettingsManager.applyLanguage();
         }
     });
 });

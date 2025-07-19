@@ -306,7 +306,8 @@
                 </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                {% if submission.processed %}
+                {% set status = submission.processing_status or 'pending' %}
+                {% if status == 'completed' or submission.processed %}
                 <span
                   class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-100 text-success-800"
                 >
@@ -317,7 +318,33 @@
                   >
                     <circle cx="4" cy="4" r="3" />
                   </svg>
-                  Processed
+                  Completed
+                </span>
+                {% elif status == 'processing' %}
+                <span
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                >
+                  <svg
+                    class="mr-1.5 h-2 w-2 text-blue-400 animate-pulse"
+                    fill="currentColor"
+                    viewBox="0 0 8 8"
+                  >
+                    <circle cx="4" cy="4" r="3" />
+                  </svg>
+                  Processing
+                </span>
+                {% elif status == 'failed' %}
+                <span
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                >
+                  <svg
+                    class="mr-1.5 h-2 w-2 text-red-400"
+                    fill="currentColor"
+                    viewBox="0 0 8 8"
+                  >
+                    <circle cx="4" cy="4" r="3" />
+                  </svg>
+                  Failed
                 </span>
                 {% else %}
                 <span
@@ -335,8 +362,11 @@
                 {% endif %}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ submission.created_at.strftime("%Y-%m-%d") if submission.created_at else
-                'Unknown' }}
+                {% if submission.created_at %}
+                  {{ submission.created_at.strftime("%Y-%m-%d %H:%M") }}
+                {% else %}
+                  <span class="text-gray-400">Unknown</span>
+                {% endif %}
               </td>
               <td
                 class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"

@@ -6,6 +6,32 @@
 
 {% block content %}
 <div class="dashboard-container">
+  <!-- Marking Guide Warning -->
+  {% if not guide_uploaded %}
+  <div class="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+    <div class="flex">
+      <div class="flex-shrink-0">
+        <svg class="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+        </svg>
+      </div>
+      <div class="ml-3">
+        <h3 class="text-sm font-medium text-yellow-800">No Marking Guide Set</h3>
+        <div class="mt-2 text-sm text-yellow-700">
+          <p>You need to upload a marking guide before you can grade submissions. The marking guide defines the questions and scoring criteria.</p>
+        </div>
+        <div class="mt-4">
+          <div class="-mx-2 -my-1.5 flex">
+            <a href="{{ url_for('upload_guide') }}" class="bg-yellow-50 px-2 py-1.5 rounded-md text-sm font-medium text-yellow-800 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-yellow-50 focus:ring-yellow-600">
+              Upload Marking Guide
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Dashboard Statistics Cards -->
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
   <!-- Guide Status Card -->
@@ -114,18 +140,20 @@
       </div>
       <dl>
         <dt class="text-sm font-medium text-gray-500 mb-1" data-i18n="last_score">Last Score</dt>
-        <dd class="text-lg font-medium text-gray-900">
-          {% if last_score > 0 %} {{ last_score }}% {% else %} -- {% endif %}
+        <dd class="text-lg font-medium text-gray-900" id="last-score-value">
+          {% if last_score and last_score > 0 %} {{ last_score }}% {% else %} -- {% endif %}
         </dd>
       </dl>
     </div>
     <div class="bg-gray-50 px-5 py-3 text-center">
       <div class="text-sm">
-        {% if last_score > 0 %}
-        <span class="text-gray-600 font-medium" data-i18n="latest_result">Latest result</span>
-        {% else %}
-        <span class="text-gray-600 font-medium" data-i18n="no_grades">No grades yet</span>
-        {% endif %}
+        <span class="text-gray-600 font-medium" id="last-score-status">
+          {% if last_score and last_score > 0 %}
+            <span data-i18n="latest_result">Latest result</span>
+          {% else %}
+            <span data-i18n="no_grades">No grades yet</span>
+          {% endif %}
+        </span>
       </div>
     </div>
   </div>
@@ -203,13 +231,21 @@
       </div>
       <div class="mt-5">
         {% if not guide_uploaded %}
-        <a
-          href="{{ url_for('upload_guide') }}"
-          class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-          data-i18n="upload_guide"
-        >
-          Upload Guide
-        </a>
+        <div class="text-center">
+          <div class="text-sm text-red-600 font-medium mb-2 flex items-center justify-center">
+            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+            </svg>
+            No Guide Set
+          </div>
+          <a
+            href="{{ url_for('upload_guide') }}"
+            class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            data-i18n="upload_guide"
+          >
+            Upload Guide Required
+          </a>
+        </div>
         {% else %}
         <div class="text-center">
           <div class="text-sm text-success-600 font-medium mb-2" data-i18n="guide_uploaded">

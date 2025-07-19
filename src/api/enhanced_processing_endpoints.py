@@ -267,6 +267,168 @@ def process_submission():
             'code': 'INTERNAL_ERROR'
         }), 500
 
+@enhanced_processing_bp.route('/process-mapping', methods=['POST'])
+@login_required
+def process_mapping():
+    """Process answer mapping for submissions against marking guide.
+    
+    Expected JSON payload:
+    {
+        "submission_ids": [list of submission IDs],
+        "marking_guide_id": "guide ID",
+        "options": {
+            "force_reprocess": false
+        }
+    }
+    
+    Returns:
+        JSON response with mapping results
+    """
+    try:
+        # Check authentication
+        user_id = require_auth()
+        if not user_id:
+            return jsonify({
+                'success': False,
+                'error': 'Authentication required',
+                'code': 'AUTH_REQUIRED'
+            }), 401
+        
+        # Get request data
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No JSON data provided',
+                'code': 'NO_DATA'
+            }), 400
+        
+        # Validate required fields
+        submission_ids = data.get('submission_ids', [])
+        marking_guide_id = data.get('marking_guide_id')
+        options = data.get('options', {})
+        
+        if not submission_ids:
+            return jsonify({
+                'success': False,
+                'error': 'No submission IDs provided',
+                'code': 'NO_SUBMISSIONS'
+            }), 400
+        
+        if not marking_guide_id:
+            return jsonify({
+                'success': False,
+                'error': 'Marking guide ID is required',
+                'code': 'NO_GUIDE_ID'
+            }), 400
+        
+        # Verify marking guide exists and belongs to user
+        marking_guide = db.session.query(MarkingGuide).filter(
+            MarkingGuide.id == marking_guide_id,
+            MarkingGuide.user_id == user_id,
+            MarkingGuide.is_active == True
+        ).first()
+        
+        if not marking_guide:
+            return jsonify({
+                'success': False,
+                'error': 'Marking guide not found or access denied',
+                'code': 'GUIDE_NOT_FOUND'
+            }), 404
+        
+        # Verify submissions exist and belong to user
+        submissions = db.session.query(Submission).filter(
+            Submission.id.in_(submission_ids),
+            Submission.user_id == user_id,
+            Submission.marking_guide_id == marking_guide_id
+        ).all()
+        
+        if len(submissions) != len(submission_ids):
+            return jsonify({
+                'success': False,
+                'error': 'Some submissions not found or access denied',
+                'code': 'SUBMISSIONS_NOT_FOUND'
+            }), 404
+        
+        # Process mapping
+        results = []
+        total_processed = 0
+        total_errors = 0
+        
+        for submission in submissions:
+            try:
+                # Check if already processed and not forcing reprocess
+                if submission.mapping_status == 'completed' and not options.get('force_reprocess', False):
+                    results.append({
+                        'submission_id': submission.id,
+                        'status': 'skipped',
+                        'message': 'Already processed'
+                    })
+                    continue
+                
+                # Process mapping using the enhanced processing service
+                mapping_result = processing_service.process_submission_mapping(
+                    submission_id=submission.id,
+                    marking_guide_id=marking_guide_id
+                )
+                
+                if mapping_result.get('success'):
+                    submission.mapping_status = 'completed'
+                    submission.mapping_data = mapping_result.get('mapping_data', {})
+                    total_processed += 1
+                    
+                    results.append({
+                        'submission_id': submission.id,
+                        'status': 'success',
+                        'mapping_data': mapping_result.get('mapping_data', {}),
+                        'message': 'Mapping completed successfully'
+                    })
+                else:
+                    submission.mapping_status = 'failed'
+                    total_errors += 1
+                    
+                    results.append({
+                        'submission_id': submission.id,
+                        'status': 'error',
+                        'error': mapping_result.get('error', 'Unknown error'),
+                        'message': 'Mapping failed'
+                    })
+                
+            except Exception as e:
+                logger.error(f"Error processing mapping for submission {submission.id}: {e}")
+                submission.mapping_status = 'failed'
+                total_errors += 1
+                
+                results.append({
+                    'submission_id': submission.id,
+                    'status': 'error',
+                    'error': str(e),
+                    'message': 'Processing error occurred'
+                })
+        
+        # Save changes
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Mapping process completed. {total_processed} successful, {total_errors} errors.',
+            'results': results,
+            'summary': {
+                'total_submissions': len(submissions),
+                'processed': total_processed,
+                'errors': total_errors,
+                'skipped': len(submissions) - total_processed - total_errors
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error in process_mapping endpoint: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'code': 'INTERNAL_ERROR'
+        }), 500
+
 @enhanced_processing_bp.route('/process-grading', methods=['POST'])
 def process_grading():
     """Process grading with max_questions_to_answer logic.

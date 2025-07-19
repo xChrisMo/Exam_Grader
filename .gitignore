@@ -88,6 +88,16 @@ Desktop.ini
 *.temp
 ~*
 *~ 
+
+# Debug and cleanup files
+*debug*.py
+*temp*.py
+*test*.db
+*.db.backup
+CTRL_C_FIX_SUMMARY.md
+ERROR_FIXES_SUMMARY.md
+quick_start.py
+simple_start.py
 # File protection system
 file_backups/
 *.backup_*

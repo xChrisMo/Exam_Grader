@@ -65,7 +65,7 @@ class SecurityConfig:
 class DatabaseConfig:
     """Database configuration settings."""
 
-    database_url: str = "sqlite:///c:/Users/mezac/Documents/job/Exam_Grader/exam_grader.db"
+    database_url: str = "sqlite:///exam_grader.db"
     database_pool_size: int = 10
     database_pool_timeout: int = 30
     database_pool_recycle: int = 3600
@@ -332,9 +332,12 @@ class UnifiedConfig:
             session_cookie_domain=None,  # Ensure cookies work on localhost
         )
 
-        # Database configuration
+        # Database configuration with path resolution
+        raw_db_url = os.getenv("DATABASE_URL", "sqlite:///exam_grader.db")
+        resolved_db_url = self._resolve_database_url(raw_db_url)
+        
         self.database = DatabaseConfig(
-            database_url=os.getenv("DATABASE_URL", "sqlite:///c:/Users/mezac/Documents/job/Exam_Grader/exam_grader.db"),
+            database_url=resolved_db_url,
             database_echo=os.getenv("DATABASE_ECHO", "False").lower() == "true",
         )
 
@@ -432,6 +435,32 @@ class UnifiedConfig:
             )
             logger.debug(f"Using SECRET_KEY (first 5 chars): {secret_key[:5]}...")
         return secret_key
+
+    def _resolve_database_url(self, database_url: str) -> str:
+        """Resolve database URL with proper path resolution for SQLite databases."""
+        if database_url.startswith("sqlite:///"):
+            # Extract the path part after sqlite:///
+            db_path = database_url[10:]  # Remove "sqlite:///"
+            
+            # If it's a relative path, resolve it relative to the project root
+            if not os.path.isabs(db_path):
+                # Get the project root (parent of src directory)
+                project_root = Path(__file__).parent.parent.parent
+                resolved_path = os.path.join(project_root, db_path)
+                resolved_path = os.path.abspath(resolved_path)
+                
+                # Ensure the directory exists
+                db_dir = os.path.dirname(resolved_path)
+                os.makedirs(db_dir, exist_ok=True)
+                
+                # Return the resolved URL
+                return f"sqlite:///{resolved_path}"
+            else:
+                # Already absolute path
+                return database_url
+        else:
+            # Not a SQLite database, return as-is
+            return database_url
 
     def get_flask_config(self) -> Dict[str, Any]:
         """

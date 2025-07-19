@@ -730,6 +730,58 @@ Please grade this answer."""
             logger.error(f"Error saving grading results: {str(e)}")
             raise
     
+    def process_submission_mapping(self, submission_id: str, marking_guide_id: str) -> Dict:
+        """Process submission mapping specifically (wrapper for process_submission).
+        
+        Args:
+            submission_id: Database ID of the submission
+            marking_guide_id: ID of the associated marking guide
+            
+        Returns:
+            Dict: Processing result with success status and mapping data
+        """
+        try:
+            # Get submission from database
+            submission = Submission.query.get(submission_id)
+            if not submission:
+                return {
+                    'success': False,
+                    'error': f'Submission {submission_id} not found'
+                }
+            
+            # Check if submission has a file path
+            if not submission.file_path or not os.path.exists(submission.file_path):
+                return {
+                    'success': False,
+                    'error': 'Submission file not found or path invalid'
+                }
+            
+            # Process the submission (which includes mapping)
+            mapping_result, error = self.process_submission(
+                submission_id=submission_id,
+                file_path=submission.file_path,
+                marking_guide_id=marking_guide_id
+            )
+            
+            if error:
+                return {
+                    'success': False,
+                    'error': error
+                }
+            
+            return {
+                'success': True,
+                'mapping_data': mapping_result,
+                'message': 'Mapping completed successfully'
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in process_submission_mapping: {str(e)}")
+            return {
+                'success': False,
+                'error': f'Processing error: {str(e)}'
+            }
+    
     def get_processing_status(self, submission_id: str, marking_guide_id: str) -> Dict:
         """Get current processing status for a submission."""
         try:

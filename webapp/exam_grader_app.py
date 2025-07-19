@@ -4,7 +4,7 @@ Exam Grader Flask Web Application
 Modern educational assessment platform with AI-powered grading capabilities.
 """
 
-print("[DEBUG] Starting exam_grader_app.py initialization...")
+# Exam Grader Flask Web Application initialization
 
 import os
 import sys
@@ -15,29 +15,25 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any
 
-print("[DEBUG] Basic imports completed")
+
 
 from utils.error_handler import add_recent_activity
 
-print("[DEBUG] Error handler import completed")
+
 
 # Load environment variables
 from dotenv import load_dotenv
 
-print("[DEBUG] dotenv import completed")
 
 load_dotenv()
 
-print("[DEBUG] Environment variables loaded")
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-print("[DEBUG] Project root added to path")
 
 # Flask imports
-print("[DEBUG] Starting Flask imports...")
 from flask import (
     Flask,
     render_template,
@@ -49,40 +45,27 @@ from flask import (
     jsonify,
     abort,
 )
-print("[DEBUG] Flask core imports completed")
 from sqlalchemy.exc import SQLAlchemyError
-print("[DEBUG] SQLAlchemy imports completed")
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField
 from wtforms.validators import DataRequired
-print("[DEBUG] WTForms imports completed")
 from flask_login import current_user, LoginManager
-print("[DEBUG] Flask-Login imports completed")
 from flask_wtf.csrf import CSRFProtect, CSRFError
-print("[DEBUG] Flask-WTF CSRF imports completed")
 from werkzeug.utils import secure_filename
-print("[DEBUG] Werkzeug imports completed")
 from flask_babel import Babel, _
-print("[DEBUG] Flask-Babel imports completed")
 # from flask_limiter import Limiter
 # from flask_limiter.util import get_remote_address
 # Redis removed - no longer needed
 from celery.result import AsyncResult
-print("[DEBUG] Celery imports completed")
 from src.services.realtime_service import socketio
-print("[DEBUG] Realtime service imports completed")
 
-print("[DEBUG] Flask and external imports completed")
 
 # Project imports
 from src.config.logging_config import create_startup_summary
 
-print("[DEBUG] Logging config import completed")
 
 try:
-    print("[DEBUG] Starting main project imports...")
     from src.config.unified_config import UnifiedConfig
-    print("[DEBUG] UnifiedConfig imported")
     from src.database import (
         db,
         User,
@@ -91,20 +74,16 @@ try:
         GradingResult,
         DatabaseUtils,
     )
-    print("[DEBUG] Database imports completed")
     from src.security.session_manager import SecureSessionManager
     from src.security.secrets_manager import secrets_manager, initialize_secrets
     from src.security.flask_session_interface import SecureSessionInterface
-    print("[DEBUG] Security imports completed")
     from src.services.ocr_service import OCRService
     from src.services.llm_service import LLMService
     from src.services.mapping_service import MappingService
     from src.services.grading_service import GradingService
     from src.services.file_cleanup_service import FileCleanupService
-    print("[DEBUG] Service imports completed")
     from src.parsing.parse_submission import parse_student_submission
     from src.parsing.parse_guide import parse_marking_guide
-    print("[DEBUG] Parsing imports completed")
     from utils.logger import logger
     # Handle case where logger might be None
     if logger is None:
@@ -112,9 +91,7 @@ try:
         logger = logging.getLogger(__name__)
     from utils.input_sanitizer import sanitize_form_data, validate_file_upload
     from utils.loading_states import loading_manager, get_loading_state_for_template
-    print("[DEBUG] Utils imports completed")
     from webapp.auth import init_auth, login_required, get_current_user
-    print("[DEBUG] Auth imports completed")
 
 except ImportError as e:
     # Use stderr for critical errors before logger is initialized
@@ -150,9 +127,13 @@ def is_guide_in_use(guide_id):
         logger.error(f"Error checking if guide {guide_id} is in use: {str(e)}")
         return False
 
-# Initialize Flask application
-# Configure static folder path relative to webapp directory
-app = Flask(__name__, static_folder='static', static_url_path='/static')
+# Prevent multiple initialization
+if 'app' not in globals():
+    # Initialize Flask application
+    # Configure static folder path relative to webapp directory
+    app = Flask(__name__, static_folder='static', static_url_path='/static')
+else:
+    logger.info("Flask app already initialized, skipping re-initialization")
 
 # Configure Babel settings
 app.config['BABEL_DEFAULT_LOCALE'] = 'en'
@@ -180,6 +161,7 @@ try:
     config.validate()
     app.config.update(config.get_flask_config())
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or "dev-key-123"  # Fallback for development
+    app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100MB file upload limit
     logger.info(f"Configuration loaded for environment: {config.environment}")
 except Exception as e:
     logger.critical(f"Failed to load configuration: {str(e)}")
@@ -570,46 +552,34 @@ def allowed_file(filename):
     return ext in config.files.supported_formats
 
 
-# Initialize services
-try:
-    print("[DEBUG] Starting service initialization...")
-    ocr_api_key = secrets_manager.get_secret("HANDWRITING_OCR_API_KEY")
-    llm_api_key = secrets_manager.get_secret("DEEPSEEK_API_KEY")
-    print(f"[DEBUG] API keys retrieved: OCR={bool(ocr_api_key)}, LLM={bool(llm_api_key)}")
+# Initialize services (only once)
+if 'services_initialized' not in globals():
+    try:
+        ocr_api_key = secrets_manager.get_secret("HANDWRITING_OCR_API_KEY")
+        llm_api_key = secrets_manager.get_secret("DEEPSEEK_API_KEY")
+        ocr_service = OCRService(api_key=ocr_api_key) if ocr_api_key else None
+        llm_service = LLMService(api_key=llm_api_key) if llm_api_key else None
+        mapping_service = MappingService(llm_service=llm_service)
+        grading_service = GradingService(
+            llm_service=llm_service, mapping_service=mapping_service
+        )
 
-    print("[DEBUG] Initializing OCR service...")
-    ocr_service = OCRService(api_key=ocr_api_key) if ocr_api_key else None
-    print(f"[DEBUG] OCR service initialized: {ocr_service is not None}")
-    
-    print("[DEBUG] Initializing LLM service...")
-    llm_service = LLMService(api_key=llm_api_key) if llm_api_key else None
-    print(f"[DEBUG] LLM service initialized: {llm_service is not None}")
-    
-    print("[DEBUG] Initializing mapping service...")
-    mapping_service = MappingService(llm_service=llm_service)
-    print(f"[DEBUG] Mapping service initialized: {mapping_service is not None}")
-    
-    print("[DEBUG] Initializing grading service...")
-    grading_service = GradingService(
-        llm_service=llm_service, mapping_service=mapping_service
-    )
-    print(f"[DEBUG] Grading service initialized: {grading_service is not None}")
+        file_cleanup_service = FileCleanupService(config)
+        file_cleanup_service.start_scheduled_cleanup()
 
-    print("[DEBUG] Initializing file cleanup service...")
-    file_cleanup_service = FileCleanupService(config)
-    file_cleanup_service.start_scheduled_cleanup()
-    print("[DEBUG] File cleanup service initialized")
-
-    logger.info("Services initialized")
-except Exception as e:
-    print(f"[DEBUG] Service initialization failed at: {e}")
-    import traceback
-    traceback.print_exc()
-    logger.critical(f"Failed to initialize services: {str(e)}")
-    sys.stderr.write(f"CRITICAL ERROR: Failed to initialize services: {e}\n")
-    ocr_service = None
-    llm_service = None
-    mapping_service = None
+        services_initialized = True
+        logger.info("Services initialized")
+    except Exception as e:
+        logger.error(f"Service initialization failed: {e}")
+        import traceback
+        traceback.print_exc()
+        logger.critical(f"Failed to initialize services: {str(e)}")
+        sys.stderr.write(f"CRITICAL ERROR: Failed to initialize services: {e}\n")
+        ocr_service = None
+        llm_service = None
+        mapping_service = None
+else:
+    logger.info("Services already initialized, skipping re-initialization")
     grading_service = None
     file_cleanup_service = None
     sys.exit(1)
@@ -1060,27 +1030,31 @@ def dashboard():
         session["total_submissions"] = total_submissions
         session["processed_submissions"] = processed_submissions
 
-        # Get last score from session if available
-        last_score = session.get("last_score")
+        # Always calculate last score from database for accuracy
+        # Get the most recent grading result score
+        latest_result = (
+            db.session.query(GradingResult.percentage)
+            .join(Submission, GradingResult.submission_id == Submission.id)
+            .filter(Submission.user_id == current_user.id)
+            .order_by(GradingResult.created_at.desc())
+            .first()
+        )
         
-        # If not in session, calculate from database
-        if last_score is None:
-            # Calculate average score from grading results (user-specific) - optimized
-            avg_result = (
-                db.session.query(db.func.avg(GradingResult.percentage))
-                .join(Submission, GradingResult.submission_id == Submission.id)
-                .filter(Submission.user_id == current_user.id)
-                .scalar()
-            )
-            avg_score = round(avg_result, 1) if avg_result else 0
-            last_score = avg_score  # Use average as last score for now
-            
-            # Update session with calculated value
-            session["last_score"] = last_score
-            session.modified = True
-        else:
-            # Use last_score as avg_score if we got it from session
-            avg_score = last_score
+        last_score = round(latest_result[0], 1) if latest_result and latest_result[0] else 0
+        
+        # Calculate average score from all grading results (user-specific)
+        avg_result = (
+            db.session.query(db.func.avg(GradingResult.percentage))
+            .join(Submission, GradingResult.submission_id == Submission.id)
+            .filter(Submission.user_id == current_user.id)
+            .scalar()
+        )
+        avg_score = round(avg_result, 1) if avg_result else 0
+        
+        # Update session with calculated values
+        session["last_score"] = last_score
+        session["avg_score"] = avg_score
+        session.modified = True
 
         service_status = get_service_status()
         context = {
@@ -3814,67 +3788,7 @@ def settings():
         return redirect(url_for("dashboard"))
 
 
-@app.route("/api/export-results")
-@csrf.exempt
-def export_results():
-    """API endpoint to export grading results."""
-    try:
-        if not session.get("grading_results"):
-            return (
-                jsonify({"success": False, "error": "No grading results available"}),
-                404,
-            )
-
-        grading_results = session.get("grading_results", {})
-
-        # Format data for export
-        export_data = {
-            "batch_summary": {
-                "total_submissions": len(grading_results),
-                "average_score": session.get("last_score", 0),
-                "timestamp": datetime.now().isoformat(),
-                "guide_id": session.get("guide_id", ""),
-                "guide_filename": session.get("guide_filename", ""),
-            },
-            "results": [],
-        }
-
-        # Add individual results
-        for submission_id, result in grading_results.items():
-            export_data["results"].append(
-                {
-                    "submission_id": submission_id,
-                    "filename": result.get("filename", "Unknown"),
-                    "score": result.get("score", 0),
-                    "letter_grade": result.get("letter_grade", "F"),
-                    "feedback": result.get("feedback", ""),
-                    "strengths": result.get("strengths", []),
-                    "weaknesses": result.get("weaknesses", []),
-                    "question_scores": result.get("question_scores", []),
-                    "timestamp": result.get("timestamp", datetime.now().isoformat()),
-                }
-            )
-
-        # Generate filename for export
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"exam_results_{timestamp}.json"
-
-        # Note: results_storage service is not available
-        # Results are returned directly to the client
-        logger.info(f"Results prepared for export: {filename}")
-
-        return jsonify(
-            {
-                "success": True,
-                "message": "Results exported successfully",
-                "filename": filename,
-                "data": export_data,
-            }
-        )
-
-    except Exception as e:
-        logger.error(f"Error exporting results: {str(e)}")
-        return jsonify({"success": False, "error": "Internal server error"}), 500
+# Duplicate export_results function removed - using the more complete version below
 
 
 @app.route("/delete-guide/<guide_id>")
@@ -4460,6 +4374,301 @@ def download_report(submission_id):
     # ... existing code ...
     pass
 
+# Dashboard stats API
+@app.route("/api/dashboard-stats", methods=["GET"])
+@login_required
+def dashboard_stats():
+    """Get dashboard statistics."""
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({"success": False, "error": "Authentication required"}), 401
+
+        # Get submission counts
+        total_submissions, processed_submissions = sync_session_submission_counts(current_user.id)
+        
+        # Get last score
+        from src.database.models import GradingResult, Submission
+        avg_result = (
+            db.session.query(db.func.avg(GradingResult.percentage))
+            .join(Submission, GradingResult.submission_id == Submission.id)
+            .filter(Submission.user_id == current_user.id)
+            .scalar()
+        )
+        last_score = round(avg_result, 1) if avg_result else 0
+        
+        # Update session
+        session["last_score"] = last_score
+        session.modified = True
+        
+        # Get service status
+        service_status = get_service_status()
+        
+        return jsonify({
+            "success": True,
+            "stats": {
+                "totalSubmissions": total_submissions,
+                "processedSubmissions": processed_submissions,
+                "lastScore": last_score,
+                "serviceStatus": service_status
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting dashboard stats: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# Submission details API
+@app.route("/api/submission-details/<submission_id>", methods=["GET"])
+@login_required
+def submission_details(submission_id):
+    """Get detailed information about a submission."""
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({"success": False, "error": "Authentication required"}), 401
+
+        from src.database.models import Submission, GradingResult
+        
+        # Get submission
+        submission = Submission.query.filter_by(
+            id=submission_id, 
+            user_id=current_user.id
+        ).first()
+        
+        if not submission:
+            return jsonify({"success": False, "error": "Submission not found"}), 404
+        
+        # Get grading result if available
+        grading_result = GradingResult.query.filter_by(submission_id=submission_id).first()
+        
+        details = {
+            "filename": submission.filename,
+            "status": "Processed" if submission.processed else "Pending",
+            "uploaded_at": submission.created_at.strftime("%Y-%m-%d %H:%M") if submission.created_at else "Unknown",
+            "score": grading_result.percentage if grading_result else None,
+            "ocr_status": "Completed" if submission.text_content else "Pending",
+            "ai_status": "Completed" if grading_result else "Pending",
+            "question_count": len(grading_result.question_results) if grading_result and hasattr(grading_result, 'question_results') else 0,
+            "feedback": grading_result.feedback if grading_result else None
+        }
+        
+        return jsonify({
+            "success": True,
+            "details": details
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting submission details: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# Submission statuses API
+@app.route("/api/submission-statuses", methods=["GET"])
+@login_required
+def submission_statuses():
+    """Get status of all submissions."""
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({"success": False, "error": "Authentication required"}), 401
+
+        from src.database.models import Submission
+        
+        submissions = Submission.query.filter_by(user_id=current_user.id).all()
+        
+        submission_data = []
+        for submission in submissions:
+            # Use processing_status if available, otherwise fall back to processed boolean
+            status = submission.processing_status or ('completed' if submission.processed else 'pending')
+            
+            submission_data.append({
+                "id": submission.id,
+                "filename": submission.filename,
+                "processing_status": status,
+                "created_at": submission.created_at.strftime("%Y-%m-%d %H:%M") if submission.created_at else "Unknown"
+            })
+        
+        return jsonify({
+            "success": True,
+            "submissions": submission_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting submission statuses: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/update-submission-status", methods=["POST"])
+@login_required
+def update_submission_status():
+    """Update submission processing status."""
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({"success": False, "error": "Authentication required"}), 401
+
+        data = request.get_json()
+        submission_id = data.get('submission_id')
+        new_status = data.get('status')
+        
+        if not submission_id or not new_status:
+            return jsonify({"success": False, "error": "Missing submission_id or status"}), 400
+            
+        valid_statuses = ['pending', 'processing', 'completed', 'failed']
+        if new_status not in valid_statuses:
+            return jsonify({"success": False, "error": f"Invalid status. Must be one of: {valid_statuses}"}), 400
+
+        from src.database.models import Submission
+        
+        submission = Submission.query.filter_by(
+            id=submission_id, 
+            user_id=current_user.id
+        ).first()
+        
+        if not submission:
+            return jsonify({"success": False, "error": "Submission not found"}), 404
+            
+        # Update status
+        submission.processing_status = new_status
+        if new_status == 'completed':
+            submission.processed = True
+        elif new_status in ['pending', 'processing']:
+            submission.processed = False
+            
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": f"Submission status updated to {new_status}",
+            "submission": {
+                "id": submission.id,
+                "filename": submission.filename,
+                "processing_status": submission.processing_status,
+                "processed": submission.processed
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating submission status: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# Export results API
+@app.route("/api/export-results", methods=["GET", "POST"])
+@login_required
+def export_results():
+    """Export grading results."""
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({"success": False, "error": "Authentication required"}), 401
+
+        from src.database.models import GradingResult, Submission
+        import json
+        import os
+        from datetime import datetime
+        
+        # Get all grading results for the user
+        results = (
+            db.session.query(GradingResult, Submission)
+            .join(Submission, GradingResult.submission_id == Submission.id)
+            .filter(Submission.user_id == current_user.id)
+            .all()
+        )
+        
+        if not results:
+            return jsonify({"success": False, "error": "No results to export"}), 400
+        
+        # Prepare export data
+        export_data = {
+            "export_date": datetime.now().isoformat(),
+            "user_id": current_user.id,
+            "total_submissions": len(results),
+            "results": []
+        }
+        
+        for grading_result, submission in results:
+            result_data = {
+                "submission_id": submission.id,
+                "filename": submission.filename,
+                "score": grading_result.percentage,
+                "letter_grade": grading_result.letter_grade,
+                "graded_at": grading_result.created_at.isoformat() if grading_result.created_at else None,
+                "feedback": grading_result.feedback
+            }
+            export_data["results"].append(result_data)
+        
+        # Save to file
+        export_filename = f"results_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        export_path = os.path.join("output", export_filename)
+        
+        # Ensure output directory exists
+        os.makedirs("output", exist_ok=True)
+        
+        with open(export_path, 'w') as f:
+            json.dump(export_data, f, indent=2)
+        
+        return jsonify({
+            "success": True,
+            "message": "Results exported successfully",
+            "download_url": f"/download/{export_filename}",
+            "filename": export_filename
+        })
+        
+    except Exception as e:
+        logger.error(f"Error exporting results: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# Download exported file
+@app.route("/download/<filename>")
+@login_required
+def download_file(filename):
+    """Download exported file."""
+    try:
+        from flask import send_from_directory
+        return send_from_directory("output", filename, as_attachment=True)
+    except Exception as e:
+        logger.error(f"Error downloading file: {str(e)}")
+        return jsonify({"error": "File not found"}), 404
+
+
+# Marking guide usage status API
+@app.route("/api/guide-usage-status", methods=["GET"])
+@login_required
+def guide_usage_status():
+    """Check if marking guide is set to be used."""
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({"success": False, "error": "Authentication required"}), 401
+
+        from src.database.models import MarkingGuide
+        
+        # Get the current guide
+        guide = MarkingGuide.query.filter_by(user_id=current_user.id).first()
+        
+        guide_status = {
+            "guide_exists": guide is not None,
+            "guide_enabled": guide.enabled if guide else False,
+            "guide_filename": guide.filename if guide else None,
+            "guide_uploaded_at": guide.created_at.isoformat() if guide and guide.created_at else None
+        }
+        
+        return jsonify({
+            "success": True,
+            "guide_status": guide_status
+        })
+        
+    except Exception as e:
+        logger.error(f"Error checking guide usage status: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # ... audit all endpoints for @login_required and permission checks ...
 
 
@@ -4472,6 +4681,7 @@ if __name__ == "__main__":
     debug = getattr(config, "DEBUG", True)
 
     logger.info(create_startup_summary(host=host, port=port))
-    logger.debug(f"Debug mode: {debug}")
+    logger.info(f"Debug mode: {debug}")
 
-    app.run(host=host, port=port, debug=debug)
+    # Use socketio.run() instead of app.run() for proper signal handling
+    socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)

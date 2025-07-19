@@ -509,13 +509,26 @@ class APIClient {
                         resolve(xhr.responseText);
                     }
                 } else {
-                    reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
+                    // Try to parse error response for detailed message
+                    let errorMessage = `Upload failed: ${xhr.status} ${xhr.statusText}`;
+                    try {
+                        const errorResponse = JSON.parse(xhr.responseText);
+                        if (errorResponse.error) {
+                            errorMessage = errorResponse.error;
+                            if (errorResponse.details) {
+                                errorMessage += `\n\n${errorResponse.details}`;
+                            }
+                        }
+                    } catch (e) {
+                        // Keep default error message if JSON parsing fails
+                    }
+                    reject(new Error(errorMessage));
                 }
             });
             
             // Error handler
             xhr.addEventListener('error', () => {
-                reject(new Error('Upload failed: Network error'));
+                reject(new Error('Upload failed: Network error. Please check your internet connection and try again.'));
             });
             
             // Abort handler

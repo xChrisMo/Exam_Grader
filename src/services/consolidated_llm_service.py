@@ -132,34 +132,42 @@ class ConsolidatedLLMService(BaseService):
             client_params = {"api_key": self.api_key, "base_url": self.base_url}
             self.client = OpenAI(**client_params)
             
-            # Test basic connectivity (synchronous)
-            try:
-                # Simple test to verify client works
-                params = {
-                    "model": self.model,
-                    "messages": [{"role": "user", "content": "test"}],
-                    "temperature": 0.0
-                    # No token limits for unrestricted responses
-                }
-                
-                if self.deterministic and self.seed is not None:
-                    params["seed"] = self.seed
-                
-                response = self.client.chat.completions.create(**params)
-                
-                if hasattr(response, "choices") and len(response.choices) > 0:
-                    self.status = ServiceStatus.HEALTHY
-                    logger.info(f"LLM service initialized successfully with model: {self.model}")
-                    return True
-                else:
-                    self.status = ServiceStatus.UNHEALTHY
-                    logger.error("LLM service connectivity test failed - no response choices")
-                    return False
+            # Test basic connectivity (synchronous) - skip during fast startup
+            skip_test = os.getenv("SKIP_LLM_INIT_TEST", "False").lower() == "true" or os.getenv("FAST_STARTUP", "False").lower() == "true"
+            
+            if not skip_test:
+                try:
+                    # Simple test to verify client works
+                    params = {
+                        "model": self.model,
+                        "messages": [{"role": "user", "content": "test"}],
+                        "temperature": 0.0
+                        # No token limits for unrestricted responses
+                    }
                     
-            except Exception as e:
-                logger.warning(f"LLM connectivity test failed during initialization: {str(e)}")
-                # Still mark as available since client was created successfully
-                self.status = ServiceStatus.DEGRADED
+                    if self.deterministic and self.seed is not None:
+                        params["seed"] = self.seed
+                    
+                    response = self.client.chat.completions.create(**params)
+                
+                    if hasattr(response, "choices") and len(response.choices) > 0:
+                        self.status = ServiceStatus.HEALTHY
+                        logger.info(f"LLM service initialized successfully with model: {self.model}")
+                        return True
+                    else:
+                        self.status = ServiceStatus.UNHEALTHY
+                        logger.error("LLM service connectivity test failed - no response choices")
+                        return False
+                        
+                except Exception as e:
+                    logger.warning(f"LLM connectivity test failed during initialization: {str(e)}")
+                    # Still mark as available since client was created successfully
+                    self.status = ServiceStatus.DEGRADED
+                    return True
+            else:
+                # Skip test during fast startup
+                self.status = ServiceStatus.HEALTHY
+                logger.info(f"LLM service initialized successfully with model: {self.model} (test skipped)")
                 return True
                 
         except Exception as e:

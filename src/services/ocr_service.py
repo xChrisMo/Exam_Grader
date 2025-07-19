@@ -69,7 +69,7 @@ class OCRService:
             logger.info("OCR service initialized successfully")
         else:
             self.headers = {"Accept": "application/json"}
-            logger.warning("OCR service initialized without API key - service will be disabled")
+            logger.info("OCR service initialized without API key - service will be disabled")
 
     def is_available(self) -> bool:
         """Check if the OCR service is available by testing API connectivity."""

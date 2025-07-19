@@ -329,7 +329,7 @@ class Submission(db.Model, TimestampMixin, ValidationMixin):
     __tablename__ = "submissions"
     __table_args__ = (
         # Composite indexes for performance optimization
-        Index('idx_user_status', 'user_id', 'processing_status'),
+        Index('idx_opt_user_status', 'user_id', 'processing_status'),  # Renamed to avoid conflict
         Index('idx_user_created', 'user_id', 'created_at'),
         Index('idx_status_created', 'processing_status', 'created_at'),
         Index('idx_guide_status', 'marking_guide_id', 'processing_status'),
@@ -612,7 +612,7 @@ class GradingSession(db.Model, TimestampMixin, ValidationMixin):
     __tablename__ = "grading_sessions"
     __table_args__ = (
         Index('idx_submission_guide', 'submission_id', 'marking_guide_id'),
-        Index('idx_user_status', 'user_id', 'status'),
+        Index('idx_opt_grading_user_status', 'user_id', 'status'),  # Renamed to avoid conflict
         Index('idx_progress_status', 'progress_id', 'status'),
         CheckConstraint('total_questions_mapped >= 0', name='ck_grading_session_mapped'),
         CheckConstraint('total_questions_graded >= 0', name='ck_grading_session_graded'),

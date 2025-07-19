@@ -41,7 +41,7 @@ def reset_database(confirm: bool = False):
         print("🔄 Starting database reset...")
         
         # Get database URL from config
-        database_url = os.getenv("DATABASE_URL", "sqlite:///c:/Users/mezac/Documents/job/Exam_Grader/exam_grader.db")
+        database_url = os.getenv("DATABASE_URL", "sqlite:///exam_grader.db")
         
         # Handle SQLite database file
         if database_url.startswith('sqlite:///'):

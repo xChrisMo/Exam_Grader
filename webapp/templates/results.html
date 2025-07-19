@@ -262,23 +262,14 @@
 <!-- Make sure app.js is loaded -->
 <script src="{{ url_for('static', filename='js/app.js') }}?v={{ range(1000, 9999) | random }}"></script>
 <script>
-// Create a simple notification manager if ExamGrader is not defined
+// Ensure ExamGrader is available
 if (typeof ExamGrader === 'undefined') {
-    console.log('ExamGrader not defined, creating fallback notification manager');
+    console.warn('ExamGrader not defined, creating minimal fallback');
     window.ExamGrader = {
         notificationManager: {
-                notify: function (message, type) {
+            notify: function (message, type) {
                 console.log(`Notification (${type}): ${message}`);
-                // Create a simple notification
-                const notification = document.createElement('div');
-                notification.className = `fixed top-4 right-4 p-4 rounded-md shadow-md ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white`;
-                notification.textContent = message;
-                document.body.appendChild(notification);
-                
-                // Remove after 3 seconds
-                setTimeout(() => {
-                    notification.remove();
-                }, 3000);
+                alert(`${type.toUpperCase()}: ${message}`);
             }
         }
     };
@@ -590,7 +581,36 @@ function updateResultsUI(data) {
                                 </div>
                                 <div class="ml-4">
                                     <div class="text-sm font-medium text-gray-900">${result.filename || 'Unknown'}</div>
-                                    <div class="text-sm text-gray-500">ID: ${result.submission_id ? result.submission_id.substring(0, 8) : 'Unknown'}...</div>
+                                    <div class="text-sm text-gray-500">ID: ${result.submission_id ? result.submission_id.substring(0, 8) + '...' : 'Unknown'}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900">${result.score || 0}%</div>
+                            <div class="w-16 bg-gray-200 rounded-full h-2 mt-1">
+                                <div class="h-2 rounded-full ${result.score >= 80 ? 'bg-success-500' : result.score >= 60 ? 'bg-warning-500' : 'bg-danger-500'}" style="width: ${result.score || 0}%"></div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${result.score >= 90 ? 'bg-success-100 text-success-800' : result.score >= 70 ? 'bg-warning-100 text-warning-800' : 'bg-danger-100 text-danger-800'}">
+                                ${result.letter_grade || 'N/A'}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${result.total_questions || 0} questions
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${result.graded_at ? result.graded_at.substring(0, 10) : 'Unknown'}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button type="button" onclick="viewDetails('${result.submission_id}')" class="text-primary-600 hover:text-primary-900 mr-3">
+                                View Details
+                            </button>
+                            <a href="/view-submission-content/${result.submission_id}" class="text-info-600 hover:text-info-900">
+                                View Content
+                            </a>
+                        </td>
+                    `;ring(0, 8) : 'Unknown'}...</div>
                                 </div>
                             </div>
                         </td>
@@ -645,34 +665,110 @@ function updateElementText(selector, index, text) {
 }
 
 // Export results function
-function exportResults() {
+window.exportResults = function() {
+    console.log('exportResults called from results.html');
+    
+    // Show loading state
+    const exportBtn = document.querySelector('button[onclick="exportResults()"]');
+    let originalText = '';
+    if (exportBtn) {
+        originalText = exportBtn.innerHTML;
+        exportBtn.innerHTML = `
+            <svg class="animate-spin mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Exporting...
+        `;
+        exportBtn.disabled = true;
+    }
+    
     // Call the API to export results
-    fetch('/api/export-results')
-        .then(response => response.json())
-        .then(data => {
+    fetch('/api/export-results', {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/pdf, application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Export failed: ${response.status} ${response.statusText}`);
+        }
+        
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/pdf')) {
+            return response.blob().then(blob => ({ type: 'pdf', data: blob }));
+        } else {
+            return response.json().then(json => ({ type: 'json', data: json }));
+        }
+    })
+    .then(result => {
+        if (result.type === 'pdf') {
+            // Handle PDF download
+            const url = window.URL.createObjectURL(result.data);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `grading_results_${new Date().toISOString().split('T')[0]}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } else if (result.type === 'json') {
+            // Handle JSON response
+            const data = result.data;
             if (data.success) {
                 const dataStr = JSON.stringify(data.data, null, 2);
-                    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(dataBlob);
-                link.download = data.filename;
+                link.download = data.filename || `grading_results_${new Date().toISOString().split('T')[0]}.json`;
                 link.click();
-
-                ExamGrader.notificationManager.notify('Results exported successfully!', 'success');
+                URL.revokeObjectURL(link.href);
             } else {
-                ExamGrader.notificationManager.notify('Failed to export results: ' + data.error, 'error');
+                throw new Error(data.error || 'Export failed');
             }
-        })
-        .catch(error => {
-            console.error('Export error:', error);
-            ExamGrader.notificationManager.notify('Failed to export results', 'error');
-        });
-}
+        }
+        
+        if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+            ExamGrader.notificationManager.notify('Results exported successfully!', 'success');
+        } else {
+            alert('Results exported successfully!');
+        }
+    })
+    .catch(error => {
+        console.error('Export error:', error);
+        if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+            ExamGrader.notificationManager.notify('Export failed: ' + error.message, 'error');
+        } else {
+            alert('Export failed: ' + error.message);
+        }
+    })
+    .finally(() => {
+        // Reset button
+        if (exportBtn) {
+            exportBtn.innerHTML = originalText;
+            exportBtn.disabled = false;
+        }
+    });
+};
 
+// Ensure global functions are available
 window.viewDetails = function(submissionId) {
+    console.log('viewDetails called from results.html for:', submissionId);
+    
     // Find the result data for this submission
-    const results = JSON.parse('{{ results_list|tojson|safe|replace("'", "\\'")|replace("`", "\\`") }}');
+    let results = [];
+    try {
+        results = JSON.parse('{{ results_list|tojson|safe|replace("'", "\\'")|replace("`", "\\`") }}');
+    } catch (e) {
+        console.error('Error parsing results data:', e);
+        if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+            ExamGrader.notificationManager.notify('Error loading results data', 'error');
+        }
+        return;
+    }
     const result = results.find(r => r.submission_id === submissionId);
 
     if (!result) {

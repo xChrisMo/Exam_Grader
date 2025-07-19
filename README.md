@@ -82,7 +82,7 @@ graph TB
 
 5. **Run the application**
    ```bash
-   python run_app.py
+   python start.py
    ```
 
 The application will be available at `http://127.0.0.1:8501`
@@ -212,11 +212,11 @@ python -m pytest --cov=src tests/
 ### Development Server
 
 ```bash
-# Run with auto-reload
-python run_app.py --debug
+# Run the application (simple)
+python start.py
 
-# Run on different port
-python run_app.py --port 8080
+# Run with advanced options
+python run_app.py --debug --port 8080
 
 # Check system requirements
 python run_app.py --check
@@ -353,7 +353,7 @@ The project is currently undergoing major refactoring. Priority areas:
 
 Run with debug logging:
 ```bash
-LOG_LEVEL=DEBUG python run_app.py
+LOG_LEVEL=DEBUG python start.py
 ```
 
 ### Manual QA Checklist

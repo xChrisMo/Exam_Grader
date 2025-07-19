@@ -84,7 +84,7 @@
                 <p class="pl-1" data-i18n="or_drag_and_drop">or drag and drop</p>
               </div>
               <p class="text-xs text-gray-500" id="upload-hint" data-i18n="file_types_hint">
-                PDF, Word documents, or images up to 16MB
+                PDF, Word documents, or images up to 100MB
               </p>
             </div>
           </div>
@@ -384,7 +384,7 @@
               fileInput.removeAttribute('required'); // Remove required for multiple mode
               uploadLabel.textContent = 'Student Submission Files (Multiple)';
               uploadText.textContent = 'Upload files';
-              uploadHint.textContent = 'PDF, Word documents, or images up to 16MB each. Select multiple files for batch processing.';
+              uploadHint.textContent = 'PDF, Word documents, or images up to 100MB each. Select multiple files for batch processing.';
               batchOptions.classList.remove('hidden');
               updateButtonText();
           } else {
@@ -392,7 +392,7 @@
               fileInput.setAttribute('required', 'required'); // Add required back for single mode
               uploadLabel.textContent = 'Student Submission File';
               uploadText.textContent = 'Upload a file';
-              uploadHint.textContent = 'PDF, Word documents, or images up to 16MB';
+              uploadHint.textContent = 'PDF, Word documents, or images up to 100MB';
               batchOptions.classList.add('hidden');
               selectedFilesDiv.classList.add('hidden');
               selectedFiles = [];
