@@ -607,7 +607,6 @@ window.NotificationManager = {
 // Backward compatibility
 window.showNotification = function(message, type = 'info', duration = 5000, options = {}) {
     return NotificationManager.show(message, type, duration, options);
-};
     // Create notification element
     const notification = document.createElement('div');
     notification.className = `fixed top-4 right-4 z-50 max-w-sm bg-white border-l-4 rounded-lg shadow-lg p-4 transform transition-all duration-300 ${

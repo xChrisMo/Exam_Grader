@@ -175,6 +175,9 @@ try:
     
     # Configure CSRF settings
     app.config.update(
+        WTF_CSRF_ENABLED=True,
+        WTF_CSRF_CHECK_DEFAULT=True,
+        WTF_CSRF_SSL_STRICT=False,  # Allow CSRF token with HTTP
         CSRF_COOKIE_NAME='secure_csrf_token',
         CSRF_COOKIE_HTTPONLY=True,
         CSRF_COOKIE_SECURE=False,
@@ -465,6 +468,15 @@ try:
     logger.info("Unified API router registered with consolidated endpoints")
 except Exception as e:
     logger.error(f"Failed to register unified API router: {str(e)}")
+    # Don't exit - this is not critical for basic functionality
+
+# Register LLM Training API blueprint
+try:
+    from webapp.api import api_bp
+    app.register_blueprint(api_bp)
+    logger.info("LLM Training API blueprint registered")
+except Exception as e:
+    logger.error(f"Failed to register LLM Training API blueprint: {str(e)}")
     # Don't exit - this is not critical for basic functionality
 
 # Register monitoring endpoints blueprint
@@ -3737,18 +3749,28 @@ def settings():
                 os.environ["LANGUAGE"] = language
                 
                 # Reload configuration
-                from src.config.config_manager import ConfigManager
-                # Use the reload method instead of creating a new instance
-                config_manager = ConfigManager()
-                config_manager.reload()
+                try:
+                    from src.config.config_manager import ConfigManager
+                    # Use the reload method instead of creating a new instance
+                    config_manager = ConfigManager()
+                    config_manager.reload()
+                except ImportError:
+                    logger.warning("ConfigManager not found, skipping config reload")
+                except Exception as config_error:
+                    logger.error(f"Error reloading ConfigManager: {str(config_error)}")
                 
                 # Reload UnifiedConfig to update supported_formats
-                from src.config.unified_config import UnifiedConfig, load_dotenv
-                # Reload environment variables to ensure we get the latest values
-                load_dotenv(override=True)
-                global config
-                config = UnifiedConfig()
-                logger.info("UnifiedConfig reloaded with updated settings")
+                try:
+                    from src.config.unified_config import UnifiedConfig, load_dotenv
+                    # Reload environment variables to ensure we get the latest values
+                    load_dotenv(override=True)
+                    global config
+                    config = UnifiedConfig()
+                    logger.info("UnifiedConfig reloaded with updated settings")
+                except ImportError:
+                    logger.warning("UnifiedConfig not found, skipping config reload")
+                except Exception as config_error:
+                    logger.error(f"Error reloading UnifiedConfig: {str(config_error)}")
                 
                 # Reinitialize services with new API keys
                 if "ocr_service" in globals() and ocr_api_key:
@@ -3770,6 +3792,25 @@ def settings():
                 flash(f"Error updating settings: {str(e)}", "error")
                 return redirect(url_for("settings"))
 
+        # Check if config is available
+        config_obj = None
+        try:
+            # Try to access the global config object
+            if 'config' in globals():
+                config_obj = globals()['config']
+            else:
+                # Try to create a new config object if not available
+                try:
+                    from src.config.unified_config import UnifiedConfig
+                    config_obj = UnifiedConfig()
+                    logger.info("Created new UnifiedConfig object for settings page")
+                except ImportError:
+                    logger.warning("UnifiedConfig not available, settings will be limited")
+                except Exception as config_error:
+                    logger.warning(f"Could not create UnifiedConfig: {str(config_error)}")
+        except Exception as config_access_error:
+            logger.warning(f"Error accessing config: {str(config_access_error)}")
+        
         context = {
             "page_title": "Settings",
             "settings": default_settings,
@@ -3779,7 +3820,7 @@ def settings():
             "languages": languages,
             "service_status": get_service_status(),
             "storage_stats": get_storage_stats(),
-            "config": config,  # Pass the config object to the template
+            "config": config_obj,  # Pass the config object to the template (might be None)
         }
         return render_template("settings.html", **context)
     except Exception as e:
@@ -4416,6 +4457,33 @@ def dashboard_stats():
         
     except Exception as e:
         logger.error(f"Error getting dashboard stats: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# Supported formats API
+@app.route("/api/upload/supported-formats", methods=["GET"])
+@login_required
+def get_supported_formats():
+    """Get list of supported file formats for upload."""
+    try:
+        # Get allowed file types from config
+        allowed_types = getattr(config, 'ALLOWED_FILE_TYPES', [
+            ".pdf", ".docx", ".doc", ".txt", ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".gif"
+        ])
+        
+        max_file_size = getattr(config, 'MAX_FILE_SIZE', 20971520)  # 20MB default
+        
+        return jsonify({
+            "success": True,
+            "data": {
+                "supportedFormats": allowed_types,
+                "maxFileSize": max_file_size,
+                "maxFileSizeFormatted": f"{max_file_size // (1024*1024)}MB"
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting supported formats: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 

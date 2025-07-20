@@ -506,3 +506,90 @@ class EnhancedUploadService:
                 'success': False,
                 'error': str(e)
             }
+    
+    def check_duplicate(self, file: FileStorage, user_id: str, marking_guide_id: str) -> Dict[str, Any]:
+        """Check if a file is a duplicate before upload.
+        
+        Args:
+            file: File to check
+            user_id: User ID
+            marking_guide_id: Marking guide ID for submissions
+            
+        Returns:
+            Dict with duplicate check results
+        """
+        try:
+            # Validate file first
+            validation_result = self.validate_file_upload(file)
+            if not validation_result['valid']:
+                return {
+                    'success': False,
+                    'error': validation_result['error'],
+                    'code': 'INVALID_FILE'
+                }
+            
+            # Extract text content for hash generation
+            temp_path = None
+            try:
+                # Save file temporarily for processing
+                temp_filename = f"temp_duplicate_check_{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+                temp_path = self.submissions_folder / temp_filename
+                file.save(str(temp_path))
+                
+                # Extract text content
+                text_content, confidence = self.content_validator.extract_and_validate_content(
+                    str(temp_path), file.filename
+                )
+                
+                if not text_content:
+                    return {
+                        'success': False,
+                        'error': 'Could not extract text content from file',
+                        'code': 'EXTRACTION_FAILED'
+                    }
+                
+                # Generate content hash
+                import hashlib
+                content_hash = hashlib.sha256(text_content.encode('utf-8')).hexdigest()
+                
+                # Check for duplicates in database
+                existing_submission = db.session.query(Submission).filter(
+                    Submission.content_hash == content_hash,
+                    Submission.user_id == user_id,
+                    Submission.marking_guide_id == marking_guide_id
+                ).first()
+                
+                if existing_submission:
+                    return {
+                        'success': True,
+                        'is_duplicate': True,
+                        'duplicate_info': {
+                            'submission_id': existing_submission.id,
+                            'filename': existing_submission.filename,
+                            'student_name': existing_submission.student_name,
+                            'student_id': existing_submission.student_id,
+                            'uploaded_at': existing_submission.created_at.isoformat(),
+                            'content_hash': content_hash
+                        },
+                        'message': 'Duplicate content detected'
+                    }
+                else:
+                    return {
+                        'success': True,
+                        'is_duplicate': False,
+                        'content_hash': content_hash,
+                        'message': 'No duplicate found'
+                    }
+                    
+            finally:
+                # Clean up temp file
+                if temp_path and os.path.exists(temp_path):
+                    os.remove(temp_path)
+                    
+        except Exception as e:
+            logger.error(f"Error checking duplicate: {e}")
+            return {
+                'success': False,
+                'error': f'Duplicate check failed: {str(e)}',
+                'code': 'CHECK_ERROR'
+            }

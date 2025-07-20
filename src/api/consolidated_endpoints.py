@@ -37,7 +37,7 @@ from src.models.validation import ValidationResult, CommonValidators
 from src.utils.response_utils import extract_pagination_params
 from src.database.models import (
     db, MarkingGuide, Submission, GradingResult, 
-    GradingSession, User
+    GradingSession, User, Mapping
 )
 from src.services.unified_ai_service import UnifiedAIService
 from src.services.enhanced_upload_service import EnhancedUploadService
@@ -551,8 +551,10 @@ def get_processing_status(task_id: str):
         APIResponse with task status
     """
     try:
-        # In a real implementation, this would check task status from Celery/Redis
-        # For now, return a mock response
+        # Check authentication
+        user_id = require_auth()
+        if not user_id:
+            return ErrorResponse.authentication_error().to_dict(), 401
         
         # Validate task_id format
         if not task_id or len(task_id) < 10:
@@ -560,28 +562,122 @@ def get_processing_status(task_id: str):
                 message="Invalid task ID"
             ).to_dict(), 400
         
-        # Mock status response
-        status_data = {
-            'task_id': task_id,
-            'status': 'processing',  # started, processing, completed, failed
-            'progress': {
-                'current': 3,
-                'total': 10,
-                'percentage': 30
-            },
-            'started_at': datetime.now().isoformat(),
-            'estimated_completion': '7 minutes remaining',
-            'results': {
-                'completed': 3,
-                'failed': 0,
-                'pending': 7
-            }
-        }
+        # Check if task_id corresponds to a submission or grading session
+        submission = db.session.query(Submission).filter(
+            Submission.id == task_id,
+            Submission.user_id == user_id
+        ).first()
         
-        return APIResponse.success(
-            data=status_data,
-            message="Processing status retrieved successfully"
-        ).to_dict()
+        if submission:
+            # Get submission processing status
+            total_steps = 4  # OCR, Mapping, Grading, Completion
+            current_step = 0
+            
+            if submission.content_text:
+                current_step += 1  # OCR completed
+            
+            mappings_count = db.session.query(Mapping).filter(
+                Mapping.submission_id == task_id
+            ).count()
+            if mappings_count > 0:
+                current_step += 1  # Mapping completed
+            
+            results_count = db.session.query(GradingResult).filter(
+                GradingResult.submission_id == task_id
+            ).count()
+            if results_count > 0:
+                current_step += 1  # Grading completed
+            
+            if submission.processed:
+                current_step = total_steps  # All completed
+            
+            percentage = int((current_step / total_steps) * 100)
+            
+            # Determine status
+            if submission.processing_status == 'failed':
+                status = 'failed'
+            elif submission.processing_status == 'completed' or submission.processed:
+                status = 'completed'
+            elif submission.processing_status == 'processing':
+                status = 'processing'
+            else:
+                status = 'pending'
+            
+            status_data = {
+                'task_id': task_id,
+                'status': status,
+                'progress': {
+                    'current': current_step,
+                    'total': total_steps,
+                    'percentage': percentage
+                },
+                'started_at': submission.created_at.isoformat(),
+                'updated_at': submission.updated_at.isoformat() if submission.updated_at else None,
+                'submission_info': {
+                    'student_name': submission.student_name,
+                    'filename': submission.filename,
+                    'file_size': submission.file_size
+                },
+                'results': {
+                    'mappings_created': mappings_count,
+                    'grading_results': results_count,
+                    'ocr_completed': bool(submission.content_text),
+                    'processing_error': submission.processing_error
+                }
+            }
+            
+            return APIResponse.success(
+                data=status_data,
+                message="Processing status retrieved successfully"
+            ).to_dict()
+        
+        # Check grading sessions
+        grading_session = db.session.query(GradingSession).filter(
+            GradingSession.id == task_id
+        ).first()
+        
+        if grading_session:
+            # Verify user owns the submission
+            submission = db.session.query(Submission).filter(
+                Submission.id == grading_session.submission_id,
+                Submission.user_id == user_id
+            ).first()
+            
+            if not submission:
+                return ErrorResponse.not_found(
+                    message="Task not found or access denied"
+                ).to_dict(), 404
+            
+            status_data = {
+                'task_id': task_id,
+                'status': grading_session.status,
+                'progress': {
+                    'current': grading_session.current_step or 0,
+                    'total': grading_session.total_questions_mapped or 1,
+                    'percentage': int(((grading_session.current_step or 0) / (grading_session.total_questions_mapped or 1)) * 100)
+                },
+                'started_at': grading_session.created_at.isoformat(),
+                'updated_at': grading_session.updated_at.isoformat() if grading_session.updated_at else None,
+                'session_info': {
+                    'submission_id': grading_session.submission_id,
+                    'marking_guide_id': grading_session.marking_guide_id,
+                    'total_questions': grading_session.total_questions_mapped
+                },
+                'results': {
+                    'questions_graded': grading_session.current_step or 0,
+                    'error_message': grading_session.error_message
+                }
+            }
+            
+            return APIResponse.success(
+                data=status_data,
+                message="Processing status retrieved successfully"
+            ).to_dict()
+        
+        # Task not found
+        return ErrorResponse.not_found(
+            message="Task not found or access denied"
+        ).to_dict(), 404
         
     except Exception as e:
         logger.error(f"Error fetching processing status for {task_id}: {str(e)}")
@@ -1080,15 +1176,7 @@ def get_enhanced_processing_status(submission_id: int, marking_guide_id: int):
 @unified_api_bp.route('/files/upload', methods=['POST'])
 @api_endpoint(
     methods=['POST'],
-    description="Generic file upload endpoint that routes to appropriate handler",
-    parameters={
-        'file': 'File to upload',
-        'type': 'Upload type (submission or guide)',
-        'marking_guide_id': 'Required for submission uploads',
-        'student_name': 'Required for submission uploads',
-        'student_id': 'Required for submission uploads',
-        'title': 'Required for guide uploads'
-    }
+    auth_required=True
 )
 def upload_file():
     """Generic file upload endpoint that routes to appropriate handler."""
@@ -1110,7 +1198,7 @@ def upload_file():
             return upload_submission_file()
         elif upload_type == 'guide':
             # Route to guide upload
-            return upload_marking_guid()ile_fe
+            return upload_marking_guide_file()
         else:
             return jsonify({
                 'success': False,

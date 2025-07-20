@@ -210,6 +210,10 @@ class RequestValidator:
     @classmethod
     def _check_suspicious_patterns(cls, request_obj) -> bool:
         """Check for suspicious patterns in request data."""
+        # Allow all local requests (for development)
+        if request_obj.remote_addr == '127.0.0.1' or request_obj.remote_addr == 'localhost':
+            return True
+            
         # Check URL (exclude legitimate application paths)
         if cls._contains_suspicious_url_pattern(request_obj.url):
             logger.warning(f"Suspicious pattern in URL: {request_obj.url}")
@@ -241,7 +245,7 @@ class RequestValidator:
             'referer', 'user-agent', 'accept', 'accept-language', 'accept-encoding',
             'connection', 'host', 'origin', 'sec-fetch-dest', 'sec-fetch-mode',
             'sec-fetch-site', 'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform',
-            'cache-control', 'pragma', 'upgrade-insecure-requests'
+            'cache-control', 'pragma', 'upgrade-insecure-requests', 'cookie'  # Added cookie to excluded headers
         }
         
         for header, value in request_obj.headers:

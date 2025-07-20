@@ -8,6 +8,7 @@ from flask import Blueprint, request, jsonify, current_app, g
 from flask_login import login_required, current_user
 from src.database.models import MarkingGuide, Submission, db
 from sqlalchemy import func
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -396,6 +397,230 @@ def process_batch_enhanced():
         return jsonify({
             'status': 'error',
             'message': 'Failed to process enhanced batch request'
+        }), 500
+
+
+@basic_api_bp.route('/submission-details/<submission_id>', methods=['GET'])
+@login_required
+def get_submission_details(submission_id):
+    """Get detailed information about a submission."""
+    try:
+        from src.database.models import Mapping, GradingResult
+        
+        # Get submission
+        submission = Submission.query.filter_by(
+            id=submission_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not submission:
+            return jsonify({
+                'success': False,
+                'error': 'Submission not found or access denied'
+            }), 404
+        
+        # Get related data
+        mappings = Mapping.query.filter_by(submission_id=submission_id).all()
+        grading_results = GradingResult.query.filter_by(submission_id=submission_id).all()
+        
+        # Build response
+        submission_data = {
+            'id': submission.id,
+            'student_name': submission.student_name,
+            'student_id': submission.student_id,
+            'filename': submission.filename,
+            'file_size': submission.file_size,
+            'file_type': submission.file_type,
+            'processing_status': getattr(submission, 'processing_status', 'pending'),
+            'processed': getattr(submission, 'processed', False),
+            'ocr_confidence': getattr(submission, 'ocr_confidence', None),
+            'content_text': getattr(submission, 'content_text', None),
+            'created_at': submission.created_at.isoformat(),
+            'updated_at': submission.updated_at.isoformat() if submission.updated_at else None,
+            'mappings': [mapping.to_dict() for mapping in mappings] if mappings else [],
+            'grading_results': [result.to_dict() for result in grading_results] if grading_results else []
+        }
+        
+        return jsonify({
+            'success': True,
+            'submission': submission_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting submission details: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
+
+@basic_api_bp.route('/dashboard-stats', methods=['GET'])
+@login_required
+def get_dashboard_stats():
+    """Get dashboard statistics for the current user."""
+    try:
+        # Get statistics
+        total_submissions = Submission.query.filter_by(user_id=current_user.id).count()
+        
+        processed_submissions = Submission.query.filter_by(
+            user_id=current_user.id
+        ).filter(
+            getattr(Submission, 'processed', True) == True
+        ).count() if hasattr(Submission, 'processed') else 0
+        
+        total_guides = MarkingGuide.query.filter_by(
+            user_id=current_user.id,
+            is_active=True
+        ).count()
+        
+        # Recent activity
+        recent_submissions = Submission.query.filter_by(
+            user_id=current_user.id
+        ).order_by(Submission.created_at.desc()).limit(5).all()
+        
+        stats = {
+            'total_submissions': total_submissions,
+            'processed_submissions': processed_submissions,
+            'pending_submissions': total_submissions - processed_submissions,
+            'total_guides': total_guides,
+            'processing_rate': round((processed_submissions / total_submissions * 100) if total_submissions > 0 else 0, 1),
+            'recent_submissions': [
+                {
+                    'id': sub.id,
+                    'student_name': sub.student_name,
+                    'filename': sub.filename,
+                    'status': getattr(sub, 'processing_status', 'pending'),
+                    'created_at': sub.created_at.isoformat()
+                } for sub in recent_submissions
+            ]
+        }
+        
+        return jsonify({
+            'success': True,
+            'stats': stats
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting dashboard stats: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
+
+@basic_api_bp.route('/export-results', methods=['GET'])
+@login_required
+def export_results():
+    """Export grading results for the current user."""
+    try:
+        from src.database.models import GradingResult
+        
+        # Get all grading results for user
+        results = db.session.query(GradingResult).join(Submission).filter(
+            Submission.user_id == current_user.id
+        ).all()
+        
+        if not results:
+            return jsonify({
+                'success': False,
+                'error': 'No results found to export'
+            }), 404
+        
+        # Format results for export
+        export_data = []
+        for result in results:
+            submission = result.submission
+            mapping = getattr(result, 'mapping', None)
+            
+            export_data.append({
+                'submission_id': submission.id,
+                'student_name': submission.student_name,
+                'student_id': getattr(submission, 'student_id', ''),
+                'filename': submission.filename,
+                'question_id': mapping.guide_question_id if mapping else None,
+                'question_text': mapping.guide_question_text if mapping else None,
+                'student_answer': mapping.submission_answer if mapping else None,
+                'score': result.score,
+                'max_score': result.max_score,
+                'percentage': round((result.score / result.max_score * 100) if result.max_score > 0 else 0, 1),
+                'feedback': result.feedback,
+                'graded_at': result.created_at.isoformat()
+            })
+        
+        return jsonify({
+            'success': True,
+            'results': export_data,
+            'total_count': len(export_data),
+            'export_timestamp': datetime.utcnow().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error exporting results: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
+
+@basic_api_bp.route('/cancel-processing/<progress_id>', methods=['POST'])
+@login_required
+def cancel_processing(progress_id):
+    """Cancel ongoing processing task."""
+    try:
+        from src.database.models import GradingSession
+        
+        # Find the processing task (could be submission or grading session)
+        submission = Submission.query.filter_by(
+            id=progress_id,
+            user_id=current_user.id
+        ).first()
+        
+        if submission and hasattr(submission, 'processing_status'):
+            if submission.processing_status == 'processing':
+                submission.processing_status = 'cancelled'
+                if hasattr(submission, 'processing_error'):
+                    submission.processing_error = 'Cancelled by user'
+                db.session.commit()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Processing cancelled successfully'
+                })
+        
+        # Check grading sessions if they exist
+        try:
+            grading_session = GradingSession.query.filter_by(id=progress_id).first()
+            if grading_session:
+                # Verify user owns the submission
+                submission = Submission.query.filter_by(
+                    id=grading_session.submission_id,
+                    user_id=current_user.id
+                ).first()
+                
+                if submission:
+                    grading_session.status = 'cancelled'
+                    if hasattr(grading_session, 'error_message'):
+                        grading_session.error_message = 'Cancelled by user'
+                    db.session.commit()
+                    
+                    return jsonify({
+                        'success': True,
+                        'message': 'Processing cancelled successfully'
+                    })
+        except Exception:
+            # GradingSession might not exist in current schema
+            pass
+        
+        return jsonify({
+            'success': False,
+            'error': 'Processing task not found or cannot be cancelled'
+        }), 404
+        
+    except Exception as e:
+        logger.error(f"Error cancelling processing: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
         }), 500
 
 

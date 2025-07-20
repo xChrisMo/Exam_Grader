@@ -477,6 +477,8 @@ def cleanup_temp_files():
             'code': 'INTERNAL_ERROR'
         }), 500
 
+
+
 @upload_bp.route('/supported-formats', methods=['GET'])
 def get_supported_formats():
     """Get list of supported file formats.

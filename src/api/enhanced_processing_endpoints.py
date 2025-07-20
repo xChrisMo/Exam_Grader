@@ -14,7 +14,7 @@ from typing import Dict, Any
 from src.services.enhanced_processing_service import EnhancedProcessingService
 from src.services.consolidated_llm_service import ConsolidatedLLMService as LLMService
 from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRService
-from src.database.models import db, User, MarkingGuide, Submission, GradingSession
+from src.database.models import db, User, MarkingGuide, Submission, GradingSession, Mapping
 from utils.logger import logger
 from utils.input_sanitizer import InputSanitizer
 
@@ -358,7 +358,11 @@ def process_mapping():
         for submission in submissions:
             try:
                 # Check if already processed and not forcing reprocess
-                if submission.mapping_status == 'completed' and not options.get('force_reprocess', False):
+                existing_mappings = db.session.query(Mapping).filter(
+                    Mapping.submission_id == submission.id
+                ).count()
+                
+                if existing_mappings > 0 and not options.get('force_reprocess', False):
                     results.append({
                         'submission_id': submission.id,
                         'status': 'skipped',
@@ -373,18 +377,26 @@ def process_mapping():
                 )
                 
                 if mapping_result.get('success'):
-                    submission.mapping_status = 'completed'
-                    submission.mapping_data = mapping_result.get('mapping_data', {})
+                    submission.processing_status = 'completed'
+                    submission.processed = True
                     total_processed += 1
+                    
+                    # Get the created mappings
+                    mappings = db.session.query(Mapping).filter(
+                        Mapping.submission_id == submission.id
+                    ).all()
+                    
+                    mapping_data = [mapping.to_dict() for mapping in mappings]
                     
                     results.append({
                         'submission_id': submission.id,
                         'status': 'success',
-                        'mapping_data': mapping_result.get('mapping_data', {}),
+                        'mapping_data': mapping_data,
                         'message': 'Mapping completed successfully'
                     })
                 else:
-                    submission.mapping_status = 'failed'
+                    submission.processing_status = 'failed'
+                    submission.processing_error = mapping_result.get('error', 'Unknown error')
                     total_errors += 1
                     
                     results.append({
@@ -396,7 +408,8 @@ def process_mapping():
                 
             except Exception as e:
                 logger.error(f"Error processing mapping for submission {submission.id}: {e}")
-                submission.mapping_status = 'failed'
+                submission.processing_status = 'failed'
+                submission.processing_error = str(e)
                 total_errors += 1
                 
                 results.append({

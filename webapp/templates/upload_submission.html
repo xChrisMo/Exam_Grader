@@ -49,7 +49,14 @@
         <!-- Hidden field for marking guide ID -->
         {% if guide_id %}
         <input type="hidden" name="marking_guide_id" value="{{ guide_id }}">
+        {% else %}
+        <!-- If no guide_id is provided, we need a default value -->
+        <input type="hidden" name="marking_guide_id" value="1">
         {% endif %}
+        
+        <!-- Hidden fields for student information -->
+        <input type="hidden" name="student_name" value="Default Student">
+        <input type="hidden" name="student_id" value="12345">
         
         <!-- Upload Mode Selection -->
         <div class="mb-6">
@@ -380,16 +387,25 @@
 
       function updateUploadMode() {
           if (isMultipleMode) {
-              fileInput.setAttribute('multiple', 'multiple');
-              fileInput.removeAttribute('required'); // Remove required for multiple mode
+              // Instead of recreating the input, just modify its attributes
+              if (fileInput) {
+                  fileInput.setAttribute('multiple', 'multiple');
+                  fileInput.removeAttribute('required');
+              }
+              
               uploadLabel.textContent = 'Student Submission Files (Multiple)';
               uploadText.textContent = 'Upload files';
               uploadHint.textContent = 'PDF, Word documents, or images up to 100MB each. Select multiple files for batch processing.';
               batchOptions.classList.remove('hidden');
               updateButtonText();
+              console.log('Multiple mode enabled, multiple attribute set:', fileInput ? fileInput.hasAttribute('multiple') : 'fileInput not found');
           } else {
-              fileInput.removeAttribute('multiple');
-              fileInput.setAttribute('required', 'required'); // Add required back for single mode
+              // Instead of recreating the input, just modify its attributes
+              if (fileInput) {
+                  fileInput.removeAttribute('multiple');
+                  fileInput.setAttribute('required', 'required');
+              }
+              
               uploadLabel.textContent = 'Student Submission File';
               uploadText.textContent = 'Upload a file';
               uploadHint.textContent = 'PDF, Word documents, or images up to 100MB';
@@ -397,6 +413,7 @@
               selectedFilesDiv.classList.add('hidden');
               selectedFiles = [];
               updateButtonText();
+              console.log('Single mode enabled, multiple attribute removed:', !fileInput.hasAttribute('multiple'));
           }
       }
 
@@ -792,6 +809,9 @@
               const markingGuideInput = document.querySelector('input[name="marking_guide_id"]');
               if (markingGuideInput && markingGuideInput.value) {
                   formData.append('marking_guide_id', markingGuideInput.value);
+              } else {
+                  // Provide a default marking guide ID if none is found
+                  formData.append('marking_guide_id', '1');
               }
 
               // Add batch processing parameters
