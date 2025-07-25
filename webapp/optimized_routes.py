@@ -16,35 +16,7 @@ from src.services.optimized_background_tasks import (
 from src.database.models import Submission, MarkingGuide, GradingResult
 from src.database.models import db
 from utils.logger import logger
-# Temporary inline function to avoid import issues
-def is_guide_in_use(guide_id):
-    """Check if a marking guide is currently being used for processing."""
-    try:
-        from src.database.models import Submission, GradingResult
-        from datetime import datetime, timedelta
-        
-        # Check for submissions currently being processed with this guide
-        active_submissions = Submission.query.filter(
-            Submission.marking_guide_id == guide_id,
-            Submission.processing_status.in_(['processing', 'pending'])
-        ).count()
-        
-        if active_submissions > 0:
-            return True
-            
-        # Check for recent grading results (within last 5 minutes)
-        recent_threshold = datetime.utcnow() - timedelta(minutes=5)
-        recent_results = GradingResult.query.filter(
-            GradingResult.marking_guide_id == guide_id,
-            GradingResult.created_at >= recent_threshold
-        ).count()
-        
-        return recent_results > 0
-        
-    except Exception as e:
-        from utils.logger import logger
-        logger.error(f"Error checking if guide {guide_id} is in use: {str(e)}")
-        return False
+from utils.guide_verification import is_guide_in_use
 try:
     from src.services.realtime_service import socketio
 except ImportError:

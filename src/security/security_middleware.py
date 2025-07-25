@@ -7,17 +7,23 @@ This module provides comprehensive security middleware including:
 - Security monitoring
 - Attack prevention
 """
+from typing import Any, Dict, List, Optional, Tuple
 
 import re
 import time
-import hashlib
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Set, Tuple, Any
 from urllib.parse import urlparse
 
-from flask import Flask, request, g, session, abort, current_app
-from werkzeug.exceptions import BadRequest, Forbidden
+try:
+    from flask import Flask, request, g, abort
+except ImportError:
+    Flask = None
+    request = None
+    g = None
+    abort = None
+
+from datetime import datetime
+
 
 try:
     from utils.logger import logger
@@ -170,6 +176,20 @@ class RequestValidator:
     @classmethod
     def _check_rate_limit(cls, request_obj, max_requests: int = 100, window_minutes: int = 15) -> bool:
         """Check if request exceeds rate limit."""
+        # Check if we're in development mode
+        import os
+        is_development = (
+            os.getenv('FLASK_ENV') == 'development' or 
+            os.getenv('DEBUG', '').lower() == 'true' or
+            request_obj.host.startswith('127.0.0.1') or
+            request_obj.host.startswith('localhost')
+        )
+        
+        # Use more lenient limits for development
+        if is_development:
+            max_requests = 10000  # Very high limit for development
+            window_minutes = 1    # Very short window for development
+        
         client_ip = cls._get_client_ip(request_obj)
         current_time = time.time()
         
@@ -189,9 +209,11 @@ class RequestValidator:
         
         # Check rate limit
         if len(request_times) >= max_requests:
-            # Block IP for 1 hour
-            cls._blocked_ips[client_ip] = current_time + 3600
-            logger.warning(f"Rate limit exceeded for IP {client_ip}, blocking for 1 hour")
+            # Block IP - shorter time for development
+            block_duration = 300 if is_development else 3600  # 5 minutes for dev, 1 hour for prod
+            cls._blocked_ips[client_ip] = current_time + block_duration
+            block_time_str = "5 minutes" if is_development else "1 hour"
+            logger.warning(f"Rate limit exceeded for IP {client_ip}, blocking for {block_time_str}")
             return False
         
         # Add current request
@@ -356,6 +378,13 @@ class RequestValidator:
                 return ip.split(',')[0].strip()
         
         return request_obj.remote_addr or 'unknown'
+    
+    @classmethod
+    def reset_rate_limits(cls):
+        """Reset all rate limits (useful for development)."""
+        cls._request_counts.clear()
+        cls._blocked_ips.clear()
+        logger.info("Rate limits reset")
 
 
 class SecurityMiddleware:

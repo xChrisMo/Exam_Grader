@@ -1,10 +1,9 @@
 """Database schema migration utilities."""
+from typing import Dict, List
 
 import logging
 from datetime import datetime
-from typing import Dict, List, Tuple
 
-from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)

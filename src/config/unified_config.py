@@ -10,7 +10,7 @@ import secrets
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import List, Dict, Any, Optional
 
 from dotenv import load_dotenv
 
@@ -29,13 +29,13 @@ def load_environment_variables():
     instance_env = Path("instance/.env")
     if instance_env.exists():
         load_dotenv(instance_env, override=True)
-        logger.debug("Loaded environment variables from instance/.env")
+
     
     # Load from root .env (lower priority)
     root_env = Path(".env")
     if root_env.exists():
         load_dotenv(root_env, override=False)  # Don't override instance settings
-        logger.debug("Loaded environment variables from .env")
+
 
 load_environment_variables()
 
@@ -51,7 +51,7 @@ class SecurityConfig:
     max_requests_per_hour: int = 0  # No limit
     secure_cookies: bool = True
     session_cookie_httponly: bool = True
-    session_cookie_secure: bool = False # Changed to False for local HTTP development
+    session_cookie_secure: bool = True  # Secure cookies for production
     session_cookie_samesite: str = "Lax"
     session_cookie_domain: str = None # Set to None to avoid domain issues with CSRF tokens
 
@@ -306,7 +306,7 @@ class UnifiedConfig:
         Args:
             environment: Environment name (development, testing, production)
         """
-        self.environment = environment or os.getenv("FLASK_ENV", "development")
+        self.environment = environment or os.getenv("FLASK_ENV", "production")
         
         # Migrate deprecated environment variables
         ConfigurationMigrator.migrate_environment_variables()
@@ -328,7 +328,7 @@ class UnifiedConfig:
             == "true",
             max_requests_per_hour=int(os.getenv("MAX_REQUESTS_PER_HOUR", "1000")),
             secure_cookies=self.environment == "production",
-            session_cookie_secure=False,  # Explicitly disabled for development
+            session_cookie_secure=self.environment == "production",
             session_cookie_domain=None,  # Ensure cookies work on localhost
         )
 
@@ -404,7 +404,7 @@ class UnifiedConfig:
 
         # Logging configuration
         self.logging = LoggingConfig(
-            log_level="DEBUG" if self.environment == "development" else os.getenv("LOG_LEVEL", "INFO"),
+            log_level=os.getenv("LOG_LEVEL", "INFO"),
             log_file=os.getenv("LOG_FILE"),
         )
 
@@ -412,7 +412,7 @@ class UnifiedConfig:
         self.server: ServerConfig = ServerConfig(
             host=os.getenv("HOST", "127.0.0.1"),
             port=int(os.getenv("PORT", "5000")),
-            debug=self.environment == "development",
+            debug=False,
             testing=self.environment == "testing",
         )
 
@@ -423,7 +423,7 @@ class UnifiedConfig:
 
     def _get_secret_key(self) -> str:
         """Get or generate a secure secret key."""
-        logger.debug("Attempting to retrieve SECRET_KEY.")
+
         secret_key = os.getenv("SECRET_KEY")
         if not secret_key:
             if self.environment == "production":
@@ -433,7 +433,7 @@ class UnifiedConfig:
             logger.warning(
                 "Using generated SECRET_KEY for development. Set SECRET_KEY environment variable for production."
             )
-            logger.debug(f"Using SECRET_KEY (first 5 chars): {secret_key[:5]}...")
+
         return secret_key
 
     def _resolve_database_url(self, database_url: str) -> str:

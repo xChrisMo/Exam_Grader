@@ -1,11 +1,11 @@
 """Application-specific exception classes with standardized error handling."""
 
 import traceback
-from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
 from enum import Enum
 
 from src.models.api_responses import ErrorCode
+from typing import Optional, Dict, Any, List
 
 
 class ErrorSeverity(Enum):

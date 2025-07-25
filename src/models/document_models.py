@@ -1,9 +1,9 @@
 """Document models for LLM training system."""
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
 from enum import Enum
+from typing import Optional, Dict, Any, List
 import hashlib
 
 

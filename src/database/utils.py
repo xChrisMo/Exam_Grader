@@ -6,8 +6,25 @@ import logging
 import secrets
 import string
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 from werkzeug.security import generate_password_hash
+
+# Import performance optimization tools
+try:
+    from src.performance.query_cache import cached_query, monitor_performance
+    PERFORMANCE_TOOLS_AVAILABLE = True
+except ImportError:
+    PERFORMANCE_TOOLS_AVAILABLE = False
+    # Fallback decorators that do nothing
+    def cached_query(timeout=300, key_prefix=""):
+        def decorator(func):
+            return func
+        return decorator
+
+    def monitor_performance(log_slow_queries=True, slow_threshold=1.0):
+        def decorator(func):
+            return func
+        return decorator
 
 logger = logging.getLogger(__name__)
 
@@ -123,3 +140,78 @@ class DatabaseUtils:
             'valid': len(errors) == 0,
             'errors': errors
         }
+
+    @staticmethod
+    @cached_query(timeout=300, key_prefix="user_")
+    @monitor_performance(slow_threshold=0.5)
+    def get_user_by_id(user_id: str) -> Optional[Any]:
+        """Get user by ID with caching."""
+        try:
+            from .models import User
+            return User.query.filter_by(id=user_id).first()
+        except Exception as e:
+            logger.error(f"Error getting user by ID {user_id}: {str(e)}")
+            return None
+
+    @staticmethod
+    @cached_query(timeout=600, key_prefix="guide_")
+    @monitor_performance(slow_threshold=0.5)
+    def get_active_marking_guides(user_id: str) -> List[Any]:
+        """Get active marking guides for user with caching."""
+        try:
+            from .models import MarkingGuide
+            return MarkingGuide.query.filter_by(
+                user_id=user_id,
+                is_active=True
+            ).order_by(MarkingGuide.created_at.desc()).all()
+        except Exception as e:
+            logger.error(f"Error getting marking guides for user {user_id}: {str(e)}")
+            return []
+
+    @staticmethod
+    @cached_query(timeout=300, key_prefix="submission_")
+    @monitor_performance(slow_threshold=1.0)
+    def get_submissions_by_status(user_id: str, status: str) -> List[Any]:
+        """Get submissions by status with caching."""
+        try:
+            from .models import Submission
+            return Submission.query.filter_by(
+                user_id=user_id,
+                processing_status=status
+            ).order_by(Submission.created_at.desc()).all()
+        except Exception as e:
+            logger.error(f"Error getting submissions for user {user_id}, status {status}: {str(e)}")
+            return []
+
+    @staticmethod
+    @monitor_performance(slow_threshold=2.0)
+    def bulk_update_submission_status(submission_ids: List[str], new_status: str) -> bool:
+        """Bulk update submission status for better performance."""
+        try:
+            from .models import Submission, db
+
+            # Use bulk update for better performance
+            updated = Submission.query.filter(
+                Submission.id.in_(submission_ids)
+            ).update(
+                {Submission.processing_status: new_status},
+                synchronize_session=False
+            )
+
+            db.session.commit()
+            logger.info(f"Bulk updated {updated} submissions to status {new_status}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error bulk updating submissions: {str(e)}")
+            return False
+
+    @staticmethod
+    def clear_user_cache(user_id: str) -> None:
+        """Clear cached data for a specific user."""
+        if PERFORMANCE_TOOLS_AVAILABLE:
+            from src.performance.query_cache import invalidate_cache_pattern
+            invalidate_cache_pattern(f"user_{user_id}")
+            invalidate_cache_pattern(f"guide_{user_id}")
+            invalidate_cache_pattern(f"submission_{user_id}")
+            logger.debug(f"Cleared cache for user {user_id}")

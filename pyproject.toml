@@ -1,0 +1,292 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "exam-grader"
+version = "1.0.0"
+description = "AI-powered educational assessment platform with OCR and automated grading"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Exam Grader Team", email = "team@examgrader.com"}
+]
+maintainers = [
+    {name = "Exam Grader Team", email = "team@examgrader.com"}
+]
+keywords = ["education", "ai", "grading", "assessment", "ocr", "machine-learning"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Education",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Framework :: Flask",
+]
+requires-python = ">=3.8"
+
+# Core dependencies
+dependencies = [
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.1",
+    "openai>=1.12.0",
+    "validators>=0.22.0",
+    "MarkupSafe>=3.0.2",
+    "PyMuPDF>=1.24.0",
+    "python-docx>=1.1.0",
+    "Pillow>=10.2.0",
+    "Flask>=3.0.2",
+    "Werkzeug>=3.0.1",
+    "Jinja2>=3.1.3",
+    "Flask-WTF>=1.2.1",
+    "Flask-Login>=0.6.3",
+    "Flask-CORS>=4.0.0",
+    "WTForms>=3.1.0",
+    "SQLAlchemy>=2.0.25",
+    "Flask-SQLAlchemy>=3.1.1",
+    "cryptography>=42.0.0",
+    "tenacity>=8.2.3",
+    "Flask-SocketIO>=5.3.6",
+    "python-socketio>=5.9.0",
+    "python-magic>=0.4.27",
+    "python-magic-bin>=0.4.14; sys_platform == 'win32'",
+    "gunicorn>=21.2.0",
+]
+
+[project.optional-dependencies]
+# Data processing features
+data = [
+    "numpy>=1.26.4",
+    "pandas>=2.2.0",
+    "openpyxl>=3.1.2",
+]
+
+# Background processing
+async = [
+    "celery>=5.3.4",
+    "redis>=5.0.0",
+    "aiofiles>=23.2.1",
+    "aiocache>=0.12.2",
+]
+
+# PDF generation
+pdf = [
+    "reportlab>=4.0.7",
+    "weasyprint>=60.2",
+]
+
+# Performance enhancements
+performance = [
+    "Flask-Caching>=2.1.0",
+    "psutil>=5.9.0",
+    "Flask-Limiter>=3.5.0",
+    "redis>=5.0.0",
+]
+
+# Internationalization
+i18n = [
+    "Flask-Babel>=3.1.0",
+    "Babel>=2.14.0",
+]
+
+# Database migrations
+migrations = [
+    "Flask-Migrate>=4.0.5",
+    "Alembic>=1.13.0",
+]
+
+# OCR fallback engines
+ocr = [
+    "easyocr>=1.7.0",
+    "paddlepaddle>=2.5.0",
+    "paddleocr>=2.7.0",
+    "transformers>=4.21.0",
+    "torch>=1.12.0",
+    "torchvision>=0.13.0",
+    "pytesseract>=0.3.10",
+]
+
+# Testing
+test = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.23.0",
+    "factory-boy>=3.3.0",
+    "faker>=22.0.0",
+    "httpx>=0.26.0",
+    "responses>=0.24.0",
+]
+
+# Code quality
+quality = [
+    "black>=24.2.0",
+    "isort>=5.13.2",
+    "flake8>=7.0.0",
+    "pylint>=3.0.0",
+    "mypy>=1.8.0",
+    "bandit>=1.7.5",
+    "pre-commit>=3.6.0",
+]
+
+# Type stubs
+types = [
+    "types-requests>=2.31.0",
+    "types-python-dateutil>=2.8.19",
+    "types-PyYAML>=6.0.12",
+    "types-Pillow>=10.2.0",
+    "types-cryptography>=3.3.23",
+]
+
+# Documentation
+docs = [
+    "sphinx>=7.2.0",
+    "sphinx-rtd-theme>=2.0.0",
+    "sphinx-autodoc-typehints>=1.25.0",
+]
+
+# Security scanning
+security = [
+    "safety>=3.0.0",
+    "pip-audit>=2.6.0",
+    "bandit>=1.7.5",
+]
+
+# Development tools
+dev = [
+    "exam-grader[test,quality,types,docs,security]",
+    "ipdb>=0.13.13",
+    "flask-debugtoolbar>=0.15.0",
+]
+
+# All optional features
+all = [
+    "exam-grader[data,async,pdf,performance,i18n,migrations,ocr]",
+]
+
+# Full development setup
+full = [
+    "exam-grader[all,dev]",
+]
+
+[project.urls]
+Homepage = "https://github.com/examgrader/exam-grader"
+Documentation = "https://examgrader.readthedocs.io/"
+Repository = "https://github.com/examgrader/exam-grader"
+"Bug Tracker" = "https://github.com/examgrader/exam-grader/issues"
+Changelog = "https://github.com/examgrader/exam-grader/blob/main/CHANGELOG.md"
+
+[project.scripts]
+exam-grader = "run_app:main"
+exam-grader-simple = "run_simple:main"
+
+[tool.setuptools.packages.find]
+include = ["src*", "webapp*", "utils*"]
+
+[tool.setuptools.package-data]
+webapp = ["templates/**/*.html", "static/**/*"]
+src = ["config/**/*.json", "config/**/*.yaml"]
+
+# Black configuration
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | node_modules
+)/
+'''
+
+# isort configuration
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["src", "webapp", "utils"]
+known_third_party = ["flask", "sqlalchemy", "requests", "openai"]
+
+# MyPy configuration
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "fitz.*",
+    "docx.*",
+    "magic.*",
+    "socketio.*",
+    "flask_socketio.*",
+]
+ignore_missing_imports = true
+
+# Pytest configuration
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["src", "webapp", "utils"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+# Bandit security linter configuration
+[tool.bandit]
+exclude_dirs = ["tests", "node_modules"]
+skips = ["B101", "B601"]  # Skip assert_used and shell_injection for tests

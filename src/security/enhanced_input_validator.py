@@ -3,15 +3,13 @@
 This module provides comprehensive input validation and sanitization
 for all user inputs, including forms, files, and API requests.
 """
+from typing import Any, Dict, List, Optional, Tuple
 
 import re
 import html
-import json
 import mimetypes
 import hashlib
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, Set
-from urllib.parse import urlparse
 from datetime import datetime
 
 try:
@@ -21,7 +19,6 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 try:
-    from src.exceptions.application_errors import ValidationError, SecurityError
 except ImportError:
     # Fallback error classes
     class ValidationError(Exception):

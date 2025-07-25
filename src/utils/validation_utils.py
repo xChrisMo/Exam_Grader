@@ -3,22 +3,22 @@
 Provides centralized validation functions that can be used across the application
 for consistent content validation, file validation, and duplicate detection.
 """
+from typing import Any, Dict, List, Union
 
 import os
 import hashlib
-from typing import Dict, List, Optional, Tuple, Any, Union
 from pathlib import Path
 from werkzeug.datastructures import FileStorage
 
 from src.services.content_validation_service import ContentValidationService
-from src.database.models import db, Submission, MarkingGuide
+from src.database.models import MarkingGuide
 from utils.logger import logger
 
 
 class ValidationUtils:
     """Utility class for content validation and duplicate detection."""
     
-    # Allowed file extensions for uploads
+    # Allowed file extensions for uploads (all document types with OCR fallback support)
     ALLOWED_EXTENSIONS = {
         'pdf', 'docx', 'doc', 'txt', 'jpg', 'jpeg', 'png', 'tiff', 'bmp'
     }
@@ -220,44 +220,28 @@ class ValidationUtils:
         """
         issues = []
         
-        # Validate student name
-        if not student_name or not student_name.strip():
-            issues.append({
-                'field': 'student_name',
-                'message': 'Student name is required',
-                'severity': 'error'
-            })
-        elif len(student_name.strip()) < 2:
-            issues.append({
-                'field': 'student_name',
-                'message': 'Student name must be at least 2 characters',
-                'severity': 'error'
-            })
-        elif len(student_name) > 200:
-            issues.append({
-                'field': 'student_name',
-                'message': 'Student name too long (maximum 200 characters)',
-                'severity': 'error'
-            })
+        # Validate student name (now optional)
+        if student_name and student_name.strip():
+            if len(student_name.strip()) < 2:
+                issues.append({
+                    'field': 'student_name',
+                    'message': 'Student name must be at least 2 characters',
+                    'severity': 'error'
+                })
+            elif len(student_name) > 200:
+                issues.append({
+                    'field': 'student_name',
+                    'message': 'Student name too long (maximum 200 characters)',
+                    'severity': 'error'
+                })
             
-        # Validate student ID
-        if not student_id or not student_id.strip():
-            issues.append({
-                'field': 'student_id',
-                'message': 'Student ID is required',
-                'severity': 'error'
-            })
-        elif len(student_id.strip()) < 1:
-            issues.append({
-                'field': 'student_id',
-                'message': 'Student ID cannot be empty',
-                'severity': 'error'
-            })
-        elif len(student_id) > 100:
-            issues.append({
-                'field': 'student_id',
-                'message': 'Student ID too long (maximum 100 characters)',
-                'severity': 'error'
+        # Validate student ID (now optional)
+        if student_id and student_id.strip():
+            if len(student_id) > 100:
+                issues.append({
+                    'field': 'student_id',
+                    'message': 'Student ID too long (maximum 100 characters)',
+                    'severity': 'error'
             })
             
         # Validate marking guide ID

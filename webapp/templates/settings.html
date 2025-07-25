@@ -4,379 +4,210 @@
 <div class="max-w-4xl mx-auto">
     <!-- Page Header -->
     <div class="mb-8">
-        <h1 class="text-2xl font-bold text-gray-900" data-i18n="settings_title">Application Settings</h1>
+        <h1 class="text-2xl font-bold text-gray-900" data-i18n="settings_title">Settings</h1>
         <p class="mt-2 text-sm text-gray-600" data-i18n="settings_description">
-            Configure your exam grader application preferences and settings.
+            Configure your exam grader application settings and preferences.
         </p>
     </div>
 
-    <form method="POST" id="settings-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
-        <div class="space-y-8">
-            <!-- File Upload Settings -->
-            <div class="bg-white shadow rounded-lg">
-                <div class="px-4 py-5 sm:p-6">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" data-i18n="file_upload_settings">File Upload Settings</h3>
-                    
-                    <!-- Max File Size -->
-                    <div class="mb-6">
-                        <label for="max_file_size" class="block text-sm font-medium text-gray-700 mb-2" data-i18n="max_file_size">
-                            Maximum File Size (MB)
-                        </label>
-                        <div class="flex items-center space-x-3">
-                            <input type="range" id="max_file_size" name="max_file_size" 
-                                   min="1" max="100" value="{{ settings.max_file_size or 100 }}"
-                                   class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                            <span id="file_size_display" class="text-sm font-medium text-gray-900 min-w-[3rem]">
-                                {{ settings.max_file_size or 100 }}MB
-                            </span>
-                        </div>
-                        <p class="mt-1 text-sm text-gray-500" data-i18n="max_file_size_description">
-                            Maximum size allowed for uploaded files (1-100 MB)
-                        </p>
-                    </div>
-
-                    <!-- Allowed File Formats -->
-                    <div class="mb-6">
-                        <label class="block text-sm font-medium text-gray-700 mb-3" data-i18n="allowed_file_formats">
-                            Allowed File Formats
-                        </label>
-                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                            {% for format in available_formats %}
-                            <label class="flex items-center">
-                                <input type="checkbox" name="allowed_formats" value="{{ format }}"
-                                       {% if format in settings.allowed_formats %}checked{% endif %}
-                                       class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
-                                <span class="ml-2 text-sm text-gray-700 uppercase">{{ format }}</span>
-                            </label>
-                            {% endfor %}
-                        </div>
-                        <p class="mt-2 text-sm text-gray-500" data-i18n="allowed_formats_description">
-                            Select which file formats are allowed for upload
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Processing Settings -->
-            <div class="bg-white shadow rounded-lg">
-                <div class="px-4 py-5 sm:p-6">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Processing Settings</h3>
-                    
-                    <!-- Auto Process -->
-                    <div class="mb-6">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <label for="auto_process" class="text-sm font-medium text-gray-700">
-                                    Auto-process submissions
-                                </label>
-                                <p class="text-sm text-gray-500">
-                                    Automatically start processing when files are uploaded
-                                </p>
-                            </div>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="auto_process" name="auto_process" 
-                                       {% if settings.auto_process %}checked{% endif %}
-                                       class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Save Temp Files -->
-                    <div class="mb-6">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <label for="save_temp_files" class="text-sm font-medium text-gray-700">
-                                    Save temporary files
-                                </label>
-                                <p class="text-sm text-gray-500">
-                                    Keep temporary files for debugging purposes
-                                </p>
-                            </div>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="save_temp_files" name="save_temp_files" 
-                                       {% if settings.save_temp_files %}checked{% endif %}
-                                       class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- User Interface Settings -->
-            <div class="bg-white shadow rounded-lg">
-                <div class="px-4 py-5 sm:p-6">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" data-i18n="ui_settings">User Interface Settings</h3>
-                    
-                    <!-- Notification Level -->
-                    <div class="mb-6">
-                        <label for="notification_level" class="block text-sm font-medium text-gray-700 mb-2" data-i18n="notification_level">
-                            Notification Level
-                        </label>
-                        <select id="notification_level" name="notification_level"
-                                class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                            {% for level in notification_levels %}
-                            <option value="{{ level.value }}" {% if level.value == settings.notification_level %}selected{% endif %}>
-                                {{ level.label }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <p class="mt-1 text-sm text-gray-500" data-i18n="notification_level_description">
-                            Choose which notifications to display
-                        </p>
-                    </div>
-
-                    <!-- Theme -->
-                    <div class="mb-6">
-                        <label for="theme" class="block text-sm font-medium text-gray-700 mb-2" data-i18n="theme">
-                            Theme
-                        </label>
-                        <select id="theme" name="theme"
-                                class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                            {% for theme in themes %}
-                            <option value="{{ theme.value }}" {% if theme.value == settings.theme %}selected{% endif %}>
-                                {{ theme.label }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <p class="mt-1 text-sm text-gray-500" data-i18n="theme_description">
-                            Select your preferred theme
-                        </p>
-                    </div>
-
-                    <!-- Language -->
-                    <div class="mb-6">
-                        <label for="language" class="block text-sm font-medium text-gray-700 mb-2" data-i18n="language">
-                            Language
-                        </label>
-                        <select id="language" name="language"
-                                class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                            {% for lang in languages %}
-                            <option value="{{ lang.value }}" {% if lang.value == settings.language %}selected{% endif %} data-i18n="language_{{ lang.value }}">
-                                {{ lang.label }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <p class="mt-1 text-sm text-gray-500" data-i18n="language_description">
-                            Choose your preferred language
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- AI Configuration Settings -->
-            <div class="bg-white shadow rounded-lg">
-                <div class="px-4 py-5 sm:p-6">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">AI Configuration Settings</h3>
-                    
-                    <!-- LLM API Key -->
-                    <div class="mb-6">
-                        <label for="llm_api_key" class="block text-sm font-medium text-gray-700 mb-2">
-                            LLM API Key (DeepSeek)
-                        </label>
-                        <input type="password" id="llm_api_key" name="llm_api_key" 
-                               value="{{ settings.llm_api_key }}" 
-                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                        <p class="mt-1 text-sm text-gray-500">
-                            API key for the DeepSeek LLM service
-                        </p>
-                    </div>
-
-                    <!-- LLM Model -->
-                    <div class="mb-6">
-                        <label for="llm_model" class="block text-sm font-medium text-gray-700 mb-2">
-                            LLM Model
-                        </label>
-                        <input type="text" id="llm_model" name="llm_model" 
-                               value="{{ settings.llm_model }}" 
-                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                        <p class="mt-1 text-sm text-gray-500">
-                            Model name for the DeepSeek LLM service (e.g., deepseek-reasoner)
-                        </p>
-                    </div>
-                    
-                    <!-- LLM Seed -->
-                    <div class="mb-6">
-                        <label for="llm_seed" class="block text-sm font-medium text-gray-700 mb-2">
-                            LLM Seed
-                        </label>
-                        <input type="number" id="llm_seed" name="llm_seed" 
-                               value="{{ settings.llm_seed }}" 
-                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                        <p class="mt-1 text-sm text-gray-500">
-                            Random seed for deterministic outputs (e.g., 42)
-                        </p>
-                    </div>
-
-                    <!-- LLM Token Limit -->
-                    <!-- <div class="mb-6">
-                        <label for="llm_token_limit" class="block text-sm font-medium text-gray-700 mb-2">
-                            LLM Token Limit
-                        </label>
-                        <input type="number" id="llm_token_limit" name="llm_token_limit" 
-                               value="{{ settings.llm_token_limit }}" 
-                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                        <p class="mt-1 text-sm text-gray-500">
-                            Maximum number of tokens for LLM responses (default: 2048)
-                        </p>
-                    </div> -->
-
-                    <!-- OCR API Key -->
-                    <div class="mb-6">
-                        <label for="ocr_api_key" class="block text-sm font-medium text-gray-700 mb-2">
-                            OCR API Key (HandwritingOCR)
-                        </label>
-                        <input type="password" id="ocr_api_key" name="ocr_api_key" 
-                               value="{{ settings.ocr_api_key }}" 
-                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                        <p class="mt-1 text-sm text-gray-500">
-                            API key for the HandwritingOCR service
-                        </p>
-                    </div>
-
-                    <!-- OCR API URL -->
-                    <div class="mb-6">
-                        <label for="ocr_api_url" class="block text-sm font-medium text-gray-700 mb-2">
-                            OCR API URL
-                        </label>
-                        <input type="text" id="ocr_api_url" name="ocr_api_url" 
-                               value="{{ settings.ocr_api_url }}" 
-                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                        <p class="mt-1 text-sm text-gray-500">
-                            API URL for the HandwritingOCR service
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- System Information -->
-            <div class="bg-white shadow rounded-lg">
-                <div class="px-4 py-5 sm:p-6">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">System Information</h3>
+    <!-- Settings Form -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <form method="POST" id="settings-form">
+                {% if csrf_token %}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                {% endif %}
+                
+                <!-- File Processing Settings -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                        <i class="fas fa-file-upload mr-2"></i>
+                        File Processing Settings
+                    </h3>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Max File Size -->
                         <div>
-                            <dt class="text-sm font-medium text-gray-500">Application Version</dt>
-                            <dd class="mt-1 text-sm text-gray-900">{{ app_version }}</dd>
+                            <label for="max_file_size" class="block text-sm font-medium text-gray-700 mb-2">
+                                Maximum File Size (MB)
+                            </label>
+                            <input type="number" id="max_file_size" name="max_file_size" 
+                                   value="{{ settings.max_file_size }}" min="1" max="500"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
                         </div>
+                        
+                        <!-- Allowed Formats -->
                         <div>
-                            <dt class="text-sm font-medium text-gray-500">Storage Usage</dt>
-                            <dd class="mt-1 text-sm text-gray-900">{{ storage_stats.total_size_mb }}MB / {{ storage_stats.max_size_mb }}MB</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">OCR Service</dt>
-                            <dd class="mt-1">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
-                                    {% if service_status.ocr_status %}bg-success-100 text-success-800{% else %}bg-danger-100 text-danger-800{% endif %}">
-                                    {% if service_status.ocr_status %}Online{% else %}Offline{% endif %}
-                                </span>
-                            </dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">AI Service</dt>
-                            <dd class="mt-1">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
-                                    {% if service_status.llm_status %}bg-success-100 text-success-800{% else %}bg-danger-100 text-danger-800{% endif %}">
-                                    {% if service_status.llm_status %}Online{% else %}Offline{% endif %}
-                                </span>
-                            </dd>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Allowed File Formats
+                            </label>
+                            <div class="space-y-2">
+                                {% for format in available_formats %}
+                                <label class="inline-flex items-center mr-4">
+                                    <input type="checkbox" name="allowed_formats" value="{{ format }}"
+                                           {% if format in settings.allowed_formats %}checked{% endif %}
+                                           class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                    <span class="ml-2 text-sm text-gray-700">{{ format }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Action Buttons -->
-            <div class="flex items-center justify-between">
-                <a href="{{ url_for('dashboard') }}" 
-                   class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                    </svg>
-                    Back to Dashboard
-                </a>
-                
-                <div class="flex space-x-3">
-                    <button type="button" id="reset-settings" 
-                            class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                        Reset to Defaults
-                    </button>
+                <!-- API Configuration -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                        <i class="fas fa-key mr-2"></i>
+                        API Configuration
+                    </h3>
                     
+                    <div class="grid grid-cols-1 gap-6">
+                        <!-- LLM API Settings -->
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <h4 class="text-md font-medium text-gray-800 mb-3">LLM Service (DeepSeek)</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="llm_api_key" class="block text-sm font-medium text-gray-700 mb-2">
+                                        API Key
+                                    </label>
+                                    <input type="password" id="llm_api_key" name="llm_api_key" 
+                                           value="{{ settings.llm_api_key }}"
+                                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                           placeholder="Enter DeepSeek API key">
+                                </div>
+                                <div>
+                                    <label for="llm_model" class="block text-sm font-medium text-gray-700 mb-2">
+                                        Model
+                                    </label>
+                                    <input type="text" id="llm_model" name="llm_model" 
+                                           value="{{ settings.llm_model }}"
+                                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- OCR API Settings -->
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <h4 class="text-md font-medium text-gray-800 mb-3">OCR Service</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="ocr_api_key" class="block text-sm font-medium text-gray-700 mb-2">
+                                        API Key
+                                    </label>
+                                    <input type="password" id="ocr_api_key" name="ocr_api_key" 
+                                           value="{{ settings.ocr_api_key }}"
+                                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                           placeholder="Enter HandwritingOCR API key">
+                                </div>
+                                <div>
+                                    <label for="ocr_api_url" class="block text-sm font-medium text-gray-700 mb-2">
+                                        API URL
+                                    </label>
+                                    <input type="url" id="ocr_api_url" name="ocr_api_url" 
+                                           value="{{ settings.ocr_api_url }}"
+                                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- UI Preferences -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                        <i class="fas fa-palette mr-2"></i>
+                        User Interface
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- Theme -->
+                        <div>
+                            <label for="theme" class="block text-sm font-medium text-gray-700 mb-2">
+                                Theme
+                            </label>
+                            <select id="theme" name="theme" 
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                {% for theme in themes %}
+                                <option value="{{ theme.value }}" {% if theme.value == settings.theme %}selected{% endif %}>
+                                    {{ theme.label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- Language -->
+                        <div>
+                            <label for="language" class="block text-sm font-medium text-gray-700 mb-2">
+                                Language
+                            </label>
+                            <select id="language" name="language" 
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                {% for language in languages %}
+                                <option value="{{ language.value }}" {% if language.value == settings.language %}selected{% endif %}>
+                                    {{ language.label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- Notifications -->
+                        <div>
+                            <label for="notification_level" class="block text-sm font-medium text-gray-700 mb-2">
+                                Notifications
+                            </label>
+                            <select id="notification_level" name="notification_level" 
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                {% for level in notification_levels %}
+                                <option value="{{ level.value }}" {% if level.value == settings.notification_level %}selected{% endif %}>
+                                    {{ level.label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Service Status -->
+                {% if service_status %}
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                        <i class="fas fa-server mr-2"></i>
+                        Service Status
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {% for service, status in service_status.items() %}
+                        <div class="flex items-center p-3 border border-gray-200 rounded-lg">
+                            <div class="flex-shrink-0">
+                                {% if status %}
+                                <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                                {% else %}
+                                <div class="w-3 h-3 bg-red-500 rounded-full"></div>
+                                {% endif %}
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900">{{ service.replace('_', ' ').title() }}</p>
+                                <p class="text-xs text-gray-500">
+                                    {% if status %}Online{% else %}Offline{% endif %}
+                                </p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Submit Button -->
+                <div class="flex justify-end">
                     <button type="submit" 
-                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
+                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <i class="fas fa-save mr-2"></i>
                         Save Settings
                     </button>
                 </div>
-            </div>
+            </form>
         </div>
-    </form>
+    </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const fileSizeSlider = document.getElementById('max_file_size');
-    const fileSizeDisplay = document.getElementById('file_size_display');
-    const resetButton = document.getElementById('reset-settings');
-    const settingsForm = document.getElementById('settings-form');
-
-    // Update file size display
-    fileSizeSlider.addEventListener('input', function() {
-        fileSizeDisplay.textContent = this.value + 'MB';
-    });
-
-    // Reset settings
-    resetButton.addEventListener('click', function() {
-        if (confirm('Are you sure you want to reset all settings to their default values?')) {
-            // Reset form to defaults from server config
-            const defaultFileSize = {{ config.files.max_file_size_mb | default(20, true) | int }};
-            fileSizeSlider.value = defaultFileSize;
-            fileSizeDisplay.textContent = defaultFileSize + 'MB';
-
-            // Reset checkboxes
-            document.querySelectorAll('input[name="allowed_formats"]').forEach(cb => {
-                const defaultFormats = {{ (config.files.supported_formats if config and config.files and config.files.supported_formats else ['pdf', 'docx', 'doc', 'jpg', 'jpeg', 'png', 'tiff', 'bmp', 'gif']) | tojson }};
-                cb.checked = defaultFormats.includes(cb.value);
-            });
-            
-            document.getElementById('auto_process').checked = true;
-            document.getElementById('save_temp_files').checked = false;
-            document.getElementById('notification_level').value = 'all';
-            document.getElementById('theme').value = 'light';
-            document.getElementById('language').value = 'en';
-            document.getElementById('llm_seed').value = '42';
-        }
-    });
-
-    // Form validation
-    settingsForm.addEventListener('submit', function(e) {
-        const checkedFormats = document.querySelectorAll('input[name="allowed_formats"]:checked');
-        if (checkedFormats.length === 0) {
-            e.preventDefault();
-            alert('Please select at least one file format.');
-            return;
-        }
-        
-        // Save settings to localStorage
-        const notificationLevel = document.getElementById('notification_level').value;
-        const theme = document.getElementById('theme').value;
-        const language = document.getElementById('language').value;
-        
-        localStorage.setItem('notification_level', notificationLevel);
-        localStorage.setItem('theme', theme);
-        localStorage.setItem('language', language);
-        
-        // Apply theme and language immediately
-        if (typeof SettingsManager !== 'undefined') {
-            SettingsManager.applyTheme();
-            SettingsManager.applyLanguage();
-        }
-    });
-});
-</script>
 {% endblock %}

@@ -1,9 +1,9 @@
 """Optimized Background Tasks with enhanced pipeline orchestration and progress tracking."""
+from typing import List
 
 import json
 import time
 from datetime import datetime
-from typing import Dict, List, Optional, Any
 
 from celery import Celery
 from celery.utils.log import get_task_logger

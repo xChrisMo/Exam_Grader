@@ -4,11 +4,11 @@ Circuit Breaker Pattern Implementation for External API Calls.
 This module provides a circuit breaker to prevent cascading failures
 when external services (LLM, OCR) are unavailable or slow.
 """
+from typing import Any
 
 import time
 import threading
 from enum import Enum
-from typing import Any, Callable, Optional
 from dataclasses import dataclass
 from functools import wraps
 

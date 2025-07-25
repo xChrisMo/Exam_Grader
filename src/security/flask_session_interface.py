@@ -1,7 +1,5 @@
-import json
+from typing import Any, Dict
 from datetime import datetime, timedelta
-import uuid
-from typing import Optional, Dict, Any
 
 from flask.sessions import SessionInterface, SessionMixin
 from werkzeug.datastructures import CallbackDict

@@ -3,18 +3,16 @@
 This module provides comprehensive performance optimization including caching,
 database optimization, resource management, and monitoring.
 """
+from typing import Any, Dict, List, Optional, Tuple, Callable
 
-import os
 import time
 import psutil
 import threading
-from typing import Dict, List, Optional, Any, Callable, Tuple
+import gc
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
-from functools import wraps, lru_cache
 from collections import defaultdict, deque
-import weakref
-import gc
+from functools import wraps
 
 try:
     from utils.logger import logger
@@ -25,6 +23,9 @@ except ImportError:
 try:
     import redis
     REDIS_AVAILABLE = True
+except ImportError:
+    redis = None
+    REDIS_AVAILABLE = False
 except ImportError:
     REDIS_AVAILABLE = False
     logger.warning("Redis not available, using in-memory cache only")

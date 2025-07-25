@@ -1,10 +1,10 @@
 """Standardized API response models for consistent response formatting."""
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
 import json
 from enum import Enum
+from typing import Optional, Dict, Any, List
 
 
 class ResponseStatus(Enum):

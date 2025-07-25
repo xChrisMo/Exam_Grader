@@ -10,9 +10,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Callable, Any
 from dataclasses import dataclass, field
 
-from src.config.unified_config import config
 from src.services.base_service import BaseService, ServiceStatus
-from utils.cache import cache_get, cache_set, cache_clear
 from utils.logger import logger
 
 

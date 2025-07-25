@@ -5,10 +5,7 @@ sandboxed processing, and malware detection capabilities.
 """
 
 import os
-import shutil
 import tempfile
-import hashlib
-import mimetypes
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, BinaryIO
 from datetime import datetime, timedelta
@@ -21,8 +18,7 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 try:
-    from src.security.enhanced_input_validator import FileValidator, validate_file_upload
-    from src.exceptions.application_errors import SecurityError, ValidationError
+    from src.exceptions.application_errors import SecurityError
 except ImportError:
     # Fallback implementations
     class SecurityError(Exception):

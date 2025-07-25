@@ -11,7 +11,7 @@ from flask import Blueprint, render_template, request, jsonify, session, current
 from flask_login import login_required, current_user
 from src.database.models import Submission, MarkingGuide, GradingSession, GradingResult
 from src.database import db
-from src.services.refactored_unified_ai_service import RefactoredUnifiedAIService
+from src.services.unified_ai_service import UnifiedAIService
 from datetime import datetime
 import logging
 
@@ -20,7 +20,7 @@ refactored_bp = Blueprint('refactored', __name__, url_prefix='/refactored')
 logger = logging.getLogger(__name__)
 
 # Initialize services
-ai_service = RefactoredUnifiedAIService()
+ai_service = UnifiedAIService()
 
 # Import ProgressTracker
 from src.services.progress_tracker import ProgressTracker
@@ -69,18 +69,27 @@ def ai_processing():
 def get_submissions():
     """Get user's submissions for the form dropdown."""
     try:
-        submissions = Submission.query.filter_by(
-            user_id=current_user.id
-        ).order_by(Submission.created_at.desc()).all()
+        # Get marking_guide_id from query parameters
+        marking_guide_id = request.args.get('marking_guide_id')
+        
+        # Build query
+        query = Submission.query.filter_by(user_id=current_user.id)
+        
+        # Filter by marking guide if provided
+        if marking_guide_id:
+            query = query.filter_by(marking_guide_id=marking_guide_id)
+        
+        submissions = query.order_by(Submission.created_at.desc()).all()
         
         submissions_data = []
         for submission in submissions:
             submissions_data.append({
                 'id': submission.id,
                 'filename': submission.filename,
+                'student_name': submission.student_name,
                 'created_at': submission.created_at.isoformat(),
                 'processing_status': submission.processing_status,
-                'has_ocr_text': bool(submission.ocr_text)
+                'has_content_text': bool(submission.content_text)
             })
         
         return jsonify({
@@ -106,12 +115,33 @@ def get_marking_guides():
         
         guides_data = []
         for guide in guides:
+            # Safely calculate questions count and total marks
+            questions_count = 0
+            total_marks = 0
+            
+            if guide.questions and isinstance(guide.questions, list):
+                questions_count = len(guide.questions)
+                try:
+                    # Safely calculate total marks, handling potential data corruption
+                    for q in guide.questions:
+                        if isinstance(q, dict) and 'marks' in q:
+                            marks = q.get('marks', 0)
+                            if isinstance(marks, (int, float)):
+                                total_marks += marks
+                except (TypeError, AttributeError) as e:
+                    logger.warning(f"Error calculating total marks for guide {guide.id}: {str(e)}")
+                    total_marks = guide.total_marks or 0
+            else:
+                # Fallback to stored total_marks if questions data is corrupted
+                total_marks = guide.total_marks or 0
+            
             guides_data.append({
                 'id': guide.id,
                 'title': guide.title,
                 'created_at': guide.created_at.isoformat(),
                 'max_questions_to_answer': guide.max_questions_to_answer,
-                'question_count': len(guide.questions) if guide.questions else 0
+                'questions_count': questions_count,
+                'total_marks': total_marks
             })
         
         return jsonify({
@@ -265,11 +295,11 @@ def validate_selection():
                 'error': 'Marking guide not found or access denied'
             }), 404
         
-        # Check if submission has OCR text
-        if not submission.ocr_text:
+        # Check if submission has content text
+        if not submission.content_text:
             return jsonify({
                 'success': False,
-                'error': 'Submission does not have OCR text. Please process OCR first.'
+                'error': 'Submission does not have content text. Please process OCR first.'
             }), 400
         
         # Check if guide has questions
@@ -286,17 +316,24 @@ def validate_selection():
             status='in_progress'
         ).first()
         
+        # Safely calculate questions count
+        questions_count = 0
+        if guide.questions and isinstance(guide.questions, list):
+            questions_count = len(guide.questions)
+        elif guide.questions and isinstance(guide.questions, dict):
+            questions_count = len(guide.questions.get('questions', []))
+        
         validation_result = {
             'submission': {
                 'id': submission.id,
                 'filename': submission.filename,
-                'has_ocr_text': bool(submission.ocr_text)
+                'has_content_text': bool(submission.content_text)
             },
             'guide': {
                 'id': guide.id,
                 'title': guide.title,
                 'max_questions_to_answer': guide.max_questions_to_answer,
-                'question_count': len(guide.questions)
+                'question_count': questions_count
             },
             'existing_session': {
                 'id': existing_session.id,

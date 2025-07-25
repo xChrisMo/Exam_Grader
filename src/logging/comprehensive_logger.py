@@ -7,7 +7,6 @@ structured logging, performance monitoring, security logging, and audit trails.
 
 import json
 import logging
-import os
 import sys
 import time
 import traceback
@@ -16,12 +15,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass, field
-from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from threading import Lock
+from logging.handlers import RotatingFileHandler
 
 # Try to import enhanced error handling
 try:
-    from src.exceptions.application_errors import ApplicationError
     from src.exceptions.error_tracker import ErrorTracker
     ENHANCED_ERROR_HANDLING_AVAILABLE = True
 except ImportError:

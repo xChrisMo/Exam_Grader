@@ -1,8 +1,8 @@
 """Flask integration for standardized error handling."""
+from typing import Any, Dict, Optional, Tuple
 
 import logging
 from functools import wraps
-from typing import Any, Dict, Optional, Tuple, Union
 from flask import Flask, request, jsonify, render_template
 from werkzeug.exceptions import HTTPException
 

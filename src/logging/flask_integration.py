@@ -6,23 +6,34 @@ request/response logging, error handling, and performance monitoring.
 
 import time
 import uuid
-from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Dict, Optional, Callable, List
-from flask import Flask, request, g, current_app, session
 from werkzeug.exceptions import HTTPException
 import psutil
 import os
 
 try:
+    from flask import Flask, request, g, session
+except ImportError:
+    from typing import TYPE_CHECKING
+    if TYPE_CHECKING:
+        from flask import Flask
+    else:
+        Flask = None
+    request = None
+    g = None
+    session = None
+
+try:
     from .comprehensive_logger import ComprehensiveLogger, LogLevel, LogContext
-    from .structured_logger import StructuredLogger, get_structured_logger
+    from .structured_logger import get_structured_logger
     from ..exceptions.application_errors import ApplicationError
 except ImportError:
     # Fallback imports for standalone usage
     ComprehensiveLogger = None
     LogLevel = None
     LogContext = None
+    get_structured_logger = None
     StructuredLogger = None
     get_structured_logger = None
     ApplicationError = Exception

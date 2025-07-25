@@ -3,10 +3,10 @@
 This module provides comprehensive monitoring endpoints for security events,
 performance metrics, and system health monitoring.
 """
+from typing import Any, Dict
 
 import os
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
 from flask import Blueprint, request, jsonify, g
 from functools import wraps
 
@@ -20,7 +20,6 @@ try:
     from src.security.auth_system import require_auth, require_permission, require_role, Permission, UserRole
     from src.security.security_config import get_security_config
     from src.performance.optimization_manager import get_performance_optimizer
-    from src.exceptions.application_errors import AuthorizationError, ValidationError
 except ImportError:
     # Fallback implementations
     def require_auth(f):
@@ -513,7 +512,8 @@ def _get_uptime() -> str:
         uptime_seconds = process.create_time()
         uptime_delta = datetime.now().timestamp() - uptime_seconds
         return str(timedelta(seconds=int(uptime_delta)))
-    except:
+    except (ImportError, Exception) as e:
+        logger.debug(f"Error getting uptime: {str(e)}")
         return "unknown"
 
 

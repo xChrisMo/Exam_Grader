@@ -2,101 +2,120 @@
 """
 Exam Grader Flask Web Application
 Modern educational assessment platform with AI-powered grading capabilities.
+
+This module provides the main Flask application with comprehensive features including:
+- AI-powered exam grading
+- OCR text extraction
+- Real-time progress tracking
+- Secure file handling
+- User authentication and session management
 """
 
-# Exam Grader Flask Web Application initialization
-
-import os
-import sys
+# Standard library imports
+import atexit
 import json
+import os
+import signal
+import sys
 import time
 import uuid
+import threading
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
-
-
-from utils.error_handler import add_recent_activity
-
-
-
-# Load environment variables
+# Third-party imports
 from dotenv import load_dotenv
+from flask import (
+    Flask,
+    abort,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from werkzeug.exceptions import RequestEntityTooLarge
+from flask_babel import Babel
+from flask_login import LoginManager, current_user
+from flask_wtf.csrf import CSRFError, CSRFProtect
+from sqlalchemy.exc import SQLAlchemyError
+from werkzeug.utils import secure_filename
 
-
+# Load environment variables early
 load_dotenv()
-
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-
-# Flask imports
-from flask import (
-    Flask,
-    render_template,
-    request,
-    redirect,
-    url_for,
-    flash,
-    session,
-    jsonify,
-    abort,
-)
-from sqlalchemy.exc import SQLAlchemyError
-from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField
-from wtforms.validators import DataRequired
-from flask_login import current_user, LoginManager
-from flask_wtf.csrf import CSRFProtect, CSRFError
-from werkzeug.utils import secure_filename
-from flask_babel import Babel, _
-# from flask_limiter import Limiter
-# from flask_limiter.util import get_remote_address
-# Redis removed - no longer needed
-from celery.result import AsyncResult
-from src.services.realtime_service import socketio
-
-
-# Project imports
+# Local imports
 from src.config.logging_config import create_startup_summary
+from src.services.realtime_service import socketio
+from utils.error_handler import add_recent_activity
 
 
+# Project-specific imports
 try:
+    # Configuration
     from src.config.unified_config import UnifiedConfig
+
+    # Database
     from src.database import (
-        db,
-        User,
+        DatabaseUtils,
+        GradingResult,
         MarkingGuide,
         Submission,
-        GradingResult,
-        DatabaseUtils,
+        User,
+        db,
     )
-    from src.security.session_manager import SecureSessionManager
-    from src.security.secrets_manager import secrets_manager, initialize_secrets
+
+    # Security
     from src.security.flask_session_interface import SecureSessionInterface
-    from src.services.ocr_service import OCRService
+    from src.security.secrets_manager import initialize_secrets, secrets_manager
+    from src.security.session_manager import SecureSessionManager
+
+    # Services
+    from src.services.file_cleanup_service import FileCleanupService
+    from src.services.grading_service import GradingService
     from src.services.llm_service import LLMService
     from src.services.mapping_service import MappingService
-    from src.services.grading_service import GradingService
-    from src.services.file_cleanup_service import FileCleanupService
-    from src.parsing.parse_submission import parse_student_submission
+    from src.services.ocr_service import OCRService
+    from src.services.training_service import training_service
+    from src.services.report_service import report_service
+
+    # Parsing
     from src.parsing.parse_guide import parse_marking_guide
+    from src.parsing.parse_submission import parse_student_submission
+
+    # Utilities
+    from utils.input_sanitizer import sanitize_form_data, validate_file_upload
+    from utils.loading_states import get_loading_state_for_template, loading_manager
     from utils.logger import logger
+
+    # Authentication
+    from webapp.auth import get_current_user, init_auth, login_required
+
     # Handle case where logger might be None
     if logger is None:
         import logging
         logger = logging.getLogger(__name__)
-    from utils.input_sanitizer import sanitize_form_data, validate_file_upload
-    from utils.loading_states import loading_manager, get_loading_state_for_template
-    from webapp.auth import init_auth, login_required, get_current_user
 
 except ImportError as e:
     # Use stderr for critical errors before logger is initialized
     sys.stderr.write(f"ERROR: Failed to import required modules: {e}\n")
     sys.exit(1)
+
+# Initialize secrets manager early
+try:
+    initialize_secrets()
+    logger.info("Secrets manager initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize secrets manager: {str(e)}")
+    # Continue without secrets manager - will fall back to environment variables
 
 # Temporary inline function to avoid import issues
 def is_guide_in_use(guide_id):
@@ -132,6 +151,30 @@ if 'app' not in globals():
     # Initialize Flask application
     # Configure static folder path relative to webapp directory
     app = Flask(__name__, static_folder='static', static_url_path='/static')
+
+    # Apply security hardening for production
+    try:
+        from webapp.security_middleware import add_security_headers
+        add_security_headers(app)
+        logger.info("Security middleware applied successfully")
+    except ImportError:
+        logger.warning("Security middleware not found - this is normal in development")
+
+    # Add caching headers for static files
+    @app.after_request
+    def add_cache_headers(response):
+        """Add appropriate cache headers for static files."""
+        if request.endpoint == 'static':
+            # Cache static files for 1 hour
+            response.cache_control.max_age = 3600
+            response.cache_control.public = True
+        elif request.path.startswith('/api/'):
+            # Don't cache API responses
+            response.cache_control.no_cache = True
+            response.cache_control.no_store = True
+            response.cache_control.must_revalidate = True
+        return response
+
 else:
     logger.info("Flask app already initialized, skipping re-initialization")
 
@@ -139,21 +182,13 @@ else:
 app.config['BABEL_DEFAULT_LOCALE'] = 'en'
 app.config['BABEL_DEFAULT_TIMEZONE'] = 'UTC'
 
-# Initialize Babel without using the decorator
-# NOTE: This initialization pattern is used for compatibility with Flask 2.3.x and Flask-Babel 2.0.0
-# If upgrading to Flask 3.x, use the locale_selector parameter in init_app instead
-babel = Babel()
-babel.init_app(app)
-
 # Define locale selector function
 def get_locale():
-    # You can try to get the language from the request, user settings, etc.
-    # For now, we'll just return 'en' as a default.
-    return 'en'
+    return session.get('locale', 'en')
 
-# Manually set the locale selector
-# This is the Flask 2.3.x compatible way to set the locale selector
-babel.locale_selector_func = get_locale
+# Initialize Babel with the new API for Flask 3.x
+babel = Babel()
+babel.init_app(app, locale_selector=get_locale)
 
 # Load and validate configuration
 try:
@@ -178,14 +213,23 @@ try:
         WTF_CSRF_ENABLED=True,
         WTF_CSRF_CHECK_DEFAULT=True,
         WTF_CSRF_SSL_STRICT=False,  # Allow CSRF token with HTTP
-        CSRF_COOKIE_NAME='secure_csrf_token',
+        WTF_CSRF_TIME_LIMIT=86400,  # 24 hours
+        WTF_CSRF_METHODS=['POST', 'PUT', 'PATCH', 'DELETE'],
+        WTF_CSRF_HEADERS=['X-CSRFToken', 'X-CSRF-Token'],
+        WTF_CSRF_FIELD_NAME='csrf_token',
+        # Session-based CSRF tokens (more reliable than cookies)
+        WTF_CSRF_SECRET_KEY=app.config.get('SECRET_KEY'),
+        # Disable CSRF session protection to avoid conflicts with custom session interface
+        WTF_CSRF_SESSION_KEY=None,
+        # Add missing CSRF cookie configuration
+        CSRF_COOKIE_NAME='csrf_token',
+        CSRF_TIME_LIMIT=86400,
+        CSRF_COOKIE_SECURE=False,  # Set to True in production with HTTPS
         CSRF_COOKIE_HTTPONLY=True,
-        CSRF_COOKIE_SECURE=False,
-        CSRF_COOKIE_SAMESITE='Lax',
-        CSRF_TIME_LIMIT=86400
+        CSRF_COOKIE_SAMESITE='Lax'
     )
-    
-    logger.info(f"CSRF protection initialized with settings: {app.config['CSRF_COOKIE_NAME']}, Timeout: {app.config['CSRF_TIME_LIMIT']}s")
+
+    logger.info(f"CSRF protection initialized with cookie: {app.config['CSRF_COOKIE_NAME']}, Timeout: {app.config['CSRF_TIME_LIMIT']}s")
 except Exception as e:
     logger.critical(f"Failed to initialize CSRF protection: {str(e)}")
     sys.stderr.write(f"CRITICAL ERROR: Failed to initialize CSRF protection: {e}\n")
@@ -290,20 +334,14 @@ try:
         # Validate session using custom session manager
         from flask import session
         
-        logger.debug(f"user_loader called with user_id: {user_id}")
-        
         session_user_id = session.get("user_id")
         session_sid = getattr(session, 'sid', None)
-        
-        logger.debug(f"user_loader: session_user_id={session_user_id}, session_sid={session_sid}")
-        
+
         # Check if user_id matches session and session is valid
         if not session_user_id or str(session_user_id) != str(user_id):
-            logger.debug(f"user_loader: user_id mismatch or missing session_user_id")
             return None
-            
+
         if not session_sid:
-            logger.debug(f"user_loader: missing session_sid")
             return None
             
         try:
@@ -313,14 +351,11 @@ try:
                 return None
                 
             secure_session = session_manager.get_session(session_sid)
-            logger.debug(f"user_loader: secure_session exists: {secure_session is not None}")
-            
+
             if not secure_session or secure_session.get('user_id') != session_user_id:
-                logger.debug(f"user_loader: invalid secure session or user_id mismatch")
                 return None
-                
+
             user = User.query.get(user_id)
-            logger.debug(f"user_loader: returning user: {user.username if user else None}")
             return user
         except Exception as e:
             logger.error(f"Error in user_loader: {str(e)}")
@@ -410,6 +445,8 @@ try:
             if 'websocket_manager' in locals():
                 persistent_progress_tracker.websocket_manager = websocket_manager
                 logger.info("Persistent progress tracker WebSocket manager integration completed")
+        except ImportError as import_error:
+            logger.warning(f"Could not import persistent progress tracker: {import_error}")
         except Exception as persistent_error:
             logger.warning(f"Could not integrate WebSocket manager with persistent progress tracker: {persistent_error}")
             
@@ -470,13 +507,13 @@ except Exception as e:
     logger.error(f"Failed to register unified API router: {str(e)}")
     # Don't exit - this is not critical for basic functionality
 
-# Register LLM Training API blueprint
+# Register LLM Training routes blueprint
 try:
-    from webapp.api import api_bp
-    app.register_blueprint(api_bp)
-    logger.info("LLM Training API blueprint registered")
+    from webapp.llm_training_routes import llm_training_bp
+    app.register_blueprint(llm_training_bp)
+    logger.info("LLM Training routes blueprint registered")
 except Exception as e:
-    logger.error(f"Failed to register LLM Training API blueprint: {str(e)}")
+    logger.error(f"Failed to register LLM Training routes blueprint: {str(e)}")
     # Don't exit - this is not critical for basic functionality
 
 # Register monitoring endpoints blueprint
@@ -495,8 +532,9 @@ def inject_csrf_token():
     from flask_wtf.csrf import generate_csrf
     try:
         # Generate the token and return it as a string
-        logger.debug("Injecting CSRF token into template context")
-        return dict(csrf_token=generate_csrf())
+        token = generate_csrf()
+        logger.debug(f"Generated CSRF token: {token[:8]}... for request {request.path}")
+        return dict(csrf_token=token)
     except Exception as e:
         logger.error(f"Failed to inject CSRF token: {str(e)}")
         return dict(csrf_token=None)
@@ -532,7 +570,7 @@ def get_csrf_token():
     from flask_wtf.csrf import generate_csrf
     try:
         token = generate_csrf()
-        logger.debug("Generated fresh CSRF token via API endpoint")
+        logger.debug(f"Generated fresh CSRF token via endpoint: {token[:8]}...")
         
         # Set response headers to prevent caching
         response = jsonify({'csrf_token': token})
@@ -569,7 +607,7 @@ if 'services_initialized' not in globals():
     try:
         ocr_api_key = secrets_manager.get_secret("HANDWRITING_OCR_API_KEY")
         llm_api_key = secrets_manager.get_secret("DEEPSEEK_API_KEY")
-        ocr_service = OCRService(api_key=ocr_api_key) if ocr_api_key else None
+        ocr_service = OCRService(api_key=ocr_api_key, enable_fallback=False) if ocr_api_key else None
         llm_service = LLMService(api_key=llm_api_key) if llm_api_key else None
         mapping_service = MappingService(llm_service=llm_service)
         grading_service = GradingService(
@@ -578,6 +616,19 @@ if 'services_initialized' not in globals():
 
         file_cleanup_service = FileCleanupService(config)
         file_cleanup_service.start_scheduled_cleanup()
+
+        # Initialize training and report services
+        import asyncio
+        try:
+            # Initialize training service
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(training_service.initialize())
+            loop.run_until_complete(report_service.initialize())
+            loop.close()
+            logger.info("Training and report services initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize training services: {e}")
 
         services_initialized = True
         logger.info("Services initialized")
@@ -596,15 +647,7 @@ else:
     file_cleanup_service = None
     sys.exit(1)
 
-# Add session fix route for debugging
-try:
-    from session_fix_route import add_session_fix_route
-    add_session_fix_route(app)
-    logger.info("Session fix route added successfully")
-except ImportError:
-    logger.warning("Session fix route module not found - this is normal in production")
-except Exception as e:
-    logger.error(f"Failed to add session fix route: {str(e)}")
+
 
 # Utility functions
 
@@ -826,6 +869,8 @@ def not_found(e):
 @app.errorhandler(500)
 def internal_error(e):
     logger.error(f"Internal server error: {str(e)}")
+
+
     return (
         render_template(
             "error.html",
@@ -834,6 +879,34 @@ def internal_error(e):
             service_status=get_service_status(),
         ),
         500,
+    )
+
+
+@app.errorhandler(400)
+def bad_request(e):
+    """Handle bad request errors."""
+    logger.warning(f"Bad request: {str(e)} - URL: {request.url}")
+    return (
+        render_template(
+            "error.html",
+            error_code=400,
+            error_message="Bad request. Please check your input and try again.",
+        ),
+        400,
+    )
+
+
+@app.errorhandler(403)
+def forbidden(e):
+    """Handle forbidden access errors."""
+    logger.warning(f"Forbidden access: {str(e)} - URL: {request.url}")
+    return (
+        render_template(
+            "error.html",
+            error_code=403,
+            error_message="Access forbidden. You don't have permission to access this resource.",
+        ),
+        403,
     )
 
 
@@ -868,47 +941,47 @@ def internal_error(e):
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):
     """Handle CSRF validation errors with improved error reporting."""
-    csrf_cookie = request.cookies.get('secure_csrf_token', 'Not Present')
-    csrf_header = request.headers.get('X-CSRFToken', 'Not Present')
-    session_csrf = session.get('csrf_token', 'Not Present')
-    
     logger.warning(f"CSRF validation error: {str(e)} - IP: {request.remote_addr}")
-    logger.warning(f"CSRF Debug - Cookie: {csrf_cookie}, Header: {csrf_header}, Session: {session_csrf}")
-    logger.warning(f"Request path: {request.path}, Method: {request.method}, Referrer: {request.referrer}")
     
+    # Enhanced debugging for CSRF issues
+    csrf_token_from_form = request.form.get('csrf_token')
+    csrf_token_from_header = request.headers.get('X-CSRFToken') or request.headers.get('X-CSRF-Token')
+    
+    logger.debug(f"CSRF error details - Path: {request.path}, Method: {request.method}")
+    logger.debug(f"Form CSRF token: {csrf_token_from_form[:8] if csrf_token_from_form else 'None'}...")
+    logger.debug(f"Header CSRF token: {csrf_token_from_header[:8] if csrf_token_from_header else 'None'}...")
+    logger.debug(f"Session ID: {session.get('_id', 'None')}")
+
     # Generate a fresh CSRF token for the response
     try:
         from flask_wtf.csrf import generate_csrf
         fresh_token = generate_csrf()
-        logger.debug(f"Generated fresh CSRF token for error response: {fresh_token[:8]}...")
+        logger.debug(f"Generated fresh CSRF token: {fresh_token[:8]}...")
     except Exception as token_error:
         logger.error(f"Failed to generate fresh CSRF token: {str(token_error)}")
         fresh_token = None
-    
+
     if request.is_json or request.path.startswith("/api/"):
         error_response = {
-                    "error": "CSRF token validation failed",
-                    "message": str(e),
-                    "status_code": 400,
-            "csrf_token_refresh_required": True
+            "error": "CSRF token validation failed",
+            "message": str(e),
+            "status_code": 400,
+            "csrf_token_refresh_required": True,
         }
-        
+
         if fresh_token:
             error_response["fresh_csrf_token"] = fresh_token
-            
+
         return jsonify(error_response), 400
     else:
         flash("Your form session has expired. Please refresh the page and try again.", "warning")
-        return (
-            render_template(
-                "error.html",
-                error_code=400,
-                error_message="CSRF token validation failed. Please refresh the page and try again.",
-                service_status=get_service_status(),
-                csrf_token=fresh_token,
-            ),
-            400,
-        )
+        
+        # For login page, redirect back to login with fresh token
+        if request.path == '/auth/login':
+            return redirect(url_for('auth.login'))
+        
+        # For other pages, redirect to the same page
+        return redirect(request.url)
 
 
 # Template context processor
@@ -925,12 +998,24 @@ def inject_globals():
             "total_active_operations": 0,
         }
 
+    # Get file configuration
+    try:
+        max_file_size = getattr(config.files, 'max_file_size_mb', 100) * 1024 * 1024  # Convert MB to bytes
+        allowed_types = getattr(config, 'ALLOWED_FILE_TYPES', [
+            ".pdf", ".docx", ".doc", ".txt", ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".gif"
+        ])
+    except Exception:
+        max_file_size = 100 * 1024 * 1024  # 100MB default
+        allowed_types = [".pdf", ".docx", ".doc", ".txt", ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".gif"]
+
     return {
         "app_version": "2.0.0",
         "current_year": datetime.now().year,
         "service_status": get_service_status(),
         "storage_stats": get_storage_stats(),
         "loading_states": loading_states,
+        "max_file_size": max_file_size,
+        "allowed_types": allowed_types,
     }
 
 
@@ -991,7 +1076,7 @@ def dashboard():
         # Ensure CSRF token is refreshed
         from flask_wtf.csrf import generate_csrf
         csrf_token = generate_csrf()
-        logger.debug(f"Dashboard: Refreshed CSRF token: {csrf_token[:8]}...")
+
 
         logger.info(f"Dashboard: session['guide_id'] is {session.get('guide_id')}")
 
@@ -1110,14 +1195,13 @@ def dashboard():
 def upload_guide():
     """Upload and process marking guide."""
     if request.method == "GET":
-        return render_template("upload_guide.html", page_title="Upload Marking Guide")
+        from flask_wtf.csrf import generate_csrf
+        return render_template("upload_guide.html", page_title="Upload Marking Guide", csrf_token=generate_csrf())
 
-    # CRITICAL DEBUG: This should appear in logs if route is being called
-    logger.info("=== UPLOAD GUIDE ROUTE CALLED ===")
-    logger.info(f"Request method: {request.method}")
-    logger.info(f"Request files: {list(request.files.keys())}")
-    csrf_cookie = request.cookies.get('secure_csrf_token', 'Not Present')
-    csrf_header = request.headers.get('X-CSRFToken', 'Not Present')
+
+    # Log CSRF token information for debugging
+    csrf_cookie = request.cookies.get('csrf_token', 'Not found')
+    csrf_header = request.headers.get('X-CSRFToken', 'Not found')
     logger.info(f"UPLOAD GUIDE: CSRF Cookie: {csrf_cookie}, X-CSRFToken Header: {csrf_header}")
 
     try:
@@ -1141,11 +1225,7 @@ def upload_guide():
         title = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip()
         
-        # Debug: Log form data received
-        logger.info(f"UPLOAD GUIDE DEBUG: Form data received:")
-        logger.info(f"UPLOAD GUIDE DEBUG: title='{title}'")
-        logger.info(f"UPLOAD GUIDE DEBUG: description='{description}'")
-        logger.info(f"UPLOAD GUIDE DEBUG: All form keys: {list(request.form.keys())}")
+
         
         # Validate metadata
         metadata_validation = ValidationUtils.validate_marking_guide_metadata(title, description)
@@ -1165,16 +1245,9 @@ def upload_guide():
 
         # Process guide with LLM extraction
         try:
-            # Debug: Check if parse_marking_guide is available
-            logger.info(
-                f"Debug: parse_marking_guide in globals: {'parse_marking_guide' in globals()}"
-            )
-            logger.info(
-                f"Debug: parse_marking_guide function: {globals().get('parse_marking_guide', 'NOT FOUND')}"
-            )
+
 
             if "parse_marking_guide" in globals():
-                logger.info("Debug: Calling parse_marking_guide function")
                 guide, error_message = parse_marking_guide(file_path)
                 if error_message:
                     flash(f"Error processing guide: {error_message}", "error")
@@ -1187,60 +1260,57 @@ def upload_guide():
                     extraction_method = "none"
 
                     try:
-                        # Debug logging for LLM extraction conditions
-                        logger.info(
-                            f"LLM extraction debug - mapping_service available: {mapping_service is not None}"
-                        )
-                        logger.info(
-                            f"LLM extraction debug - guide.raw_content length: {len(guide.raw_content) if guide.raw_content else 0}"
-                        )
+
 
                         # Import and use the mapping service for LLM extraction
                         if mapping_service and guide.raw_content:
-                            logger.info(
-                                "Using LLM service to extract questions and marks from guide content"
-                            )
-                            logger.info(
-                                f"Guide content preview: {guide.raw_content[:200]}..."
-                            )
 
                             try:
+                                logger.info("Starting LLM extraction from Word document...")
                                 extraction_result = (
                                     mapping_service.extract_questions_and_total_marks(
                                         guide.raw_content
                                     )
                                 )
-                                logger.info(f"LLM extraction result: {extraction_result}")
         
                                 if extraction_result and isinstance(extraction_result, dict):
                                     questions = extraction_result.get("questions", [])
                                     total_marks = extraction_result.get("total_marks", 0)
-                                    extraction_method = extraction_result.get(
-                                        "extraction_method", "llm"
-                                    )
-                                    logger.info(
-                                        f"LLM extraction successful: {len(questions)} questions, {total_marks} total marks"
-                                    )
+                                    extraction_method = extraction_result.get("extraction_method", "llm")
+                                    
+                                    if questions and len(questions) > 0:
+                                        logger.info(f"✓ LLM extraction successful: {len(questions)} questions, {total_marks} total marks")
+                                    else:
+                                        logger.warning(f"⚠ LLM extraction completed but found no questions (document may not contain structured questions)")
+                                        extraction_method = "llm_no_questions"
                                 else:
-                                    raise ValueError("Empty or invalid extraction result")
+                                    logger.warning("⚠ LLM extraction returned empty result")
+                                    questions = []
+                                    total_marks = 0
+                                    extraction_method = "llm_empty"
+                                    
                             except Exception as llm_error:
-                                logger.error(f"LLM extraction failed: {str(llm_error)}")
-                                logger.error(f"LLM extraction error traceback: ", exc_info=True)
+                                error_msg = str(llm_error)
+                                if "timed out" in error_msg.lower() or "timeout" in error_msg.lower():
+                                    logger.error("✗ LLM extraction timed out - document may be too complex")
+                                    flash("AI processing timed out. The document was uploaded but question extraction failed.", "warning")
+                                else:
+                                    logger.error(f"✗ LLM extraction failed: {error_msg}")
+                                    flash("AI extraction failed - document uploaded successfully but questions need manual review", "warning")
+                                
                                 questions = []
                                 total_marks = 0
-                                extraction_method = "error"
-                                flash("AI extraction failed - using basic guide structure", "warning")
-                            else:
-                                logger.warning("LLM extraction returned empty result")
+                                extraction_method = "llm_error"
                         else:
                             if not mapping_service:
-                                logger.warning(
-                                    "LLM service not available - mapping_service is None"
-                                )
+                                logger.warning("⚠ LLM service not available")
+                                flash("AI service unavailable - document uploaded but questions need manual review", "warning")
                             if not guide.raw_content:
-                                logger.warning(
-                                    "No content to extract from - guide.raw_content is empty"
-                                )
+                                logger.warning("⚠ No text content extracted from Word document")
+                                flash("Document appears empty - please check your Word document", "warning")
+                            questions = []
+                            total_marks = 0
+                            extraction_method = "no_service"
 
                     except Exception as llm_error:
                         logger.error(f"LLM extraction failed: {str(llm_error)}")
@@ -1261,12 +1331,6 @@ def upload_guide():
                     return redirect(request.url)
             else:
                 # Create basic guide data structure if parse_marking_guide is not available
-                logger.warning(
-                    "Debug: parse_marking_guide NOT found in globals - using fallback"
-                )
-                logger.warning(
-                    f"Debug: Available globals keys: {list(globals().keys())[:20]}..."
-                )  # Show first 20 keys
                 guide_data = {
                     "filename": filename,
                     "questions": [],
@@ -1281,7 +1345,7 @@ def upload_guide():
             return redirect(request.url)
 
         # Content validation and duplicate detection
-        logger.info("Performing content validation and duplicate detection.")
+        logger.info("🔍 Validating content and checking for duplicates...")
         try:
             content_validation_service = ContentValidationService()
             
@@ -1294,6 +1358,7 @@ def upload_guide():
             )
             
             if not validation_result['success']:
+                logger.error(f"✗ Content validation failed: {validation_result.get('error', 'Unknown error')}")
                 flash(f"Content validation failed: {validation_result['error']}", "error")
                 os.remove(file_path)
                 return redirect(request.url)
@@ -1360,11 +1425,14 @@ def upload_guide():
             # Combine user description with auto description
             final_description = f"{guide_description} | {auto_description}" if guide_description else auto_description
 
+            # Ensure we use the raw content from the parsed guide if available
+            content_text = guide_data.get("raw_content") or validation_result.get('text_content', '')
+            
             # Create marking guide record with content hash for duplicate detection
             marking_guide = MarkingGuide(
                 user_id=current_user.id,
                 title=guide_title,
-                content_text=validation_result['text_content'],
+                content_text=content_text,
                 content_hash=validation_result['content_hash'],
                 description=final_description,
                 filename=filename,
@@ -1401,13 +1469,27 @@ def upload_guide():
         except OSError as e:
             logger.warning(f"Could not remove temporary file {file_path}: {str(e)}")
 
-        flash("Marking guide uploaded and processed successfully!", "success")
-        return redirect(url_for("dashboard"))
+        # Return appropriate response based on request type
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({
+                "status": "success",
+                "success": True,
+                "message": "Marking guide uploaded and processed successfully!"
+            }), 200
+        else:
+            flash("Marking guide uploaded and processed successfully!", "success")
+            return redirect(url_for("dashboard"))
 
     except Exception as e:
         logger.error(f"Error uploading guide: {str(e)}")
-        flash("Error uploading guide. Please try again.", "error")
-        return redirect(request.url)
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({
+                "success": False,
+                "error": "Error uploading guide. Please try again."
+            }), 500
+        else:
+            flash("Error uploading guide. Please try again.", "error")
+            return redirect(request.url)
 
 
 @app.route("/upload-submission", methods=["GET", "POST"])
@@ -1416,18 +1498,33 @@ def upload_submission():
     """Upload and process student submission."""
     from webapp.forms import UploadSubmissionForm
     
+    # Check if guide is uploaded
     if not session.get('guide_uploaded'):
         return redirect(url_for('upload_guide'))
+    
+    # Check if a guide is selected for use
+    if not session.get('guide_id'):
+        flash('No marking guide selected. Please select a guide using "Use Guide" button first.', 'error')
+        return redirect(url_for('dashboard'))
         
     form = UploadSubmissionForm()
     
     # If it's a GET request, render the template
     if request.method == 'GET':
+        from flask_wtf.csrf import generate_csrf
         guide_id = session.get('guide_id')
-        return render_template('upload_submission.html', form=form, guide_id=guide_id)
+        return render_template('upload_submission.html', form=form, guide_id=guide_id, csrf_token=generate_csrf())
 
     # For POST requests, check if it's an AJAX request or regular form submission
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    
+    # Validate that a guide is selected for use (for both AJAX and form submissions)
+    if not session.get('guide_id'):
+        error_message = 'No marking guide selected. Please select a guide using "Use Guide" button first.'
+        if is_ajax:
+            return jsonify({"success": False, "error": error_message, "code": "NO_GUIDE_SELECTED"}), 400
+        flash(error_message, 'error')
+        return redirect(url_for('dashboard'))
     
     # For regular form submissions, validate the form
     if not is_ajax and form.validate_on_submit():
@@ -1441,7 +1538,8 @@ def upload_submission():
         logger.info(f"Request form data: {dict(request.form)}")
         logger.info(f"Request files: {list(request.files.keys())}")
 
-        files = request.files.getlist("file")
+        # Try multiple possible file input names
+        files = request.files.getlist("submission_files") or request.files.getlist("file")
         if not files or all(f.filename == "" for f in files):
             if (
                 request.headers.get("X-Requested-With") == "XMLHttpRequest"
@@ -1457,15 +1555,20 @@ def upload_submission():
         uploaded_count = 0
         failed_count = 0
         submissions_data = session.get("submissions", [])
+        
+        # Track results for multiple file processing
+        processing_results = []
+        file_errors = []
 
         # Import validation utilities
         from src.utils.validation_utils import ValidationUtils
         from src.services.content_validation_service import ContentValidationService
         
-        # Get submission metadata from form
+        # Get submission metadata from form and session
         student_name = request.form.get('student_name', '').strip()
         student_id = request.form.get('student_id', '').strip()
-        marking_guide_id = request.form.get('marking_guide_id', '').strip()
+        # Get marking guide ID from session (the currently selected guide)
+        marking_guide_id = session.get('guide_id', '').strip()
         
         # Validate submission metadata if provided
         if student_name or student_id or marking_guide_id:
@@ -1487,22 +1590,20 @@ def upload_submission():
                 return redirect(request.url)
 
         for file in files:
+            filename = secure_filename(file.filename) if file.filename else "unknown_file"
+            
             # Comprehensive file validation
             file_validation = ValidationUtils.validate_file_upload(file)
             if not file_validation['success']:
-                if (
-                    request.headers.get("X-Requested-With") == "XMLHttpRequest"
-                    or request.content_type == "application/json"
-                ):
-                    return jsonify({
-                        "success": False,
-                        "error": file_validation['error']
-                    }), 400
-                flash(file_validation['error'], "error")
                 failed_count += 1
+                file_errors.append({
+                    'filename': filename,
+                    'error': file_validation['error'],
+                    'type': 'validation_error'
+                })
+                logger.warning(f"File validation failed for {filename}: {file_validation['error']}")
                 continue
 
-            filename = secure_filename(file.filename)
             file_path = os.path.join(
                 temp_dir, f"submission_{uuid.uuid4().hex}_{filename}"
             )
@@ -1517,21 +1618,13 @@ def upload_submission():
                     answers, raw_text, error = parse_student_submission(file_path)
 
                 if error:
-                    if (
-                        request.headers.get("X-Requested-With") == "XMLHttpRequest"
-                        or request.content_type == "application/json"
-                    ):
-                        return (
-                            jsonify(
-                                {
-                                    "success": False,
-                                    "error": f"Error processing {filename}: {error}",
-                                }
-                            ),
-                            400,
-                        )
-                    flash(f"Error processing {filename}: {error}", "error")
                     failed_count += 1
+                    file_errors.append({
+                        'filename': filename,
+                        'error': f"Error processing {filename}: {error}",
+                        'type': 'processing_error'
+                    })
+                    logger.error(f"Error processing {filename}: {error}")
                     os.remove(file_path)
                     continue
                 elif not answers and not raw_text:
@@ -1540,9 +1633,7 @@ def upload_submission():
                 logger.info(
                     f"Before storing in session - filename: {filename}, raw_text length: {len(raw_text) if raw_text else 0}, answers keys: {list(answers.keys()) if answers else 'None'}, parse_submission error: {error}"
                 )
-                logger.debug(
-                    f"Raw text content from parse_student_submission: {raw_text[:500] if raw_text else 'None'}"
-                )
+
 
                 submission_id = str(uuid.uuid4())
 
@@ -1553,14 +1644,20 @@ def upload_submission():
                     # Get file extension for validation
                     file_extension = filename.split('.')[-1].lower() if '.' in filename else 'unknown'
                     
-                    # Validate and check for duplicates
+                    # Debug logging
+                    logger.info(f"Content validation - file: {filename}, extension: {file_extension}, raw_text length: {len(raw_text) if raw_text else 0}")
+                    
+                    # Validate and check for duplicates - pass extracted text if available
                     validation_result = content_validation_service.validate_and_check_duplicates(
                         file_path, 
                         file_extension,
                         user_id=get_current_user().id if get_current_user() else None,
                         check_type='submission',
-                        marking_guide_id=marking_guide_id if marking_guide_id else None
+                        marking_guide_id=marking_guide_id if marking_guide_id else None,
+                        extracted_text=raw_text if raw_text else None
                     )
+                    
+                    logger.info(f"Content validation result: success={validation_result.get('success')}, error={validation_result.get('error')}")
                     
                     if not validation_result['success']:
                         if (
@@ -1576,9 +1673,10 @@ def upload_submission():
                         os.remove(file_path)
                         continue
                         
-                    # Check content quality
+                    # Check content quality - use extracted text if available, otherwise validation result text
+                    text_for_quality_check = raw_text if raw_text else validation_result['text_content']
                     content_quality = ValidationUtils.validate_content_quality(
-                        validation_result['text_content'],
+                        text_for_quality_check,
                         validation_result.get('confidence', 1.0)
                     )
                     
@@ -1751,12 +1849,21 @@ def upload_submission():
             request.headers.get("X-Requested-With") == "XMLHttpRequest"
             or request.content_type == "application/json"
         ):
-            return jsonify({
-                "success": True,
+            response_data = {
+                "status": "success" if uploaded_count > 0 else "partial_failure" if failed_count > 0 else "failure",
+                "success": uploaded_count > 0,
                 "uploaded_count": uploaded_count,
                 "failed_count": failed_count,
+                "total_files": len(files),
                 "message": f"{uploaded_count} submission(s) uploaded successfully" + (f", {failed_count} failed" if failed_count > 0 else "")
-            }), 200
+            }
+            
+            # Include detailed error information for failed files
+            if file_errors:
+                response_data["errors"] = file_errors
+                response_data["detailed_message"] = f"Successfully processed {uploaded_count} files. {failed_count} files failed: " + "; ".join([f"{err['filename']}: {err['error']}" for err in file_errors[:3]]) + ("..." if len(file_errors) > 3 else "")
+            
+            return jsonify(response_data), 200
 
         return redirect(url_for("dashboard"))
 
@@ -1939,7 +2046,7 @@ def view_results():
         # Add timestamp for data freshness tracking
         from src.database.models import GradingResult, MarkingGuide
         
-        # Log all relevant session variables for debugging
+
         last_progress_id = session.get("last_grading_progress_id")
         last_grading_result = session.get('last_grading_result')
         guide_id = session.get('guide_id')
@@ -2733,9 +2840,7 @@ def process_unified_ai():
         guide_id = session.get("guide_id")
         submissions = session.get("submissions", [])
 
-        # Enhanced logging for debugging
-        logger.info(f"Session validation - guide_id: {guide_id}, submissions count: {len(submissions)}")
-        logger.info(f"Session keys: {list(session.keys())}")
+
         
         if not guide_id:
             logger.warning("No guide selected in session")
@@ -3214,9 +3319,7 @@ def marking_guides():
                         "is_session_guide": False,
                     }
                     guides.append(guide_data)
-                    logger.debug(
-                        f"Added guide to list: ID={guide_data['id']}, Title={guide_data['title']}"
-                    )
+
                 logger.info(f"Loaded {len(db_guides)} guides from database")
         except Exception as db_error:
             logger.error(f"Error loading guides from database: {str(db_error)}")
@@ -3614,7 +3717,6 @@ def settings():
         current_llm_api_key = os.getenv("DEEPSEEK_API_KEY", "")
         current_llm_model = os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner")
         current_llm_seed = os.getenv("DEEPSEEK_SEED", "42")
-        # current_llm_token_limit = os.getenv("DEEPSEEK_TOKEN_LIMIT", "2048")  # Token limits removed
         current_ocr_api_key = os.getenv("HANDWRITING_OCR_API_KEY", "")
         current_ocr_api_url = os.getenv("HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3")
         
@@ -3775,7 +3877,7 @@ def settings():
                 # Reinitialize services with new API keys
                 if "ocr_service" in globals() and ocr_api_key:
                     global ocr_service
-                    ocr_service = OCRService(api_key=ocr_api_key)
+                    ocr_service = OCRService(api_key=ocr_api_key, enable_fallback=False)
                     logger.info("OCR service reinitialized with new API key")
                 
                 if "llm_service" in globals() and llm_api_key:
@@ -3811,6 +3913,24 @@ def settings():
         except Exception as config_access_error:
             logger.warning(f"Error accessing config: {str(config_access_error)}")
         
+        # Get service status and storage stats with error handling
+        try:
+            service_status = get_service_status()
+        except Exception as e:
+            logger.warning(f"Could not get service status: {e}")
+            service_status = {}
+            
+        try:
+            storage_stats = get_storage_stats()
+        except Exception as e:
+            logger.warning(f"Could not get storage stats: {e}")
+            storage_stats = {
+                "temp_size_mb": 0.0,
+                "output_size_mb": 0.0,
+                "total_size_mb": 0.0,
+                "max_size_mb": 160.0,
+            }
+
         context = {
             "page_title": "Settings",
             "settings": default_settings,
@@ -3818,8 +3938,8 @@ def settings():
             "notification_levels": notification_levels,
             "themes": themes,
             "languages": languages,
-            "service_status": get_service_status(),
-            "storage_stats": get_storage_stats(),
+            "service_status": service_status,
+            "storage_stats": storage_stats,
             "config": config_obj,  # Pass the config object to the template (might be None)
         }
         return render_template("settings.html", **context)
@@ -4737,19 +4857,771 @@ def guide_usage_status():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+# Enhanced Processing API Endpoints
+@app.route("/api/enhanced-processing/start", methods=["POST"])
+@login_required
+@csrf.exempt
+def start_enhanced_processing():
+    """Start the enhanced LLM-driven processing pipeline with specific marking guide."""
+    try:
+        import uuid
+        from datetime import datetime
+        
+        # Generate a unique task ID
+        task_id = str(uuid.uuid4())
+        
+        # Get current user
+        user_id = session.get('user_id')
+        if not user_id:
+            return jsonify({"success": False, "error": "User not authenticated"}), 401
+        
+        # Get request data
+        data = request.get_json() or {}
+        marking_guide_id = data.get('marking_guide_id') or session.get('guide_id')
+        
+        # Debug logging
+        app.logger.info(f"Enhanced processing request data: {data}")
+        app.logger.info(f"Marking guide ID from request: {data.get('marking_guide_id')}")
+        app.logger.info(f"Marking guide ID from session: {session.get('guide_id')}")
+        app.logger.info(f"Final marking guide ID: {marking_guide_id}")
+        
+        if not marking_guide_id:
+            return jsonify({
+                "success": False, 
+                "error": "No marking guide selected. Please select a marking guide first."
+            }), 400
+        
+        # Load the specific marking guide
+        marking_guide = MarkingGuide.query.filter_by(
+            id=marking_guide_id, 
+            user_id=user_id
+        ).first()
+        
+        if not marking_guide:
+            return jsonify({
+                "success": False, 
+                "error": "Selected marking guide not found or access denied."
+            }), 404
+        
+        # Get submission IDs from request or use all submissions for the guide
+        submission_ids = data.get('submission_ids', [])
+        
+        if submission_ids:
+            # Load specific submissions
+            submissions = Submission.query.filter(
+                Submission.id.in_(submission_ids),
+                Submission.marking_guide_id == marking_guide_id,
+                Submission.user_id == user_id
+            ).all()
+        else:
+            # Load all submissions for this marking guide
+            submissions = Submission.query.filter_by(
+                marking_guide_id=marking_guide_id,
+                user_id=user_id
+            ).all()
+        
+        if not submissions:
+            return jsonify({
+                "success": False, 
+                "error": f"No submissions found for marking guide '{marking_guide.filename}'. Please upload submissions first."
+            }), 400
+        
+        # Initialize progress tracking
+        progress_data = {
+            "task_id": task_id,
+            "status": "started",
+            "progress": 0,
+            "current_step": "Initializing enhanced processing pipeline",
+            "message": f"Starting LLM-driven workflow for guide: {marking_guide.filename}",
+            "started_at": datetime.utcnow().isoformat(),
+            "marking_guide_id": marking_guide_id,
+            "marking_guide_name": marking_guide.filename,
+            "submissions_count": len(submissions)
+        }
+        
+        # Store progress in app storage (works better with background threads)
+        if not hasattr(app, 'enhanced_progress'):
+            app.enhanced_progress = {}
+        app.enhanced_progress[task_id] = progress_data
+        
+        # Start background processing with specific guide
+        import threading
+        thread = threading.Thread(
+            target=process_enhanced_pipeline_with_context, 
+            args=(task_id, user_id, marking_guide_id)
+        )
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            "success": True,
+            "task_id": task_id,
+            "message": f"Enhanced processing started for '{marking_guide.filename}'"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error starting enhanced processing: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/enhanced-processing/progress/<task_id>", methods=["GET"])
+@login_required
+@csrf.exempt
+def get_enhanced_processing_progress(task_id):
+    """Get progress of enhanced processing task."""
+    try:
+        # Get progress from app storage (in production, use Redis or database)
+        if not hasattr(app, 'enhanced_progress'):
+            app.enhanced_progress = {}
+        
+        progress_data = app.enhanced_progress.get(task_id)
+        
+        if not progress_data:
+            # Fallback to session for backwards compatibility
+            progress_key = f"enhanced_progress_{task_id}"
+            progress_data = session.get(progress_key)
+            
+        if not progress_data:
+            return jsonify({
+                "success": False,
+                "error": "Task not found or expired"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "task_id": task_id,
+            "status": progress_data.get("status", "unknown"),
+            "progress": progress_data.get("progress", 0),
+            "current_step": progress_data.get("current_step", "Processing"),
+            "message": progress_data.get("message", "Processing..."),
+            "results": progress_data.get("results", {})
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting enhanced processing progress: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+def perform_intelligent_grading(llm_service, guide_type, guide_items, submission_data, total_points, max_questions_to_answer=None):
+    """Perform intelligent grading of a submission against marking guide items.
+    
+    Args:
+        llm_service: LLM service instance
+        guide_type: Type of guide (QUESTION_ONLY, ANSWER_ONLY, MIXED)
+        guide_items: List of guide items with questions/answers
+        submission_data: Dict with submission content and metadata
+        total_points: Total points available
+        max_questions_to_answer: Maximum questions to grade (optional)
+        
+    Returns:
+        Dict with grading results
+    """
+    try:
+        # Limit questions if max_questions_to_answer is specified
+        items_to_grade = guide_items
+        if max_questions_to_answer and len(guide_items) > max_questions_to_answer:
+            items_to_grade = guide_items[:max_questions_to_answer]
+            logger.info(f"Limiting grading to {max_questions_to_answer} questions out of {len(guide_items)}")
+        
+        # Create simplified grading prompt that's more likely to return valid JSON
+        system_prompt = """You are an expert exam grader. You must respond with valid JSON only. 
+Do not include any text before or after the JSON. The JSON must be properly formatted and complete."""
+
+        # Calculate points per item for fallback
+        points_per_item = total_points // len(items_to_grade) if items_to_grade else total_points
+        
+        grading_prompt = f"""Grade this student submission against the marking guide. Return ONLY valid JSON.
+
+MARKING GUIDE:
+{chr(10).join([f"Item {item['item_number']}: {item.get('question', item.get('answer', 'Assessment item'))} (Points: {item.get('points', points_per_item)})" for item in items_to_grade])}
+
+STUDENT SUBMISSION:
+Student: {submission_data.get('student_name', 'Unknown')}
+Content: {submission_data['content']}
+
+Return this exact JSON structure:
+{{
+    "total_score": 0,
+    "max_possible_score": {total_points},
+    "percentage": 0.0,
+    "overall_feedback": "Brief overall assessment",
+    "question_grades": [
+        {{
+            "question_number": 1,
+            "points_awarded": 0,
+            "max_points": {points_per_item},
+            "feedback": "Brief feedback"
+        }}
+    ]
+}}"""
+        
+        # Get grading response from LLM
+        grading_response = llm_service.generate_response(
+            system_prompt=system_prompt,
+            user_prompt=grading_prompt,
+            temperature=0.1
+        )
+        
+        # Parse the response with better error handling
+        import json
+        import re
+        
+        try:
+            # Clean the response - remove any text before/after JSON
+            cleaned_response = grading_response.strip()
+            
+            # Try to extract JSON from the response
+            json_match = re.search(r'\{.*\}', cleaned_response, re.DOTALL)
+            if json_match:
+                cleaned_response = json_match.group(0)
+            
+            grading_result = json.loads(cleaned_response)
+            
+            # Validate required fields
+            if 'total_score' not in grading_result:
+                grading_result['total_score'] = 0
+            if 'max_possible_score' not in grading_result:
+                grading_result['max_possible_score'] = total_points
+            if 'percentage' not in grading_result:
+                grading_result['percentage'] = 0.0
+            if 'overall_feedback' not in grading_result:
+                grading_result['overall_feedback'] = "Grading completed"
+            if 'question_grades' not in grading_result:
+                grading_result['question_grades'] = []
+                
+        except (json.JSONDecodeError, AttributeError) as e:
+            logger.error(f"Failed to parse LLM response as JSON: {e}")
+            logger.debug(f"Raw LLM response: {grading_response[:500]}...")
+            
+            # Create a fallback grading result with partial credit
+            estimated_score = min(total_points * 0.5, 50)  # Give 50% or 50 points, whichever is lower
+            grading_result = {
+                'total_score': estimated_score,
+                'max_possible_score': total_points,
+                'percentage': (estimated_score / total_points * 100) if total_points > 0 else 0,
+                'overall_feedback': f"Automated grading completed. Raw response could not be parsed as JSON.",
+                'question_grades': [{
+                    'question_number': 1,
+                    'points_awarded': estimated_score,
+                    'max_points': total_points,
+                    'feedback': 'Partial credit awarded due to parsing error'
+                }]
+            }
+        
+        # Add submission metadata
+        grading_result['submission_id'] = submission_data['id']
+        grading_result['submission_filename'] = submission_data['filename']
+        grading_result['student_name'] = submission_data.get('student_name', 'Unknown')
+        
+        # Ensure percentage is calculated
+        if grading_result['max_possible_score'] > 0:
+            grading_result['percentage'] = (grading_result['total_score'] / grading_result['max_possible_score']) * 100
+        else:
+            grading_result['percentage'] = 0.0
+        
+        # Create feedback summary
+        feedback_parts = []
+        if grading_result.get('overall_feedback'):
+            feedback_parts.append(grading_result['overall_feedback'])
+        
+        if grading_result.get('strengths'):
+            feedback_parts.append(f"Strengths: {', '.join(grading_result['strengths'])}")
+        
+        if grading_result.get('areas_for_improvement'):
+            feedback_parts.append(f"Areas for improvement: {', '.join(grading_result['areas_for_improvement'])}")
+        
+        grading_result['feedback'] = '\n\n'.join(feedback_parts)
+        
+        return grading_result
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse grading response as JSON: {e}")
+        # Return fallback result
+        return {
+            'submission_id': submission_data['id'],
+            'submission_filename': submission_data['filename'],
+            'student_name': submission_data.get('student_name', 'Unknown'),
+            'total_score': 0,
+            'max_possible_score': total_points,
+            'percentage': 0.0,
+            'feedback': f"Grading failed due to response parsing error: {str(e)}",
+            'question_grades': [],
+            'overall_feedback': "Unable to complete grading due to technical error"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in intelligent grading: {e}")
+        # Return fallback result
+        return {
+            'submission_id': submission_data['id'],
+            'submission_filename': submission_data['filename'],
+            'student_name': submission_data.get('student_name', 'Unknown'),
+            'total_score': 0,
+            'max_possible_score': total_points,
+            'percentage': 0.0,
+            'feedback': f"Grading failed: {str(e)}",
+            'question_grades': [],
+            'overall_feedback': "Unable to complete grading due to technical error"
+        }
+
+
+def process_enhanced_pipeline_with_context(task_id, user_id, marking_guide_id=None):
+    """Wrapper function to run enhanced pipeline with Flask application context."""
+    try:
+        logger.info(f"Starting enhanced processing pipeline with context for task {task_id}, guide {marking_guide_id}")
+        with app.app_context():
+            process_enhanced_pipeline(task_id, user_id, marking_guide_id)
+        logger.info(f"Enhanced processing pipeline completed for task {task_id}")
+    except Exception as e:
+        logger.error(f"Error in enhanced processing pipeline wrapper: {str(e)}")
+        # Update error progress even if context fails
+        try:
+            with app.app_context():
+                error_progress = {
+                    "task_id": task_id,
+                    "status": "failed",
+                    "progress": 0,
+                    "current_step": "Error",
+                    "message": f"Processing failed: {str(e)}",
+                    "error": str(e),
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                
+                if not hasattr(app, 'enhanced_progress'):
+                    app.enhanced_progress = {}
+                app.enhanced_progress[task_id] = error_progress
+        except Exception as context_error:
+            logger.error(f"Failed to update error progress: {str(context_error)}")
+
+def process_enhanced_pipeline(task_id, user_id, marking_guide_id=None):
+    """Enhanced processing pipeline with intelligent marking guide analysis and best-score grading."""
+    try:
+        import time
+        from datetime import datetime
+        
+        def update_progress(progress, step, message):
+            """Helper to update progress with real-time updates."""
+            progress_data = {
+                "task_id": task_id,
+                "status": "processing",
+                "progress": min(progress, 100),
+                "current_step": step,
+                "message": message,
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            
+            if not hasattr(app, 'enhanced_progress'):
+                app.enhanced_progress = {}
+            app.enhanced_progress[task_id] = progress_data
+            
+            logger.info(f"Enhanced Processing: {progress}% - {step} - {message}")
+        
+        # PHASE 1: Load and analyze marking guide (5-15%)
+        update_progress(5, "Loading Data", "Loading marking guide from database...")
+        
+        # Load the specific marking guide
+        marking_guide = MarkingGuide.query.filter_by(
+            id=marking_guide_id, 
+            user_id=user_id
+        ).first()
+        
+        if not marking_guide:
+            raise Exception(f"Marking guide {marking_guide_id} not found")
+        
+        # Load associated submissions
+        submissions = Submission.query.filter_by(
+            marking_guide_id=marking_guide_id,
+            user_id=user_id
+        ).all()
+        
+        if not submissions:
+            raise Exception(f"No submissions found for marking guide {marking_guide.filename}")
+        
+        update_progress(8, "Data Loaded", f"Loaded guide '{marking_guide.filename}' with {len(submissions)} submissions")
+        
+        # Initialize LLM service
+        try:
+            from src.services.consolidated_llm_service import ConsolidatedLLMService
+            llm_service = ConsolidatedLLMService()
+            
+            if not llm_service.is_available():
+                raise Exception("LLM service is not available")
+                
+            update_progress(10, "LLM Ready", "LLM service initialized and ready")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM service: {str(e)}")
+            raise Exception(f"LLM service initialization failed: {str(e)}")
+        
+        # PHASE 2: Analyze marking guide structure (15-30%)
+        update_progress(15, "Analyzing Guide", f"Analyzing marking guide structure: {marking_guide.filename}")
+        
+        # Use pre-extracted content from database
+        guide_content = marking_guide.content_text or ""
+        if not guide_content:
+            raise Exception(f"Marking guide '{marking_guide.filename}' has no extracted content. Please re-upload the marking guide.")
+        
+        # Use LLM to determine guide type and extract structure
+        guide_analysis_prompt = f"""
+Analyze this marking guide and determine its structure. Classify it as one of:
+1. QUESTION_ONLY: Contains only questions without model answers
+2. ANSWER_ONLY: Contains only model answers without explicit questions  
+3. MIXED: Contains both questions and their corresponding answers
+
+Then extract the structured content accordingly.
+
+Marking Guide Content:
+{guide_content}
+
+Return a JSON response with this structure:
+{{
+    "guide_type": "QUESTION_ONLY|ANSWER_ONLY|MIXED",
+    "total_items": <number>,
+    "items": [
+        {{
+            "item_number": <number>,
+            "question": "<question text if available>",
+            "answer": "<answer text if available>",
+            "points": <estimated points if mentioned>,
+            "section": "<section name if applicable>"
+        }}
+    ],
+    "grading_criteria": "<any specific grading instructions found>",
+    "total_points": <total points if determinable>
+}}
+"""
+        
+        try:
+            guide_analysis_response = llm_service.generate_response(
+                system_prompt="You are an expert at analyzing educational marking guides and extracting their structure.",
+                user_prompt=guide_analysis_prompt,
+                temperature=0.1
+            )
+            
+            import json
+            guide_analysis = json.loads(guide_analysis_response)
+            guide_type = guide_analysis.get("guide_type", "MIXED")
+            guide_items = guide_analysis.get("items", [])
+            total_points = guide_analysis.get("total_points", 100)
+            
+            logger.info(f"Guide analysis complete: Type={guide_type}, Items={len(guide_items)}, Points={total_points}")
+            
+        except Exception as e:
+            logger.warning(f"Guide analysis failed, using fallback: {str(e)}")
+            # Fallback: treat as mixed type
+            guide_type = "MIXED"
+            guide_items = [{"item_number": 1, "question": "General Assessment", "answer": guide_content, "points": 100}]
+            total_points = 100
+        
+        update_progress(25, "Guide Analyzed", f"Guide type: {guide_type}, Found {len(guide_items)} items")
+        
+        # PHASE 3: Load submissions from database (30-50%)
+        processed_submissions = []
+        
+        for i, submission in enumerate(submissions):
+            progress = 30 + (20 * i / len(submissions))
+            update_progress(int(progress), "Loading Submissions", f"Loading: {submission.filename}")
+            
+            # Use pre-extracted content from database
+            submission_content = submission.content_text
+            
+            if not submission_content:
+                logger.warning(f"No extracted content available for submission {submission.filename}. Skipping.")
+                continue
+                
+            processed_submissions.append({
+                'id': submission.id,
+                'filename': submission.filename,
+                'content': submission_content,
+                'student_name': submission.student_name
+            })
+        
+        update_progress(50, "Submissions Loaded", f"Loaded {len(processed_submissions)} submissions from database")
+        
+        # PHASE 4: Intelligent mapping and grading (50-90%)
+        grading_results = []
+        
+        for i, submission_data in enumerate(processed_submissions):
+            progress = 50 + (40 * i / len(processed_submissions))
+            update_progress(int(progress), "AI Grading", f"Grading: {submission_data['filename']}")
+            
+            try:
+                # Create comprehensive grading prompt based on guide type
+                grading_result = perform_intelligent_grading(
+                    llm_service, 
+                    guide_type, 
+                    guide_items, 
+                    submission_data, 
+                    total_points,
+                    marking_guide.max_questions_to_answer
+                )
+                
+                if grading_result:
+                    grading_results.append(grading_result)
+                    logger.info(f"Successfully graded {submission_data['filename']}: {grading_result['total_score']}/{grading_result['max_possible_score']}")
+                
+            except Exception as grading_error:
+                logger.error(f"Grading failed for {submission_data['filename']}: {grading_error}")
+                continue
+        
+        update_progress(90, "Saving Results", "Saving grading results to database...")
+        
+        # PHASE 5: Save results to database (90-100%)
+        saved_count = 0
+        for result in grading_results:
+            try:
+                # Create GradingResult record
+                grading_record = GradingResult(
+                    submission_id=result['submission_id'],
+                    marking_guide_id=marking_guide_id,
+                    score=result['total_score'],
+                    max_score=result['max_possible_score'],
+                    percentage=result['percentage'],
+                    feedback=result['feedback'],
+                    detailed_feedback={
+                        'question_grades': result.get('question_grades', []),
+                        'guide_type': guide_type,
+                        'task_id': task_id,
+                        'grading_method': 'enhanced_llm_processing',
+                        'overall_feedback': result.get('overall_feedback', ''),
+                        'strengths': result.get('strengths', []),
+                        'areas_for_improvement': result.get('areas_for_improvement', [])
+                    },
+                    grading_method='enhanced_llm',
+                    confidence=0.85
+                )
+                
+                db.session.add(grading_record)
+                saved_count += 1
+                
+            except Exception as save_error:
+                logger.error(f"Failed to save result for submission {result['submission_id']}: {save_error}")
+        
+        # Commit all results
+        db.session.commit()
+        
+        update_progress(100, "Complete", f"Enhanced processing completed! Graded {saved_count} submissions")
+        
+        # Update final progress
+        final_progress = {
+            "task_id": task_id,
+            "status": "completed",
+            "progress": 100,
+            "current_step": "Complete",
+            "message": f"Successfully processed {saved_count} submissions using {guide_type} marking guide",
+            "results": {
+                "guide_type": guide_type,
+                "guide_items_count": len(guide_items),
+                "submissions_processed": len(processed_submissions),
+                "results_saved": saved_count,
+                "total_points": total_points
+            },
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        if not hasattr(app, 'enhanced_progress'):
+            app.enhanced_progress = {}
+        app.enhanced_progress[task_id] = final_progress
+        
+        logger.info(f"Enhanced processing completed for task {task_id}: {saved_count} results saved")
+
+    except Exception as e:
+        logger.error(f"Error in enhanced processing pipeline: {str(e)}")
+        
+        # Update error progress
+        error_progress = {
+            "task_id": task_id,
+            "status": "failed",
+            "progress": 0,
+            "current_step": "Error",
+            "message": f"Processing failed: {str(e)}",
+            "error": str(e),
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        if not hasattr(app, 'enhanced_progress'):
+            app.enhanced_progress = {}
+        app.enhanced_progress[task_id] = error_progress
+
+
 # ... audit all endpoints for @login_required and permission checks ...
 
+
+def shutdown_handler(signum=None, frame=None):
+    """Handle graceful shutdown of the application."""
+    logger.info("Shutdown signal received, cleaning up...")
+    
+    try:
+        # Stop file cleanup service if it exists
+        if 'file_cleanup_service' in globals() and file_cleanup_service:
+            file_cleanup_service.stop_scheduled_cleanup()
+            logger.info("File cleanup service stopped")
+    except Exception as e:
+        logger.error(f"Error stopping file cleanup service: {e}")
+    
+    try:
+        # Stop any other background services
+        if 'performance_optimizer' in globals():
+            # Add any cleanup for performance optimizer if needed
+            pass
+    except Exception as e:
+        logger.error(f"Error stopping performance optimizer: {e}")
+    
+    logger.info("Application shutdown complete")
+    sys.exit(0)
 
 if __name__ == "__main__":
     logger.info("Starting Exam Grader Web Application...")
 
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, shutdown_handler)
+    signal.signal(signal.SIGTERM, shutdown_handler)
+    
+    # Register atexit handler as backup
+    atexit.register(shutdown_handler)
+
     # Get configuration values
     host = getattr(config, "HOST", "127.0.0.1")
     port = getattr(config, "PORT", 5000)
-    debug = getattr(config, "DEBUG", True)
+    debug = getattr(config, "DEBUG", False)
 
     logger.info(create_startup_summary(host=host, port=port))
     logger.info(f"Debug mode: {debug}")
 
-    # Use socketio.run() instead of app.run() for proper signal handling
-    socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)
+    try:
+        # Use socketio.run() instead of app.run() for proper signal handling
+        socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)
+    except KeyboardInterrupt:
+        logger.info("Received keyboard interrupt")
+        shutdown_handler()
+    except Exception as e:
+        logger.error(f"Application error: {e}")
+        shutdown_handler()
+
+# Global cleanup function for graceful shutdown
+def cleanup_services():
+    """Clean up all services and connections for graceful shutdown."""
+    try:
+        logger.info("🧹 Starting service cleanup...")
+        
+        # Stop file cleanup service
+        if 'file_cleanup_service' in globals() and file_cleanup_service:
+            try:
+                file_cleanup_service.stop_scheduled_cleanup()
+                logger.info("✅ File cleanup service stopped")
+            except Exception as e:
+                logger.error(f"❌ Error stopping file cleanup service: {e}")
+        
+        # Close SocketIO connections
+        try:
+            if 'socketio' in globals() and socketio:
+                try:
+                    # Disconnect all clients gracefully
+                    if hasattr(socketio, 'server') and socketio.server:
+                        # Get all connected clients and disconnect them
+                        try:
+                            # Disconnect all clients
+                            for sid in list(socketio.server.manager.get_participants(namespace='/')):
+                                socketio.server.disconnect(sid)
+                        except:
+                            # Fallback: try to shutdown the server directly
+                            if hasattr(socketio.server, 'shutdown'):
+                                socketio.server.shutdown()
+                        logger.info("✅ SocketIO connections closed")
+                    else:
+                        logger.info("✅ SocketIO server not active")
+                except Exception as inner_e:
+                    logger.warning(f"⚠️ SocketIO cleanup fallback: {inner_e}")
+                    # Try alternative cleanup
+                    try:
+                        if hasattr(socketio, 'server') and socketio.server:
+                            socketio.server.shutdown()
+                    except:
+                        pass
+                    logger.info("✅ SocketIO cleanup attempted")
+        except Exception as e:
+            logger.error(f"❌ Error closing SocketIO: {e}")
+        
+        # Close database connections
+        try:
+            if 'db' in globals() and db:
+                try:
+                    # Try with app context first
+                    with app.app_context():
+                        db.session.close()
+                        db.engine.dispose()
+                except RuntimeError:
+                    # If app context not available, try direct cleanup
+                    try:
+                        db.session.close()
+                    except:
+                        pass
+                    try:
+                        db.engine.dispose()
+                    except:
+                        pass
+                logger.info("✅ Database connections closed")
+        except Exception as e:
+            logger.error(f"❌ Error closing database: {e}")
+        
+        # Stop background threads
+        try:
+            for thread in threading.enumerate():
+                if thread != threading.current_thread() and thread.daemon:
+                    logger.info(f"🧵 Stopping daemon thread: {thread.name}")
+                    # Give threads a moment to finish
+                    thread.join(timeout=1.0)
+                    # Force stop if still alive
+                    if thread.is_alive():
+                        logger.warning(f"🧵 Force stopping thread: {thread.name}")
+        except Exception as e:
+            logger.error(f"❌ Error stopping threads: {e}")
+        
+        logger.info("✅ Service cleanup completed")
+        
+        # Force exit after cleanup
+        try:
+            import os
+            os._exit(0)
+        except:
+            pass
+        
+    except Exception as e:
+        logger.error(f"❌ Error during service cleanup: {e}")
+
+# Register cleanup function to run on exit
+atexit.register(cleanup_services)
+
+# Add signal handlers for graceful shutdown
+def signal_handler(signum, frame):
+    """Handle shutdown signals."""
+    logger.info(f"🛑 Received signal {signum}, initiating shutdown...")
+    cleanup_services()
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+# Shutdown endpoint for graceful shutdown
+@app.route('/shutdown', methods=['POST'])
+def shutdown():
+    """Endpoint to trigger graceful shutdown."""
+    try:
+        logger.info("🛑 Shutdown endpoint called")
+        
+        # Trigger cleanup
+        cleanup_services()
+        
+        # Shutdown the Flask development server
+        func = request.environ.get('werkzeug.server.shutdown')
+        if func is None:
+            logger.warning("Not running with the Werkzeug Server")
+            return jsonify({'status': 'error', 'message': 'Not running with Werkzeug server'}), 500
+        
+        func()
+        logger.info("✅ Server shutdown initiated")
+        return jsonify({'status': 'success', 'message': 'Server shutting down...'})
+        
+    except Exception as e:
+        logger.error(f"❌ Error during shutdown: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500

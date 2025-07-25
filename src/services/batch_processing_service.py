@@ -2,13 +2,11 @@
 Batch Processing Service for handling multiple file uploads efficiently.
 Supports parallel and sequential processing with progress tracking.
 """
+from typing import Any, Dict, List, Optional
 
-import asyncio
-import concurrent.futures
 import os
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Any
 from werkzeug.datastructures import FileStorage
 
 from utils.logger import logger

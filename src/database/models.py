@@ -4,10 +4,10 @@ Database models for the Exam Grader application.
 This module defines SQLAlchemy models for persistent data storage,
 replacing the session-based storage system.
 """
+from typing import Any, Dict
 
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
 
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
@@ -24,10 +24,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.dialects.sqlite import JSON as SQLiteJSON
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm import relationship
 from werkzeug.security import check_password_hash, generate_password_hash
 
 # Initialize SQLAlchemy
@@ -430,6 +427,225 @@ class GradingSession(db.Model, TimestampMixin):
             "processing_end_time": self.processing_end_time.isoformat() if self.processing_end_time else None,
             "error_message": self.error_message,
             "session_data": self.session_data,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class LLMDocument(db.Model, TimestampMixin):
+    """LLM training document model"""
+    
+    __tablename__ = "llm_documents"
+    
+    id = get_uuid_column()
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    original_name = Column(String(255), nullable=False)
+    stored_name = Column(String(255), nullable=False)
+    file_type = Column(String(10), nullable=False)
+    mime_type = Column(String(100), nullable=False)
+    file_size = Column(Integer, nullable=False)
+    file_path = Column(String(500), nullable=False)
+    text_content = Column(Text)
+    word_count = Column(Integer, default=0)
+    character_count = Column(Integer, default=0)
+    extracted_text = Column(Boolean, default=False)
+    
+    # Relationships
+    user = relationship("User", backref="llm_documents")
+    dataset_documents = relationship("LLMDatasetDocument", back_populates="document", cascade="all, delete-orphan")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "name": self.name,
+            "originalName": self.original_name,
+            "storedName": self.stored_name,
+            "type": self.file_type.upper(),
+            "mimeType": self.mime_type,
+            "size": self.file_size,
+            "datasets": [dd.dataset_id for dd in self.dataset_documents],
+            "metadata": {
+                "uploadDate": self.created_at.isoformat(),
+                "wordCount": self.word_count,
+                "characterCount": self.character_count,
+                "extractedText": self.extracted_text
+            }
+        }
+
+
+class LLMDataset(db.Model, TimestampMixin):
+    """LLM training dataset model"""
+    
+    __tablename__ = "llm_datasets"
+    
+    id = get_uuid_column()
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    document_count = Column(Integer, default=0)
+    total_words = Column(Integer, default=0)
+    total_size = Column(Integer, default=0)
+    
+    # Relationships
+    user = relationship("User", backref="llm_datasets")
+    dataset_documents = relationship("LLMDatasetDocument", back_populates="dataset", cascade="all, delete-orphan")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "name": self.name,
+            "description": self.description,
+            "documents": [dd.document_id for dd in self.dataset_documents],
+            "documentCount": self.document_count,
+            "metadata": {
+                "createdDate": self.created_at.isoformat(),
+                "totalWords": self.total_words,
+                "totalSize": self.total_size
+            }
+        }
+
+
+class LLMDatasetDocument(db.Model):
+    """Association table for datasets and documents"""
+    
+    __tablename__ = "llm_dataset_documents"
+    
+    dataset_id = Column(String(36), ForeignKey("llm_datasets.id"), primary_key=True)
+    document_id = Column(String(36), ForeignKey("llm_documents.id"), primary_key=True)
+    
+    # Relationships
+    dataset = relationship("LLMDataset", back_populates="dataset_documents")
+    document = relationship("LLMDocument", back_populates="dataset_documents")
+
+
+class LLMTrainingJob(db.Model, TimestampMixin):
+    """LLM training job model"""
+    
+    __tablename__ = "llm_training_jobs"
+    
+    id = get_uuid_column()
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    model_id = Column(String(100), nullable=False)
+    dataset_id = Column(String(36), ForeignKey("llm_datasets.id"), nullable=False, index=True)
+    status = Column(String(50), default="pending", nullable=False)  # pending, preparing, training, evaluating, completed, failed, cancelled
+    progress = Column(Float, default=0.0)
+    current_epoch = Column(Integer, default=0)
+    total_epochs = Column(Integer, default=10)
+    accuracy = Column(Float)
+    validation_accuracy = Column(Float)
+    loss = Column(Float)
+    validation_loss = Column(Float)
+    start_time = Column(DateTime)
+    end_time = Column(DateTime)
+    error_message = Column(Text)
+    
+    # Training configuration
+    config_epochs = Column(Integer, default=10)
+    config_batch_size = Column(Integer, default=8)
+    config_learning_rate = Column(Float, default=0.0001)
+    config_max_tokens = Column(Integer, default=512)
+    config_temperature = Column(Float)
+    config_custom_parameters = Column(JSON)
+    
+    # Results and metrics
+    training_metrics = Column(JSON)
+    evaluation_results = Column(JSON)
+    model_output_path = Column(String(500))
+    
+    # Relationships
+    user = relationship("User", backref="llm_training_jobs")
+    dataset = relationship("LLMDataset", backref="training_jobs")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "name": self.name,
+            "model_id": self.model_id,
+            "dataset_id": self.dataset_id,
+            "status": self.status,
+            "progress": self.progress,
+            "current_epoch": self.current_epoch,
+            "total_epochs": self.total_epochs,
+            "accuracy": self.accuracy,
+            "validation_accuracy": self.validation_accuracy,
+            "loss": self.loss,
+            "validation_loss": self.validation_loss,
+            "start_time": self.start_time.isoformat() if self.start_time else None,
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "error_message": self.error_message,
+            "config": {
+                "epochs": self.config_epochs,
+                "batch_size": self.config_batch_size,
+                "learning_rate": self.config_learning_rate,
+                "max_tokens": self.config_max_tokens,
+                "temperature": self.config_temperature,
+                "custom_parameters": self.config_custom_parameters
+            },
+            "training_metrics": self.training_metrics,
+            "evaluation_results": self.evaluation_results,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class LLMTrainingReport(db.Model, TimestampMixin):
+    """LLM training report model"""
+    
+    __tablename__ = "llm_training_reports"
+    
+    id = get_uuid_column()
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    job_ids = Column(JSON, nullable=False)  # List of training job IDs
+    report_type = Column(String(50), default="training_summary")
+    format = Column(String(20), default="html")  # html, pdf, json
+    status = Column(String(50), default="generating")  # generating, completed, failed
+    file_path = Column(String(500))
+    file_size = Column(Integer)
+    
+    # Report configuration
+    include_metrics = Column(Boolean, default=True)
+    include_logs = Column(Boolean, default=False)
+    include_charts = Column(Boolean, default=True)
+    chart_format = Column(String(10), default="png")
+    
+    # Report data
+    report_data = Column(JSON)
+    generation_error = Column(Text)
+    
+    # Relationships
+    user = relationship("User", backref="llm_training_reports")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "name": self.name,
+            "description": self.description,
+            "job_ids": self.job_ids,
+            "report_type": self.report_type,
+            "format": self.format,
+            "status": self.status,
+            "file_path": self.file_path,
+            "file_size": self.file_size,
+            "config": {
+                "include_metrics": self.include_metrics,
+                "include_logs": self.include_logs,
+                "include_charts": self.include_charts,
+                "chart_format": self.chart_format
+            },
+            "report_data": self.report_data,
+            "generation_error": self.generation_error,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }

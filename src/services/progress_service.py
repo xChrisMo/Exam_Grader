@@ -1,6 +1,5 @@
 """Unified Progress Service that integrates both in-memory and persistent progress trackers."""
 
-import time
 from typing import Any, Callable, Dict, List, Optional
 
 from ..utils.logging_config import get_logger

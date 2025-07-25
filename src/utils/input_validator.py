@@ -4,13 +4,17 @@ Enhanced Input Validation System for Exam Grader Application.
 This module provides comprehensive input validation for file uploads,
 user inputs, and API requests to prevent security vulnerabilities.
 """
+from typing import Dict, Union
 
-import os
 
-import magic
+try:
+    import magic
+    MAGIC_AVAILABLE = True
+except ImportError:
+    magic = None
+    MAGIC_AVAILABLE = False
 import hashlib
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
 
 try:
@@ -246,9 +250,19 @@ class InputValidator:
                 )
             
             # Check MIME type using python-magic
-            try:
-                mime_type = magic.from_file(str(file_path), mime=True)
-            except Exception:
+            if MAGIC_AVAILABLE:
+                try:
+                    mime_type = magic.from_file(str(file_path), mime=True)
+                except Exception:
+                    # Fallback if python-magic fails
+                    logger.warning("python-magic failed, skipping MIME type validation")
+                    return ValidationResult(
+                        is_valid=True,
+                        message="MIME type validation skipped (python-magic failed)",
+                        details={"extension": extension},
+                        risk_level="low"
+                    )
+            else:
                 # Fallback if python-magic is not available
                 logger.warning("python-magic not available, skipping MIME type validation")
                 return ValidationResult(

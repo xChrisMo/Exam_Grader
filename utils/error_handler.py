@@ -18,11 +18,13 @@ from flask import session, flash
 try:
     from src.exceptions.enhanced_error_handler import enhanced_error_handler
     from src.exceptions.application_errors import ApplicationError
+    from src.models.api_responses import ErrorCode
     ENHANCED_ERROR_HANDLING_AVAILABLE = True
 except ImportError:
     ENHANCED_ERROR_HANDLING_AVAILABLE = False
     enhanced_error_handler = None
     ApplicationError = None
+    ErrorCode = None
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +62,7 @@ class ErrorHandler:
             'timestamp': datetime.now().isoformat(),
             'error_type': error_type,
             'error_message': error_message,
-            'error_code': error_code.value if error_code else None,
+            'error_code': error_code.value if error_code and hasattr(error_code, 'value') else None,
             'error_id': error_id,
             'context': context,
             'user_id': user_id,

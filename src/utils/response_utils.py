@@ -1,7 +1,7 @@
 """Utilities for standardized API response handling."""
+from typing import Any, Dict, List, Tuple, Callable
 
 from functools import wraps
-from typing import Any, Dict, List, Optional, Tuple, Union, Callable
 from flask import jsonify, request, g
 import time
 import uuid

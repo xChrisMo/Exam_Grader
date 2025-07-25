@@ -1,9 +1,9 @@
 """Configuration utilities for the Exam Grader application."""
+from typing import Dict, List, Tuple
 
 import os
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from .unified_config import UnifiedConfig
 

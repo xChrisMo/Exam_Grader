@@ -3,14 +3,13 @@ File Cleanup Service for Exam Grader Application.
 
 Provides automated cleanup of temporary files, old uploads, and orphaned files.
 """
+from typing import Any, Dict
 
-import os
 import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
 
 from src.database.models import MarkingGuide, Submission, db
 from utils.logger import logger

@@ -259,9 +259,257 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Results data for JavaScript -->
+<script type="application/json" id="results-data">{{ results_list|tojson|safe }}</script>
+
 <!-- Make sure app.js is loaded -->
 <script src="{{ url_for('static', filename='js/app.js') }}?v={{ range(1000, 9999) | random }}"></script>
 <script>
+// Ensure ExamGrader is available
+if (typeof ExamGrader === 'undefined') {
+    console.warn('ExamGrader not defined, creating minimal fallback');
+    window.ExamGrader = {
+        notificationManager: {
+            notify: function (message, type) {
+                console.log('Notification (' + type + '): ' + message);
+                alert(type.toUpperCase() + ': ' + message);
+            }
+        }
+    };
+}
+
+// Safe viewDetails function using DOM manipulation instead of template literals
+window.viewDetails = function(submissionId) {
+    console.log('viewDetails called for:', submissionId);
+    
+    try {
+        // Get results data safely
+        const resultsScript = document.getElementById('results-data');
+        let results = [];
+        
+        if (resultsScript) {
+            results = JSON.parse(resultsScript.textContent);
+        }
+        
+        const result = results.find(function(r) { return r.submission_id === submissionId; });
+        
+        if (!result) {
+            ExamGrader.notificationManager.notify('Result details not found', 'error');
+            return;
+        }
+        
+        // Create content using DOM manipulation to avoid template literal issues
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'space-y-6';
+        
+        // Header section
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'bg-gray-50 rounded-lg p-4';
+        
+        const title = document.createElement('h4');
+        title.className = 'text-lg font-medium text-gray-900 mb-2';
+        title.textContent = result.filename || 'Unknown';
+        headerDiv.appendChild(title);
+        
+        const gridDiv = document.createElement('div');
+        gridDiv.className = 'grid grid-cols-2 gap-4 text-sm';
+        
+        // Score section
+        const scoreDiv = document.createElement('div');
+        const scoreLabel = document.createElement('span');
+        scoreLabel.className = 'font-medium text-gray-500';
+        scoreLabel.textContent = 'Score:';
+        const scoreValue = document.createElement('span');
+        scoreValue.className = 'ml-2 text-gray-900';
+        scoreValue.textContent = (result.score || 0) + '% (' + (result.letter_grade || 'N/A') + ')';
+        scoreDiv.appendChild(scoreLabel);
+        scoreDiv.appendChild(scoreValue);
+        
+        // Questions section
+        const questionsDiv = document.createElement('div');
+        const questionsLabel = document.createElement('span');
+        questionsLabel.className = 'font-medium text-gray-500';
+        questionsLabel.textContent = 'Questions:';
+        const questionsValue = document.createElement('span');
+        questionsValue.className = 'ml-2 text-gray-900';
+        questionsValue.textContent = result.total_questions || 0;
+        questionsDiv.appendChild(questionsLabel);
+        questionsDiv.appendChild(questionsValue);
+        
+        gridDiv.appendChild(scoreDiv);
+        gridDiv.appendChild(questionsDiv);
+        headerDiv.appendChild(gridDiv);
+        contentDiv.appendChild(headerDiv);
+        
+        // Simple feedback section
+        if (result.feedback) {
+            const feedbackDiv = document.createElement('div');
+            feedbackDiv.className = 'bg-blue-50 rounded-lg p-4';
+            
+            const feedbackTitle = document.createElement('h5');
+            feedbackTitle.className = 'text-sm font-medium text-blue-700 mb-2';
+            feedbackTitle.textContent = 'Feedback:';
+            
+            const feedbackText = document.createElement('p');
+            feedbackText.className = 'text-sm text-blue-600';
+            feedbackText.textContent = result.feedback;
+            
+            feedbackDiv.appendChild(feedbackTitle);
+            feedbackDiv.appendChild(feedbackText);
+            contentDiv.appendChild(feedbackDiv);
+        }
+        
+        // Show modal
+        const modalContent = document.getElementById('modalContent');
+        if (modalContent) {
+            modalContent.innerHTML = '';
+            modalContent.appendChild(contentDiv);
+        }
+        
+        const modal = document.getElementById('detailsModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+        
+    } catch (error) {
+        console.error('Error in viewDetails:', error);
+        ExamGrader.notificationManager.notify('Error loading result details', 'error');
+    }
+};
+
+// Close modal function
+window.closeDetailsModal = function() {
+    const modal = document.getElementById('detailsModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+};
+
+// Export results function
+window.exportResults = function() {
+    console.log('exportResults called');
+    
+    const exportBtn = document.querySelector('button[onclick="exportResults()"]');
+    let originalText = '';
+    
+    if (exportBtn) {
+        originalText = exportBtn.innerHTML;
+        exportBtn.innerHTML = 'Exporting...';
+        exportBtn.disabled = true;
+    }
+    
+    fetch('/api/export-results', {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/pdf, application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(function(response) {
+        if (!response.ok) {
+            throw new Error('Export failed: ' + response.status + ' ' + response.statusText);
+        }
+        
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/pdf')) {
+            return response.blob().then(function(blob) { 
+                return { type: 'pdf', data: blob }; 
+            });
+        } else {
+            return response.json().then(function(json) { 
+                return { type: 'json', data: json }; 
+            });
+        }
+    })
+    .then(function(result) {
+        if (result.type === 'pdf') {
+            const url = window.URL.createObjectURL(result.data);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'grading_results_' + new Date().toISOString().split('T')[0] + '.pdf';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } else if (result.type === 'json') {
+            const data = result.data;
+            if (data.success) {
+                const dataStr = JSON.stringify(data.data, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(dataBlob);
+                link.download = data.filename || 'grading_results_' + new Date().toISOString().split('T')[0] + '.json';
+                link.click();
+                URL.revokeObjectURL(link.href);
+            } else {
+                throw new Error(data.error || 'Export failed');
+            }
+        }
+        
+        ExamGrader.notificationManager.notify('Results exported successfully!', 'success');
+    })
+    .catch(function(error) {
+        console.error('Export error:', error);
+        ExamGrader.notificationManager.notify('Export failed: ' + error.message, 'error');
+    })
+    .finally(function() {
+        if (exportBtn) {
+            exportBtn.innerHTML = originalText;
+            exportBtn.disabled = false;
+        }
+    });
+};
+
+// Auto-refresh functionality
+let autoRefreshEnabled = localStorage.getItem('results_auto_refresh') !== 'false';
+let refreshInterval;
+const REFRESH_INTERVAL_MS = 30000; // 30 seconds
+
+function initAutoRefresh() {
+    console.log('Initializing auto-refresh');
+    // Auto-refresh functionality can be added here if needed
+    // For now, just log that it's initialized
+}
+
+function startAutoRefresh() {
+    console.log('Starting auto-refresh');
+    // Auto-refresh functionality can be added here if needed
+}
+
+function stopAutoRefresh() {
+    console.log('Stopping auto-refresh');
+    // Auto-refresh functionality can be added here if needed
+}
+
+function refreshResults() {
+    console.log('Refreshing results');
+    // For now, just reload the page
+    window.location.reload();
+}
+
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing results page');
+    
+    try {
+        initAutoRefresh();
+        console.log('Auto-refresh initialized successfully');
+    } catch (error) {
+        console.error('Error initializing auto-refresh:', error);
+    }
+    
+    // Close modal on escape key
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeDetailsModal();
+        }
+    });
+    
+    console.log('Results page initialized successfully');
+});
+</script>
+{% endblock %}
 // Ensure ExamGrader is available
 if (typeof ExamGrader === 'undefined') {
     console.warn('ExamGrader not defined, creating minimal fallback');
@@ -496,21 +744,6 @@ async function refreshResults() {
     // Reset auto-refresh if all retries failed
     if (autoRefreshEnabled) {
         startAutoRefresh();
-    }
-    } catch (error) {
-        console.error('Error in refresh process:', error);
-        if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
-            ExamGrader.notificationManager.notify(`Failed to refresh results: ${error.message}`, 'error');
-        }
-    } finally {
-        const statusElement = document.getElementById('refresh-status');
-        if (statusElement) {
-            statusElement.textContent = autoRefreshEnabled ? 'Waiting...' : 'Paused';
-        }
-        console.log('Refresh process completed, autoRefreshEnabled:', autoRefreshEnabled);
-        if (autoRefreshEnabled) {
-            startAutoRefresh();
-        }
     }
 }
 
@@ -761,7 +994,14 @@ window.viewDetails = function(submissionId) {
     // Find the result data for this submission
     let results = [];
     try {
-        results = JSON.parse('{{ results_list|tojson|safe|replace("'", "\\'")|replace("`", "\\`") }}');
+        // Use a safer approach to get results data
+        const resultsScript = document.getElementById('results-data');
+        if (resultsScript) {
+            results = JSON.parse(resultsScript.textContent);
+        } else {
+            // Fallback: create empty results
+            results = [];
+        }
     } catch (e) {
         console.error('Error parsing results data:', e);
         if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
@@ -769,34 +1009,42 @@ window.viewDetails = function(submissionId) {
         }
         return;
     }
+    
     const result = results.find(r => r.submission_id === submissionId);
 
     if (!result) {
-        ExamGrader.notificationManager.notify('Result details not found', 'error');
+        if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+            ExamGrader.notificationManager.notify('Result details not found', 'error');
+        }
         return;
     }
 
-    // Build detailed content
-    let content = `
-        <div class="space-y-6">
-            <div class="bg-gray-50 rounded-lg p-4">
-                <h4 class="text-lg font-medium text-gray-900 mb-2">${result.filename}</h4>
-                <div class="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <span class="font-medium text-gray-500">Score:</span>
-                        <span class="ml-2 text-gray-900">${result.score}% (${result.letter_grade})</span>
-                    </div>
-                    <div>
-                        <span class="font-medium text-gray-500">Questions:</span>
-                        <span class="ml-2 text-gray-900">${result.total_questions}</span>
-                    </div>
-                </div>
-            </div>
+    // Helper function to safely escape HTML content
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 
-            <div>
-                <h5 class="text-sm font-medium text-gray-700 mb-3">Question Breakdown:</h5>
-                <div class="space-y-3">
-    `;
+    // Build detailed content using DOM manipulation instead of template literals
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'space-y-6';
+    
+    // Header section
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'bg-gray-50 rounded-lg p-4';
+    headerDiv.innerHTML = '<h4 class="text-lg font-medium text-gray-900 mb-2">' + escapeHtml(result.filename || 'Unknown') + '</h4>' +
+        '<div class="grid grid-cols-2 gap-4 text-sm">' +
+        '<div><span class="font-medium text-gray-500">Score:</span><span class="ml-2 text-gray-900">' + (result.score || 0) + '% (' + escapeHtml(result.letter_grade || 'N/A') + ')</span></div>' +
+        '<div><span class="font-medium text-gray-500">Questions:</span><span class="ml-2 text-gray-900">' + (result.total_questions || 0) + '</span></div>' +
+        '</div>';
+    contentDiv.appendChild(headerDiv);
+
+    // Question breakdown section
+    const questionDiv = document.createElement('div');
+    questionDiv.innerHTML = '<h5 class="text-sm font-medium text-gray-700 mb-3">Question Breakdown:</h5><div class="space-y-3"></div>';
+    contentDiv.appendChild(questionDiv);
 
     // Add question details
     if (result.criteria_scores) {

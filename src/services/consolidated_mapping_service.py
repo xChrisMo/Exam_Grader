@@ -3,13 +3,11 @@
 This module provides a unified mapping service that combines the functionality of all
 mapping services with integration to the base service architecture.
 """
+from typing import Any, Dict, Optional, Tuple
 
 import json
 import time
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
 
-from src.config.unified_config import config
 from src.services.base_service import BaseService, ServiceStatus
 from utils.logger import logger
 

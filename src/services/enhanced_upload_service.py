@@ -3,15 +3,14 @@
 This service integrates file upload handling with content validation,
 duplicate detection, and database operations for both submissions and marking guides.
 """
+from typing import Any, Dict, Optional, Tuple
 
 import os
 import uuid
-from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
-from src.database.models import db, Submission, MarkingGuide, User
 from src.services.content_validation_service import ContentValidationService
 from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRService
 from utils.logger import logger

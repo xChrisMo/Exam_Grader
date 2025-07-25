@@ -1,1 +1,0 @@
-"""Test package for Exam Grader application."""

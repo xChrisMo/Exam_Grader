@@ -4,12 +4,11 @@ Retry Service with Circuit Breaker Pattern
 This module provides retry functionality with exponential backoff and circuit breaker
 pattern for handling transient failures in external service calls.
 """
+from typing import Any, Dict, Optional
 
 import functools
 import time
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, Optional, Union
-from dataclasses import dataclass, field
 
 from utils.logger import logger
 

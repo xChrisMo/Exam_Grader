@@ -4,17 +4,16 @@ Provides Flask routes and SocketIO events for the refactored unified AI processi
 with detailed step-by-step progress tracking.
 """
 
-import json
 import uuid
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, session
 from flask_login import login_required, current_user
 from flask_socketio import emit, join_room, leave_room
 
 from src.database.models import db, Submission, MarkingGuide, GradingSession
-from src.services.refactored_unified_ai_service import RefactoredUnifiedAIService
+from src.services.unified_ai_service import UnifiedAIService as RefactoredUnifiedAIService
 from utils.logger import logger
 
 # Create blueprint

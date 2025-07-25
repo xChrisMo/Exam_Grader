@@ -1,9 +1,9 @@
 """Base service architecture for unified service management."""
+from typing import Any, Dict, List, Optional
 
 import time
 import logging
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -46,6 +46,18 @@ class ServiceMetrics:
     def failure_rate(self) -> float:
         """Calculate failure rate percentage."""
         return 100.0 - self.success_rate
+    
+    def add_custom_metric(self, key: str, value: Any) -> None:
+        """Add or increment a custom metric.
+        
+        Args:
+            key: Metric key
+            value: Value to add (will be incremented if key exists and both are numeric)
+        """
+        if key in self.custom_metrics and isinstance(self.custom_metrics[key], (int, float)) and isinstance(value, (int, float)):
+            self.custom_metrics[key] += value
+        else:
+            self.custom_metrics[key] = value
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert metrics to dictionary."""
@@ -135,7 +147,7 @@ class BaseService(ABC):
             self.metrics.custom_metrics[key] = value
     
     @contextmanager
-    def track_request(self):
+    def track_request(self, operation_name=None):
         """Context manager to track request metrics."""
         start_time = time.time()
         request_time = datetime.utcnow()
@@ -144,6 +156,12 @@ class BaseService(ABC):
             with self._lock:
                 self.metrics.total_requests += 1
                 self.metrics.last_request_time = request_time
+                if operation_name:
+                    # Track operation-specific metrics if needed
+                    operation_key = f"operation_{operation_name}"
+                    if operation_key not in self.metrics.custom_metrics:
+                        self.metrics.custom_metrics[operation_key] = 0
+                    self.metrics.custom_metrics[operation_key] += 1
             
             yield
             

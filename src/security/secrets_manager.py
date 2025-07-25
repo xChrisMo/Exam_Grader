@@ -6,7 +6,6 @@ sensitive configuration data using encryption and secure key derivation.
 """
 
 import base64
-import hashlib
 import json
 import os
 from datetime import datetime
@@ -14,8 +13,6 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
 # Import logger with fallback

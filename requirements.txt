@@ -1,76 +1,198 @@
-# Core Dependencies
-requests>=2.31.0
-python-dotenv>=1.0.1
-numpy>=1.26.4
-pandas>=2.2.0
-openpyxl>=3.1.2  # For Excel export
-openai>=1.12.0  # Latest OpenAI API client
-MarkupSafe>=3.0.2
-validators>=0.22.0
+# =============================================================================
+# EXAM GRADER - UNIFIED REQUIREMENTS
+# =============================================================================
+# Complete dependency list for the Exam Grader application
+# Includes core, optional, development, and OCR dependencies
 
-# Document Processing
-PyMuPDF==1.26.3  # For PDF processing (specific version that works with Python 3.13)
-python-docx>=1.1.0  # For Word documents
-Pillow>=10.2.0  # For image processing
+# ===== CORE RUNTIME DEPENDENCIES =====
 
-# Web Framework
-Flask>=3.0.2
-Werkzeug>=3.0.1
-Jinja2>=3.1.3
-Flask-Babel>=3.1.0
+# HTTP and API Communication
+requests>=2.31.0                    # HTTP library for API calls
+openai>=1.12.0                     # OpenAI API client for LLM services
 
-# Real-time Communication
-Flask-SocketIO>=5.3.6  # WebSocket support for real-time updates
-python-socketio>=5.9.0  # Socket.IO Python client
+# Configuration and Environment
+python-dotenv>=1.0.1               # Environment variable management
 
-# Background Job Processing
-celery>=5.3.4  # Background task queue
+# Data Validation and Processing
+validators>=0.22.0                 # Input validation utilities
+MarkupSafe>=3.0.2                 # Safe string handling
 
-# PDF Generation
-reportlab>=4.0.7  # PDF generation for detailed feedback reports
-weasyprint>=60.2  # Alternative PDF generation from HTML
+# Document Processing (Core)
+PyMuPDF>=1.24.0                   # PDF processing (fitz module)
+python-docx>=1.1.0                # Word document processing
+Pillow>=10.2.0                    # Image processing
 
-# Security
-Flask-WTF>=1.2.1  # CSRF protection
-Flask-Limiter>=3.5.0  # Rate limiting
-cryptography>=42.0.0  # For encryption and secure storage
-Flask-Login>=0.6.3
-Flask-Session>=0.5.0
-Flask-Caching>=2.1.0
-Flask-SQLAlchemy>=3.1.1
-Flask-Migrate>=4.0.5
+# ===== WEB FRAMEWORK =====
 
-# Database
-Flask-SQLAlchemy>=3.1.1  # Database ORM
-SQLAlchemy>=2.0.25  # Database toolkit
+# Flask Core
+Flask>=3.0.2                      # Web framework
+Werkzeug>=3.0.1                   # WSGI utilities
+Jinja2>=3.1.3                     # Template engine
 
-# Performance and Monitoring
-Flask-Caching>=2.1.0  # Caching support
-psutil>=5.9.0  # System monitoring
-aiofiles>=23.2.1  # Async file operations
-# concurrent-futures removed - included in Python 3.2+ standard library as concurrent.futures
-aiocache>=0.12.2  # Async caching
-# uvloop>=0.19.0  # High-performance event loop (Unix only) - Removed: Not compatible with Windows
+# Flask Extensions (Essential)
+Flask-WTF>=1.2.1                  # CSRF protection and forms
+Flask-Login>=0.6.3                # User session management
+Flask-CORS>=4.0.0                 # Cross-origin resource sharing
+Flask-Caching>=2.1.0              # Application-level caching
+Flask-Limiter>=3.5.0              # API rate limiting
+Flask-Babel>=3.1.0                # Internationalization support
 
-# Circuit Breaker and Resilience
-pybreaker>=1.0.1  # Circuit breaker pattern implementation
-tenacity>=8.2.3  # Retry library with exponential backoff
+# Forms and Validation
+WTForms>=3.1.0                    # Form handling and validation
 
-# Development Dependencies
-pytest>=8.0.0
-black>=24.2.0
-isort>=5.13.2
-flake8>=7.0.0
-mypy>=1.8.0
-pytest-cov>=4.1.0
+# ===== DATABASE =====
 
-# Type Stubs
-types-requests
-types-python-dateutil
-types-PyYAML
+# SQLAlchemy Core
+SQLAlchemy>=2.0.25                # Database toolkit
+Flask-SQLAlchemy>=3.1.1           # Flask-SQLAlchemy integration
+Flask-Migrate>=4.0.5              # Database migrations
 
-# Additional Dependencies
-Flask-CORS>=4.0.0  # For Cross-Origin Resource Sharing
-gunicorn>=21.2.0  # Production WSGI server
-python-magic>=0.4.27  # For file type detection
-python-magic-bin>=0.4.14; sys_platform == 'win32'  # Windows-specific magic bindings
+# ===== SECURITY =====
+
+# Cryptography and Security
+cryptography>=42.0.0              # Encryption and secure storage
+tenacity>=8.2.3                   # Retry logic with exponential backoff
+
+# ===== REAL-TIME COMMUNICATION =====
+
+# WebSocket Support
+Flask-SocketIO>=5.3.6             # WebSocket support for real-time updates
+python-socketio>=5.9.0            # Socket.IO Python client
+
+# ===== FILE HANDLING =====
+
+# File Type Detection
+python-magic>=0.4.27              # File type detection
+python-magic-bin>=0.4.14; sys_platform == 'win32'  # Windows magic bindings
+
+# ===== PRODUCTION SERVER =====
+
+# WSGI Server
+gunicorn>=21.2.0                  # Production WSGI server
+
+# ===== DATA PROCESSING AND ANALYTICS =====
+
+# Data Analysis (for Excel export and advanced analytics)
+numpy>=1.26.4                     # Numerical computing
+pandas>=2.2.0                     # Data manipulation and analysis
+matplotlib>=3.8.0                 # Plotting and visualization
+seaborn>=0.13.0                   # Statistical data visualization
+openpyxl>=3.1.2                   # Excel file support
+
+# ===== BACKGROUND TASKS =====
+
+# Background Task Processing
+celery>=5.3.4                     # Distributed task queue
+redis>=5.0.0                      # Redis client for Celery broker
+
+# ===== PDF GENERATION =====
+
+# PDF Generation and Reports
+reportlab>=4.0.7                  # PDF generation library
+weasyprint>=60.2                  # HTML to PDF conversion
+
+# ===== SYSTEM MONITORING =====
+
+# System Monitoring
+psutil>=5.9.0                     # System and process monitoring
+
+# ===== ASYNC OPERATIONS =====
+
+# Asynchronous File Operations
+aiofiles>=23.2.1                  # Async file I/O
+aiocache>=0.12.2                  # Async caching
+
+# ===== INTERNATIONALIZATION =====
+
+# Multi-language Support
+Babel>=2.14.0                     # Localization utilities
+
+# ===== DEVELOPMENT AND TESTING =====
+
+# Core Testing
+pytest>=8.0.0                     # Testing framework
+pytest-cov>=4.1.0                 # Coverage reporting
+pytest-mock>=3.12.0               # Mocking utilities
+pytest-asyncio>=0.23.0            # Async testing support
+
+# Test Data and Fixtures
+factory-boy>=3.3.0                # Test data generation
+faker>=22.0.0                     # Fake data generation
+
+# Code Quality Tools
+black>=24.2.0                     # Code formatter
+isort>=5.13.2                     # Import sorting
+flake8>=7.0.0                     # Code linting
+pylint>=3.0.0                     # Advanced code analysis
+bandit>=1.7.5                     # Security linting
+mypy>=1.8.0                       # Static type checking
+
+# Type Stubs for Third-party Libraries
+types-requests>=2.31.0            # Type stubs for requests
+types-python-dateutil>=2.8.19     # Type stubs for dateutil
+types-PyYAML>=6.0.12              # Type stubs for PyYAML
+types-Pillow>=10.2.0              # Type stubs for Pillow
+types-cryptography>=3.3.23        # Type stubs for cryptography
+
+# Documentation Generation
+sphinx>=7.2.0                     # Documentation generator
+sphinx-rtd-theme>=2.0.0           # Read the Docs theme
+sphinx-autodoc-typehints>=1.25.0  # Type hints in docs
+
+# HTTP Testing
+httpx>=0.26.0                     # Modern HTTP client for testing
+responses>=0.24.0                 # Mock HTTP responses
+
+# ===== FALLBACK OCR ENGINES =====
+# ⚠️ WARNING: OCR engines require 2-3GB of disk space
+# Install selectively based on your needs
+
+# EasyOCR - General purpose OCR with good balance of speed and accuracy
+easyocr>=1.7.0
+
+# PaddleOCR - High accuracy OCR from Baidu, excellent for production use
+paddlepaddle>=2.5.0
+paddleocr>=2.7.0
+
+# TrOCR - Microsoft's transformer-based OCR, excellent for handwritten text
+transformers>=4.21.0
+torch>=1.12.0
+torchvision>=0.13.0
+
+# Tesseract - Classic OCR engine, good for printed text
+pytesseract>=0.3.10
+
+# Supporting Libraries for OCR
+opencv-python>=4.5.0              # Computer vision library
+sentencepiece>=0.1.97             # Text tokenization
+tokenizers>=0.13.0                # Fast tokenizers
+
+# =============================================================================
+# INSTALLATION INSTRUCTIONS
+# =============================================================================
+
+# Basic installation (core functionality only):
+# pip install -r requirements.txt
+
+# Note: This unified file includes ALL dependencies. For minimal installation,
+# comment out sections you don't need:
+# - Data Processing (numpy, pandas, openpyxl)
+# - Background Tasks (celery, redis)
+# - PDF Generation (reportlab, weasyprint)
+# - Development Tools (pytest, black, etc.)
+# - OCR Engines (easyocr, paddleocr, etc.)
+
+# =============================================================================
+# DEPENDENCY MANAGEMENT NOTES
+# =============================================================================
+
+# 1. This unified file contains ALL dependencies for the application
+# 2. Comment out sections you don't need to reduce installation size
+# 3. OCR engines require significant disk space (2-3GB)
+# 4. Use virtual environments to avoid conflicts
+# 5. Pin versions for production deployments
+# 6. Regularly update dependencies for security patches
+
+# Total dependencies: ~80 packages
+# Core only: ~30 packages (~150MB)
+# With OCR engines: ~80 packages (~2-3GB)

@@ -1,4 +1,4 @@
-﻿"""Consolidated API endpoints using unified router structure.
+"""Consolidated API endpoints using unified router structure.
 
 This module provides consolidated endpoints for:
 - Marking guides management
@@ -43,8 +43,13 @@ from src.services.unified_ai_service import UnifiedAIService
 from src.services.enhanced_upload_service import EnhancedUploadService
 from src.services.consolidated_ocr_service import ConsolidatedOCRService
 from src.services.enhanced_processing_service import EnhancedProcessingService
-from src.services.consolidated_llm_service import ConsolidatedLLMService
 from utils.logger import logger
+
+try:
+    from src.services.consolidated_llm_service import ConsolidatedLLMService
+except ImportError as e:
+    logger.error(f"Failed to import ConsolidatedLLMService: {e}")
+    ConsolidatedLLMService = None
 from utils.input_sanitizer import sanitize_form_data, validate_file_upload
 
 # Initialize services
@@ -75,8 +80,12 @@ def init_consolidated_services(app):
             upload_service = EnhancedUploadService(upload_folder, ocr_service)
             
             # Initialize enhanced processing service
-            llm_service = ConsolidatedLLMService()
-            enhanced_processing_service = EnhancedProcessingService(llm_service, ocr_service)
+            if ConsolidatedLLMService is not None:
+                llm_service = ConsolidatedLLMService()
+                enhanced_processing_service = EnhancedProcessingService(llm_service, ocr_service)
+            else:
+                logger.warning("ConsolidatedLLMService not available, enhanced processing disabled")
+                enhanced_processing_service = None
             
             logger.info("Consolidated API services initialized successfully")
             
@@ -115,7 +124,7 @@ def get_marking_guides():
         search = request.args.get('search', '').strip()
         if search:
             query = query.filter(
-                MarkingGuide.name.ilike(f'%{search}%')
+                MarkingGuide.title.ilike(f'%{search}%')
             )
         
         # Apply status filter
@@ -140,26 +149,38 @@ def get_marking_guides():
                 marking_guide_id=guide.id
             ).count()
             
+            # Safely calculate questions count
+            questions_count = 0
+            if guide.questions and isinstance(guide.questions, list):
+                questions_count = len(guide.questions)
+            elif guide.questions and isinstance(guide.questions, dict):
+                questions_count = len(guide.questions.get('questions', []))
+            
             guides_data.append({
                 'id': guide.id,
-                'name': guide.name,
-                'subject': guide.subject,
+                'title': guide.title,
+                'description': guide.description,
                 'total_marks': guide.total_marks,
                 'is_active': guide.is_active,
                 'created_at': guide.created_at.isoformat(),
                 'updated_at': guide.updated_at.isoformat() if guide.updated_at else None,
                 'submission_count': submission_count,
                 'file_path': guide.file_path,
-                'content_preview': guide.content[:200] + '...' if guide.content and len(guide.content) > 200 else guide.content
+                'questions_count': questions_count,
+                'content_preview': guide.content_text[:200] + '...' if guide.content_text and len(guide.content_text) > 200 else guide.content_text
             })
         
-        return PaginatedResponse.create(
-            data=guides_data,
-            page=pagination.page,
-            per_page=pagination.per_page,
-            total=pagination.total,
-            pages=pagination.pages
-        ).to_dict()
+        # Return response in format expected by frontend
+        return {
+            'success': True,
+            'guides': guides_data,
+            'pagination': {
+                'page': pagination.page,
+                'per_page': pagination.per_page,
+                'total': pagination.total,
+                'pages': pagination.pages
+            }
+        }
         
     except Exception as e:
         logger.error(f"Error fetching marking guides: {str(e)}")
@@ -209,16 +230,25 @@ def get_marking_guide(guide_id: str):
             Submission.marking_guide_id == guide_id
         ).first()
         
+        # Safely calculate questions count
+        questions_count = 0
+        if guide.questions and isinstance(guide.questions, list):
+            questions_count = len(guide.questions)
+        elif guide.questions and isinstance(guide.questions, dict):
+            questions_count = len(guide.questions.get('questions', []))
+        
         guide_data = {
             'id': guide.id,
-            'name': guide.name,
-            'subject': guide.subject,
+            'title': guide.title,
+            'description': guide.description,
             'total_marks': guide.total_marks,
             'is_active': guide.is_active,
             'created_at': guide.created_at.isoformat(),
             'updated_at': guide.updated_at.isoformat() if guide.updated_at else None,
             'file_path': guide.file_path,
-            'content': guide.content,
+            'questions': guide.questions,
+            'questions_count': questions_count,
+            'content_text': guide.content_text,
             'statistics': {
                 'total_submissions': submission_stats.total or 0,
                 'completed_submissions': submission_stats.completed or 0,
@@ -244,16 +274,16 @@ def get_marking_guide(guide_id: str):
     methods=['POST'],
     auth_required=True,
     rate_limit_config={'max_requests': 20, 'window_seconds': 3600},
-    validate_json_fields=['name', 'subject']
+    validate_json_fields=['title']
 )
 def create_marking_guide():
     """Create a new marking guide.
     
     Request Body:
-        name (str): Guide name (required)
-        subject (str): Subject name (required)
+        title (str): Guide title (required)
+        description (str): Guide description (optional)
         total_marks (int): Total marks (optional)
-        content (str): Guide content (optional)
+        content_text (str): Guide content (optional)
     
     Returns:
         APIResponse with created guide
@@ -264,22 +294,23 @@ def create_marking_guide():
         # Additional validation
         validation_result = ValidationResult()
         
-        # Validate name
-        if not CommonValidators.min_length(data.get('name', ''), 3):
-            validation_result.add_error('name', 'Name must be at least 3 characters long')
+        # Validate title
+        if not CommonValidators.min_length(data.get('title', ''), 3):
+            validation_result.add_error('title', 'Title must be at least 3 characters long')
         
-        if not CommonValidators.max_length(data.get('name', ''), 100):
-            validation_result.add_error('name', 'Name must be less than 100 characters')
+        if not CommonValidators.max_length(data.get('title', ''), 200):
+            validation_result.add_error('title', 'Title must be less than 200 characters')
         
-        # Validate subject
-        if not CommonValidators.min_length(data.get('subject', ''), 2):
-            validation_result.add_error('subject', 'Subject must be at least 2 characters long')
+        # Validate description if provided
+        description = data.get('description', '')
+        if description and not CommonValidators.max_length(description, 1000):
+            validation_result.add_error('description', 'Description must be less than 1000 characters')
         
         # Validate total_marks if provided
         total_marks = data.get('total_marks')
         if total_marks is not None:
-            if not isinstance(total_marks, int) or total_marks <= 0:
-                validation_result.add_error('total_marks', 'Total marks must be a positive integer')
+            if not isinstance(total_marks, (int, float)) or total_marks <= 0:
+                validation_result.add_error('total_marks', 'Total marks must be a positive number')
         
         if not validation_result.is_valid:
             return ErrorResponse.validation_error(
@@ -290,24 +321,29 @@ def create_marking_guide():
                 } for error in validation_result.errors]
             ).to_dict(), 400
         
-        # Check for duplicate name
+        # Check for duplicate title
         existing_guide = MarkingGuide.query.filter_by(
             user_id=current_user.id,
-            name=data['name']
+            title=data['title']
         ).first()
         
         if existing_guide:
             return ErrorResponse.validation_error(
-                message="A marking guide with this name already exists",
-                details=[{"field": "name", "message": "Name must be unique"}]
+                message="A marking guide with this title already exists",
+                details=[{"field": "title", "message": "Title must be unique"}]
             ).to_dict(), 400
         
-        # Create new marking guide
+        # Create new marking guide (this would typically be done through file upload)
+        # For now, create a minimal guide that can be populated later
         guide = MarkingGuide(
-            name=data['name'],
-            subject=data['subject'],
-            total_marks=total_marks or 100,
-            content=data.get('content', ''),
+            title=data['title'],
+            description=description,
+            total_marks=total_marks or 100.0,
+            content_text=data.get('content_text', ''),
+            filename='manual_entry.txt',
+            file_path='',
+            file_size=0,
+            file_type='text/plain',
             user_id=current_user.id,
             is_active=True
         )
@@ -317,12 +353,12 @@ def create_marking_guide():
         
         guide_data = {
             'id': guide.id,
-            'name': guide.name,
-            'subject': guide.subject,
+            'title': guide.title,
+            'description': guide.description,
             'total_marks': guide.total_marks,
             'is_active': guide.is_active,
             'created_at': guide.created_at.isoformat(),
-            'content': guide.content
+            'content_text': guide.content_text
         }
         
         return APIResponse.success(
@@ -370,9 +406,9 @@ def get_submissions():
         )
         
         # Apply guide filter
-        guide_id = request.args.get('guide_id', type=int)
-        if guide_id:
-            query = query.filter(Submission.marking_guide_id == guide_id)
+        marking_guide_id = request.args.get('marking_guide_id')
+        if marking_guide_id:
+            query = query.filter(Submission.marking_guide_id == marking_guide_id)
         
         # Apply status filter
         status = request.args.get('status', '').strip()
@@ -412,8 +448,8 @@ def get_submissions():
                 'file_path': submission.file_path,
                 'marking_guide': {
                     'id': submission.marking_guide.id,
-                    'name': submission.marking_guide.name,
-                    'subject': submission.marking_guide.subject
+                    'title': submission.marking_guide.title,
+                    'description': submission.marking_guide.description
                 },
                 'latest_result': {
                     'total_score': latest_result.total_score,
@@ -1267,16 +1303,7 @@ def upload_submission_file():
                 "field": "marking_guide_id",
                 "message": "Marking guide ID is required"
             })
-        if not student_name:
-            validation_errors.append({
-                "field": "student_name",
-                "message": "Student name is required"
-            })
-        if not student_id:
-            validation_errors.append({
-                "field": "student_id",
-                "message": "Student ID is required"
-            })
+        # Student name and ID are now optional - no validation needed
         
         if validation_errors:
             return ErrorResponse.validation_error(
@@ -1974,3 +2001,16 @@ def get_file_operation_progress(task_id: str):
         return ErrorResponse.processing_error(
             message="Failed to get file operation progress"
         ).to_dict(), 500
+
+
+def require_auth():
+    """Check if user is authenticated and return user ID."""
+    if not current_user.is_authenticated:
+        return None
+    return current_user.id
+
+def require_auth():
+    """Check if user is authenticated and return user ID."""
+    if not current_user.is_authenticated:
+        return None
+    return current_user.id

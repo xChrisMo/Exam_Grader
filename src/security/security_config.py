@@ -9,7 +9,6 @@ import json
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from datetime import timedelta
 
 try:
     from utils.logger import logger
@@ -18,7 +17,7 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 try:
-    from src.security.auth_system import UserRole, Permission
+    from src.database.models import UserRole
 except ImportError:
     # Fallback for missing dependencies
     class UserRole:
@@ -348,6 +347,13 @@ class SecurityConfiguration:
             
             if self.debug_mode:
                 errors.append("Debug mode must be disabled in production")
+        elif self.environment == 'development':
+            # In development, these are warnings, not errors
+            if not self.session.session_cookie_secure:
+                logger.debug("Development mode: Session cookies are not secure (this is normal)")
+            
+            if not self.headers.strict_transport_security:
+                logger.debug("Development mode: HSTS header not required (this is normal)")
         
         return errors
     

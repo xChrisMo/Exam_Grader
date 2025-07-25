@@ -1,18 +1,24 @@
 """
 OCR Service for processing image-based submissions using HandwritingOCR API.
 """
+from typing import Any, Union, BinaryIO
 
 import json
-import mimetypes
 import os
 import time
-from datetime import datetime
 from pathlib import Path
-from typing import BinaryIO, Dict, List, Optional, Tuple, Union
 
 import requests
 
 from utils.logger import logger
+
+# Import fallback OCR service
+try:
+    from .fallback_ocr_service import get_fallback_ocr_service
+    FALLBACK_OCR_AVAILABLE = True
+except ImportError:
+    FALLBACK_OCR_AVAILABLE = False
+    logger.warning("Fallback OCR service not available")
 
 
 class OCRServiceError(Exception):
@@ -43,7 +49,7 @@ class OCRServiceError(Exception):
 class OCRService:
     """OCR service that uses HandwritingOCR API for text extraction."""
 
-    def __init__(self, api_key=None, base_url=None, allow_no_key=False):
+    def __init__(self, api_key=None, base_url=None, allow_no_key=False, enable_fallback=True):
         """
         Initialize with API key and base URL.
 
@@ -51,6 +57,7 @@ class OCRService:
             api_key: HandwritingOCR API key
             base_url: API base URL
             allow_no_key: If True, allows initialization without API key (for graceful degradation)
+            enable_fallback: If True, enables fallback OCR engines when primary API fails
         """
         self.api_key = api_key or os.getenv("HANDWRITING_OCR_API_KEY")
 
@@ -70,6 +77,21 @@ class OCRService:
         else:
             self.headers = {"Accept": "application/json"}
             logger.info("OCR service initialized without API key - service will be disabled")
+
+        # Initialize fallback OCR service
+        self.enable_fallback = enable_fallback
+        self.fallback_service = None
+        if enable_fallback and FALLBACK_OCR_AVAILABLE:
+            try:
+                self.fallback_service = get_fallback_ocr_service()
+                if self.fallback_service.is_available():
+                    available_engines = self.fallback_service.get_available_engines()
+                    logger.info(f"Fallback OCR service initialized with engines: {available_engines}")
+                else:
+                    logger.warning("Fallback OCR service initialized but no engines available")
+            except Exception as e:
+                logger.error(f"Failed to initialize fallback OCR service: {e}")
+                self.fallback_service = None
 
     def is_available(self) -> bool:
         """Check if the OCR service is available by testing API connectivity."""
@@ -149,10 +171,46 @@ class OCRService:
         Raises:
             OCRServiceError: If OCR processing fails
         """
-        if not self.api_key:
-            raise OCRServiceError("OCR service not available - API key not configured")
+        # Try primary API first if available
+        if self.api_key:
+            try:
+                return self._extract_with_primary_api(file)
+            except OCRServiceError as e:
+                logger.warning(f"Primary OCR API failed: {e}")
+                # Fall through to fallback if available
 
-        logger.info("Starting OCR text extraction...")
+        # Try fallback OCR if primary failed or not available
+        if self.fallback_service and self.fallback_service.is_available():
+            logger.info("Attempting OCR with fallback service...")
+            try:
+                return self._extract_with_fallback(file)
+            except Exception as e:
+                logger.error(f"Fallback OCR failed: {e}")
+                if self.api_key:
+                    # If we had a primary API, mention both failures
+                    raise OCRServiceError(
+                        f"Both primary OCR API and fallback services failed. "
+                        f"Primary error: {e}. Please check your configuration or try again later."
+                    )
+                else:
+                    raise OCRServiceError(
+                        f"OCR processing failed: {e}. "
+                        f"No primary API key configured and fallback service failed."
+                    )
+
+        # No OCR service available
+        if not self.api_key:
+            raise OCRServiceError(
+                "OCR service not available - API key not configured and no fallback service available"
+            )
+        else:
+            raise OCRServiceError(
+                "OCR processing failed and no fallback service available"
+            )
+
+    def _extract_with_primary_api(self, file: Union[str, Path, BinaryIO]) -> str:
+        """Extract text using the primary HandwritingOCR API."""
+        logger.info("Starting OCR text extraction with primary API...")
 
         try:
             # Validate file if it's a path
@@ -242,6 +300,84 @@ class OCRService:
                 f"OCR processing failed: {str(e)}. "
                 "Please try again or contact support if the issue persists."
             )
+
+    def _extract_with_fallback(self, file: Union[str, Path, BinaryIO]) -> str:
+        """Extract text using fallback OCR engines."""
+        logger.info("Starting OCR text extraction with fallback service...")
+
+        # Convert file object to path if needed
+        file_path = file
+        if hasattr(file, 'read'):  # File-like object
+            import tempfile
+            import shutil
+
+            # Save to temporary file
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+            if hasattr(file, 'seek'):
+                file.seek(0)
+            shutil.copyfileobj(file, temp_file)
+            temp_file.close()
+            file_path = temp_file.name
+
+        try:
+            # Determine content type based on file characteristics
+            content_type = self._detect_content_type(file_path)
+
+            # Use fallback service
+            result = self.fallback_service.extract_text(
+                file_path,
+                content_type=content_type
+            )
+
+            if result['success'] and result['text'].strip():
+                engine_used = result.get('engine_used', 'unknown')
+                processing_time = result.get('processing_time', 0)
+                confidence = result.get('confidence', 0)
+
+                logger.info(
+                    f"Fallback OCR completed successfully with {engine_used} "
+                    f"in {processing_time:.2f}s (confidence: {confidence:.2f})"
+                )
+
+                return result['text']
+            else:
+                error_msg = result.get('error', 'Unknown error')
+                raise OCRServiceError(f"Fallback OCR failed: {error_msg}")
+
+        except Exception as e:
+            logger.error(f"Fallback OCR processing failed: {e}")
+            raise OCRServiceError(f"Fallback OCR processing failed: {e}")
+        finally:
+            # Clean up temporary file if created
+            if hasattr(file, 'read') and file_path != file:
+                try:
+                    os.unlink(file_path)
+                except:
+                    pass
+
+    def _detect_content_type(self, file_path: Union[str, Path]) -> str:
+        """
+        Detect the type of content in the image for optimal OCR engine selection.
+
+        Args:
+            file_path: Path to the image file
+
+        Returns:
+            str: Content type ('printed', 'handwritten', 'mixed')
+        """
+        # Simple heuristic based on file name and basic analysis
+        # In a more sophisticated implementation, this could use image analysis
+
+        file_name = str(file_path).lower()
+
+        # Check for keywords that might indicate content type
+        if any(keyword in file_name for keyword in ['handwritten', 'handwriting', 'hw', 'written']):
+            return 'handwritten'
+        elif any(keyword in file_name for keyword in ['printed', 'typed', 'document', 'pdf']):
+            return 'printed'
+        else:
+            # Default to mixed for unknown content
+            return 'mixed'
 
     def _upload_document(self, file: Union[str, Path, BinaryIO]) -> str:
         """

@@ -1,5 +1,8 @@
 """
-Logging configuration for the application.
+Unified Logging Configuration for Exam Grader Application.
+
+This module provides a standardized logging interface that integrates with
+the comprehensive logging system when available, with fallback to basic logging.
 """
 
 import logging
@@ -10,10 +13,22 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+# Try to import comprehensive logging system
+try:
+    from src.logging import get_application_logger, setup_application_logging
+    from src.logging.comprehensive_logger import ComprehensiveLogger, LogLevel
+    COMPREHENSIVE_LOGGING_AVAILABLE = True
+except ImportError:
+    COMPREHENSIVE_LOGGING_AVAILABLE = False
+    ComprehensiveLogger = None
+    LogLevel = None
+
 
 def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
     """
     Set up a logger with proper configuration.
+
+    Uses comprehensive logging system when available, falls back to basic logging.
 
     Args:
         name: Name of the logger (usually __name__)
@@ -22,28 +37,29 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
     Returns:
         logging.Logger: Configured logger instance
     """
-    # Create logger
+    # Try to use comprehensive logging system first
+    if COMPREHENSIVE_LOGGING_AVAILABLE:
+        try:
+            comprehensive_logger = get_application_logger(name)
+            if comprehensive_logger:
+                return comprehensive_logger.logger  # Return the underlying logger
+        except Exception:
+            pass  # Fall back to basic logging
+
+    # Fall back to basic logging configuration
     logger = logging.getLogger(name)
 
     # Only configure if it hasn't been configured before
     if not logger.handlers:
         # Set log level from environment or default to INFO
         log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-        
+
         # Validate log level
         valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
         if log_level not in valid_levels:
-            log_level = 'DEBUG'  # Default to DEBUG for maximum visibility
-            
-        # Use a temporary console handler to log the debug message
-        temp_handler = logging.StreamHandler()
-        temp_handler.setFormatter(logging.Formatter("%(message)s"))
-        temp_logger = logging.getLogger("setup")
-        temp_logger.setLevel(logging.DEBUG)
-        temp_logger.addHandler(temp_handler)
-        temp_logger.debug(f"Setting logger level to: {log_level}")
-        # Ensure the logger level is set to DEBUG to capture all messages
-        logger.setLevel(getattr(logging, log_level, logging.DEBUG))
+            log_level = 'INFO'  # Default to INFO for production
+
+        logger.setLevel(getattr(logging, log_level, logging.INFO))
 
         # Create formatters
         file_formatter = logging.Formatter(
@@ -161,6 +177,36 @@ class Logger:
         """Log a critical message."""
         self.log_metric("errors")
         self.logger.critical(message, *args, **kwargs)
+
+    def exception(self, message: str, *args, **kwargs) -> None:
+        """Log an exception with traceback."""
+        self.log_metric("errors")
+        self.logger.exception(message, *args, **kwargs)
+
+    def log_error_with_context(self, error: Exception, context: Dict[str, Any],
+                              user_id: Optional[str] = None) -> None:
+        """Log an error with additional context information.
+
+        Args:
+            error: The exception that occurred
+            context: Additional context information
+            user_id: Optional user ID for tracking
+        """
+        self.log_metric("errors")
+
+        error_info = {
+            'error_type': type(error).__name__,
+            'error_message': str(error),
+            'context': context,
+            'user_id': user_id,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        self.logger.error(
+            f"Error occurred: {error_info['error_type']} - {error_info['error_message']}",
+            extra={'error_context': error_info},
+            exc_info=True
+        )
 
     # Original enhanced logging methods
     def log_metric(self, metric_name: str, value: Any = 1) -> None:

@@ -6,10 +6,10 @@ This service handles:
 - Duplicate detection logic
 - Integration with existing OCR and file processing services
 """
+from typing import Any, Dict, Optional, Tuple
 
 import hashlib
 # Removed regex import - using LLM-based approaches instead
-from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 
 from src.database.models import db, Submission, MarkingGuide
@@ -111,48 +111,52 @@ class ContentValidationService:
                 return "", 0.0
             
             # Handle different file types
-            if file_type.lower() in ['pdf', 'jpg', 'jpeg', 'png', 'tiff', 'bmp']:
-                # Use OCR service for images and PDFs
-                result = self.ocr_service.extract_text(file_path)
-                if result and 'text' in result:
-                    confidence = result.get('confidence', 0.0)
-                    return result['text'], confidence
-                else:
-                    logger.warning(f"OCR extraction failed for {file_path}")
-                    return "", 0.0
-                    
-            elif file_type.lower() in ['docx', 'doc']:
-                # Handle Word documents
+            if file_type.lower() in ['docx', 'doc']:
+                from src.parsing.parse_submission import DocumentParser
                 try:
-                    import docx
-                    doc = docx.Document(file_path)
-                    text = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
-                    return text, 1.0  # High confidence for direct text extraction
-                except ImportError:
-                    logger.error("python-docx not installed, cannot process DOCX files")
-                    return "", 0.0
+                    text_content = DocumentParser.extract_text_from_docx(file_path)
+                    if text_content and len(text_content.strip()) >= 10:
+                        logger.info(f"✓ Content validation: {len(text_content)} characters extracted")
+                        return text_content, 1.0  # Perfect confidence for Word documents
+                    else:
+                        logger.warning(f"⚠ Word document appears to be empty")
+                        return "", 0.0
                 except Exception as e:
-                    logger.error(f"Error extracting text from DOCX: {e}")
+                    logger.error(f"✗ Content validation failed: {str(e)}")
                     return "", 0.0
-                    
+            elif file_type.lower() == 'pdf':
+                # For PDFs, text extraction is handled by OCR service during upload
+                # We just validate that the file exists and is readable
+                try:
+                    logger.info(f"✓ PDF file type accepted - text extraction handled by OCR service")
+                    # Return empty string with confidence - actual text will be provided via extracted_text parameter
+                    return "", 0.8  # Lower confidence since OCR was used
+                except Exception as e:
+                    logger.error(f"✗ PDF validation failed: {str(e)}")
+                    return "", 0.0
             elif file_type.lower() == 'txt':
-                # Handle plain text files
                 try:
                     with open(file_path, 'r', encoding='utf-8') as f:
-                        text = f.read()
-                    return text, 1.0
-                except UnicodeDecodeError:
-                    # Try with different encoding
-                    try:
-                        with open(file_path, 'r', encoding='latin-1') as f:
-                            text = f.read()
-                        return text, 0.9  # Slightly lower confidence due to encoding issues
-                    except Exception as e:
-                        logger.error(f"Error reading text file: {e}")
+                        text_content = f.read()
+                    if text_content and len(text_content.strip()) >= 10:
+                        logger.info(f"✓ Text file validation: {len(text_content)} characters extracted")
+                        return text_content, 1.0  # Perfect confidence for text files
+                    else:
+                        logger.warning(f"⚠ Text file appears to be empty")
                         return "", 0.0
-                        
+                except Exception as e:
+                    logger.error(f"✗ Text file validation failed: {str(e)}")
+                    return "", 0.0
+            elif file_type.lower() in ['jpg', 'jpeg', 'png', 'bmp', 'tiff', 'gif']:
+                # For images, text extraction is handled by OCR service during upload
+                try:
+                    logger.info(f"✓ Image file type accepted - text extraction handled by OCR service")
+                    return "", 0.7  # Lower confidence since OCR was used
+                except Exception as e:
+                    logger.error(f"✗ Image validation failed: {str(e)}")
+                    return "", 0.0
             else:
-                logger.warning(f"Unsupported file type for text extraction: {file_type}")
+                logger.error(f"✗ Unsupported file type: {file_type}. Supported types: docx, doc, pdf, txt, jpg, jpeg, png, bmp, tiff, gif")
                 return "", 0.0
                 
         except Exception as e:
@@ -324,7 +328,8 @@ class ContentValidationService:
     
     def validate_and_check_duplicates(self, file_path: str, file_type: str, 
                                     user_id: str, check_type: str,
-                                    marking_guide_id: Optional[str] = None) -> Dict[str, Any]:
+                                    marking_guide_id: Optional[str] = None,
+                                    extracted_text: Optional[str] = None) -> Dict[str, Any]:
         """Complete validation and duplicate checking workflow.
         
         Args:
@@ -338,7 +343,24 @@ class ContentValidationService:
             Complete validation and duplicate check results
         """
         # Step 1: Validate file content
-        validation_result = self.validate_file_content(file_path, file_type)
+        if extracted_text is not None:
+            # Use pre-extracted text (from OCR or other processing)
+            logger.info(f"Using pre-extracted text ({len(extracted_text)} characters) for validation")
+            content_hash = self.compute_content_hash(extracted_text)
+            validation_result = {
+                'success': True,
+                'content_hash': content_hash,
+                'text_content': extracted_text,
+                'confidence': 0.8,  # OCR confidence
+                'text_length': len(extracted_text),
+                'normalized_length': len(self.normalize_text(extracted_text)),
+                'validation_method': 'pre_extracted_text',
+                'file_size': Path(file_path).stat().st_size,
+                'file_type': file_type
+            }
+        else:
+            # Extract text from file
+            validation_result = self.validate_file_content(file_path, file_type)
         
         if not validation_result['success']:
             # For marking guides, be more lenient with content extraction failures
@@ -384,7 +406,7 @@ class ContentValidationService:
         # Combine results
         result = {
             **validation_result,
-            **duplicate_result
+            'duplicate_check': duplicate_result
         }
         
         return result

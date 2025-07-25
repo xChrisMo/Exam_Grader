@@ -821,9 +821,53 @@ class UIWorkflows {
         if (e.altKey) parts.push('alt');
         if (e.metaKey) parts.push('meta');
         
-        parts.push(e.key.toLowerCase());
+        // Handle cases where e.key might be undefined
+        if (e.key && typeof e.key === 'string') {
+            parts.push(e.key.toLowerCase());
+        } else {
+            // Fallback to keyCode if key is not available
+            const keyName = this.getKeyNameFromCode(e.keyCode || e.which);
+            if (keyName) {
+                parts.push(keyName.toLowerCase());
+            }
+        }
         
         return parts.join('+');
+    }
+    
+    getKeyNameFromCode(keyCode) {
+        // Common key codes mapping
+        const keyMap = {
+            8: 'backspace',
+            9: 'tab',
+            13: 'enter',
+            16: 'shift',
+            17: 'ctrl',
+            18: 'alt',
+            27: 'escape',
+            32: 'space',
+            37: 'arrowleft',
+            38: 'arrowup',
+            39: 'arrowright',
+            40: 'arrowdown',
+            46: 'delete'
+        };
+        
+        if (keyMap[keyCode]) {
+            return keyMap[keyCode];
+        }
+        
+        // For letter keys (A-Z)
+        if (keyCode >= 65 && keyCode <= 90) {
+            return String.fromCharCode(keyCode).toLowerCase();
+        }
+        
+        // For number keys (0-9)
+        if (keyCode >= 48 && keyCode <= 57) {
+            return String.fromCharCode(keyCode);
+        }
+        
+        return null;
     }
     
     showNotification(message, type = 'info', duration = 5000) {

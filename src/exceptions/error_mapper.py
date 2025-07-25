@@ -1,13 +1,11 @@
 """Error mapping system for user-friendly error messages and localization."""
 
-import re
-from typing import Any, Dict, List, Optional, Tuple
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
+from typing import Optional, Dict, Any, List
 
-from .application_errors import ApplicationError
-from src.models.api_responses import ErrorCode
+from .application_errors import ApplicationError, ErrorCode
 
 
 class MessageSeverity(Enum):
@@ -479,7 +477,6 @@ class ContextAwareErrorMapper(UserFriendlyErrorMapper):
                 'corrupted': 'The uploaded file appears to be corrupted.'
             },
             'student_id': {
-                'required': 'Student ID is required.',
                 'invalid': 'Please enter a valid student ID.',
                 'not_found': 'Student ID not found in the system.'
             },

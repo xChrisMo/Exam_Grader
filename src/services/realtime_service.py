@@ -2,15 +2,10 @@
 Provides real-time communication for dashboard updates, progress tracking, and notifications.
 Integrated with enhanced WebSocketManager for comprehensive connection handling."""
 
-import json
-import time
-from datetime import datetime
-from typing import Any, Dict, List, Optional
 
-from flask import current_app, request
+from typing import Dict, Any, Optional
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from src.logging import get_logger
-from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRService
 from src.services.websocket_manager import WebSocketManager, MessagePriority
 
 # Handle case where get_logger might be None due to import issues

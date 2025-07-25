@@ -2,11 +2,9 @@
 Background Task Processing Service using Celery.
 Handles OCR processing, LLM grading, and other long-running tasks asynchronously.
 """
+from typing import Any, Dict, List
 
 import os
-import time
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
 
 from celery import Celery
 from flask import current_app
@@ -15,7 +13,6 @@ from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRS
 from src.services.consolidated_llm_service import ConsolidatedLLMService as LLMService
 from src.services.consolidated_mapping_service import ConsolidatedMappingService as MappingService
 from src.services.consolidated_grading_service import ConsolidatedGradingService as GradingService
-from src.services.realtime_service import realtime_service
 from src.database.models import db, Submission, GradingResult, Mapping, MarkingGuide
 from utils.logger import logger
 

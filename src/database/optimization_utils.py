@@ -1,15 +1,13 @@
 """Database optimization utilities for applying migrations and validating schema."""
+from typing import Dict, List, Optional
 
 import logging
-from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
 from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.exc import SQLAlchemyError
 from flask import current_app
 
 from .schema_migrations import MigrationManager
-from .optimized_models import db
 
 logger = logging.getLogger(__name__)
 

@@ -124,6 +124,7 @@ class GradingService:
                 student_submission_content = json.dumps(student_answers)
 
                 if self.mapping_service:
+                    # Let mapping service handle guide type detection automatically
                     mapping_result, mapping_error = (
                         self.mapping_service.map_submission_to_guide(
                             marking_guide_content, student_submission_content
@@ -210,58 +211,38 @@ class GradingService:
                     try:
                         # Use LLM to compare answers with improved system prompt
                         system_prompt = """
-                        You are an expert educational grader with years of experience in assessing student work.
-                        Your task is to evaluate a student's answer against a model answer from a marking guide.
+                        You are a fair and encouraging educational grader. Your goal is to recognize student effort and knowledge while providing constructive feedback.
 
-                        Evaluate the student's answer based on the following criteria:
-                        1. Content Accuracy (40%): Correctness of facts, concepts, or procedures
-                        2. Completeness (30%): Inclusion of all required information or steps
-                        3. Understanding (20%): Demonstrated comprehension of underlying principles
-                        4. Clarity (10%): Clear and coherent expression of ideas
+                        GRADING PHILOSOPHY:
+                        - Give credit for effort and partial understanding
+                        - Look for any relevant content, even if not perfectly expressed
+                        - Consider that students may express ideas differently than the model answer
+                        - Be generous with partial credit for attempts that show understanding
+                        - Focus on what the student got right, not just what they missed
 
-                        IMPORTANT GUIDELINES:
-                        - Be fair and objective in your assessment
-                        - Consider partial credit for partially correct answers
-                        - Identify specific points where the student's answer matches or differs from the model answer
-                        - Provide constructive feedback that helps the student understand what they did well and what they missed
-                        - Your feedback should be specific and directly reference the student's response
-                        - Look for semantic similarity, not just exact word matches
-                        - Consider alternative correct approaches that might differ from the model answer
-                        - Be lenient on minor formatting differences or slight wording variations
-                        - Focus on how closely the student's answer matches the model answer in terms of content and understanding
-                        - Evaluate the quality and correctness of the student's response, not just the presence of keywords
+                        SCORING GUIDELINES:
+                        - 90-100%: Excellent answer that demonstrates clear understanding
+                        - 70-89%: Good answer with most key points covered
+                        - 50-69%: Adequate answer showing basic understanding
+                        - 30-49%: Partial answer with some relevant content
+                        - 10-29%: Minimal answer but shows some effort
+                        - 0-9%: No relevant content or no attempt
+
+                        IMPORTANT: Even if the student's answer doesn't perfectly match the model answer, give credit for:
+                        - Relevant facts or concepts mentioned
+                        - Logical reasoning or problem-solving attempts
+                        - Correct terminology or vocabulary
+                        - Evidence of understanding the topic
+                        - Creative or alternative approaches that are valid
 
                         Output in JSON format:
                         {
                             "score": <numeric_score>,
                             "percentage": <percent_of_max_score>,
-                            "feedback": "<detailed_feedback_with_specifics>",
-                            "strengths": ["<specific_strength1>", "<specific_strength2>", ...],
-                            "weaknesses": ["<specific_weakness1>", "<specific_weakness2>", ...],
-                            "improvement_suggestions": ["<specific_suggestion1>", "<specific_suggestion2>", ...],
-                            "key_points": {
-                                "matched": ["<specific_point1>", "<specific_point2>", ...],
-                                "missed": ["<specific_point1>", "<specific_point2>", ...],
-                                "partially_matched": ["<specific_point1>", "<specific_point2>", ...]
-                            },
-                            "grading_breakdown": {
-                                "content_accuracy": {
-                                    "score": <0-10>,
-                                    "comments": "<specific_comments>"
-                                },
-                                "completeness": {
-                                    "score": <0-10>,
-                                    "comments": "<specific_comments>"
-                                },
-                                "understanding": {
-                                    "score": <0-10>,
-                                    "comments": "<specific_comments>"
-                                },
-                                "clarity": {
-                                    "score": <0-10>,
-                                    "comments": "<specific_comments>"
-                                }
-                            }
+                            "feedback": "<encouraging_and_constructive_feedback>",
+                            "strengths": ["<what_student_did_well>", ...],
+                            "areas_for_improvement": ["<gentle_suggestions>", ...],
+                            "partial_credit_given_for": ["<specific_reasons_for_partial_credit>", ...]
                         }
                         """
 
@@ -276,22 +257,35 @@ class GradingService:
                         """
 
                         user_prompt = f"""
+                        GRADING CONTEXT:
+                        Guide Type: {guide_type}
                         Question: {guide_text}
-
-                        Model Answer from Marking Guide:
-                        {guide_answer}
-
-                        Student's Answer:
-                        {submission_answer}
-
+                        Model Answer: {guide_answer}
+                        Student Answer: {submission_answer}
                         Maximum Score: {max_score}
+
+                        GUIDE TYPE SPECIFIC INSTRUCTIONS:
+                        
+                        For "questions_only" guides:
+                        - Focus on whether student answered the question appropriately
+                        - Look for understanding, effort, and relevant content
+                        - Be generous since no model answer is available for comparison
+                        - Award points for logical reasoning and topic knowledge
+                        
+                        For "answers_only" guides:
+                        - Compare student response directly against the model answer
+                        - Look for key concepts, facts, and approaches from the model
+                        - Give partial credit for partially correct elements
+                        
+                        For "mixed" guides:
+                        - Use both question context AND model answer for evaluation
+                        - Check if student addressed the question AND compare against model answer
+                        - Most comprehensive grading possible
 
                         {match_info}
 
-                        Please evaluate how closely the student's answer matches the model answer and assign a score out of {max_score}.
-                        Focus on semantic similarity and conceptual understanding rather than exact wording.
-                        Consider both the content accuracy and the demonstrated understanding.
-                        Provide detailed feedback explaining your scoring.
+                        Please evaluate the student's answer based on the guide type "{guide_type}" and assign a fair score out of {max_score}.
+                        Focus on understanding and effort, giving credit for partial knowledge.
                         """
 
                         logger.info(
@@ -567,7 +561,6 @@ class GradingService:
             return 0.0
 
         # Remove punctuation and convert to lowercase for comparison using basic string operations
-        import string
         guide_clean = ''.join(c for c in guide_answer.lower() if c.isalnum() or c.isspace())
         submission_clean = ''.join(c for c in submission_answer.lower() if c.isalnum() or c.isspace())
 
@@ -779,3 +772,43 @@ class GradingService:
     def process_submission(submission):
         submission.processed = True
         db.session.commit()
+    
+    def _get_letter_grade(self, percentage: float) -> str:
+        """Convert percentage score to letter grade.
+        
+        Args:
+            percentage: Percentage score (0-100)
+            
+        Returns:
+            Letter grade (A, B, C, D, F)
+        """
+        if percentage >= 90:
+            return 'A'
+        elif percentage >= 80:
+            return 'B'
+        elif percentage >= 70:
+            return 'C'
+        elif percentage >= 60:
+            return 'D'
+        else:
+            return 'F'
+    
+    def _get_letter_grade(self, percentage: float) -> str:
+        """Convert percentage score to letter grade.
+        
+        Args:
+            percentage: Percentage score (0-100)
+            
+        Returns:
+            Letter grade (A, B, C, D, F)
+        """
+        if percentage >= 90:
+            return 'A'
+        elif percentage >= 80:
+            return 'B'
+        elif percentage >= 70:
+            return 'C'
+        elif percentage >= 60:
+            return 'D'
+        else:
+            return 'F'

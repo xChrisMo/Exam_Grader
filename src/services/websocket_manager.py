@@ -8,20 +8,17 @@ Provides comprehensive WebSocket connection management with:
 - Message queuing for offline clients
 """
 
-import json
 import time
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Set, Callable, Any
-from dataclasses import dataclass, asdict
 from threading import Lock, Thread
 from collections import defaultdict, deque
 from enum import Enum
+from dataclasses import dataclass
 
-from flask import current_app, request
 from flask_socketio import SocketIO, emit, join_room, leave_room, disconnect
 from src.logging import get_logger
-from src.exceptions import ApplicationError, ErrorCode
 
 # Handle case where get_logger might be None due to import issues
 if get_logger is not None:

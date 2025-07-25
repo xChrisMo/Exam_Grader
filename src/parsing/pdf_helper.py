@@ -1,13 +1,17 @@
 """
 PDF processing helper functions with improved error handling.
 """
+from typing import Tuple
 
 import os
 import logging
-from pathlib import Path
-from typing import Tuple, Optional
 
-import fitz  # PyMuPDF
+try:
+    import fitz  # PyMuPDF
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+    fitz = None
 
 logger = logging.getLogger(__name__)
 

@@ -13,9 +13,6 @@ __version__ = "0.1.0"
 __author__ = "Exam Grader Team"
 __license__ = "MIT"
 
-from src.config.config_manager import ConfigManager
-from src.parsing.parse_submission import parse_student_submission
-from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRService
 
 # Load environment variables
 load_dotenv(".env", override=True)

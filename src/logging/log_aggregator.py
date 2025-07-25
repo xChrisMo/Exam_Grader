@@ -6,13 +6,12 @@ for the comprehensive logging system.
 
 import json
 import statistics
-from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
 from threading import Lock
 import re
+from typing import Optional, Dict, Any, List, Union
 
 
 @dataclass

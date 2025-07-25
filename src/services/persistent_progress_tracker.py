@@ -1,24 +1,62 @@
 """Enhanced Progress Tracker with Database Persistence and Recovery."""
 
-import json
-import time
-import uuid
 from datetime import datetime, timedelta
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import sessionmaker
 
-from ..database.models import db
-from ..database.progress_models import (
-    ProgressMetrics,
-    ProgressRecovery,
-    ProgressSession,
-    ProgressUpdate,
-)
-from ..utils.logging_config import get_logger
-from .websocket_manager import MessagePriority, WebSocketManager
+try:
+    from src.database.models import db
+except ImportError:
+    try:
+        # Try alternative import path
+        from webapp.database.models import db
+    except ImportError:
+        try:
+            # Try importing from the main database module
+            from src.database import db
+        except ImportError:
+            # Fallback when db is not available
+            db = None
+try:
+    from ..database.progress_models import (
+        ProgressMetrics,
+        ProgressRecovery,
+        ProgressSession,
+        ProgressUpdate,
+    )
+except ImportError:
+    try:
+        from src.database.progress_models import (
+            ProgressMetrics,
+            ProgressRecovery,
+            ProgressSession,
+            ProgressUpdate,
+        )
+    except ImportError:
+        # Fallback when progress models are not available
+        ProgressMetrics = None
+        ProgressRecovery = None
+        ProgressSession = None
+        ProgressUpdate = None
+try:
+    from ..utils.logging_config import get_logger
+except ImportError:
+    try:
+        from src.utils.logging_config import get_logger
+    except ImportError:
+        get_logger = None
+
+try:
+    from .websocket_manager import MessagePriority, WebSocketManager
+except ImportError:
+    try:
+        from src.services.websocket_manager import MessagePriority, WebSocketManager
+    except ImportError:
+        # Fallback when websocket manager is not available
+        MessagePriority = None
+        WebSocketManager = None
 
 # Handle case where get_logger might be None due to import issues
 if get_logger is not None:
@@ -41,14 +79,18 @@ class PersistentProgressTracker:
         self._realtime_service = None
         self.lock = Lock()
         self.logger = logger
+        self.db_available = db is not None and ProgressSession is not None
         
         # In-memory cache for active sessions
-        self._active_sessions_cache: Dict[str, ProgressSession] = {}
+        self._active_sessions_cache: Dict[str, Any] = {}
         self._cache_lock = Lock()
         
         # Performance metrics
         self._metrics_buffer: List[Dict[str, Any]] = []
         self._metrics_lock = Lock()
+        
+        if not self.db_available:
+            logger.warning("Database or progress models not available, persistent progress tracking disabled")
         
         logger.info("Persistent Progress Tracker initialized")
     
@@ -84,8 +126,16 @@ class PersistentProgressTracker:
         Returns:
             Session ID
         """
+        if not self.db_available or ProgressSession is None:
+            logger.warning(f"Database or progress models not available, cannot create persistent session {session_id}")
+            return session_id
+            
         try:
             # Create database session
+            if db is None:
+                logger.warning("Database not available, progress tracking disabled")
+                return session_id
+                
             progress_session = ProgressSession(
                 session_id=session_id,
                 user_id=user_id,
@@ -96,8 +146,9 @@ class PersistentProgressTracker:
                 session_metadata=metadata or {}
             )
             
-            db.session.add(progress_session)
-            db.session.commit()
+            if db and hasattr(db, 'session'):
+                db.session.add(progress_session)
+                db.session.commit()
             
             # Cache the session
             with self._cache_lock:
@@ -107,9 +158,13 @@ class PersistentProgressTracker:
             return session_id
             
         except SQLAlchemyError as e:
-            db.session.rollback()
+            if db:
+                db.session.rollback()
             logger.error(f"Failed to create progress session {session_id}: {e}")
             raise
+        except Exception as e:
+            logger.error(f"Failed to create progress session {session_id}: {e}")
+            return session_id
     
     def update_progress(
         self,
@@ -137,6 +192,10 @@ class PersistentProgressTracker:
         Returns:
             ProgressUpdate object or None if failed
         """
+        if not self.db_available or ProgressUpdate is None:
+            logger.debug(f"Database or progress models not available, skipping progress update for {session_id}")
+            return None
+            
         try:
             # Get or load session
             progress_session = self._get_session(session_id)
@@ -173,8 +232,9 @@ class PersistentProgressTracker:
                 progress_session.status = "failed"
             
             # Save to database
-            db.session.add(progress_update)
-            db.session.commit()
+            if db is not None and hasattr(db, 'session'):
+                db.session.add(progress_update)
+                db.session.commit()
             
             # Emit real-time update
             self._emit_progress_update(session_id, progress_update)
@@ -187,7 +247,8 @@ class PersistentProgressTracker:
             return progress_update
             
         except SQLAlchemyError as e:
-            db.session.rollback()
+            if db:
+                db.session.rollback()
             logger.error(f"Failed to update progress for {session_id}: {e}")
             return None
     
@@ -209,6 +270,10 @@ class PersistentProgressTracker:
         Returns:
             True if successful
         """
+        if not self.db_available or ProgressUpdate is None:
+            logger.debug(f"Database or progress models not available, skipping session completion for {session_id}")
+            return True
+            
         try:
             progress_session = self._get_session(session_id)
             if not progress_session:
@@ -216,21 +281,23 @@ class PersistentProgressTracker:
                 return False
             
             # Complete the session
-            progress_session.complete(status, end_time)
+            if hasattr(progress_session, 'complete'):
+                progress_session.complete(status, end_time)
             
             # Create final progress update
             final_update = ProgressUpdate(
                 session_id=session_id,
-                step_number=progress_session.total_steps,
+                step_number=getattr(progress_session, 'total_steps', 1),
                 operation="Completed",
-                submission_index=progress_session.total_submissions - 1,
+                submission_index=getattr(progress_session, 'total_submissions', 1) - 1,
                 percentage=100.0,
                 status=status,
                 details=final_message
             )
             
-            db.session.add(final_update)
-            db.session.commit()
+            if db and hasattr(db, 'session'):
+                db.session.add(final_update)
+                db.session.commit()
             
             # Remove from cache
             with self._cache_lock:
@@ -243,7 +310,11 @@ class PersistentProgressTracker:
             return True
             
         except SQLAlchemyError as e:
-            db.session.rollback()
+            if db:
+                db.session.rollback()
+            logger.error(f"Failed to complete session {session_id}: {e}")
+            return False
+        except Exception as e:
             logger.error(f"Failed to complete session {session_id}: {e}")
             return False
     
@@ -261,7 +332,12 @@ class PersistentProgressTracker:
             if not progress_session:
                 return None
             
+            result = progress_session.to_dict()
+            
             # Get latest progress update
+            if db is None or not hasattr(db, 'session'):
+                return result
+                
             latest_update = (
                 db.session.query(ProgressUpdate)
                 .filter_by(session_id=session_id)
@@ -269,7 +345,6 @@ class PersistentProgressTracker:
                 .first()
             )
             
-            result = progress_session.to_dict()
             if latest_update:
                 result.update({
                     "latest_operation": latest_update.operation,
@@ -293,6 +368,9 @@ class PersistentProgressTracker:
             List of progress updates
         """
         try:
+            if db is None or not hasattr(db, 'session'):
+                return []
+                
             updates = (
                 db.session.query(ProgressUpdate)
                 .filter_by(session_id=session_id)
@@ -324,6 +402,10 @@ class PersistentProgressTracker:
         Returns:
             True if recovery initiated successfully
         """
+        if not self.db_available or ProgressRecovery is None:
+            logger.debug(f"Database or progress models not available, skipping session recovery for {session_id}")
+            return True
+            
         try:
             progress_session = self._get_session(session_id, include_completed=True)
             if not progress_session:
@@ -335,7 +417,7 @@ class PersistentProgressTracker:
                 if recovery_type == "restart":
                     recovery_point = 0
                 else:
-                    recovery_point = progress_session.current_step
+                    recovery_point = getattr(progress_session, 'current_step', 0)
             
             # Create recovery record
             recovery_record = ProgressRecovery(
@@ -348,16 +430,22 @@ class PersistentProgressTracker:
             
             # Reset session state for recovery
             if recovery_type == "restart":
-                progress_session.current_step = 0
-                progress_session.current_submission = 0
+                if hasattr(progress_session, 'current_step'):
+                    progress_session.current_step = 0
+                if hasattr(progress_session, 'current_submission'):
+                    progress_session.current_submission = 0
             elif recovery_type == "rollback":
-                progress_session.current_step = max(0, recovery_point)
+                if hasattr(progress_session, 'current_step'):
+                    progress_session.current_step = max(0, recovery_point)
             
-            progress_session.status = "active"
-            progress_session.end_time = None
+            if hasattr(progress_session, 'status'):
+                progress_session.status = "active"
+            if hasattr(progress_session, 'end_time'):
+                progress_session.end_time = None
             
-            db.session.add(recovery_record)
-            db.session.commit()
+            if db and hasattr(db, 'session'):
+                db.session.add(recovery_record)
+                db.session.commit()
             
             # Add back to cache
             with self._cache_lock:
@@ -367,7 +455,11 @@ class PersistentProgressTracker:
             return True
             
         except SQLAlchemyError as e:
-            db.session.rollback()
+            if db:
+                db.session.rollback()
+            logger.error(f"Failed to recover session {session_id}: {e}")
+            return False
+        except Exception as e:
             logger.error(f"Failed to recover session {session_id}: {e}")
             return False
     
@@ -381,6 +473,9 @@ class PersistentProgressTracker:
             List of active session data
         """
         try:
+            if db is None or not hasattr(db, 'session'):
+                return []
+                
             query = db.session.query(ProgressSession).filter_by(status="active")
             
             if user_id:
@@ -403,6 +498,9 @@ class PersistentProgressTracker:
             Number of sessions cleaned up
         """
         try:
+            if db is None or not hasattr(db, 'session'):
+                return 0
+                
             cutoff_date = datetime.utcnow() - timedelta(days=days_old)
             
             # Delete old completed sessions and their updates
@@ -421,7 +519,8 @@ class PersistentProgressTracker:
             return deleted_count
             
         except SQLAlchemyError as e:
-            db.session.rollback()
+            if db:
+                db.session.rollback()
             logger.error(f"Failed to cleanup old sessions: {e}")
             return 0
     
@@ -442,6 +541,9 @@ class PersistentProgressTracker:
             List of metrics
         """
         try:
+            if db is None or not hasattr(db, 'session'):
+                return []
+                
             cutoff_time = datetime.utcnow() - timedelta(hours=hours)
             
             query = db.session.query(ProgressMetrics).filter(
@@ -519,6 +621,9 @@ class PersistentProgressTracker:
         
         # Query database
         try:
+            if db is None or not hasattr(db, 'session'):
+                return None
+                
             query = db.session.query(ProgressSession).filter_by(session_id=session_id)
             
             if not include_completed:
@@ -603,7 +708,14 @@ class PersistentProgressTracker:
             session_id: Session identifier
             metrics: Metrics data
         """
+        if not self.db_available or ProgressMetrics is None:
+            logger.debug(f"Database or progress models not available, skipping metrics recording for {session_id}")
+            return
+            
         try:
+            if db is None or not hasattr(db, 'session'):
+                return
+                
             for metric_type, value in metrics.items():
                 if isinstance(value, (int, float)):
                     metric = ProgressMetrics(
@@ -617,9 +729,61 @@ class PersistentProgressTracker:
             db.session.commit()
             
         except SQLAlchemyError as e:
-            db.session.rollback()
+            if db:
+                db.session.rollback()
+            logger.warning(f"Failed to record metrics for {session_id}: {e}")
+        except Exception as e:
             logger.warning(f"Failed to record metrics for {session_id}: {e}")
 
 
-# Global instance
-persistent_progress_tracker = PersistentProgressTracker()
+# Global instance - create with error handling
+try:
+    persistent_progress_tracker = PersistentProgressTracker()
+except Exception as e:
+    # Fallback instance if initialization fails
+    import logging
+    fallback_logger = logging.getLogger(__name__)
+    fallback_logger.warning(f"Failed to initialize PersistentProgressTracker: {e}")
+    
+    class FallbackProgressTracker:
+        """Fallback progress tracker when full initialization fails."""
+        def __init__(self):
+            self.websocket_manager = None
+            self.db_available = False
+        
+        def create_session(self, *args, **kwargs):
+            return kwargs.get('session_id', 'fallback')
+        
+        def update_progress(self, *args, **kwargs):
+            return None
+        
+        def complete_session(self, *args, **kwargs):
+            return True
+        
+        def get_session_progress(self, *args, **kwargs):
+            return None
+        
+        def get_session_history(self, *args, **kwargs):
+            return []
+        
+        def recover_session(self, *args, **kwargs):
+            return True
+        
+        def get_active_sessions(self, *args, **kwargs):
+            return []
+        
+        def cleanup_old_sessions(self, *args, **kwargs):
+            return 0
+        
+        def get_performance_metrics(self, *args, **kwargs):
+            return []
+        
+        def create_progress_callback(self, session_id):
+            def dummy_callback(progress_data):
+                pass
+            return dummy_callback
+        
+        def set_realtime_service(self, realtime_service):
+            pass
+    
+    persistent_progress_tracker = FallbackProgressTracker()

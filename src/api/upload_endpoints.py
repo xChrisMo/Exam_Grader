@@ -4,11 +4,10 @@ This module provides REST API endpoints for file uploads with integrated
 content validation, duplicate detection, and enhanced error handling.
 """
 
-from flask import Blueprint, request, jsonify, session, current_app
+from flask import Blueprint, request, jsonify, session
 from flask_wtf.csrf import validate_csrf
-from werkzeug.utils import secure_filename
+from flask_login import current_user
 import os
-from typing import Dict, Any
 
 from src.services.enhanced_upload_service import EnhancedUploadService
 from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRService
@@ -126,19 +125,7 @@ def upload_submission():
                 'code': 'MISSING_GUIDE_ID'
             }), 400
         
-        if not student_name:
-            return jsonify({
-                'success': False,
-                'error': 'Student name is required',
-                'code': 'MISSING_STUDENT_NAME'
-            }), 400
-        
-        if not student_id:
-            return jsonify({
-                'success': False,
-                'error': 'Student ID is required',
-                'code': 'MISSING_STUDENT_ID'
-            }), 400
+        # Student name and ID are now optional - no validation needed
         
         # Sanitize inputs
         student_name = input_sanitizer.sanitize_text(student_name)

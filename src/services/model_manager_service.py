@@ -5,14 +5,47 @@ This service handles model registration, validation, and management for differen
 """
 
 import os
-import json
 import logging
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
 from datetime import datetime
 
-from webapp.types.api_responses import ValidationResult, ErrorType, ErrorResponse
+# Import ValidationResult from training_service to avoid circular imports
+# We'll define it locally to avoid the circular dependency
+class ValidationResult:
+    """Validation result helper class"""
+    
+    def __init__(self, is_valid: bool = True):
+        self.errors = []
+        self.warnings = []
+        self._is_valid = is_valid
+    
+    @property
+    def is_valid(self) -> bool:
+        return len(self.errors) == 0 and self._is_valid
+    
+    def add_error(self, field: str, message: str, code: str, value: Any = None):
+        self.errors.append({
+            'field': field,
+            'message': message,
+            'code': code,
+            'value': value
+        })
+        self._is_valid = False
+    
+    def add_warning(self, field: str, message: str, suggestion: str = None):
+        self.warnings.append({
+            'field': field,
+            'message': message,
+            'suggestion': suggestion
+        })
+    
+    def get_error_summary(self) -> str:
+        if not self.errors:
+            return ""
+        return "; ".join([error['message'] for error in self.errors])
+
 
 
 logger = logging.getLogger(__name__)

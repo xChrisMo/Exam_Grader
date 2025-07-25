@@ -6,17 +6,21 @@ This module provides REST API endpoints for the new enhanced processing pipeline
 3. Grading Process - LLM grades with max_questions_to_answer logic
 """
 
-from flask import Blueprint, request, jsonify, session, current_app
-from flask_login import login_required, current_user
-import os
-from typing import Dict, Any
+from flask import Blueprint, request, jsonify, session
+from flask_login import login_required
 
-from src.services.enhanced_processing_service import EnhancedProcessingService
-from src.services.consolidated_llm_service import ConsolidatedLLMService as LLMService
-from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRService
-from src.database.models import db, User, MarkingGuide, Submission, GradingSession, Mapping
 from utils.logger import logger
 from utils.input_sanitizer import InputSanitizer
+from src.database.models import db, User, MarkingGuide, Submission, Mapping
+from src.services.enhanced_processing_service import EnhancedProcessingService
+
+try:
+    from src.services.consolidated_llm_service import ConsolidatedLLMService as LLMService
+    from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRService
+except ImportError as e:
+    logger.error(f"Failed to import LLM/OCR services: {e}")
+    LLMService = None
+    OCRService = None
 
 # Create blueprint
 enhanced_processing_bp = Blueprint('enhanced_processing', __name__, url_prefix='/api/enhanced')
@@ -35,15 +39,19 @@ def init_enhanced_processing_services(app):
     
     with app.app_context():
         try:
-            # Initialize services
-            llm_service = LLMService()
-            ocr_service = OCRService()
+            # Initialize services with direct imports to avoid scope issues
+            from src.services.consolidated_llm_service import ConsolidatedLLMService
+            from src.services.consolidated_ocr_service import ConsolidatedOCRService
+            
+            llm_service = ConsolidatedLLMService()
+            ocr_service = ConsolidatedOCRService()
             processing_service = EnhancedProcessingService(llm_service, ocr_service)
             
             logger.info("Enhanced processing services initialized successfully")
             
         except Exception as e:
             logger.error(f"Failed to initialize enhanced processing services: {e}")
+            processing_service = None
             raise
 
 def require_auth():

@@ -1,7 +1,6 @@
 """Enhanced error handler that integrates all error handling components."""
 
 import logging
-import traceback
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 from flask import session, flash, request
@@ -14,8 +13,8 @@ from .error_mapper import (
     ContextAwareErrorMapper,
     UserMessage
 )
-from ..models.api_responses import ErrorCode, ErrorResponse, ErrorDetail
 from ..utils.response_utils import create_error_response
+from ..models.api_responses import ErrorCode
 
 logger = logging.getLogger(__name__)
 
@@ -380,7 +379,7 @@ class EnhancedErrorHandler:
             }
             
             category = category_mapping.get(user_message.severity.value, 'error')
-            flash(user_message.text, category)
+            flash(user_message.message, category)
         except RuntimeError:
             # Outside request context
             pass

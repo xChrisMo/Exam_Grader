@@ -3,18 +3,15 @@
 This module provides a unified LLM service that combines the functionality of both
 LLMService and EnhancedLLMService with integration to the base service architecture.
 """
+from typing import Any, Dict, Optional
 
-import importlib.metadata
 import json
 import os
 import threading
 import time
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 from packaging import version
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from src.config.unified_config import config
 from src.services.base_service import BaseService, ServiceStatus
@@ -123,9 +120,10 @@ class ConsolidatedLLMService(BaseService):
             
             # Get OpenAI version
             try:
-                openai_version_str = importlib.metadata.version("openai")
+                import openai
+                openai_version_str = openai.__version__
                 logger.info(f"Using OpenAI library version: {openai_version_str}")
-            except (importlib.metadata.PackageNotFoundError, version.InvalidVersion):
+            except Exception:
                 logger.warning("Could not determine OpenAI library version")
             
             # Initialize client
@@ -189,10 +187,11 @@ class ConsolidatedLLMService(BaseService):
                 
                 # Get OpenAI version
                 try:
-                    openai_version_str = importlib.metadata.version("openai")
+                    import openai
+                    openai_version_str = openai.__version__
                     openai_version = version.parse(openai_version_str)
                     logger.info(f"Using OpenAI library version: {openai_version_str}")
-                except (importlib.metadata.PackageNotFoundError, version.InvalidVersion):
+                except Exception:
                     openai_version = version.parse("0.0.0")
                     logger.warning("Could not determine OpenAI library version")
                 

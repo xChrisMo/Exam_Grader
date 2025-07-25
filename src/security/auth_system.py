@@ -6,12 +6,11 @@ and session security management.
 
 import hashlib
 import secrets
-import time
-from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any, Set
 from enum import Enum
-from dataclasses import dataclass, field
 from functools import wraps
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 try:
     from utils.logger import logger
@@ -30,7 +29,6 @@ except ImportError:
 
 try:
     from flask import request, session, g
-    from flask_login import UserMixin
 except ImportError:
     # Fallback for non-Flask environments
     class UserMixin:
@@ -462,27 +460,36 @@ class AuthenticationManager:
         return len(expired_sessions)
     
     def _get_user_data(self, username: str) -> Optional[Dict[str, Any]]:
-        """Get user data from storage (placeholder implementation).
-        
+        """Get user data from storage.
+
         Args:
             username: Username
-            
+
         Returns:
             User data dictionary or None
         """
-        # This would typically query a database
-        # For now, return a mock user for demonstration
-        mock_users = {
-            'admin': {
-                'user_id': 'admin_001',
-                'username': 'admin',
-                'password_hash': PasswordHasher.hash_password('admin123'),
-                'role': UserRole.ADMIN.value,
-                'email': 'admin@example.com'
-            }
-        }
-        
-        return mock_users.get(username)
+        # Query the actual database for user data
+        try:
+            from src.database.models import User
+            user = User.query.filter_by(username=username).first()
+
+            if user:
+                return {
+                    'user_id': user.id,
+                    'username': user.username,
+                    'password_hash': user.password_hash,
+                    'role': 'admin' if user.username == 'admin' else 'user',
+                    'email': user.email,
+                    'is_active': user.is_active,
+                    'failed_attempts': user.failed_login_attempts,
+                    'locked_until': user.locked_until
+                }
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error retrieving user data: {str(e)}")
+            return None
     
     def _generate_session_id(self) -> str:
         """Generate secure session ID.

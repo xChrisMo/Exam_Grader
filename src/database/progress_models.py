@@ -1,8 +1,7 @@
 """Database models for progress tracking persistence."""
+from typing import Any, Dict, Optional
 
-import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
 
 from sqlalchemy import (
     JSON,
@@ -18,10 +17,30 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from .models import db, TimestampMixin, get_uuid_column
+# Import database and utility functions from models
+try:
+    from .models import db, TimestampMixin, get_uuid_column
+    DB_AVAILABLE = db is not None
+except ImportError:
+    try:
+        from src.database.models import db, TimestampMixin, get_uuid_column
+        DB_AVAILABLE = db is not None
+    except ImportError:
+        # Fallback when models are not available
+        db = None
+        TimestampMixin = object
+        get_uuid_column = lambda: Column(String(36), primary_key=True)
+        DB_AVAILABLE = False
+
+# Create base class conditionally
+if DB_AVAILABLE and db is not None:
+    BaseModel = db.Model
+else:
+    BaseModel = object
 
 
-class ProgressSession(db.Model, TimestampMixin):
+
+class ProgressSession(BaseModel, TimestampMixin):
     """Model for tracking progress sessions with persistence."""
     
     __tablename__ = "progress_sessions"
@@ -120,7 +139,7 @@ class ProgressSession(db.Model, TimestampMixin):
         }
 
 
-class ProgressUpdate(db.Model, TimestampMixin):
+class ProgressUpdate(BaseModel, TimestampMixin):
     """Model for individual progress updates with persistence."""
     
     __tablename__ = "progress_updates"
@@ -166,7 +185,7 @@ class ProgressUpdate(db.Model, TimestampMixin):
         }
 
 
-class ProgressRecovery(db.Model, TimestampMixin):
+class ProgressRecovery(BaseModel, TimestampMixin):
     """Model for tracking progress recovery operations."""
     
     __tablename__ = "progress_recovery"
@@ -202,7 +221,7 @@ class ProgressRecovery(db.Model, TimestampMixin):
         }
 
 
-class ProgressMetrics(db.Model, TimestampMixin):
+class ProgressMetrics(BaseModel, TimestampMixin):
     """Model for storing progress performance metrics."""
     
     __tablename__ = "progress_metrics"

@@ -7,10 +7,10 @@ This module provides:
 - Standardized error handling and validation
 - Request/response logging and monitoring
 """
+from typing import Optional, Callable
 
 import time
 import functools
-from typing import Dict, Any, Optional, Callable
 from flask import (
     Blueprint, request, jsonify, g, current_app,
     session, abort
@@ -19,14 +19,14 @@ from flask_login import current_user
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
-from src.models.api_responses import APIResponse, ErrorResponse
-from src.models.validation import validate_request_data, ValidationError
+from src.models.api_responses import ErrorResponse
+from src.models.validation import validate_request_data, CommonValidators
+
 from src.utils.response_utils import (
     standardize_response, generate_request_id, create_metadata,
     handle_service_errors, extract_pagination_params
 )
 from utils.logger import logger
-from webapp.auth import login_required
 
 # Create unified API blueprint
 unified_api_bp = Blueprint('unified_api', __name__, url_prefix='/api/v1')
@@ -107,7 +107,7 @@ class APIMiddleware:
                 if required_fields:
                     # Convert list of required fields to validator format
                     def create_required_validator(field_name):
-                        return lambda value, fn: None if value is not None else f"Field '{field_name}' is required"
+                        return lambda value: CommonValidators.required(value, field_name)
                     
                     validators = {field: [create_required_validator(field)] for field in required_fields}
                     validation_result = validate_request_data(data, validators)
@@ -319,7 +319,7 @@ def init_unified_api(app):
     """
     # Import consolidated endpoints to register routes
     try:
-        import src.api.consolidated_endpoints
+        from src.api.consolidated_endpoints import unified_api_bp as consolidated_bp
         logger.info("Consolidated endpoints imported successfully")
     except Exception as e:
         logger.error(f"Failed to import consolidated endpoints: {str(e)}")

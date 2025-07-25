@@ -7,7 +7,6 @@ student exam submissions against marking guides.
 This is an updated version that works with the latest OpenAI library.
 """
 
-import importlib.metadata
 import json
 import os
 import random
@@ -122,15 +121,20 @@ class LLMService:
 
             # Get the OpenAI version
             try:
-                openai_version_str = importlib.metadata.version("openai")
+                import openai
+                openai_version_str = openai.__version__
                 openai_version = version.parse(openai_version_str)
                 logger.info(f"Using OpenAI library version: {openai_version_str}")
-            except (importlib.metadata.PackageNotFoundError, version.InvalidVersion):
+            except Exception:
                 openai_version = version.parse("0.0.0")
                 logger.warning("Could not determine OpenAI library version")
 
             # Initialize OpenAI client with parameters based on version
-            client_params = {"api_key": self.api_key, "base_url": self.base_url}
+            client_params = {
+                "api_key": self.api_key, 
+                "base_url": self.base_url,
+                "timeout": 120.0  # 2 minute timeout for complex document processing
+            }
 
             # Create the client with appropriate parameters
             self.client = OpenAI(**client_params)

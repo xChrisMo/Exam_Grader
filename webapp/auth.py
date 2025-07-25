@@ -122,7 +122,8 @@ def login():
                 logger.error(f"Session validation error: {str(e)}")
                 session.clear()
 
-        return render_template("auth/login.html", page_title="Login", form=form)
+        from flask_wtf.csrf import generate_csrf
+        return render_template("auth/login.html", page_title="Login", form=form, csrf_token=generate_csrf())
 
     try:
         # Validate form first (including CSRF token) before clearing session
@@ -131,7 +132,8 @@ def login():
             for field, errors in form.errors.items():
                 for error in errors:
                     flash(f"{field}: {error}", "error")
-            return render_template("auth/login.html", page_title="Login", form=form)
+            from flask_wtf.csrf import generate_csrf
+            return render_template("auth/login.html", page_title="Login", form=form, csrf_token=generate_csrf())
 
         # Get form data
         username = form.username.data.strip()

@@ -301,6 +301,20 @@
             Upload Submission
           </button>
         </div>
+        {% elif not session.get('guide_id') %}
+        <div class="text-center">
+          <div class="text-sm text-gray-500 mb-2">Select a guide to use first</div>
+          <button
+            disabled
+            class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-400 bg-gray-100 cursor-not-allowed"
+            data-i18n="upload_submission"
+          >
+            Upload Submission
+          </button>
+          <div class="mt-2">
+            <a href="{{ url_for('marking_guides') }}" class="text-sm text-primary-600 hover:text-primary-500">Go to Marking Guides →</a>
+          </div>
+        </div>
         {% else %}
         <a
           href="{{ url_for('upload_submission') }}"
@@ -496,8 +510,10 @@
         <div class="ml-4 flex-1">
           <h4 class="text-sm font-medium text-gray-900">Upload Student Submissions</h4>
           <p class="text-sm text-gray-500">Upload student work to be graded ({{ total_submissions }} uploaded)</p>
-          {% if guide_uploaded and total_submissions == 0 %}
+          {% if guide_uploaded and session.get('guide_id') and total_submissions == 0 %}
           <a href="{{ url_for('upload_submission') }}" class="text-sm text-primary-600 hover:text-primary-500">Upload submissions →</a>
+          {% elif guide_uploaded and not session.get('guide_id') %}
+          <span class="text-sm text-gray-400">Select a guide first</span>
           {% endif %}
         </div>
         <div class="flex-shrink-0">
@@ -764,8 +780,10 @@
     if (processUnifiedAIBtn) {
       processUnifiedAIBtn.addEventListener("click", async function () {
         try {
-          if (typeof ExamGrader !== 'undefined' && ExamGrader.utils && ExamGrader.utils.showButtonLoading) {
+          if (typeof ExamGrader !== 'undefined' && ExamGrader.utils && typeof ExamGrader.utils.showButtonLoading === 'function') {
             ExamGrader.utils.showButtonLoading(this, "Processing...");
+          } else {
+            console.warn('ExamGrader.utils.showButtonLoading not available');
           }
         } catch (error) {
           console.error('Error showing button loading state:', error);

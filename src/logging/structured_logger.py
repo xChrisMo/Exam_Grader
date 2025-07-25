@@ -9,11 +9,10 @@ import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass, field, asdict
 from enum import Enum
-import traceback
 import uuid
+from typing import Optional, Dict, Any, List, Union
 
 
 class StructuredLogLevel(Enum):

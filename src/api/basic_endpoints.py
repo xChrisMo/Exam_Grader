@@ -4,14 +4,23 @@ This module provides basic REST API endpoints that are expected by the frontend
 but may not exist in the current system.
 """
 
-from flask import Blueprint, request, jsonify, current_app, g
-from flask_login import login_required, current_user
-from src.database.models import MarkingGuide, Submission, db
-from sqlalchemy import func
 from datetime import datetime
 import logging
 
+from flask import Blueprint, request, jsonify
+from flask_login import login_required, current_user
+
+from src.database.models import db, MarkingGuide, Submission, Mapping, GradingResult, GradingSession
+from src.services.enhanced_processing_service import EnhancedProcessingService
+
 logger = logging.getLogger(__name__)
+
+# Import LLM service with fallback
+try:
+    from src.services.consolidated_llm_service import ConsolidatedLLMService as LLMService
+except ImportError as e:
+    logger.error(f"Failed to import LLMService: {e}")
+    LLMService = None
 
 
 def calculate_grade_level(percentage: float) -> str:
@@ -254,158 +263,12 @@ def get_submission(submission_id):
         }), 500
 
 
-@basic_api_bp.route('/v1/processing/batch-enhanced', methods=['POST'])
-@login_required
-def process_batch_enhanced():
-    """Process multiple submissions with the complete enhanced pipeline.
-    
-    Request Body:
-        submission_ids (list): List of submission IDs (required)
-        marking_guide_id (int): Marking guide ID (required)
-        max_questions_to_answer (int): Maximum questions to grade (optional)
-        process_steps (list): Steps to execute ['grading'] (optional)
-    
-    Returns:
-        JSON response with batch processing result
-    """
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({
-                'status': 'error',
-                'message': 'No JSON data provided'
-            }), 400
-        
-        submission_ids = data.get('submission_ids', [])
-        marking_guide_id = data.get('marking_guide_id')
-        max_questions_to_answer = data.get('max_questions_to_answer')
-        process_steps = data.get('process_steps', ['grading'])
-        
-        if not submission_ids:
-            return jsonify({
-                'status': 'error',
-                'message': 'submission_ids is required'
-            }), 400
-        
-        if not marking_guide_id:
-            return jsonify({
-                'status': 'error',
-                'message': 'marking_guide_id is required'
-            }), 400
-        
-        # Validate guide ownership
-        guide = MarkingGuide.query.filter_by(
-            id=marking_guide_id,
-            user_id=current_user.id
-        ).first()
-        
-        if not guide:
-            return jsonify({
-                'status': 'error',
-                'message': 'Marking guide not found'
-            }), 404
-        
-        # Validate submissions ownership
-        submissions = db.session.query(Submission).join(
-            MarkingGuide, Submission.marking_guide_id == MarkingGuide.id
-        ).filter(
-            Submission.id.in_(submission_ids),
-            MarkingGuide.user_id == current_user.id
-        ).all()
-        
-        if len(submissions) != len(submission_ids):
-            return jsonify({
-                'status': 'error',
-                'message': 'Some submissions not found or access denied'
-            }), 400
-        
-        # Initialize enhanced processing service
-        try:
-            from src.services.enhanced_processing_service import EnhancedProcessingService
-            from src.services.consolidated_llm_service import ConsolidatedLLMService
-            from src.services.consolidated_ocr_service import ConsolidatedOCRService
-            
-            llm_service = ConsolidatedLLMService()
-            ocr_service = ConsolidatedOCRService()
-            enhanced_service = EnhancedProcessingService(llm_service, ocr_service)
-            logger.info("Enhanced processing service initialized for batch processing")
-        except Exception as e:
-            logger.error(f"Failed to initialize enhanced processing service: {str(e)}")
-            return jsonify({
-                'status': 'error',
-                'message': 'Enhanced processing service could not be initialized'
-            }), 503
-        
-        # Initialize results
-        batch_results = {
-            'guide_processing': None,
-            'submission_processing': {},
-            'grading_results': {},
-            'summary': {
-                'total_submissions': len(submission_ids),
-                'successful_processing': 0,
-                'successful_grading': 0,
-                'failed_processing': 0,
-                'failed_grading': 0
-            }
-        }
-        
-        # Process grading (main step)
-        if 'grading' in process_steps:
-            for submission_id in submission_ids:
-                try:
-                    result, grading_error = enhanced_service.process_grading(
-                        submission_id=submission_id,
-                        marking_guide_id=marking_guide_id,
-                        max_questions_to_answer=max_questions_to_answer
-                    )
-                    
-                    if grading_error:
-                        batch_results['grading_results'][submission_id] = {
-                            'success': False,
-                            'error': grading_error
-                        }
-                        batch_results['summary']['failed_grading'] += 1
-                    else:
-                        percentage = result.get('percentage', 0)
-                        batch_results['grading_results'][submission_id] = {
-                            'success': True,
-                            'total_score': result.get('total_score', 0),
-                            'max_possible_score': result.get('max_possible_score', 0),
-                            'percentage': percentage,
-                            'grade_level': calculate_grade_level(percentage),
-                            'questions_graded': result.get('selected_questions', 0)
-                        }
-                        batch_results['summary']['successful_grading'] += 1
-                    
-                except Exception as e:
-                    logger.error(f"Error grading submission {submission_id}: {str(e)}")
-                    batch_results['grading_results'][submission_id] = {
-                        'success': False,
-                        'error': str(e)
-                    }
-                    batch_results['summary']['failed_grading'] += 1
-        
-        return jsonify({
-            'status': 'success',
-            'data': batch_results,
-            'message': 'Enhanced batch processing completed'
-        })
-        
-    except Exception as e:
-        logger.error(f"Error in enhanced batch processing: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': 'Failed to process enhanced batch request'
-        }), 500
-
 
 @basic_api_bp.route('/submission-details/<submission_id>', methods=['GET'])
 @login_required
 def get_submission_details(submission_id):
     """Get detailed information about a submission."""
     try:
-        from src.database.models import Mapping, GradingResult
         
         # Get submission
         submission = Submission.query.filter_by(
@@ -513,7 +376,6 @@ def get_dashboard_stats():
 def export_results():
     """Export grading results for the current user."""
     try:
-        from src.database.models import GradingResult
         
         # Get all grading results for user
         results = db.session.query(GradingResult).join(Submission).filter(
@@ -567,7 +429,6 @@ def export_results():
 def cancel_processing(progress_id):
     """Cancel ongoing processing task."""
     try:
-        from src.database.models import GradingSession
         
         # Find the processing task (could be submission or grading session)
         submission = Submission.query.filter_by(

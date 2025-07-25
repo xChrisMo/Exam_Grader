@@ -5,9 +5,25 @@ This package provides database models, migrations, and utilities for
 persistent data storage replacing the session-based storage system.
 """
 
-from .migrations import MigrationManager
-from .models import GradingResult, GradingSession, Mapping, MarkingGuide, Session, Submission, User, db
+# Import core database components
+from .models import (
+    db,
+    User,
+    MarkingGuide,
+    Submission,
+    Mapping,
+    GradingResult,
+    GradingSession,
+    Session
+)
+
 from .utils import DatabaseUtils
+
+# Import migration manager
+try:
+    from .migrations import MigrationManager
+except ImportError:
+    MigrationManager = None
 
 # Import optimized models as well
 try:

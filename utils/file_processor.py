@@ -74,20 +74,66 @@ class FileProcessor:
 
 class MemoryEfficientFileHandler:
     """Memory-efficient file handling for large files."""
-    
+
     def __init__(self, chunk_size: int = 8192):
         self.chunk_size = chunk_size
-    
+        self._file_cache = {}  # Simple file content cache
+        self._cache_max_size = 10  # Maximum cached files
+
     def read_text_file_limited(self, file_path: str, max_chars: int = 10000) -> str:
         """Read text file with character limit."""
         try:
+            # Check cache first
+            cache_key = f"{file_path}:{max_chars}"
+            if cache_key in self._file_cache:
+                return self._file_cache[cache_key]
+
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read(max_chars)
-                return content
-                
+
+            # Cache the content (with size limit)
+            if len(self._file_cache) >= self._cache_max_size:
+                # Remove oldest entry
+                oldest_key = next(iter(self._file_cache))
+                del self._file_cache[oldest_key]
+
+            self._file_cache[cache_key] = content
+            return content
+
         except Exception as e:
             logger.error(f"Error reading text file {file_path}: {str(e)}")
             return ""
+
+    def read_file_in_chunks(self, file_path: str, chunk_size: Optional[int] = None):
+        """Generator to read file in chunks for memory efficiency."""
+        chunk_size = chunk_size or self.chunk_size
+        try:
+            with open(file_path, 'rb') as f:
+                while True:
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        break
+                    yield chunk
+        except Exception as e:
+            logger.error(f"Error reading file in chunks {file_path}: {str(e)}")
+            return
+
+    def get_file_hash_efficient(self, file_path: str) -> str:
+        """Calculate file hash without loading entire file into memory."""
+        import hashlib
+        hash_obj = hashlib.sha256()
+
+        try:
+            for chunk in self.read_file_in_chunks(file_path):
+                hash_obj.update(chunk)
+            return hash_obj.hexdigest()
+        except Exception as e:
+            logger.error(f"Error calculating hash for {file_path}: {str(e)}")
+            return ""
+
+    def clear_cache(self):
+        """Clear the file content cache."""
+        self._file_cache.clear()
 
 
 def get_file_type(filename: str) -> str:

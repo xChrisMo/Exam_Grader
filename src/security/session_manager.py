@@ -5,18 +5,13 @@ This module provides secure session management with encryption, proper
 session invalidation, and security features to replace Flask's default
 session handling.
 """
+from typing import Any, Dict, Optional
 
 import base64
-import hashlib
 import json
-import os
 import secrets
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, Tuple
 
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 # Import Flask request with fallback
 try:
@@ -24,26 +19,30 @@ try:
 except ImportError:
     request = None
     has_request_context = lambda: False
-from flask import g, request
-from sqlalchemy.orm import sessionmaker
 
 # Import logger with fallback
-try:
-    from utils.logger import logger
-except ImportError:
-    import logging
-
-    logger = logging.getLogger(__name__)
+import logging
+logger = logging.getLogger(__name__)
 
 # Import database models with fallback
 try:
-    from src.database.models import Session as SessionModel
-    from src.database.models import User, db
+    from src.database.models import Session as SessionModel, db
 except ImportError:
     # Fallback for when models aren't available yet
     db = None
     SessionModel = None
     User = None
+
+# Import cryptography with fallback
+try:
+    from cryptography.fernet import Fernet
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+except ImportError:
+    # Fallback for when cryptography isn't available
+    Fernet = None
+    hashes = None
+    PBKDF2HMAC = None
 
 
 class SessionEncryption:

@@ -1,15 +1,20 @@
 """Document processing service for LLM training system."""
+from typing import Any, Dict, List, Optional
 
-import os
 import json
 import uuid
 import logging
-from typing import Dict, List, Optional, Union
 from io import BytesIO
 import re
 
 # Document processing libraries
-import PyMuPDF as fitz  # For PDF processing
+try:
+    import PyMuPDF as fitz  # For PDF processing
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+    fitz = None
+
 from docx import Document as DocxDocument  # For DOCX processing
 
 from ..services.base_service import BaseService
@@ -17,7 +22,40 @@ from ..models.document_models import (
     DocumentType, DocumentStatus, ProcessedDocument, DocumentMetadata,
     DocumentProcessingResult, FileUpload, Dataset
 )
-from ..models.validation import ValidationResult, ValidationError
+
+# Define ValidationResult locally to avoid circular imports
+class ValidationResult:
+    """Validation result helper class"""
+    
+    def __init__(self, is_valid: bool = True):
+        self.errors = []
+        self.warnings = []
+        self._is_valid = is_valid
+    
+    @property
+    def is_valid(self) -> bool:
+        return len(self.errors) == 0 and self._is_valid
+    
+    def add_error(self, field: str, message: str, code: str, value: Any = None):
+        self.errors.append({
+            'field': field,
+            'message': message,
+            'code': code,
+            'value': value
+        })
+        self._is_valid = False
+    
+    def add_warning(self, field: str, message: str, suggestion: str = None):
+        self.warnings.append({
+            'field': field,
+            'message': message,
+            'suggestion': suggestion
+        })
+    
+    def get_error_summary(self) -> str:
+        if not self.errors:
+            return ""
+        return "; ".join([error['message'] for error in self.errors])
 
 logger = logging.getLogger(__name__)
 
@@ -69,12 +107,16 @@ class DocumentProcessorService(BaseService):
         """Test that all required dependencies are available."""
         try:
             # Test PyMuPDF
-            fitz.Document()
+            if PYMUPDF_AVAILABLE:
+                fitz.Document()
+                logger.info("PyMuPDF available for PDF processing")
+            else:
+                logger.warning("PyMuPDF not available - PDF processing disabled")
             
             # Test python-docx
             DocxDocument()
             
-            logger.info("All document processing dependencies are available")
+            logger.info("Document processing dependencies checked")
         except Exception as e:
             raise RuntimeError(f"Document processing dependencies not available: {str(e)}")
     
@@ -216,6 +258,9 @@ class DocumentProcessorService(BaseService):
             Extracted text content
         """
         try:
+            if not PYMUPDF_AVAILABLE:
+                raise RuntimeError("PDF processing not available. Install PyMuPDF: pip install PyMuPDF")
+                
             # Open PDF from bytes
             pdf_document = fitz.open(stream=content, filetype="pdf")
             
@@ -394,9 +439,7 @@ class DocumentProcessorService(BaseService):
                 return True
         
         return False
-    
-    # Document management methods
-    
+
     def get_document(self, document_id: str) -> Optional[ProcessedDocument]:
         """Get a processed document by ID.
         

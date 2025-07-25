@@ -27,12 +27,12 @@ import fitz  # PyMuPDF
 from docx import Document
 
 from src.config.config_manager import ConfigManager
-from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRService, OCRServiceError
+from src.services.ocr_service import OCRService, OCRServiceError
 from utils.logger import logger
 
 # Import the PDF helper for better error messages
 try:
-    from src.parsing.pdf_helper import get_helpful_error_message
+    from utils.pdf_helper import get_helpful_error_message
 except ImportError:
     # Fallback if helper module doesn't exist
     def get_helpful_error_message(file_path, original_error):
@@ -40,7 +40,6 @@ except ImportError:
 
 # Import fallback OCR service if available
 try:
-    from src.services.fallback_ocr_service import FallbackOCRService
     fallback_ocr_available = True
 except ImportError:
     fallback_ocr_available = False
@@ -57,7 +56,7 @@ try:
     )
 
     # Always try to initialize OCR service, allowing graceful degradation
-    ocr_service_instance = OCRService(api_key=api_key, base_url=api_url, allow_no_key=True)
+    ocr_service_instance = OCRService(api_key=api_key, base_url=api_url, allow_no_key=True, enable_fallback=False)
 
     if api_key:
         logger.info("OCR service initialized successfully with API key")
@@ -272,7 +271,8 @@ class DocumentParser:
                                 if pix:
                                     try:
                                         del pix  # Explicitly delete pixmap to release resources
-                                    except:
+                                    except Exception as e:
+                                        logger.debug(f"Error deleting pixmap: {str(e)}")
                                         pass
                                 
                                 # Clean up temporary image with retry logic for Windows

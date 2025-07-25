@@ -4,14 +4,13 @@ Comprehensive Health Check System for Exam Grader Application.
 This module provides health checks for all critical components including
 database, external APIs, file system, and internal services.
 """
+from typing import Any, Dict
 
 import os
 import time
 import psutil
 from pathlib import Path
-from typing import Dict, Any, Optional
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
 
 try:
     from utils.logger import logger

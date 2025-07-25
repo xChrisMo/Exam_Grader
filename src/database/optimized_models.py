@@ -6,11 +6,11 @@ This module contains enhanced versions of the database models with:
 - Data validation rules
 - Optimized query methods
 """
+from typing import Any, Dict
 
 import uuid
 import hashlib
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
 
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
@@ -389,21 +389,21 @@ class Submission(db.Model, TimestampMixin, ValidationMixin):
 
     @validates('student_name')
     def validate_student_name(self, key, student_name):
-        """Validate student name."""
-        if not student_name or not student_name.strip():
-            raise ValueError("Student name is required")
-        if len(student_name) > 200:
-            raise ValueError("Student name must be no more than 200 characters")
-        return student_name.strip()
+        """Validate student name (now optional)."""
+        if student_name and student_name.strip():
+            if len(student_name) > 200:
+                raise ValueError("Student name must be no more than 200 characters")
+            return student_name.strip()
+        return student_name  # Allow None or empty values
 
     @validates('student_id')
     def validate_student_id(self, key, student_id):
-        """Validate student ID."""
-        if not student_id or not student_id.strip():
-            raise ValueError("Student ID is required")
-        if len(student_id) > 100:
-            raise ValueError("Student ID must be no more than 100 characters")
-        return student_id.strip()
+        """Validate student ID (now optional)."""
+        if student_id and student_id.strip():
+            if len(student_id) > 100:
+                raise ValueError("Student ID must be no more than 100 characters")
+            return student_id.strip()
+        return student_id  # Allow None or empty values
 
     def generate_content_hash(self, content: bytes = None):
         """Generate SHA-256 hash of file content."""

@@ -5,8 +5,6 @@ questions and answers in student submissions.
 """
 
 import json
-import time
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from utils.logger import logger
