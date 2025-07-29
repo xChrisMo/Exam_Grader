@@ -37,11 +37,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 # Initialize SQLAlchemy
 db = SQLAlchemy()
 
-
 def get_uuid_column():
     """Get appropriate UUID column type."""
     return Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-
 
 class TimestampMixin:
     """Mixin for adding timestamp fields to models."""
@@ -54,7 +52,6 @@ class TimestampMixin:
         nullable=False,
         index=True
     )
-
 
 class ValidationMixin:
     """Mixin for adding validation methods to models."""
@@ -81,19 +78,16 @@ class ValidationMixin:
             errors.append(f"{field} must be no more than {max_length} characters")
         return errors
 
-
 class User(UserMixin, db.Model, TimestampMixin, ValidationMixin):
     """Enhanced User model with improved validation and indexes."""
 
     __tablename__ = "users"
     __table_args__ = (
-        # Composite indexes for common queries
         Index('idx_user_active_login', 'is_active', 'last_login'),
         Index('idx_user_created_active', 'created_at', 'is_active'),
         # Unique constraints
         UniqueConstraint('username', name='uq_user_username'),
         UniqueConstraint('email', name='uq_user_email'),
-        # Check constraints for data validation
         CheckConstraint('failed_login_attempts >= 0', name='ck_user_failed_attempts'),
         CheckConstraint("email LIKE '%@%'", name='ck_user_email_format'),
     )
@@ -107,7 +101,6 @@ class User(UserMixin, db.Model, TimestampMixin, ValidationMixin):
     failed_login_attempts = Column(Integer, default=0, nullable=False)
     locked_until = Column(DateTime, index=True)
     
-    # Additional fields for enhanced security
     password_changed_at = Column(DateTime, default=datetime.utcnow)
     email_verified = Column(Boolean, default=False, nullable=False)
     two_factor_enabled = Column(Boolean, default=False, nullable=False)
@@ -222,13 +215,11 @@ class User(UserMixin, db.Model, TimestampMixin, ValidationMixin):
         """Return False as this is not an anonymous user."""
         return False
 
-
 class MarkingGuide(db.Model, TimestampMixin, ValidationMixin):
     """Enhanced MarkingGuide model with improved validation and indexes."""
     
     __tablename__ = "marking_guides"
     __table_args__ = (
-        # Composite indexes for performance
         Index('idx_guide_user_title', 'user_id', 'title'),
         Index('idx_guide_user_active', 'user_id', 'is_active'),
         Index('idx_guide_created_active', 'created_at', 'is_active'),
@@ -322,13 +313,11 @@ class MarkingGuide(db.Model, TimestampMixin, ValidationMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class Submission(db.Model, TimestampMixin, ValidationMixin):
     """Enhanced Submission model with improved validation and indexes."""
 
     __tablename__ = "submissions"
     __table_args__ = (
-        # Composite indexes for performance optimization
         Index('idx_opt_user_status', 'user_id', 'processing_status'),  # Renamed to avoid conflict
         Index('idx_user_created', 'user_id', 'created_at'),
         Index('idx_status_created', 'processing_status', 'created_at'),
@@ -447,7 +436,6 @@ class Submission(db.Model, TimestampMixin, ValidationMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class Mapping(db.Model, TimestampMixin, ValidationMixin):
     """Enhanced Answer mapping model."""
 
@@ -495,7 +483,6 @@ class Mapping(db.Model, TimestampMixin, ValidationMixin):
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
-
 
 class GradingResult(db.Model, TimestampMixin):
     """Enhanced grading result model."""
@@ -556,7 +543,6 @@ class GradingResult(db.Model, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class Session(db.Model, TimestampMixin):
     """Enhanced session model."""
 
@@ -604,7 +590,6 @@ class Session(db.Model, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
             "salt": self.salt,
         }
-
 
 class GradingSession(db.Model, TimestampMixin, ValidationMixin):
     """Enhanced grading session tracking model."""

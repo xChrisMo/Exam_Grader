@@ -18,7 +18,6 @@ from utils.logger import logger
 try:
     from utils.socketio_utils import broadcast_update
 except ImportError:
-    # Fallback if socketio_utils is not available
     def broadcast_update(event, data):
         pass
 
@@ -34,7 +33,6 @@ llm_service = LLMService()
 mapping_service = OptimizedMappingService(llm_service)
 grading_service = OptimizedGradingService(llm_service, mapping_service)
 
-
 class ProcessingProgress:
     """Enhanced progress tracking for optimized pipeline."""
     
@@ -48,7 +46,6 @@ class ProcessingProgress:
         self.errors = []
         self.warnings = []
         
-        # Stage weights for overall progress calculation
         self.stage_weights = {
             "ocr": 0.3,
             "mapping": 0.3,
@@ -122,7 +119,6 @@ class ProcessingProgress:
         except Exception as e:
             celery_logger.warning(f"Failed to broadcast progress: {e}")
 
-
 @celery_app.task(bind=True)
 def process_optimized_ocr_task(self, submission_id: int, file_paths: List[str]):
     """Optimized OCR processing with parallel execution and caching."""
@@ -133,7 +129,7 @@ def process_optimized_ocr_task(self, submission_id: int, file_paths: List[str]):
         progress.update_stage("ocr", 0, "Starting OCR processing")
         
         # Get submission
-        submission = Submission.query.get(submission_id)
+        submission = db.session.get(Submission, submission_id)
         if not submission:
             raise ValueError(f"Submission {submission_id} not found")
         
@@ -188,7 +184,7 @@ def process_optimized_ocr_task(self, submission_id: int, file_paths: List[str]):
         
         # Update submission status
         try:
-            submission = Submission.query.get(submission_id)
+            submission = db.session.get(Submission, submission_id)
             if submission:
                 submission.status = 'ocr_failed'
                 submission.updated_at = datetime.utcnow()
@@ -202,7 +198,6 @@ def process_optimized_ocr_task(self, submission_id: int, file_paths: List[str]):
             'error': error_msg
         }
 
-
 @celery_app.task(bind=True)
 def process_optimized_full_pipeline(self, submission_ids: List[int], marking_guide_id: int):
     """Optimized full pipeline with enhanced efficiency and redundancy elimination."""
@@ -213,7 +208,7 @@ def process_optimized_full_pipeline(self, submission_ids: List[int], marking_gui
         progress.update_stage("initializing", 0, "Loading marking guide and submissions")
         
         # Load marking guide
-        marking_guide = MarkingGuide.query.get(marking_guide_id)
+        marking_guide = db.session.get(MarkingGuide, marking_guide_id)
         if not marking_guide:
             raise ValueError(f"Marking guide {marking_guide_id} not found")
         
@@ -222,7 +217,6 @@ def process_optimized_full_pipeline(self, submission_ids: List[int], marking_gui
         if not submissions:
             raise ValueError("No submissions found")
         
-        # Prepare submission data for optimized processing
         submission_data = []
         for submission in submissions:
             if submission.raw_text:
@@ -237,7 +231,7 @@ def process_optimized_full_pipeline(self, submission_ids: List[int], marking_gui
         
         # Initialize optimized unified service
         try:
-            from src.services.unified_ai_service import UnifiedAIService as ConsolidatedUnifiedAIService
+            from src.services.core_service import core_service as ConsolidatedUnifiedAIService
             # Use consolidated service with backward compatibility
             unified_service = ConsolidatedUnifiedAIService(
                 mapping_service=mapping_service,
@@ -245,7 +239,6 @@ def process_optimized_full_pipeline(self, submission_ids: List[int], marking_gui
                 llm_service=llm_service
             )
         except ImportError:
-            # Fallback to original processing if unified service not available
             return self._process_fallback_pipeline(submission_data, marking_guide, progress)
         
         # Set up progress callback
@@ -289,7 +282,6 @@ def process_optimized_full_pipeline(self, submission_ids: List[int], marking_gui
                     ).first()
                     
                     if existing_mapping:
-                        # Create reference mapping for duplicate
                         duplicate_mapping = Mapping(
                             submission_id=submission_id,
                             marking_guide_id=marking_guide_id,
@@ -298,7 +290,6 @@ def process_optimized_full_pipeline(self, submission_ids: List[int], marking_gui
                         )
                         db.session.add(duplicate_mapping)
                         
-                        # Create reference grading for duplicate
                         existing_grading = GradingResult.query.filter_by(
                             submission_id=original_id,
                             marking_guide_id=marking_guide_id
@@ -346,7 +337,7 @@ def process_optimized_full_pipeline(self, submission_ids: List[int], marking_gui
                 db.session.add(grade_obj)
                 
                 # Update submission status
-                submission = Submission.query.get(submission_id)
+                submission = db.session.get(Submission, submission_id)
                 if submission:
                     submission.status = 'graded'
                     submission.updated_at = datetime.utcnow()
@@ -465,7 +456,6 @@ def process_optimized_full_pipeline(self, submission_ids: List[int], marking_gui
             'unique_contents': len(submission_data)
         }
 
-
 @celery_app.task(bind=True)
 def process_batch_submissions_optimized(self, submission_ids: List[int], marking_guide_id: int, batch_size: int = 5):
     """Process submissions in optimized batches for better resource utilization."""
@@ -526,7 +516,6 @@ def process_batch_submissions_optimized(self, submission_ids: List[int], marking
             'total_submissions': len(submission_ids)
         }
 
-
 # Task monitoring and management
 @celery_app.task
 def get_task_status(task_id: str):
@@ -548,7 +537,6 @@ def get_task_status(task_id: str):
             'status': 'ERROR',
             'error': str(e)
         }
-
 
 @celery_app.task
 def cleanup_old_tasks(days_old: int = 7):

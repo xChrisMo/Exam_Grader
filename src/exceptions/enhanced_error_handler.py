@@ -18,7 +18,6 @@ from ..models.api_responses import ErrorCode
 
 logger = logging.getLogger(__name__)
 
-
 class EnhancedErrorHandler:
     """Enhanced error handler with standardized error management."""
     
@@ -63,7 +62,6 @@ class EnhancedErrorHandler:
         Returns:
             API response dictionary if return_response is True
         """
-        # Convert to ApplicationError if needed
         if not isinstance(error, ApplicationError):
             app_error = self._convert_to_application_error(error)
         else:
@@ -87,7 +85,6 @@ class EnhancedErrorHandler:
         # Generate user message
         user_message = self._generate_user_message(app_error, enhanced_context)
         
-        # Flash message if requested
         should_flash = flash_message if flash_message is not None else self.auto_flash_errors
         if should_flash:
             self._flash_user_message(user_message)
@@ -95,7 +92,6 @@ class EnhancedErrorHandler:
         # Add to recent activity
         self._add_to_recent_activity(app_error, enhanced_context)
         
-        # Return API response if requested
         if return_response:
             return self._create_api_response(app_error, user_message)
         
@@ -280,7 +276,6 @@ class EnhancedErrorHandler:
         """
         enhanced_context = context.copy() if context else {}
         
-        # Add request information if available
         try:
             if request:
                 enhanced_context.update({
@@ -294,7 +289,6 @@ class EnhancedErrorHandler:
             # Outside request context
             pass
         
-        # Add session information if available
         try:
             if session:
                 enhanced_context.update({
@@ -461,12 +455,9 @@ class EnhancedErrorHandler:
         
         return status_code_mapping.get(error_code, 500)
 
-
 # Global instance
 enhanced_error_handler = EnhancedErrorHandler()
 
-
-# Convenience functions for backward compatibility
 def handle_error(
     error: Union[Exception, ApplicationError],
     context: Optional[Dict[str, Any]] = None,
@@ -487,7 +478,6 @@ def handle_error(
         user_id=user_id,
         flash_message=flash_message
     )
-
 
 def handle_api_error(
     error: Union[Exception, ApplicationError],
@@ -512,7 +502,6 @@ def handle_api_error(
         return_response=True
     )
 
-
 def get_error_metrics() -> Dict[str, Any]:
     """Get error metrics.
     
@@ -520,7 +509,6 @@ def get_error_metrics() -> Dict[str, Any]:
         Error metrics dictionary
     """
     return enhanced_error_handler.get_error_metrics()
-
 
 def get_error_report() -> Dict[str, Any]:
     """Get error report.

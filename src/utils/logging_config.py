@@ -27,7 +27,6 @@ except ImportError:
     get_json_logger = None
     LoggingConfiguration = None
 
-
 class LoggingConfig:
     """
     Centralized logging configuration with simplified output.
@@ -51,7 +50,6 @@ class LoggingConfig:
         self.log_dir = Path(log_dir) if log_dir else None
         self.loggers = {}
         
-        # Create log directory if specified
         if self.log_dir:
             self.log_dir.mkdir(exist_ok=True)
 
@@ -74,13 +72,11 @@ class LoggingConfig:
         console_handler.setLevel(getattr(logging, self.log_level))
         
         if simplified:
-            # Simplified format for better readability
             console_format = logging.Formatter(
                 '%(levelname)s - %(message)s',
                 datefmt='%H:%M:%S'
             )
         else:
-            # Detailed format for debugging
             console_format = logging.Formatter(
                 '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
                 datefmt='%Y-%m-%d %H:%M:%S'
@@ -89,7 +85,6 @@ class LoggingConfig:
         console_handler.setFormatter(console_format)
         root_logger.addHandler(console_handler)
         
-        # Add file handler if log directory is specified
         if self.log_dir:
             file_handler = logging.FileHandler(
                 self.log_dir / 'exam_grader.log',
@@ -196,10 +191,8 @@ Press Ctrl+C to stop the server
             'database_echo': os.getenv('DATABASE_ECHO', 'False').lower() == 'true',
         }
 
-
 # Global logging configuration instance
 _logging_config = None
-
 
 def setup_application_logging(
     log_level: str = None,
@@ -222,7 +215,6 @@ def setup_application_logging(
     """
     global _logging_config
     
-    # Get configuration from environment if not provided
     env_config = LoggingConfig.get_environment_config()
     
     log_level = log_level or env_config['log_level']
@@ -230,7 +222,6 @@ def setup_application_logging(
     simplified = simplified if simplified is not None else env_config['simplified_logging']
     quiet_third_party = quiet_third_party if quiet_third_party is not None else env_config['quiet_third_party']
     
-    # Use comprehensive logging system if available and requested
     if use_comprehensive and COMPREHENSIVE_LOGGING_AVAILABLE and setup_comprehensive_logging:
         try:
             comprehensive_config = setup_comprehensive_logging(
@@ -245,8 +236,8 @@ def setup_application_logging(
             
             return comprehensive_config
         except Exception as e:
-            # Fallback to traditional logging if comprehensive fails
-            print(f"Warning: Comprehensive logging failed, falling back to traditional: {e}")
+            import logging
+            logging.warning(f"Comprehensive logging failed, falling back to traditional: {e}")
     
     # Create and configure traditional logging
     _logging_config = LoggingConfig(log_level, log_dir)
@@ -254,7 +245,6 @@ def setup_application_logging(
     _logging_config.configure_third_party_loggers(quiet_third_party)
     
     return _logging_config
-
 
 def get_logger(name: str, use_comprehensive: bool = True) -> logging.Logger:
     """Get a logger for the specified component.
@@ -283,7 +273,6 @@ def get_logger(name: str, use_comprehensive: bool = True) -> logging.Logger:
     
     return _logging_config.get_logger(name)
 
-
 def log_startup_summary(host: str = "127.0.0.1", port: int = 5000, debug: bool = True) -> None:
     """
     Log a clean startup summary.
@@ -309,7 +298,6 @@ Press Ctrl+C to stop the server
     
     logger.info(summary)
 
-
 def _configure_third_party_loggers_quiet():
     """Configure third-party loggers to reduce noise."""
     # Reduce SQLAlchemy verbosity
@@ -329,7 +317,6 @@ def _configure_third_party_loggers_quiet():
     logging.getLogger('PIL').setLevel(logging.WARNING)
     logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
-
 def get_structured_logger(name: str):
     """Get a structured JSON logger if available.
     
@@ -345,7 +332,6 @@ def get_structured_logger(name: str):
         except Exception:
             pass
     return None
-
 
 def create_startup_summary(host: str = "127.0.0.1", port: int = 5000, debug: bool = True) -> str:
     """Create a clean startup summary message.

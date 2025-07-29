@@ -34,11 +34,9 @@ try:
     from flask import request, g
     from flask_caching import Cache
 except ImportError:
-    # Fallback for non-Flask environments
     request = None
     g = None
     Cache = None
-
 
 @dataclass
 class PerformanceMetrics:
@@ -80,7 +78,6 @@ class PerformanceMetrics:
             'timestamp': self.timestamp.isoformat()
         }
 
-
 class MemoryCache:
     """High-performance in-memory cache with TTL support."""
     
@@ -114,7 +111,6 @@ class MemoryCache:
             
             value, expiry = self._cache[key]
             
-            # Check if expired
             if time.time() > expiry:
                 self._remove_key(key)
                 return None
@@ -135,7 +131,6 @@ class MemoryCache:
             True if set successfully
         """
         with self._lock:
-            # Check if we need to evict items
             if len(self._cache) >= self.max_size and key not in self._cache:
                 self._evict_lru()
             
@@ -227,7 +222,6 @@ class MemoryCache:
         
         return total_size
 
-
 class DatabaseOptimizer:
     """Database query optimization and monitoring."""
     
@@ -255,7 +249,6 @@ class DatabaseOptimizer:
             params: Query parameters
         """
         with self._lock:
-            # Normalize query for tracking
             normalized_query = self._normalize_query(query)
             
             stats = self.query_stats[normalized_query]
@@ -329,7 +322,6 @@ class DatabaseOptimizer:
         
         return normalized.upper()
 
-
 class ResourceMonitor:
     """System resource monitoring."""
     
@@ -385,7 +377,6 @@ class ResourceMonitor:
             disk = psutil.disk_usage('/')
             disk_percent = disk.percent
             
-            # Network metrics (if available)
             try:
                 network = psutil.net_io_counters()
                 network_sent = network.bytes_sent
@@ -445,7 +436,6 @@ class ResourceMonitor:
                 logger.error(f"Error in monitoring loop: {str(e)}")
                 time.sleep(self.monitoring_interval)
 
-
 class PerformanceOptimizer:
     """Main performance optimization manager."""
     
@@ -462,7 +452,6 @@ class PerformanceOptimizer:
         self.resource_monitor = ResourceMonitor()
         self.metrics = PerformanceMetrics()
         
-        # Initialize Redis cache if available
         self.redis_cache = None
         if REDIS_AVAILABLE and redis_url:
             try:
@@ -472,7 +461,6 @@ class PerformanceOptimizer:
             except Exception as e:
                 logger.warning(f"Failed to initialize Redis cache: {str(e)}")
         
-        # Initialize Flask-Caching if available
         self.flask_cache = None
         if app and Cache:
             try:
@@ -528,7 +516,6 @@ class PerformanceOptimizer:
         Returns:
             Cached value or None
         """
-        # Try Redis first if available
         if use_redis and self.redis_cache:
             try:
                 value = self.redis_cache.get(key)
@@ -562,7 +549,6 @@ class PerformanceOptimizer:
         """
         success = False
         
-        # Set in Redis if available
         if use_redis and self.redis_cache:
             try:
                 import pickle
@@ -592,7 +578,6 @@ class PerformanceOptimizer:
         """
         success = False
         
-        # Delete from Redis if available
         if use_redis and self.redis_cache:
             try:
                 self.redis_cache.delete(key)
@@ -600,7 +585,6 @@ class PerformanceOptimizer:
             except Exception as e:
                 logger.warning(f"Redis cache delete error: {str(e)}")
         
-        # Delete from memory cache
         self.memory_cache.delete(key)
         
         return success
@@ -685,8 +669,6 @@ class PerformanceOptimizer:
         # Start initial cleanup timer
         threading.Timer(300, cleanup_task).start()
 
-
-# Decorators for performance optimization
 def cached(timeout: int = 3600, key_prefix: str = ''):
     """Decorator for caching function results.
     
@@ -702,7 +684,6 @@ def cached(timeout: int = 3600, key_prefix: str = ''):
             key_data = f"{key_prefix}:{f.__name__}:{str(args)}:{str(sorted(kwargs.items()))}"
             cache_key = hashlib.md5(key_data.encode()).hexdigest()
             
-            # Try to get from cache
             optimizer = get_performance_optimizer()
             if optimizer:
                 cached_result = optimizer.cache_get(cache_key)
@@ -720,7 +701,6 @@ def cached(timeout: int = 3600, key_prefix: str = ''):
         return decorated_function
     
     return decorator
-
 
 def monitor_performance(f: Callable) -> Callable:
     """Decorator for monitoring function performance.
@@ -753,10 +733,8 @@ def monitor_performance(f: Callable) -> Callable:
     
     return decorated_function
 
-
 # Global performance optimizer instance
 performance_optimizer = None
-
 
 def init_performance_optimizer(app=None, redis_url: Optional[str] = None) -> PerformanceOptimizer:
     """Initialize global performance optimizer.
@@ -771,7 +749,6 @@ def init_performance_optimizer(app=None, redis_url: Optional[str] = None) -> Per
     global performance_optimizer
     performance_optimizer = PerformanceOptimizer(app, redis_url)
     return performance_optimizer
-
 
 def get_performance_optimizer() -> Optional[PerformanceOptimizer]:
     """Get global performance optimizer instance.

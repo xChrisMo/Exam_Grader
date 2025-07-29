@@ -17,7 +17,6 @@ from .application_errors import (
 
 from ..models.api_responses import ErrorCode
 
-
 __all__ = [
     'ApplicationError',
     'ValidationError',

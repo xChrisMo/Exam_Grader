@@ -4,13 +4,11 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 from enum import Enum
 
-
 class ValidationSeverity(Enum):
     """Validation error severity levels."""
     ERROR = "error"
     WARNING = "warning"
     INFO = "info"
-
 
 @dataclass
 class ValidationError:
@@ -37,7 +35,6 @@ class ValidationError:
             result["constraint"] = self.constraint
             
         return result
-
 
 @dataclass
 class ValidationResult:
@@ -108,7 +105,6 @@ class ValidationResult:
     def failure(cls, errors: List[ValidationError] = None) -> 'ValidationResult':
         """Create a failed validation result."""
         return cls(is_valid=False, errors=errors or [])
-
 
 class CommonValidators:
     """Common validation functions."""
@@ -221,7 +217,6 @@ class CommonValidators:
                 constraint=str(max_size)
             )
         return None
-
 
 def validate_request_data(data: Dict[str, Any], validators: Dict[str, List[callable]]) -> ValidationResult:
     """Validate request data using provided validators.

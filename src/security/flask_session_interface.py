@@ -1,13 +1,12 @@
-from typing import Any, Dict
 from datetime import datetime, timedelta
 
 from flask.sessions import SessionInterface, SessionMixin
+from typing import Any, Dict
 from werkzeug.datastructures import CallbackDict
 
-from src.security.session_manager import SecureSessionManager
 from src.database.models import Session as SessionModel, db
+from src.security.session_manager import SecureSessionManager
 from utils.logger import logger
-
 
 class SecureFlaskSession(CallbackDict, SessionMixin):
     def __init__(self, initial=None, sid=None, new=False):
@@ -24,7 +23,6 @@ class SecureFlaskSession(CallbackDict, SessionMixin):
         super().__delitem__(key)
         self.modified = True
 
-
 class SecureSessionInterface(SessionInterface):
     def __init__(self, session_manager: SecureSessionManager, app_secret_key: str):
         self.session_manager = session_manager
@@ -39,7 +37,6 @@ class SecureSessionInterface(SessionInterface):
             # No session ID in cookie, create a new session
             return SecureFlaskSession(new=True)
 
-        # Try to load session from database using SecureSessionManager
         session_data = self.session_manager.get_session(sid)
         if session_data is None:
             # Session not found or invalid, create a new one
@@ -72,10 +69,12 @@ class SecureSessionInterface(SessionInterface):
             # If session is new or modified, save it
             if session.new:
                 # Create a new session in the database
-                user_id = session.get('user_id') # Assuming user_id is stored in session
+                try:
+                    from flask_login import current_user
+                    user_id = current_user.id if current_user.is_authenticated else None
+                except:
+                    user_id = None
                 logger.debug(f"New session user_id: {user_id}")
-                # Create a new session in the database, even for anonymous users
-                # The user_id can be None for anonymous sessions
                 # Pass remember_me to create_session to determine session timeout
                 sid = self.session_manager.create_session(
                     user_id,
@@ -107,7 +106,6 @@ class SecureSessionInterface(SessionInterface):
             # Session not modified, but update last_accessed in DB to keep it alive
             self.session_manager.update_session_last_accessed(session.sid)
             logger.debug(f"Session {session.sid} last_accessed updated in DB.")
-
 
 # Add update_session and update_session_last_accessed to SecureSessionManager
 def _update_session(self, sid: str, session_data: Dict[str, Any]):

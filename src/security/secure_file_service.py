@@ -30,7 +30,6 @@ except ImportError:
     def validate_file_upload(file_obj, filename):
         return True, None, {}
 
-
 class SecureFileStorage:
     """Secure file storage with isolation and cleanup."""
     
@@ -183,12 +182,10 @@ class SecureFileStorage:
         # Get file extension
         extension = Path(original_filename).suffix.lower()
         
-        # Use hash and timestamp for uniqueness
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
         hash_prefix = file_hash[:16] if file_hash else 'unknown'
         
         return f"{timestamp}_{hash_prefix}{extension}"
-
 
 class MalwareScanner:
     """Basic malware detection for uploaded files."""
@@ -237,17 +234,14 @@ class MalwareScanner:
         threats = []
         
         try:
-            # Check for malicious patterns
             for pattern in cls.MALICIOUS_PATTERNS:
                 if pattern in file_content:
                     threats.append(f"Malicious pattern detected: {pattern.decode('utf-8', errors='ignore')}")
             
-            # Check for suspicious extensions in content
             for ext in cls.SUSPICIOUS_EXTENSIONS:
                 if ext in file_content:
                     threats.append(f"Suspicious file extension in content: {ext.decode('utf-8', errors='ignore')}")
             
-            # Check for high entropy (possible encryption/obfuscation)
             entropy = cls._calculate_entropy(file_content)
             if entropy > 7.5:  # High entropy threshold
                 threats.append(f"High entropy detected: {entropy:.2f} (possible obfuscation)")
@@ -295,7 +289,6 @@ class MalwareScanner:
                 entropy -= probability * (probability.bit_length() - 1)
         
         return entropy
-
 
 class SecureFileService:
     """Main secure file service."""
@@ -436,7 +429,6 @@ class SecureFileService:
             if not success:
                 return False
             
-            # Check if file is quarantined
             if metadata and metadata.get('file_info', {}).get('quarantined', False):
                 logger.warning(f"Access denied to quarantined file: {stored_filename}")
                 return False
@@ -449,10 +441,8 @@ class SecureFileService:
             logger.error(f"Error validating file access for {stored_filename}: {str(e)}")
             return False
 
-
 # Global secure file service instance
 secure_file_service = None
-
 
 def init_secure_file_service(storage_path: str, enable_malware_scan: bool = True) -> SecureFileService:
     """Initialize global secure file service.
@@ -467,7 +457,6 @@ def init_secure_file_service(storage_path: str, enable_malware_scan: bool = True
     global secure_file_service
     secure_file_service = SecureFileService(storage_path, enable_malware_scan)
     return secure_file_service
-
 
 def get_secure_file_service() -> Optional[SecureFileService]:
     """Get global secure file service instance.

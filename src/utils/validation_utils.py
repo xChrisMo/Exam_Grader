@@ -10,15 +10,13 @@ import hashlib
 from pathlib import Path
 from werkzeug.datastructures import FileStorage
 
-from src.services.content_validation_service import ContentValidationService
+# Using inline validation instead
 from src.database.models import MarkingGuide
 from utils.logger import logger
-
 
 class ValidationUtils:
     """Utility class for content validation and duplicate detection."""
     
-    # Allowed file extensions for uploads (all document types with OCR fallback support)
     ALLOWED_EXTENSIONS = {
         'pdf', 'docx', 'doc', 'txt', 'jpg', 'jpeg', 'png', 'tiff', 'bmp'
     }
@@ -42,7 +40,6 @@ class ValidationUtils:
             Dictionary with validation results
         """
         try:
-            # Check if file exists
             if not file:
                 return {
                     'success': False,
@@ -141,7 +138,6 @@ class ValidationUtils:
                 'severity': 'warning'
             })
             
-        # Check for suspicious patterns
         suspicious_patterns = cls._detect_suspicious_patterns(text_content)
         if suspicious_patterns:
             warnings.extend(suspicious_patterns)
@@ -252,7 +248,6 @@ class ValidationUtils:
                 'severity': 'error'
             })
         else:
-            # Check if marking guide exists
             guide = MarkingGuide.query.filter_by(
                 id=marking_guide_id, is_active=True
             ).first()
@@ -387,7 +382,6 @@ class ValidationUtils:
         """Detect suspicious patterns in text content."""
         warnings = []
         
-        # Check for excessive repetition
         words = text.split()
         if len(words) > 10:
             word_freq = {}
@@ -402,7 +396,6 @@ class ValidationUtils:
                     'severity': 'warning'
                 })
                 
-        # Check for very short lines (possible OCR artifacts)
         lines = text.split('\n')
         short_lines = [line for line in lines if 0 < len(line.strip()) < 3]
         if len(short_lines) > len(lines) * 0.5:
@@ -417,22 +410,18 @@ class ValidationUtils:
     @classmethod
     def _calculate_quality_score(cls, text: str, confidence: float) -> float:
         """Calculate overall content quality score."""
-        # Base score from confidence
         score = confidence
         
-        # Adjust for text length
         text_length = len(text.strip())
         if text_length < cls.MIN_TEXT_LENGTH:
             score *= 0.5
         elif text_length > 1000:
             score = min(score + 0.1, 1.0)
             
-        # Adjust for suspicious patterns
         suspicious_patterns = cls._detect_suspicious_patterns(text)
         score -= len(suspicious_patterns) * 0.1
         
         return max(0.0, min(1.0, score))
-
 
 class ContentHashUtils:
     """Utilities for content hashing and comparison."""
@@ -469,9 +458,10 @@ class ContentHashUtils:
             SHA256 hash as hexadecimal string
         """
         if normalize:
-            # Use ContentValidationService for consistent normalization
-            service = ContentValidationService()
-            text = service.normalize_text(text)
+            text = text.strip().lower()
+            # Remove extra whitespace
+            import re
+            text = re.sub(r'\s+', ' ', text)
             
         return hashlib.sha256(text.encode('utf-8')).hexdigest()
         

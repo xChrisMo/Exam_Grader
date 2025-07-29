@@ -7,13 +7,11 @@ from .persistent_progress_tracker import PersistentProgressTracker
 from .progress_tracker import ProgressTracker
 from .websocket_manager import WebSocketManager
 
-# Handle case where get_logger might be None due to import issues
 if get_logger is not None:
     logger = get_logger(__name__)
 else:
     import logging
     logger = logging.getLogger(__name__)
-
 
 class ProgressService:
     """Unified progress service that manages both in-memory and persistent progress tracking."""
@@ -46,7 +44,6 @@ class ProgressService:
     
     def _init_trackers(self):
         """Initialize progress trackers based on configuration."""
-        # Initialize persistent tracker if enabled
         if self.enable_persistence:
             try:
                 self.persistent_tracker = PersistentProgressTracker(
@@ -58,7 +55,6 @@ class ProgressService:
                 if not self.fallback_to_memory:
                     raise
         
-        # Initialize memory tracker if needed
         if not self.persistent_tracker or self.fallback_to_memory:
             try:
                 self.memory_tracker = ProgressTracker(
@@ -186,10 +182,8 @@ class ProgressService:
             except Exception as e:
                 logger.warning(f"Persistent tracker update failed: {e}")
         
-        # Try memory tracker if persistent failed or as backup
         if not success and self.memory_tracker:
             try:
-                # Create progress data for memory tracker
                 progress_data = {
                     "current_step": step_number,
                     "operation": operation,
@@ -235,7 +229,6 @@ class ProgressService:
             except Exception as e:
                 logger.warning(f"Persistent tracker completion failed: {e}")
         
-        # Try memory tracker if persistent failed
         if not success and self.memory_tracker:
             try:
                 # Memory tracker doesn't have explicit completion, just update status
@@ -348,7 +341,6 @@ class ProgressService:
         """
         sessions = []
         
-        # Get from persistent tracker
         if self.persistent_tracker:
             try:
                 sessions.extend(
@@ -357,11 +349,9 @@ class ProgressService:
             except Exception as e:
                 logger.warning(f"Failed to get persistent active sessions: {e}")
         
-        # Get from memory tracker
         if self.memory_tracker:
             try:
                 memory_sessions = self.memory_tracker.get_active_sessions()
-                # Convert to expected format and filter by user if needed
                 for session_id, session_data in memory_sessions.items():
                     if not user_id or session_data.get('user_id') == user_id:
                         sessions.append({
@@ -481,7 +471,6 @@ class ProgressService:
             "persistence_enabled": self.enable_persistence,
             "fallback_enabled": self.fallback_to_memory
         }
-
 
 # Global instance
 progress_service = ProgressService()

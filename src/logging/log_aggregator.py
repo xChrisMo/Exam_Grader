@@ -13,7 +13,6 @@ from threading import Lock
 import re
 from typing import Optional, Dict, Any, List, Union
 
-
 @dataclass
 class LogMetrics:
     """Metrics collected from log analysis."""
@@ -95,7 +94,6 @@ class LogMetrics:
             }
         }
 
-
 class LogAggregator:
     """Log aggregation and metrics collection system."""
     
@@ -109,7 +107,6 @@ class LogAggregator:
         self.metrics_cache: Dict[str, LogMetrics] = {}
         self._cache_lock = Lock()
         
-        # Patterns for log parsing
         self.log_patterns = {
             'timestamp': re.compile(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'),
             'level': re.compile(r'\[(\w+)\]'),
@@ -253,7 +250,6 @@ class LogAggregator:
             operation = operation_match.group(1)
             metrics.operation_counts[operation] = metrics.operation_counts.get(operation, 0) + 1
             
-            # Extract operation duration if available
             if response_time_match:
                 try:
                     duration = float(response_time_match.group(1))
@@ -390,7 +386,6 @@ class LogAggregator:
         """Clear metrics cache."""
         with self._cache_lock:
             self.metrics_cache.clear()
-
 
 class LogAnalytics:
     """Advanced log analytics and insights."""

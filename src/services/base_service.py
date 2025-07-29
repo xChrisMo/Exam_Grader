@@ -12,14 +12,12 @@ from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
-
 class ServiceStatus(Enum):
     """Service status enumeration."""
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
     UNKNOWN = "unknown"
-
 
 @dataclass
 class ServiceMetrics:
@@ -75,7 +73,6 @@ class ServiceMetrics:
             "status": self.status.value,
             "custom_metrics": self.custom_metrics
         }
-
 
 class BaseService(ABC):
     """Base service class providing common functionality for all services."""
@@ -157,7 +154,6 @@ class BaseService(ABC):
                 self.metrics.total_requests += 1
                 self.metrics.last_request_time = request_time
                 if operation_name:
-                    # Track operation-specific metrics if needed
                     operation_key = f"operation_{operation_name}"
                     if operation_key not in self.metrics.custom_metrics:
                         self.metrics.custom_metrics[operation_key] = 0
@@ -220,7 +216,6 @@ class BaseService(ABC):
         """
         current_time = time.time()
         
-        # Use cached result if within interval
         if (self._last_health_check and 
             current_time - self._last_health_check < self._health_check_interval):
             return self.metrics.status in [ServiceStatus.HEALTHY, ServiceStatus.DEGRADED]
@@ -253,7 +248,6 @@ class BaseService(ABC):
     
     def __repr__(self) -> str:
         return self.__str__()
-
 
 class ServiceRegistry:
     """Registry for managing service instances and dependencies."""
@@ -392,7 +386,6 @@ class ServiceRegistry:
             for name in list(cls._services.keys()):
                 cls.unregister(name)
             cls._dependencies.clear()
-
 
 class ServiceInjector:
     """Dependency injection for services."""

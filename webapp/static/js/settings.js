@@ -1,12 +1,18 @@
 /**
- * Settings Manager for Exam Grader Application
- * Handles applying UI settings like theme and language
+ * Enhanced Settings Manager for Exam Grader Application
+ * Handles UI settings, API integration, and real-time updates
  */
 
 // Settings namespace
 const SettingsManager = {
     // Current language
     currentLanguage: 'en',
+    
+    // Settings cache
+    settingsCache: {},
+    
+    // Loading state
+    isLoading: false,
     
     // Apply theme based on saved setting
     applyTheme: function() {
@@ -87,45 +93,378 @@ const SettingsManager = {
         });
     },
     
-    // Save settings to localStorage when changed
-    saveSettings: function() {
-        // Listen for changes to notification level
-        const notificationLevelSelect = document.getElementById('notification_level');
-        if (notificationLevelSelect) {
-            notificationLevelSelect.addEventListener('change', function() {
-                localStorage.setItem('notification_level', this.value);
-                console.log(`Notification level saved: ${this.value}`);
-            });
+    // Show notification
+    showNotification: function(message, type = 'info') {
+        // Try to use ExamGrader notification system if available
+        if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+            ExamGrader.notificationManager.notify(message, type);
+        } else {
+            // Fallback to alert
+            alert(type.toUpperCase() + ': ' + message);
+        }
+    },
+    
+    // Show loading state
+    showLoading: function(show = true) {
+        this.isLoading = show;
+        const submitButton = document.querySelector('button[type="submit"]');
+        if (submitButton) {
+            if (show) {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+            } else {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="fas fa-save mr-2"></i>Save Settings';
+            }
+        }
+    },
+    
+    // Validate form data
+    validateSettings: function(data) {
+        const errors = [];
+        
+        // Validate max file size
+        if (data.max_file_size && (data.max_file_size < 1 || data.max_file_size > 500)) {
+            errors.push('Max file size must be between 1 and 500 MB');
         }
         
-        // Listen for changes to theme
-        const themeSelect = document.getElementById('theme');
-        if (themeSelect) {
-            themeSelect.addEventListener('change', function() {
-                localStorage.setItem('theme', this.value);
-                SettingsManager.applyTheme();
-                console.log(`Theme saved: ${this.value}`);
-            });
+        // Validate results per page
+        if (data.results_per_page && (data.results_per_page < 5 || data.results_per_page > 100)) {
+            errors.push('Results per page must be between 5 and 100');
         }
         
-        // Listen for changes to language
-        const languageSelect = document.getElementById('language');
-        if (languageSelect) {
-            languageSelect.addEventListener('change', function() {
-                localStorage.setItem('language', this.value);
-                SettingsManager.currentLanguage = this.value;
-                SettingsManager.applyLanguage();
-                // Force page reload to ensure all content is translated
-                // This is needed because some content might be dynamically generated
-                // or not have data-i18n attributes
-                window.location.reload();
-                console.log(`Language saved: ${this.value}`);
+        // Validate URL format for OCR API
+        if (data.ocr_api_url && data.ocr_api_url.trim()) {
+            try {
+                new URL(data.ocr_api_url);
+            } catch (e) {
+                errors.push('OCR API URL must be a valid URL');
+            }
+        }
+        
+        return errors;
+    },
+    
+    // Save settings via API
+    saveSettingsAPI: async function(settingsData) {
+        try {
+            this.showLoading(true);
+            
+            // Validate settings
+            const errors = this.validateSettings(settingsData);
+            if (errors.length > 0) {
+                this.showNotification('Validation errors: ' + errors.join(', '), 'error');
+                return false;
+            }
+            
+            const response = await fetch('/api/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(settingsData)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.settingsCache = result.settings;
+                this.showNotification('Settings saved successfully!', 'success');
+                
+                // Apply theme and language changes immediately
+                if (settingsData.theme) {
+                    localStorage.setItem('theme', settingsData.theme);
+                    this.applyTheme();
+                }
+                
+                if (settingsData.language) {
+                    localStorage.setItem('language', settingsData.language);
+                    this.currentLanguage = settingsData.language;
+                    this.applyLanguage();
+                }
+                
+                return true;
+            } else {
+                this.showNotification('Error saving settings: ' + result.error, 'error');
+                return false;
+            }
+            
+        } catch (error) {
+            console.error('Error saving settings:', error);
+            this.showNotification('Network error saving settings', 'error');
+            return false;
+        } finally {
+            this.showLoading(false);
+        }
+    },
+    
+    // Load settings from API
+    loadSettingsAPI: async function() {
+        try {
+            const response = await fetch('/api/settings', {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.settingsCache = result.settings;
+                this.populateForm(result.settings);
+                return result.settings;
+            } else {
+                console.error('Error loading settings:', result.error);
+                return null;
+            }
+            
+        } catch (error) {
+            console.error('Error loading settings:', error);
+            return null;
+        }
+    },
+    
+    // Populate form with settings data
+    populateForm: function(settings) {
+        Object.keys(settings).forEach(key => {
+            const element = document.getElementById(key);
+            if (element) {
+                if (element.type === 'checkbox') {
+                    element.checked = settings[key];
+                } else if (element.type === 'password') {
+                    // Don't populate password fields for security
+                    element.placeholder = settings[key] ? '••••••••' : 'Enter API key';
+                } else {
+                    element.value = settings[key] || '';
+                }
+            }
+        });
+        
+        // Handle allowed formats checkboxes
+        if (settings.allowed_formats && Array.isArray(settings.allowed_formats)) {
+            const checkboxes = document.querySelectorAll('input[name="allowed_formats"]');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = settings.allowed_formats.includes(checkbox.value);
             });
         }
     },
     
+    // Get form data
+    getFormData: function() {
+        const form = document.getElementById('settings-form');
+        if (!form) return {};
+        
+        const formData = new FormData(form);
+        const data = {};
+        
+        // Handle regular form fields
+        for (let [key, value] of formData.entries()) {
+            if (key === 'allowed_formats') {
+                // Handle multiple checkboxes
+                if (!data[key]) data[key] = [];
+                data[key].push(value);
+            } else {
+                data[key] = value;
+            }
+        }
+        
+        // Handle checkboxes that might not be in FormData if unchecked
+        const checkboxes = form.querySelectorAll('input[type="checkbox"]:not([name="allowed_formats"])');
+        checkboxes.forEach(checkbox => {
+            if (!data.hasOwnProperty(checkbox.name)) {
+                data[checkbox.name] = false;
+            } else {
+                data[checkbox.name] = true;
+            }
+        });
+        
+        // Convert string numbers to actual numbers
+        if (data.max_file_size) data.max_file_size = parseInt(data.max_file_size);
+        if (data.results_per_page) data.results_per_page = parseInt(data.results_per_page);
+        
+        return data;
+    },
+    
+    // Reset settings to defaults
+    resetToDefaults: async function() {
+        if (!confirm('Are you sure you want to reset all settings to defaults? This cannot be undone.')) {
+            return;
+        }
+        
+        try {
+            this.showLoading(true);
+            
+            const response = await fetch('/api/settings/reset', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.settingsCache = result.settings;
+                this.populateForm(result.settings);
+                this.showNotification('Settings reset to defaults', 'success');
+                
+                // Apply theme and language changes
+                localStorage.setItem('theme', result.settings.theme);
+                localStorage.setItem('language', result.settings.language);
+                this.applyTheme();
+                this.currentLanguage = result.settings.language;
+                this.applyLanguage();
+            } else {
+                this.showNotification('Error resetting settings: ' + result.error, 'error');
+            }
+            
+        } catch (error) {
+            console.error('Error resetting settings:', error);
+            this.showNotification('Network error resetting settings', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+    
+    // Export settings
+    exportSettings: async function() {
+        try {
+            const response = await fetch('/api/settings/export', {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Create and download file
+                const dataStr = JSON.stringify(result.data, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(dataBlob);
+                link.download = result.filename;
+                link.click();
+                URL.revokeObjectURL(link.href);
+                
+                this.showNotification('Settings exported successfully', 'success');
+            } else {
+                this.showNotification('Error exporting settings: ' + result.error, 'error');
+            }
+            
+        } catch (error) {
+            console.error('Error exporting settings:', error);
+            this.showNotification('Network error exporting settings', 'error');
+        }
+    },
+    
+    // Update service status
+    updateServiceStatus: async function() {
+        try {
+            const response = await fetch('/api/service-status', {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Update service status indicators
+                Object.keys(result.status).forEach(service => {
+                    const indicator = document.querySelector(`[data-service="${service}"] .status-indicator`);
+                    if (indicator) {
+                        const isOnline = result.status[service];
+                        indicator.className = `w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`;
+                        
+                        const statusText = indicator.parentElement.querySelector('.status-text');
+                        if (statusText) {
+                            statusText.textContent = isOnline ? 'Online' : 'Offline';
+                        }
+                    }
+                });
+            }
+            
+        } catch (error) {
+            console.error('Error updating service status:', error);
+        }
+    },
+    
+    // Set up form event listeners
+    setupFormListeners: function() {
+        const form = document.getElementById('settings-form');
+        if (!form) return;
+        
+        // Handle form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (this.isLoading) return;
+            
+            const formData = this.getFormData();
+            await this.saveSettingsAPI(formData);
+        });
+        
+        // Handle real-time theme changes
+        const themeSelect = document.getElementById('theme');
+        if (themeSelect) {
+            themeSelect.addEventListener('change', (e) => {
+                localStorage.setItem('theme', e.target.value);
+                this.applyTheme();
+            });
+        }
+        
+        // Handle real-time language changes
+        const languageSelect = document.getElementById('language');
+        if (languageSelect) {
+            languageSelect.addEventListener('change', (e) => {
+                localStorage.setItem('language', e.target.value);
+                this.currentLanguage = e.target.value;
+                this.applyLanguage();
+            });
+        }
+        
+        // Add reset button if it doesn't exist
+        const resetButton = document.getElementById('reset-settings-btn');
+        if (!resetButton) {
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton) {
+                const resetBtn = document.createElement('button');
+                resetBtn.type = 'button';
+                resetBtn.id = 'reset-settings-btn';
+                resetBtn.className = 'inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 mr-3';
+                resetBtn.innerHTML = '<i class="fas fa-undo mr-2"></i>Reset to Defaults';
+                resetBtn.addEventListener('click', () => this.resetToDefaults());
+                
+                submitButton.parentElement.insertBefore(resetBtn, submitButton);
+            }
+        }
+        
+        // Add export button if it doesn't exist
+        const exportButton = document.getElementById('export-settings-btn');
+        if (!exportButton) {
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton) {
+                const exportBtn = document.createElement('button');
+                exportBtn.type = 'button';
+                exportBtn.id = 'export-settings-btn';
+                exportBtn.className = 'inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 mr-3';
+                exportBtn.innerHTML = '<i class="fas fa-download mr-2"></i>Export Settings';
+                exportBtn.addEventListener('click', () => this.exportSettings());
+                
+                submitButton.parentElement.insertBefore(exportBtn, submitButton);
+            }
+        }
+    },
+    
     // Initialize settings
-    init: function() {
+    init: async function() {
+        console.log('Initializing Enhanced Settings Manager');
+        
         // Get current language first
         const storedLanguage = localStorage.getItem('language');
         this.currentLanguage = storedLanguage || document.documentElement.getAttribute('lang') || 'en';
@@ -134,37 +473,22 @@ const SettingsManager = {
         this.applyTheme();
         this.applyLanguage();
         
-        // Set up event listeners for settings changes
-        this.saveSettings();
+        // Set up form event listeners
+        this.setupFormListeners();
         
-        // Apply settings immediately when settings page loads
+        // Load settings from API if on settings page
         const settingsForm = document.getElementById('settings-form');
         if (settingsForm) {
-            // Update form values from localStorage if available
-            const notificationLevel = localStorage.getItem('notification_level');
-            const theme = localStorage.getItem('theme');
-            const language = localStorage.getItem('language');
+            await this.loadSettingsAPI();
             
-            if (notificationLevel) {
-                const notificationSelect = document.getElementById('notification_level');
-                if (notificationSelect) notificationSelect.value = notificationLevel;
-            }
+            // Update service status
+            this.updateServiceStatus();
             
-            if (theme) {
-                const themeSelect = document.getElementById('theme');
-                if (themeSelect) themeSelect.value = theme;
-            }
-            
-            if (language) {
-                const languageSelect = document.getElementById('language');
-                if (languageSelect) languageSelect.value = language;
-            }
+            // Set up periodic service status updates
+            setInterval(() => this.updateServiceStatus(), 30000); // Every 30 seconds
         }
         
-        // Apply translations to the page
-        this.translatePage();
-        
-        console.log('Settings manager initialized');
+        console.log('Enhanced Settings Manager initialized');
     }
 };
 

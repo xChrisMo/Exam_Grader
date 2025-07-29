@@ -12,7 +12,6 @@ from ..models.api_responses import ErrorCode
 
 logger = logging.getLogger(__name__)
 
-
 class FlaskErrorIntegration:
     """Flask integration for standardized error handling."""
     
@@ -77,13 +76,11 @@ class FlaskErrorIntegration:
         @self.app.before_request
         def before_request():
             """Handle before request processing."""
-            # Increment request count for error rate tracking
             enhanced_error_handler.increment_request_count()
         
         @self.app.after_request
         def after_request(response):
             """Handle after request processing."""
-            # Log successful requests for analytics
             if response.status_code < 400:
                 logger.debug(f"Successful request: {request.method} {request.path}")
             
@@ -270,8 +267,10 @@ class FlaskErrorIntegration:
             User ID if available
         """
         try:
-            from flask import session
-            return session.get('user_id') or session.get('current_user_id')
+            from flask_login import current_user
+            if current_user.is_authenticated:
+                return str(current_user.id)
+            return None
         except RuntimeError:
             return None
     
@@ -281,7 +280,6 @@ class FlaskErrorIntegration:
         Returns:
             Request ID
         """
-        # Try to get from headers first
         request_id = request.headers.get('X-Request-ID')
         if not request_id:
             # Generate a simple request ID
@@ -296,7 +294,6 @@ class FlaskErrorIntegration:
         Returns:
             True if API request, False otherwise
         """
-        # Check if request path starts with /api/
         if request.path.startswith('/api/'):
             return True
         
@@ -380,7 +377,6 @@ class FlaskErrorIntegration:
             </html>
             """
 
-
 def error_handler_decorator(flash_errors: bool = True):
     """Decorator for automatic error handling in Flask routes.
     
@@ -445,9 +441,6 @@ def error_handler_decorator(flash_errors: bool = True):
         return wrapper
     return decorator
 
-
-# Convenience decorator for API endpoints
 api_error_handler = error_handler_decorator(flash_errors=False)
 
-# Convenience decorator for web endpoints
 web_error_handler = error_handler_decorator(flash_errors=True)

@@ -27,18 +27,15 @@ import fitz  # PyMuPDF
 from docx import Document
 
 from src.config.config_manager import ConfigManager
-from src.services.ocr_service import OCRService, OCRServiceError
+from src.services.consolidated_ocr_service import ConsolidatedOCRService as OCRService, OCRServiceError
 from utils.logger import logger
 
-# Import the PDF helper for better error messages
 try:
     from utils.pdf_helper import get_helpful_error_message
 except ImportError:
-    # Fallback if helper module doesn't exist
     def get_helpful_error_message(file_path, original_error):
         return f"Error processing PDF: {original_error}"
 
-# Import fallback OCR service if available
 try:
     fallback_ocr_available = True
 except ImportError:
@@ -67,7 +64,6 @@ except Exception as e:
     logger.error(f"OCR Service Error: Failed to initialize OCR service: {str(e)}")
     logger.warning("OCR service will be disabled")
     ocr_service_instance = None
-
 
 class DocumentParser:
     """
@@ -99,7 +95,6 @@ class DocumentParser:
         """
         mime_type, _ = mimetypes.guess_type(file_path)
         if mime_type is None:
-            # Try to determine type from file extension
             ext = Path(file_path).suffix.lower()
             if ext == ".pdf":
                 return "application/pdf"
@@ -150,7 +145,6 @@ class DocumentParser:
                     )
                     continue
 
-            # Check if we got meaningful text (more than just whitespace or a few characters)
             if not text.strip():
                 logger.warning(
                     "PDF text extraction yielded no text, OCR may be needed"
@@ -214,7 +208,6 @@ class DocumentParser:
             OCRServiceError: If OCR processing fails
         """
         try:
-            # Check if the file is a PDF
             is_pdf = file_path.lower().endswith(".pdf")
 
             if is_pdf:
@@ -234,7 +227,6 @@ class DocumentParser:
                             logger.debug(f"Converting page {page_num} to image")
                             # Convert page to image
                             import tempfile
-                            # Create a temporary file for the image with better cleanup
                             import tempfile
                             import time
                             
@@ -275,7 +267,6 @@ class DocumentParser:
                                         logger.debug(f"Error deleting pixmap: {str(e)}")
                                         pass
                                 
-                                # Clean up temporary image with retry logic for Windows
                                 if temp_img_path and os.path.exists(temp_img_path):
                                     for attempt in range(3):  # Try up to 3 times
                                         try:
@@ -352,7 +343,6 @@ class DocumentParser:
             logger.error(f"File Error: Error reading text file: {str(e)}")
             raise
 
-
 def parse_student_submission(
     file_path: str,
 ) -> Tuple[Dict[str, str], Optional[str], Optional[str]]:
@@ -388,7 +378,6 @@ def parse_student_submission(
         - Returns empty dict and error message if extraction fails
     """
     try:
-        # Check if file exists
         if not os.path.exists(file_path):
             return {}, None, f"File not found: {file_path}"
 
@@ -459,7 +448,6 @@ def parse_student_submission(
                     f"Text extraction failed and OCR fallback also failed: {str(ocr_error)}",
                 )
 
-        # Check if we have any text
         if not raw_text or not raw_text.strip():
             error_message = f"No text could be extracted from the document: {file_path}"
             logger.error(error_message)

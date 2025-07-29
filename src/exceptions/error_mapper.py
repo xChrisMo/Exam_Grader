@@ -7,14 +7,12 @@ from typing import Optional, Dict, Any, List
 
 from .application_errors import ApplicationError, ErrorCode
 
-
 class MessageSeverity(Enum):
     """Message severity levels for user display."""
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
     CRITICAL = "critical"
-
 
 @dataclass
 class UserMessage:
@@ -41,7 +39,6 @@ class UserMessage:
             'auto_dismiss_seconds': self.auto_dismiss_seconds
         }
 
-
 class ErrorMapper(ABC):
     """Abstract base class for error mapping."""
     
@@ -66,7 +63,6 @@ class ErrorMapper(ABC):
             List of supported ErrorCode values
         """
         pass
-
 
 class UserFriendlyErrorMapper(ErrorMapper):
     """Default user-friendly error mapper with contextual messages."""
@@ -93,7 +89,6 @@ class UserFriendlyErrorMapper(ErrorMapper):
         """
         context = context or {}
         
-        # Get base template for error code
         template = self._error_templates.get(
             error.error_code,
             self._error_templates[ErrorCode.INTERNAL_ERROR]
@@ -288,7 +283,6 @@ class UserFriendlyErrorMapper(ErrorMapper):
         """
         customized = template.copy()
         
-        # Check for context-specific patterns
         for pattern, customizations in self._context_patterns.items():
             if pattern in context.get('operation', '').lower():
                 error_customization = customizations.get(error.error_code, {})
@@ -354,7 +348,6 @@ class UserFriendlyErrorMapper(ErrorMapper):
         
         return text
 
-
 class LocalizedErrorMapper(UserFriendlyErrorMapper):
     """Localized error mapper with multi-language support."""
     
@@ -375,14 +368,11 @@ class LocalizedErrorMapper(UserFriendlyErrorMapper):
         Returns:
             Dictionary mapping error codes to localized message templates
         """
-        # Load templates for current language
         templates = self._localized_templates.get(self.language, {})
         
-        # Fall back to default language if needed
         if not templates and self.language != self.fallback_language:
             templates = self._localized_templates.get(self.fallback_language, {})
         
-        # Fall back to base templates if no localized templates found
         if not templates:
             return super()._load_error_templates()
         
@@ -394,7 +384,6 @@ class LocalizedErrorMapper(UserFriendlyErrorMapper):
         Returns:
             Dictionary mapping language codes to error templates
         """
-        # This would typically load from external files or database
         # For now, we'll include a few examples
         return {
             'en': super()._load_error_templates(),
@@ -418,7 +407,6 @@ class LocalizedErrorMapper(UserFriendlyErrorMapper):
                 # Add more Spanish translations as needed
             }
         }
-
 
 class ContextAwareErrorMapper(UserFriendlyErrorMapper):
     """Context-aware error mapper that provides highly specific messages."""
@@ -445,7 +433,6 @@ class ContextAwareErrorMapper(UserFriendlyErrorMapper):
         # Get base message
         base_message = super().map_error(error, context)
         
-        # Apply field-specific customizations for validation errors
         if error.error_code == ErrorCode.VALIDATION_ERROR and error.field:
             field_message = self._get_field_specific_message(error.field, error.details)
             if field_message:
@@ -499,14 +486,11 @@ class ContextAwareErrorMapper(UserFriendlyErrorMapper):
         """
         field_messages = self._field_specific_messages.get(field, {})
         
-        # Check for specific validation type in details
         validation_type = details.get('validation_type', 'invalid')
         return field_messages.get(validation_type, field_messages.get('invalid'))
 
-
 # Global error mapper instance
 _global_error_mapper = None
-
 
 def get_error_mapper() -> ErrorMapper:
     """Get global error mapper instance.
@@ -519,7 +503,6 @@ def get_error_mapper() -> ErrorMapper:
         _global_error_mapper = ContextAwareErrorMapper()
     return _global_error_mapper
 
-
 def set_error_mapper(mapper: ErrorMapper) -> None:
     """Set global error mapper instance.
     
@@ -528,7 +511,6 @@ def set_error_mapper(mapper: ErrorMapper) -> None:
     """
     global _global_error_mapper
     _global_error_mapper = mapper
-
 
 def map_error_to_user_message(
     error: ApplicationError,

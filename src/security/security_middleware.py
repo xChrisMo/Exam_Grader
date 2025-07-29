@@ -24,7 +24,6 @@ except ImportError:
 
 from datetime import datetime
 
-
 try:
     from utils.logger import logger
 except ImportError:
@@ -40,7 +39,6 @@ except ImportError:
     
     class ValidationError(Exception):
         pass
-
 
 class SecurityHeaders:
     """Manages security headers for HTTP responses."""
@@ -117,7 +115,6 @@ class SecurityHeaders:
             hsts += "; includeSubDomains"
         return hsts
 
-
 class RequestValidator:
     """Validates and sanitizes incoming requests."""
     
@@ -159,7 +156,6 @@ class RequestValidator:
             if not cls._validate_request_size(request_obj):
                 return False, "Request too large"
             
-            # Check for suspicious patterns
             if not cls._check_suspicious_patterns(request_obj):
                 return False, "Suspicious request detected"
             
@@ -176,7 +172,6 @@ class RequestValidator:
     @classmethod
     def _check_rate_limit(cls, request_obj, max_requests: int = 100, window_minutes: int = 15) -> bool:
         """Check if request exceeds rate limit."""
-        # Check if we're in development mode
         import os
         is_development = (
             os.getenv('FLASK_ENV') == 'development' or 
@@ -185,7 +180,6 @@ class RequestValidator:
             request_obj.host.startswith('localhost')
         )
         
-        # Use more lenient limits for development
         if is_development:
             max_requests = 10000  # Very high limit for development
             window_minutes = 1    # Very short window for development
@@ -193,7 +187,6 @@ class RequestValidator:
         client_ip = cls._get_client_ip(request_obj)
         current_time = time.time()
         
-        # Check if IP is temporarily blocked
         if client_ip in cls._blocked_ips:
             if current_time < cls._blocked_ips[client_ip]:
                 return False
@@ -209,7 +202,6 @@ class RequestValidator:
         
         # Check rate limit
         if len(request_times) >= max_requests:
-            # Block IP - shorter time for development
             block_duration = 300 if is_development else 3600  # 5 minutes for dev, 1 hour for prod
             cls._blocked_ips[client_ip] = current_time + block_duration
             block_time_str = "5 minutes" if is_development else "1 hour"
@@ -232,7 +224,6 @@ class RequestValidator:
     @classmethod
     def _check_suspicious_patterns(cls, request_obj) -> bool:
         """Check for suspicious patterns in request data."""
-        # Allow all local requests (for development)
         if request_obj.remote_addr == '127.0.0.1' or request_obj.remote_addr == 'localhost':
             return True
             
@@ -243,9 +234,7 @@ class RequestValidator:
         
         # Check query parameters with context-aware validation
         for key, value in request_obj.args.items():
-            # For auth/login paths, use more lenient validation for redirect parameters
             if (request_obj.path.startswith('/auth') or request_obj.path.startswith('/login')) and key == 'next':
-                # Only check for actual malicious patterns in redirect URLs
                 if cls._contains_malicious_query_pattern(value):
                     logger.warning(f"Malicious pattern in redirect param: {key}={value}")
                     return False
@@ -271,7 +260,6 @@ class RequestValidator:
         }
         
         for header, value in request_obj.headers:
-            # Skip validation for standard headers that may contain legitimate content
             if header.lower() not in excluded_headers:
                 if cls._contains_suspicious_pattern(f"{header}: {value}"):
                     logger.warning(f"Suspicious pattern in header: {header}")
@@ -307,12 +295,10 @@ class RequestValidator:
         if path.startswith('/api/v1/'):
             return False
         
-        # Check if it's a legitimate application path
         for legit_path in legitimate_paths:
             if path.startswith(legit_path):
                 # For auth paths, be more lenient with query parameters
                 if path.startswith('/auth') or path.startswith('/login'):
-                    # Only check for actual malicious patterns, not legitimate redirects
                     if query and cls._contains_malicious_query_pattern(query):
                         return True
                     return False
@@ -347,14 +333,12 @@ class RequestValidator:
     @classmethod
     def _validate_headers(cls, request_obj) -> bool:
         """Validate request headers."""
-        # Check for required headers in POST requests
         if request_obj.method == 'POST':
             content_type = request_obj.headers.get('Content-Type', '')
             if not content_type:
                 logger.warning("POST request missing Content-Type header")
                 return False
         
-        # Check for suspicious user agents
         user_agent = request_obj.headers.get('User-Agent', '')
         if not user_agent or len(user_agent) < 10:
             logger.warning(f"Suspicious or missing User-Agent: {user_agent}")
@@ -365,7 +349,6 @@ class RequestValidator:
     @classmethod
     def _get_client_ip(cls, request_obj) -> str:
         """Get client IP address from request."""
-        # Check for forwarded headers
         forwarded_ips = [
             request_obj.headers.get('X-Forwarded-For'),
             request_obj.headers.get('X-Real-IP'),
@@ -374,7 +357,6 @@ class RequestValidator:
         
         for ip in forwarded_ips:
             if ip:
-                # Take first IP if comma-separated
                 return ip.split(',')[0].strip()
         
         return request_obj.remote_addr or 'unknown'
@@ -385,7 +367,6 @@ class RequestValidator:
         cls._request_counts.clear()
         cls._blocked_ips.clear()
         logger.info("Rate limits reset")
-
 
 class SecurityMiddleware:
     """Main security middleware class."""
@@ -437,7 +418,6 @@ class SecurityMiddleware:
     def _before_request(self):
         """Handle before request processing."""
         try:
-            # Skip security checks for certain paths
             if self._should_skip_security_check():
                 return
             
@@ -472,7 +452,6 @@ class SecurityMiddleware:
             # Add security headers
             self._add_security_headers(response)
             
-            # Log security events if needed
             if hasattr(g, 'security_context'):
                 self._log_security_event(response)
             
@@ -497,12 +476,10 @@ class SecurityMiddleware:
         csp_header = self.security_headers.get_csp_header(custom_csp)
         response.headers['Content-Security-Policy'] = csp_header
         
-        # Add HSTS header for HTTPS
         if request.is_secure:
             hsts_header = self.security_headers.get_hsts_header()
             response.headers['Strict-Transport-Security'] = hsts_header
         
-        # Add cache control for sensitive pages
         if self._is_sensitive_page():
             response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
             response.headers['Pragma'] = 'no-cache'
@@ -590,10 +567,8 @@ class SecurityMiddleware:
                 'status_code': 429
             }, 429
 
-
 # Global security middleware instance
 security_middleware = SecurityMiddleware()
-
 
 def init_security_middleware(app: Flask, config: Optional[Dict[str, Any]] = None):
     """Initialize security middleware with Flask app.

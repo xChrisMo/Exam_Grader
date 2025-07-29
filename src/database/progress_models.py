@@ -17,7 +17,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-# Import database and utility functions from models
 try:
     from .models import db, TimestampMixin, get_uuid_column
     DB_AVAILABLE = db is not None
@@ -32,13 +31,10 @@ except ImportError:
         get_uuid_column = lambda: Column(String(36), primary_key=True)
         DB_AVAILABLE = False
 
-# Create base class conditionally
 if DB_AVAILABLE and db is not None:
     BaseModel = db.Model
 else:
     BaseModel = object
-
-
 
 class ProgressSession(BaseModel, TimestampMixin):
     """Model for tracking progress sessions with persistence."""
@@ -68,7 +64,6 @@ class ProgressSession(BaseModel, TimestampMixin):
         order_by="ProgressUpdate.created_at"
     )
     
-    # Indexes for performance
     __table_args__ = (
         Index('idx_session_user_status', 'session_id', 'user_id', 'status'),
         Index('idx_session_type_status', 'session_type', 'status'),
@@ -138,7 +133,6 @@ class ProgressSession(BaseModel, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class ProgressUpdate(BaseModel, TimestampMixin):
     """Model for individual progress updates with persistence."""
     
@@ -159,7 +153,6 @@ class ProgressUpdate(BaseModel, TimestampMixin):
     # Relationships
     session = relationship("ProgressSession", back_populates="progress_updates")
     
-    # Indexes for performance
     __table_args__ = (
         Index('idx_update_session_step', 'session_id', 'step_number'),
         Index('idx_update_session_created', 'session_id', 'created_at'),
@@ -184,7 +177,6 @@ class ProgressUpdate(BaseModel, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class ProgressRecovery(BaseModel, TimestampMixin):
     """Model for tracking progress recovery operations."""
     
@@ -199,7 +191,6 @@ class ProgressRecovery(BaseModel, TimestampMixin):
     recovery_message = Column(Text, nullable=True)
     recovered_at = Column(DateTime, nullable=True)
     
-    # Indexes for performance
     __table_args__ = (
         Index('idx_recovery_session_type', 'session_id', 'recovery_type'),
         Index('idx_recovery_status_created', 'recovery_status', 'created_at'),
@@ -220,7 +211,6 @@ class ProgressRecovery(BaseModel, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class ProgressMetrics(BaseModel, TimestampMixin):
     """Model for storing progress performance metrics."""
     
@@ -234,7 +224,6 @@ class ProgressMetrics(BaseModel, TimestampMixin):
     measurement_time = Column(DateTime, default=datetime.utcnow, nullable=False)
     context_data = Column(JSON, nullable=True)  # Additional context for the metric
     
-    # Indexes for performance
     __table_args__ = (
         Index('idx_metrics_session_type', 'session_id', 'metric_type'),
         Index('idx_metrics_type_time', 'metric_type', 'measurement_time'),

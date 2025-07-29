@@ -84,7 +84,6 @@ class InputSanitizer:
         for pattern in InputSanitizer.SCRIPT_PATTERNS:
             value = re.sub(pattern, '', value, flags=re.IGNORECASE | re.DOTALL)
         
-        # Check for SQL injection patterns
         for pattern in InputSanitizer.SQL_PATTERNS:
             if re.search(pattern, value, re.IGNORECASE):
                 logger.warning(f"Potential SQL injection detected: {pattern}")
@@ -92,7 +91,6 @@ class InputSanitizer:
                     raise ValueError("Input contains potentially dangerous SQL patterns")
                 value = re.sub(pattern, '', value, flags=re.IGNORECASE)
         
-        # Check for path traversal
         for pattern in InputSanitizer.PATH_TRAVERSAL_PATTERNS:
             if re.search(pattern, value, re.IGNORECASE):
                 logger.warning(f"Path traversal attempt detected: {pattern}")
@@ -100,7 +98,6 @@ class InputSanitizer:
                     raise ValueError("Input contains path traversal patterns")
                 value = re.sub(pattern, '', value, flags=re.IGNORECASE)
         
-        # Check for command injection
         if strict:
             for pattern in InputSanitizer.COMMAND_PATTERNS:
                 if re.search(pattern, value, re.IGNORECASE):
@@ -287,12 +284,10 @@ class InputSanitizer:
         """
         attacks = []
         
-        # Check for URL encoding attacks
         if '%' in data:
             try:
                 decoded = urllib.parse.unquote(data)
                 if decoded != data:
-                    # Check if decoded version contains dangerous patterns
                     for pattern in InputSanitizer.SCRIPT_PATTERNS:
                         if re.search(pattern, decoded, re.IGNORECASE):
                             attacks.append("url_encoded_script")
@@ -300,7 +295,6 @@ class InputSanitizer:
             except Exception:
                 pass
         
-        # Check for HTML entity encoding
         if '&' in data and ';' in data:
             decoded = html.unescape(data)
             if decoded != data:
@@ -309,7 +303,6 @@ class InputSanitizer:
                         attacks.append("html_entity_encoded_script")
                         break
         
-        # Check for Unicode normalization attacks
         normalized = unicodedata.normalize('NFKC', data)
         if normalized != data:
             for pattern in InputSanitizer.SCRIPT_PATTERNS:
@@ -390,7 +383,6 @@ def validate_file_upload(file_data: bytes, filename: str,
     if len(file_data) > 50 * 1024 * 1024:  # 50MB
         return False, "File too large"
     
-    # Check for embedded scripts in text files
     if ext in ['.txt', '.csv', '.json']:
         try:
             content = file_data.decode('utf-8', errors='ignore')
@@ -400,7 +392,6 @@ def validate_file_upload(file_data: bytes, filename: str,
         except Exception:
             pass
     
-    # Check file headers for common file types
     file_signatures = {
         '.pdf': [b'%PDF'],
         '.jpg': [b'\xff\xd8\xff'],

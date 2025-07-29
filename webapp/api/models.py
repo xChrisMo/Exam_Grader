@@ -10,7 +10,6 @@ from src.services.model_manager_service import model_manager_service, TrainingCo
 
 logger = logging.getLogger(__name__)
 
-
 @api_bp.route('/models', methods=['GET'])
 def get_models():
     """Get list of available LLM models"""
@@ -27,7 +26,6 @@ def get_models():
             details={"error": str(e)}
         )
         return jsonify(ApiResponse.error(error)), 500
-
 
 @api_bp.route('/models/<model_id>', methods=['GET'])
 def get_model(model_id):
@@ -52,7 +50,6 @@ def get_model(model_id):
         )
         return jsonify(ApiResponse.error(error)), 500
 
-
 @api_bp.route('/models/<model_id>/validate', methods=['POST'])
 def validate_model_config(model_id):
     """Validate training configuration for a model"""
@@ -65,7 +62,6 @@ def validate_model_config(model_id):
             )
             return jsonify(ApiResponse.error(error)), 400
         
-        # Create TrainingConfig from request data
         try:
             config = TrainingConfig.from_dict(config_data)
         except (TypeError, ValueError) as e:
@@ -90,7 +86,6 @@ def validate_model_config(model_id):
         )
         return jsonify(ApiResponse.error(error)), 500
 
-
 @api_bp.route('/models/<model_id>/capabilities', methods=['GET'])
 def get_model_capabilities(model_id):
     """Get model capabilities"""
@@ -113,7 +108,6 @@ def get_model_capabilities(model_id):
             details={"error": str(e)}
         )
         return jsonify(ApiResponse.error(error)), 500
-
 
 @api_bp.route('/models/<model_id>/default-config', methods=['GET'])
 def get_model_default_config(model_id):
@@ -144,7 +138,6 @@ def get_model_default_config(model_id):
             details={"error": str(e)}
         )
         return jsonify(ApiResponse.error(error)), 500
-
 
 @api_bp.route('/models/<model_id>/availability', methods=['GET'])
 def check_model_availability(model_id):

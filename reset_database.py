@@ -83,6 +83,8 @@ def reset_database(confirm: bool = False):
                     # Drop specific indexes that might cause conflicts
                     problematic_indexes = [
                         'idx_user_status',
+                        'idx_submission_user_status',
+                        'idx_grading_session_user_status',
                         'idx_submission_guide', 
                         'idx_progress_status',
                         'idx_user_created',

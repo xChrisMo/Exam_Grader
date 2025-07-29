@@ -1,0 +1,217 @@
+{% extends "layout.html" %}
+
+{% block title %}System Information{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="fas fa-server"></i> System Information</h1>
+                <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- System Information -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-info-circle"></i> System Information</h5>
+                </div>
+                <div class="card-body">
+                    {% if system_info %}
+                        <table class="table table-sm">
+                            <tbody>
+                                <tr>
+                                    <td><strong>Platform:</strong></td>
+                                    <td>{{ system_info.platform or 'Unknown' }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Python Version:</strong></td>
+                                    <td>{{ system_info.python_version or 'Unknown' }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>CPU Count:</strong></td>
+                                    <td>{{ system_info.cpu_count or 'Unknown' }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Memory Total:</strong></td>
+                                    <td>{{ "%.1f GB"|format(system_info.memory_total_gb) if system_info.memory_total_gb else 'Unknown' }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Disk Free:</strong></td>
+                                    <td>{{ "%.1f GB"|format(system_info.disk_free_gb) if system_info.disk_free_gb else 'Unknown' }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Uptime:</strong></td>
+                                    <td>{{ system_info.uptime or 'Unknown' }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <p class="text-muted">System information unavailable</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Database Information -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-database"></i> Database Information</h5>
+                </div>
+                <div class="card-body">
+                    {% if db_info %}
+                        <table class="table table-sm">
+                            <tbody>
+                                <tr>
+                                    <td><strong>Database Type:</strong></td>
+                                    <td>{{ db_info.type or 'Unknown' }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Database Size:</strong></td>
+                                    <td>{{ "%.2f MB"|format(db_info.size_mb) if db_info.size_mb else 'Unknown' }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Total Tables:</strong></td>
+                                    <td>{{ db_info.table_count or 'Unknown' }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Connection Status:</strong></td>
+                                    <td>
+                                        <span class="badge badge-{% if db_info.connected %}success{% else %}danger{% endif %}">
+                                            {% if db_info.connected %}Connected{% else %}Disconnected{% endif %}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% if db_info.version %}
+                                <tr>
+                                    <td><strong>Version:</strong></td>
+                                    <td>{{ db_info.version }}</td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <p class="text-muted">Database information unavailable</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Service Health -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-heartbeat"></i> Service Health Status</h5>
+                </div>
+                <div class="card-body">
+                    {% if service_health %}
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h4>Overall Status</h4>
+                                    <span class="badge badge-lg badge-{% if service_health.overall_status == 'healthy' %}success{% elif service_health.overall_status == 'warning' %}warning{% else %}danger{% endif %}">
+                                        {{ service_health.overall_status.title() }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="col-md-9">
+                                {% if service_health.services %}
+                                    <div class="row">
+                                        {% for service, status in service_health.services.items() %}
+                                        <div class="col-md-4 mb-3">
+                                            <div class="card border-{% if status == 'healthy' %}success{% elif status == 'warning' %}warning{% else %}danger{% endif %}">
+                                                <div class="card-body text-center">
+                                                    <h6>{{ service.title() }}</h6>
+                                                    <span class="badge badge-{% if status == 'healthy' %}success{% elif status == 'warning' %}warning{% else %}danger{% endif %}">
+                                                        {{ status.title() }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <p class="text-muted">Service health information unavailable</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Metrics -->
+    {% if performance_metrics %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-line"></i> Performance Metrics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h6>CPU Usage</h6>
+                                <div class="progress mb-2">
+                                    <div class="progress-bar {% if performance_metrics.cpu_usage > 80 %}bg-danger{% elif performance_metrics.cpu_usage > 60 %}bg-warning{% else %}bg-success{% endif %}" 
+                                         style="width: {{ performance_metrics.cpu_usage }}%"></div>
+                                </div>
+                                <small>{{ "%.1f"|format(performance_metrics.cpu_usage) }}%</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h6>Memory Usage</h6>
+                                <div class="progress mb-2">
+                                    <div class="progress-bar {% if performance_metrics.memory_usage > 80 %}bg-danger{% elif performance_metrics.memory_usage > 60 %}bg-warning{% else %}bg-success{% endif %}" 
+                                         style="width: {{ performance_metrics.memory_usage }}%"></div>
+                                </div>
+                                <small>{{ "%.1f"|format(performance_metrics.memory_usage) }}%</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h6>Disk Usage</h6>
+                                <div class="progress mb-2">
+                                    <div class="progress-bar {% if performance_metrics.disk_usage > 80 %}bg-danger{% elif performance_metrics.disk_usage > 60 %}bg-warning{% else %}bg-success{% endif %}" 
+                                         style="width: {{ performance_metrics.disk_usage }}%"></div>
+                                </div>
+                                <small>{{ "%.1f"|format(performance_metrics.disk_usage) }}%</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h6>Response Time</h6>
+                                <h4 class="{% if performance_metrics.response_time_ms > 1000 %}text-danger{% elif performance_metrics.response_time_ms > 500 %}text-warning{% else %}text-success{% endif %}">
+                                    {{ "%.0f"|format(performance_metrics.response_time_ms) }}ms
+                                </h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh every 30 seconds
+setInterval(function() {
+    location.reload();
+}, 30000);
+</script>
+{% endblock %}

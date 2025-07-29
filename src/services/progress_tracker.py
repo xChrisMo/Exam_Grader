@@ -14,7 +14,6 @@ from threading import Lock
 from utils.logger import logger
 from .websocket_manager import WebSocketManager, MessagePriority
 
-
 @dataclass
 class ProgressUpdate:
     """Data class for progress updates"""
@@ -34,7 +33,6 @@ class ProgressUpdate:
     def __post_init__(self):
         if self.timestamp is None:
             self.timestamp = datetime.now().isoformat()
-
 
 class ProgressTracker:
     """
@@ -225,7 +223,6 @@ class ProgressTracker:
                 percentage=100.0 # Ensure 100% on completion
             )
             
-            # Mark session as completed but keep it for a while
             session['completed_at'] = time.time()
             session['final_status'] = status
         
@@ -281,7 +278,6 @@ class ProgressTracker:
                     age = current_time - session['completed_at']
                     if age > max_age_seconds:
                         sessions_to_remove.append(progress_id)
-                # Remove sessions that are stuck (no updates for a long time)
                 elif current_time - session['last_update'] > max_age_seconds:
                     sessions_to_remove.append(progress_id)
             
@@ -353,7 +349,6 @@ class ProgressTracker:
         """Create progress update from JSON string"""
         data = json.loads(json_str)
         return ProgressUpdate(**data)
-
 
 # Global progress tracker instance
 progress_tracker = ProgressTracker()

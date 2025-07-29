@@ -23,7 +23,6 @@ from src.services.training_service import training_service, TrainingJob, Trainin
 from src.services.model_manager_service import model_manager_service
 from utils.logger import logger
 
-
 @dataclass
 class ReportConfig:
     """Report generation configuration"""
@@ -32,7 +31,6 @@ class ReportConfig:
     include_metrics: bool = True
     chart_format: str = 'png'
     chart_dpi: int = 300
-
 
 class ReportService(BaseService):
     """Service for generating training reports and analytics"""
@@ -90,7 +88,6 @@ class ReportService(BaseService):
                     report = self.generate_training_report(job_ids[0], config)
                     return job_ids[0]  # Return job_id as report_id
                 else:
-                    # Comparison report for multiple jobs
                     report = self.generate_comparison_report(job_ids, config)
                     return f"comparison_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                     
@@ -189,8 +186,8 @@ class ReportService(BaseService):
         """Generate dataset analysis report"""
         try:
             with self.track_request("generate_dataset_analysis"):
-                # TODO: Implement actual dataset analysis
-                # For now, return mock analysis
+                # Dataset analysis implementation deferred
+                # Currently returning mock analysis data
                 
                 analysis = {
                     'dataset_id': dataset_id,
@@ -263,7 +260,6 @@ class ReportService(BaseService):
             'final_validation_accuracy': job.validation_accuracy
         }
         
-        # Add improvement metrics if we have epoch data
         if job.metrics and len(job.metrics) > 1:
             epoch_keys = [k for k in job.metrics.keys() if k.startswith('epoch_')]
             if epoch_keys:
@@ -307,7 +303,6 @@ class ReportService(BaseService):
             'final_evaluation': {}
         }
         
-        # Extract training metrics from job metrics
         if job.metrics:
             epoch_data = []
             for key, value in job.metrics.items():
@@ -389,7 +384,6 @@ class ReportService(BaseService):
                     'batch_size': job.config.batch_size
                 }
                 
-                # Add final evaluation metrics if available
                 if job.metrics and 'final_evaluation' in job.metrics:
                     final_eval = job.metrics['final_evaluation']
                     job_data.update({
@@ -554,7 +548,6 @@ class ReportService(BaseService):
         filename = f"training_report_{report_id}_{timestamp}.json"
         filepath = os.path.join(self.output_dir, filename)
         
-        # Remove base64 charts from saved report to reduce file size
         report_copy = report.copy()
         if 'charts' in report_copy:
             report_copy['charts'] = {k: f"<base64_chart_{k}>" for k in report_copy['charts'].keys()}
@@ -577,7 +570,6 @@ class ReportService(BaseService):
             change = abs(values[i] - values[i-1])
             changes.append(change)
         
-        # Return average rate of change (lower is better for convergence)
         return sum(changes) / len(changes) if changes else 0.0
 
     def _format_duration(self, seconds: float) -> str:
@@ -601,7 +593,6 @@ class ReportService(BaseService):
                         filepath = os.path.join(self.output_dir, filename)
                         stat = os.stat(filepath)
                         
-                        # Extract report ID from filename: training_report_{report_id}_{timestamp}.json
                         try:
                             # Remove prefix and suffix, then split by underscore
                             name_without_prefix = filename[len('training_report_'):]
@@ -613,7 +604,6 @@ class ReportService(BaseService):
                             else:
                                 report_id = parts[0] if parts else filename
                         except Exception:
-                            # Fallback to filename if parsing fails
                             report_id = filename
                         
                         reports.append({
@@ -636,11 +626,9 @@ class ReportService(BaseService):
     def get_report(self, report_id: str) -> Optional[Dict[str, Any]]:
         """Get report by ID"""
         try:
-            # Look for existing report file first
             if os.path.exists(self.output_dir):
                 for filename in os.listdir(self.output_dir):
                     if filename.endswith('.json') and filename.startswith('training_report_'):
-                        # Extract report ID from filename
                         try:
                             name_without_prefix = filename[len('training_report_'):]
                             name_without_suffix = name_without_prefix[:-5]  # Remove .json
@@ -656,13 +644,11 @@ class ReportService(BaseService):
                                 with open(filepath, 'r', encoding='utf-8') as f:
                                     report_data = json.load(f)
                                 
-                                # Add content field for viewing
                                 report_data['content'] = self._generate_html_content(report_data)
                                 return report_data
                         except Exception:
                             continue
             
-            # If no existing report found, try to generate one for the job
             job = training_service.get_training_job(report_id)
             if job:
                 report = self.generate_training_report(report_id)

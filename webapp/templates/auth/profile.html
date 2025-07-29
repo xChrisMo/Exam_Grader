@@ -105,6 +105,7 @@
                 </div>
                 <div class="px-6 py-4">
                     <form id="changePasswordForm" class="space-y-4">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
                         <div>
                             <label for="current_password" class="block text-sm font-medium text-gray-700">Current Password</label>
                             <input type="password" id="current_password" name="current_password" required
@@ -177,11 +178,11 @@
                     <h2 class="text-lg font-medium text-gray-900">Quick Actions</h2>
                 </div>
                 <div class="px-6 py-4 space-y-3">
-                    <a href="{{ url_for('dashboard') }}" 
+                    <a href="{{ url_for('main.dashboard') }}" 
                        class="block w-full text-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                         Go to Dashboard
                     </a>
-                    <a href="{{ url_for('upload_guide') }}" 
+                    <a href="{{ url_for('main.upload_guide') }}" 
                        class="block w-full text-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                         Upload Marking Guide
                     </a>

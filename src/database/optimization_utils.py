@@ -11,7 +11,6 @@ from .schema_migrations import MigrationManager
 
 logger = logging.getLogger(__name__)
 
-
 class DatabaseOptimizer:
     """Utility class for database optimization and validation."""
     
@@ -58,7 +57,6 @@ class DatabaseOptimizer:
         """
         inspector = inspect(self.engine)
         
-        # Expected indexes from our optimized models
         expected_indexes = {
             'users': [
                 'idx_user_active_login',
@@ -122,7 +120,6 @@ class DatabaseOptimizer:
         
         for table_name, expected in expected_indexes.items():
             try:
-                # Get existing indexes for the table
                 table_indexes = inspector.get_indexes(table_name)
                 existing_index_names = [idx['name'] for idx in table_indexes if idx['name']]
                 
@@ -163,7 +160,6 @@ class DatabaseOptimizer:
         
         for table_name, expected in expected_foreign_keys.items():
             try:
-                # Get existing foreign keys for the table
                 table_fks = inspector.get_foreign_keys(table_name)
                 existing_fk_columns = [fk['constrained_columns'][0] for fk in table_fks if fk['constrained_columns']]
                 
@@ -187,10 +183,8 @@ class DatabaseOptimizer:
         Returns:
             Dictionary with constraint validation results.
         """
-        # For SQLite, we'll check if triggers exist as they implement our constraints
         try:
             with self.engine.connect() as conn:
-                # Check for validation triggers
                 result = conn.execute(text("""
                     SELECT name FROM sqlite_master 
                     WHERE type='trigger' AND name LIKE 'validate_%'
@@ -228,7 +222,6 @@ class DatabaseOptimizer:
         """
         try:
             with self.engine.connect() as conn:
-                # Check for views
                 result = conn.execute(text("""
                     SELECT name FROM sqlite_master 
                     WHERE type='view'
@@ -321,7 +314,6 @@ class DatabaseOptimizer:
             logger.warning("Database optimization completed with issues. Check the report for details.")
         
         return result
-
 
 def create_optimization_script():
     """Create a standalone script for database optimization."""

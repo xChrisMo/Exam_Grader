@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 
 from utils.logger import logger
 
-
 @dataclass
 class ServiceStats:
     """Statistics for a service."""
@@ -25,7 +24,6 @@ class ServiceStats:
     last_failure: Optional[datetime] = None
     current_state: str = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
 
-
 @dataclass
 class CircuitBreakerConfig:
     """Configuration for circuit breaker."""
@@ -33,11 +31,9 @@ class CircuitBreakerConfig:
     recovery_timeout: int = 60  # seconds
     success_threshold: int = 3  # for half-open state
 
-
 class CircuitBreakerError(Exception):
     """Raised when circuit breaker is open."""
     pass
-
 
 class RetryService:
     """Service for handling retries with circuit breaker pattern."""
@@ -89,14 +85,12 @@ class RetryService:
         stats = self.services[service_name]
         config = self.circuit_configs.get(service_name, CircuitBreakerConfig())
         
-        # Check if circuit should be opened
         if (stats.failed_attempts >= config.failure_threshold and 
             stats.current_state == "CLOSED"):
             stats.current_state = "OPEN"
             stats.circuit_breaker_trips += 1
             logger.warning(f"Circuit breaker opened for service: {service_name}")
         
-        # Check if circuit should move to half-open
         elif (stats.current_state == "OPEN" and 
               stats.last_failure and
               datetime.now() - stats.last_failure > timedelta(seconds=config.recovery_timeout)):
@@ -177,10 +171,8 @@ class RetryService:
         logger.error(f"All {max_attempts} attempts failed for {service_name}")
         raise last_exception
 
-
 # Global retry service instance
 retry_service = RetryService()
-
 
 def retry_with_backoff(
     service_name: str,
@@ -207,7 +199,6 @@ def retry_with_backoff(
         return wrapper
     return decorator
 
-
 def configure_service_circuit_breaker(
     service_name: str,
     failure_threshold: int = 5,
@@ -222,8 +213,6 @@ def configure_service_circuit_breaker(
         success_threshold=success_threshold
     )
 
-
-# Configure default circuit breakers for common services
 configure_service_circuit_breaker("ocr_service", failure_threshold=3, recovery_timeout=30)
 configure_service_circuit_breaker("llm_service", failure_threshold=3, recovery_timeout=30)
 configure_service_circuit_breaker("mapping_service", failure_threshold=5, recovery_timeout=60)

@@ -6,7 +6,6 @@ This package contains all API-related modules including:
 - Response utilities and validation
 """
 
-
 __all__ = [
     'unified_api_bp',
     'init_unified_api',

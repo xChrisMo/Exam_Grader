@@ -20,7 +20,6 @@ def initialize_mcp_for_app():
     try:
         config = UnifiedConfig()
         
-        # Check if API key is available
         if not config.api.deepseek_api_key:
             logger.warning("DeepSeek API key not found, MCP service disabled")
             return False
@@ -70,12 +69,10 @@ def get_mcp_status():
             'message': f'MCP service error: {str(e)}'
         }
 
-# Auto-initialize when imported (if not in test mode)
 if __name__ != "__main__" and os.getenv('TESTING', 'false').lower() != 'true':
     initialize_mcp_for_app()
 
 if __name__ == "__main__":
-    # Direct execution for testing
     print("🚀 Initializing MCP Service...")
     success = initialize_mcp_for_app()
     

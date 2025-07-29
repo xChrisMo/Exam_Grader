@@ -15,7 +15,6 @@ from typing import Dict, List, Optional, Tuple
 
 from utils.logger import logger
 
-
 class SecurityValidator:
     """Security validation utilities."""
     
@@ -51,7 +50,6 @@ class SecurityValidator:
         if len(filename) > 255:
             return False, "Filename too long (max 255 characters)"
         
-        # Check for dangerous characters
         for char in cls.DANGEROUS_CHARS:
             if char in filename:
                 return False, f"Filename contains invalid character: {char}"
@@ -80,7 +78,6 @@ class SecurityValidator:
             abs_file_path = Path(file_path).resolve()
             abs_base_path = Path(allowed_base_path).resolve()
             
-            # Check if file path is within allowed base path
             if not str(abs_file_path).startswith(str(abs_base_path)):
                 return False, "File path outside allowed directory"
             
@@ -127,7 +124,6 @@ class SecurityValidator:
         # Remove null bytes
         input_str = input_str.replace('\x00', '')
         
-        # Truncate if too long
         if len(input_str) > max_length:
             input_str = input_str[:max_length]
         
@@ -148,7 +144,6 @@ class SecurityValidator:
             Hex-encoded secure token
         """
         return secrets.token_hex(length)
-
 
 class RateLimiter:
     """Simple rate limiter implementation."""
@@ -182,7 +177,6 @@ class RateLimiter:
         while request_times and request_times[0] < cutoff_time:
             request_times.popleft()
         
-        # Check if under limit
         if len(request_times) >= max_requests:
             logger.warning(f"Rate limit exceeded for {identifier}")
             return False
@@ -220,36 +214,29 @@ class RateLimiter:
             'total_tracked_requests': sum(len(reqs) for reqs in self.requests.values())
         }
 
-
 # Global instances
 security_validator = SecurityValidator()
 rate_limiter = RateLimiter()
-
 
 def validate_filename(filename: str) -> Tuple[bool, Optional[str]]:
     """Validate filename using global validator."""
     return security_validator.validate_filename(filename)
 
-
 def validate_file_path(file_path: str, allowed_base_path: str) -> Tuple[bool, Optional[str]]:
     """Validate file path using global validator."""
     return security_validator.validate_file_path(file_path, allowed_base_path)
-
 
 def validate_file_size(size_bytes: int, file_type: str = 'default') -> Tuple[bool, Optional[str]]:
     """Validate file size using global validator."""
     return security_validator.validate_file_size(size_bytes, file_type)
 
-
 def sanitize_input(input_str: str, max_length: int = 1000) -> str:
     """Sanitize input using global validator."""
     return security_validator.sanitize_input(input_str, max_length)
 
-
 def generate_secure_token(length: int = 32) -> str:
     """Generate secure token using global validator."""
     return security_validator.generate_secure_token(length)
-
 
 def check_rate_limit(
     identifier: str, 
@@ -259,7 +246,6 @@ def check_rate_limit(
     """Check rate limit using global rate limiter."""
     return rate_limiter.is_allowed(identifier, max_requests, window_seconds)
 
-
 def get_remaining_requests(
     identifier: str, 
     max_requests: int = 100, 
@@ -267,7 +253,6 @@ def get_remaining_requests(
 ) -> int:
     """Get remaining requests using global rate limiter."""
     return rate_limiter.get_remaining_requests(identifier, max_requests, window_seconds)
-
 
 def reset_rate_limit(identifier: str):
     """Reset rate limit using global rate limiter."""

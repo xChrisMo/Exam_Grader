@@ -27,6 +27,9 @@
                 {% if csrf_token %}
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                 {% endif %}
+                {% if guide_id %}
+                <input type="hidden" name="guide_id" value="{{ guide_id }}" />
+                {% endif %}
                 
                 <!-- Student Information -->
                 <div class="mb-6">

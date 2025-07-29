@@ -20,13 +20,11 @@ from dataclasses import dataclass
 from flask_socketio import SocketIO, emit, join_room, leave_room, disconnect
 from src.logging import get_logger
 
-# Handle case where get_logger might be None due to import issues
 if get_logger is not None:
     logger = get_logger(__name__)
 else:
     import logging
     logger = logging.getLogger(__name__)
-
 
 class ConnectionStatus(Enum):
     """WebSocket connection status."""
@@ -35,14 +33,12 @@ class ConnectionStatus(Enum):
     RECONNECTING = "reconnecting"
     FAILED = "failed"
 
-
 class MessagePriority(Enum):
     """Message priority levels."""
     LOW = 1
     NORMAL = 2
     HIGH = 3
     CRITICAL = 4
-
 
 @dataclass
 class ConnectionInfo:
@@ -70,7 +66,6 @@ class ConnectionInfo:
             'reconnect_attempts': self.reconnect_attempts
         }
 
-
 @dataclass
 class QueuedMessage:
     """Queued message for offline clients."""
@@ -83,7 +78,6 @@ class QueuedMessage:
     expires_at: datetime
     retry_count: int = 0
     max_retries: int = 3
-
 
 class WebSocketManager:
     """Enhanced WebSocket manager with comprehensive connection handling."""
@@ -209,13 +203,11 @@ class WebSocketManager:
                         connection = self.connections[session_id]
                         connection.status = ConnectionStatus.DISCONNECTED
                         
-                        # Remove from user sessions
                         if connection.user_id:
                             self.user_sessions[connection.user_id].discard(session_id)
                             if not self.user_sessions[connection.user_id]:
                                 del self.user_sessions[connection.user_id]
                         
-                        # Remove from rooms
                         for room in connection.rooms.copy():
                             self._leave_room_internal(session_id, room)
                         
@@ -229,7 +221,6 @@ class WebSocketManager:
                             except Exception as e:
                                 logger.error(f"Disconnection handler error: {e}")
                         
-                        # Keep connection info for a while for potential reconnection
                         # Will be cleaned up by background task
                         
                         logger.info(f"Client disconnected: {session_id}")
@@ -317,10 +308,11 @@ class WebSocketManager:
         if auth and isinstance(auth, dict):
             return auth.get('user_id')
         
-        # Try to get from session or request context
         try:
-            from flask import session
-            return session.get('user_id')
+            from flask_login import current_user
+            if current_user.is_authenticated:
+                return current_user.id
+            return None
         except:
             return None
     
@@ -444,7 +436,6 @@ class WebSocketManager:
             with self.lock:
                 self.health_stats['total_messages_sent'] += 1
             
-            # Queue for offline clients if high priority
             if priority in [MessagePriority.HIGH, MessagePriority.CRITICAL]:
                 self._queue_message_for_room(room_name, event, message_data, priority)
             
@@ -475,7 +466,6 @@ class WebSocketManager:
                 user_sessions = self.user_sessions.get(user_id, set()).copy()
             
             if not user_sessions:
-                # Queue message for when user connects
                 self._queue_message_for_user(user_id, event, data, priority)
                 return False
             
@@ -530,7 +520,6 @@ class WebSocketManager:
             expires_at=datetime.now() + timedelta(seconds=self.message_retention)
         )
         
-        # Queue for room
         self.message_queue[f"room:{room_name}"].append(message)
     
     def _queue_message_for_user(self, user_id: str, event: str, data: Dict[str, Any],
@@ -553,7 +542,6 @@ class WebSocketManager:
             expires_at=datetime.now() + timedelta(seconds=self.message_retention)
         )
         
-        # Queue for user
         self.message_queue[f"user:{user_id}"].append(message)
     
     def _deliver_queued_messages(self, session_id: str):
@@ -584,7 +572,6 @@ class WebSocketManager:
                                 logger.debug(f"Delivered queued message to {session_id}: {message.event}")
                             except Exception as e:
                                 logger.error(f"Failed to deliver queued message: {e}")
-                                # Re-queue if retries available
                                 if message.retry_count < message.max_retries:
                                     message.retry_count += 1
                                     self.message_queue[queue_key].append(message)

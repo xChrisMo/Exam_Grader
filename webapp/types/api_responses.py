@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
 
-
 class ErrorType(Enum):
     VALIDATION_ERROR = 'validation_error'
     UPLOAD_ERROR = 'upload_error'
@@ -14,7 +13,6 @@ class ErrorType(Enum):
     TRAINING_ERROR = 'training_error'
     API_ERROR = 'api_error'
     NETWORK_ERROR = 'network_error'
-
 
 @dataclass
 class ErrorResponse:
@@ -34,7 +32,6 @@ class ErrorResponse:
             result['suggestions'] = self.suggestions
         return result
 
-
 @dataclass
 class PaginationInfo:
     page: int
@@ -49,7 +46,6 @@ class PaginationInfo:
             'total': self.total,
             'totalPages': self.total_pages
         }
-
 
 class ApiResponse:
     """Standard API response wrapper"""
@@ -87,7 +83,6 @@ class ApiResponse:
             response['message'] = message
         return response
 
-
 class ValidationError:
     """Validation error details"""
     
@@ -107,7 +102,6 @@ class ValidationError:
             result['value'] = self.value
         return result
 
-
 class ValidationWarning:
     """Validation warning details"""
     
@@ -124,7 +118,6 @@ class ValidationWarning:
         if self.suggestion:
             result['suggestion'] = self.suggestion
         return result
-
 
 class ValidationResult:
     """Validation result container"""

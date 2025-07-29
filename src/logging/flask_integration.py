@@ -29,7 +29,6 @@ try:
     from .structured_logger import get_structured_logger
     from ..exceptions.application_errors import ApplicationError
 except ImportError:
-    # Fallback imports for standalone usage
     ComprehensiveLogger = None
     LogLevel = None
     LogContext = None
@@ -37,7 +36,6 @@ except ImportError:
     StructuredLogger = None
     get_structured_logger = None
     ApplicationError = Exception
-
 
 class FlaskLoggingIntegration:
     """Flask logging integration with comprehensive logging system."""
@@ -144,11 +142,13 @@ class FlaskLoggingIntegration:
         Returns:
             User ID if available
         """
-        # Try to get user ID from session
-        if 'user_id' in session:
-            return str(session['user_id'])
+        try:
+            from flask_login import current_user
+            if current_user.is_authenticated:
+                return str(current_user.id)
+        except:
+            pass
         
-        # Try to get from request headers
         return request.headers.get('X-User-ID')
     
     def _get_session_id(self) -> Optional[str]:
@@ -567,7 +567,6 @@ class FlaskLoggingIntegration:
             'longest_running_request': longest_request
         }
 
-
 def log_route(logger_name: Optional[str] = None, log_args: bool = True, log_result: bool = True):
     """Decorator for logging route functions.
     
@@ -647,7 +646,6 @@ def log_route(logger_name: Optional[str] = None, log_args: bool = True, log_resu
         
         return wrapper
     return decorator
-
 
 def log_performance(operation_name: Optional[str] = None):
     """Decorator for logging performance metrics.
@@ -736,8 +734,6 @@ def log_performance(operation_name: Optional[str] = None):
         return wrapper
     return decorator
 
-
-# Convenience function for easy setup
 def setup_flask_logging(
     app: Flask,
     logger_name: str = 'flask_app',

@@ -46,7 +46,6 @@ def analyze_pdf_content(file_path: str) -> Tuple[bool, str, dict]:
         
         for page_num, page in enumerate(doc, 1):
             try:
-                # Check for text
                 page_text = page.get_text()
                 text_length = len(page_text.strip())
                 analysis['total_text_length'] += text_length
@@ -55,7 +54,6 @@ def analyze_pdf_content(file_path: str) -> Tuple[bool, str, dict]:
                     analysis['has_text'] = True
                     analysis['pages_with_text'] += 1
                 
-                # Check for images
                 image_list = page.get_images()
                 if image_list:
                     analysis['has_images'] = True

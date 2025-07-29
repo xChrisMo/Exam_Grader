@@ -12,7 +12,6 @@ from collections import OrderedDict
 
 from utils.logger import logger
 
-
 @dataclass
 class CacheEntry:
     """Cache entry with value and metadata."""
@@ -32,7 +31,6 @@ class CacheEntry:
         """Record access to this entry."""
         self.access_count += 1
         self.last_accessed = time.time()
-
 
 class Cache:
     """Simple in-memory cache with TTL support."""
@@ -67,7 +65,6 @@ class Cache:
             
             entry = self._cache[key]
             
-            # Check if expired
             if entry.is_expired():
                 del self._cache[key]
                 self._stats['misses'] += 1
@@ -84,7 +81,6 @@ class Cache:
     def set(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
         """Set value in cache."""
         with self._lock:
-            # Use default TTL if not specified
             if ttl is None:
                 ttl = self.default_ttl
             
@@ -95,7 +91,6 @@ class Cache:
                 ttl=ttl
             )
             
-            # Remove existing entry if present
             if key in self._cache:
                 del self._cache[key]
             
@@ -104,7 +99,6 @@ class Cache:
             self._cache.move_to_end(key)
             self._stats['sets'] += 1
             
-            # Evict oldest entries if over max size
             while len(self._cache) > self.max_size:
                 oldest_key = next(iter(self._cache))
                 del self._cache[oldest_key]
@@ -217,40 +211,32 @@ class Cache:
                 )
             }
 
-
 # Global cache instance
 _global_cache = Cache(max_size=1000, default_ttl=3600)  # 1 hour default TTL
-
 
 def get_cache() -> Cache:
     """Get the global cache instance."""
     return _global_cache
 
-
 def cache_get(key: str) -> Any:
     """Get value from global cache."""
     return _global_cache.get(key)
-
 
 def cache_set(key: str, value: Any, ttl: Optional[float] = None) -> None:
     """Set value in global cache."""
     _global_cache.set(key, value, ttl)
 
-
 def cache_delete(key: str) -> bool:
     """Delete key from global cache."""
     return _global_cache.delete(key)
-
 
 def cache_clear() -> None:
     """Clear global cache."""
     _global_cache.clear()
 
-
 def cache_cleanup() -> Dict[str, int]:
     """Cleanup expired entries from global cache."""
     return _global_cache.cleanup()
-
 
 def cache_stats() -> Dict[str, Union[int, float]]:
     """Get global cache statistics."""

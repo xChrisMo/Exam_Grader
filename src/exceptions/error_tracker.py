@@ -11,7 +11,6 @@ from threading import Lock
 from .application_errors import ApplicationError, ErrorSeverity
 from src.models.api_responses import ErrorCode
 
-
 @dataclass
 class ErrorMetrics:
     """Error metrics for analytics."""
@@ -34,7 +33,6 @@ class ErrorMetrics:
             'error_rate_per_minute': self.error_rate_per_minute,
             'recovery_rate': self.recovery_rate
         }
-
 
 class ErrorTracker:
     """Centralized error tracking system with analytics capabilities."""
@@ -394,7 +392,6 @@ class ErrorTracker:
         else:  # low
             self.logger.info(message, extra=extra)
 
-
 class ErrorAnalytics:
     """Advanced error analytics and reporting."""
     
@@ -489,10 +486,8 @@ class ErrorAnalytics:
         
         return recommendations
 
-
 # Global error tracker instance
 _global_error_tracker = None
-
 
 def get_error_tracker() -> ErrorTracker:
     """Get global error tracker instance.
@@ -504,7 +499,6 @@ def get_error_tracker() -> ErrorTracker:
     if _global_error_tracker is None:
         _global_error_tracker = ErrorTracker()
     return _global_error_tracker
-
 
 def track_error(
     error: ApplicationError,

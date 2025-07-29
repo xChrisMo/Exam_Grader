@@ -7,14 +7,332 @@ from flask import jsonify, request, current_app
 from werkzeug.exceptions import BadRequest
 from . import api_bp
 from ..types.api_responses import ApiResponse, ErrorResponse, ErrorType
-from src.services.document_processor_service import DocumentProcessorService
-from src.models.document_models import FileUpload
 
 logger = logging.getLogger(__name__)
 
-# Initialize document processor service
-document_service = DocumentProcessorService()
+class DocumentServiceFallback:
+    """Fallback document service that works with LLM training models"""
+    
+    def __init__(self):
+        from flask_login import current_user
+        from src.database.models import LLMDocument, LLMDataset, LLMDatasetDocument
+        self.current_user = current_user
+        self.LLMDocument = LLMDocument
+        self.LLMDataset = LLMDataset
+        self.LLMDatasetDocument = LLMDatasetDocument
+    
+    def list_documents(self):
+        """Get all documents for current user"""
+        try:
+            from flask_login import current_user
+            from src.database.models import LLMDocument
+            if current_user and current_user.is_authenticated:
+                return LLMDocument.query.filter_by(user_id=current_user.id).all()
+            return []
+        except Exception as e:
+            logger.error(f"Error listing documents: {e}")
+            return []
+    
+    def process_file_upload(self, file_upload):
+        """Process uploaded file and create document record"""
+        try:
+            from flask_login import current_user
+            from src.database.models import db, LLMDocument
+            import uuid
+            import os
+            from werkzeug.utils import secure_filename
+            
+            if not current_user or not current_user.is_authenticated:
+                return type('Result', (), {
+                    'success': False, 
+                    'error_message': 'Authentication required', 
+                    'warnings': [],
+                    'document': None
+                })()
+            
+            # Secure filename and generate unique stored name
+            original_name = secure_filename(file_upload.filename)
+            file_extension = os.path.splitext(original_name)[1].lower()
+            stored_name = f"{uuid.uuid4()}{file_extension}"
+            
+            # Create upload directory
+            from flask import current_app
+            upload_dir = os.path.join(current_app.root_path, 'uploads', 'llm_documents')
+            os.makedirs(upload_dir, exist_ok=True)
+            
+            file_path = os.path.join(upload_dir, stored_name)
+            
+            # Save file content
+            with open(file_path, 'wb') as f:
+                f.write(file_upload.content)
+            
+            # Extract text content
+            text_content = ""
+            word_count = 0
+            
+            try:
+                from webapp.routes.llm_training_routes import extract_text_from_file
+                text_content = extract_text_from_file(file_path, file_extension)
+                if text_content:
+                    word_count = len(text_content.split())
+            except Exception as e:
+                logger.warning(f"Text extraction failed for {original_name}: {e}")
+            
+            # Create document record
+            document = LLMDocument(
+                user_id=current_user.id,
+                name=original_name,
+                original_name=original_name,
+                stored_name=stored_name,
+                file_type=file_extension[1:] if file_extension else 'unknown',
+                mime_type=file_upload.content_type or 'application/octet-stream',
+                file_size=file_upload.size,
+                file_path=file_path,
+                text_content=text_content,
+                word_count=word_count,
+                character_count=len(text_content),
+                extracted_text=bool(text_content)
+            )
+            
+            db.session.add(document)
+            db.session.commit()
+            
+            return type('Result', (), {
+                'success': True,
+                'error_message': None,
+                'warnings': [],
+                'document': document
+            })()
+            
+        except Exception as e:
+            logger.error(f"Error processing file upload: {e}")
+            return type('Result', (), {
+                'success': False,
+                'error_message': str(e),
+                'warnings': [],
+                'document': None
+            })()
+    
+    def get_document(self, doc_id):
+        """Get specific document by ID"""
+        try:
+            from flask_login import current_user
+            from src.database.models import LLMDocument
+            if current_user and current_user.is_authenticated:
+                return LLMDocument.query.filter_by(
+                    id=doc_id, 
+                    user_id=current_user.id
+                ).first()
+            return None
+        except Exception as e:
+            logger.error(f"Error getting document {doc_id}: {e}")
+            return None
+    
+    def delete_document(self, doc_id):
+        """Delete document"""
+        try:
+            from flask_login import current_user
+            from src.database.models import db, LLMDocument, LLMDatasetDocument
+            import os
+            
+            if not current_user or not current_user.is_authenticated:
+                return False
+            
+            document = LLMDocument.query.filter_by(
+                id=doc_id,
+                user_id=current_user.id
+            ).first()
+            
+            if not document:
+                return False
+            
+            # Remove from datasets
+            LLMDatasetDocument.query.filter_by(document_id=doc_id).delete()
+            
+            # Delete file
+            if document.file_path and os.path.exists(document.file_path):
+                try:
+                    os.remove(document.file_path)
+                except OSError as e:
+                    logger.warning(f"Could not delete file {document.file_path}: {e}")
+            
+            # Delete database record
+            db.session.delete(document)
+            db.session.commit()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error deleting document {doc_id}: {e}")
+            return False
+    
+    def list_datasets(self):
+        """Get all datasets for current user"""
+        try:
+            from flask_login import current_user
+            from src.database.models import LLMDataset
+            if current_user and current_user.is_authenticated:
+                return LLMDataset.query.filter_by(user_id=current_user.id).all()
+            return []
+        except Exception as e:
+            logger.error(f"Error listing datasets: {e}")
+            return []
+    
+    def create_dataset(self, name, description, doc_ids):
+        """Create new dataset"""
+        try:
+            from flask_login import current_user
+            from src.database.models import db, LLMDataset, LLMDatasetDocument
+            
+            if not current_user or not current_user.is_authenticated:
+                return None
+            
+            dataset = LLMDataset(
+                name=name,
+                description=description,
+                user_id=current_user.id,
+                document_count=len(doc_ids),
+                total_words=0,
+                total_size=0
+            )
+            
+            db.session.add(dataset)
+            db.session.flush()  # Get the ID
+            
+            # Add documents to dataset
+            for doc_id in doc_ids:
+                dataset_doc = LLMDatasetDocument(
+                    dataset_id=dataset.id,
+                    document_id=doc_id
+                )
+                db.session.add(dataset_doc)
+            
+            db.session.commit()
+            return dataset
+            
+        except Exception as e:
+            logger.error(f"Error creating dataset: {e}")
+            return None
+    
+    def get_dataset(self, dataset_id):
+        """Get specific dataset by ID"""
+        try:
+            from flask_login import current_user
+            from src.database.models import LLMDataset
+            if current_user and current_user.is_authenticated:
+                return LLMDataset.query.filter_by(
+                    id=dataset_id,
+                    user_id=current_user.id
+                ).first()
+            return None
+        except Exception as e:
+            logger.error(f"Error getting dataset {dataset_id}: {e}")
+            return None
+    
+    def get_dataset_statistics(self, dataset_id):
+        """Get dataset statistics"""
+        try:
+            from src.database.models import LLMDataset, LLMDocument, LLMDatasetDocument
+            
+            dataset = self.get_dataset(dataset_id)
+            if not dataset:
+                return None
+            
+            # Calculate stats from associated documents
+            documents = db.session.query(LLMDocument).join(LLMDatasetDocument).filter(
+                LLMDatasetDocument.dataset_id == dataset_id
+            ).all()
+            
+            total_size = sum(doc.file_size or 0 for doc in documents)
+            total_words = sum(doc.word_count or 0 for doc in documents)
+            
+            return {
+                'document_count': len(documents),
+                'total_size': total_size,
+                'total_words': total_words,
+                'total_size_mb': round(total_size / (1024 * 1024), 2) if total_size else 0
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting dataset statistics {dataset_id}: {e}")
+            return None
+    
+    def add_document_to_dataset(self, dataset_id, doc_id):
+        """Add document to dataset"""
+        try:
+            from src.database.models import db, LLMDatasetDocument
+            
+            # Check if association already exists
+            existing = LLMDatasetDocument.query.filter_by(
+                dataset_id=dataset_id,
+                document_id=doc_id
+            ).first()
+            
+            if existing:
+                return True
+            
+            dataset_doc = LLMDatasetDocument(
+                dataset_id=dataset_id,
+                document_id=doc_id
+            )
+            
+            db.session.add(dataset_doc)
+            db.session.commit()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error adding document {doc_id} to dataset {dataset_id}: {e}")
+            return False
+    
+    def remove_document_from_dataset(self, dataset_id, doc_id):
+        """Remove document from dataset"""
+        try:
+            from src.database.models import db, LLMDatasetDocument
+            
+            LLMDatasetDocument.query.filter_by(
+                dataset_id=dataset_id,
+                document_id=doc_id
+            ).delete()
+            
+            db.session.commit()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error removing document {doc_id} from dataset {dataset_id}: {e}")
+            return False
+    
+    def delete_dataset(self, dataset_id):
+        """Delete dataset"""
+        try:
+            from flask_login import current_user
+            from src.database.models import db, LLMDataset, LLMDatasetDocument
+            
+            if not current_user or not current_user.is_authenticated:
+                return False
+            
+            dataset = LLMDataset.query.filter_by(
+                id=dataset_id,
+                user_id=current_user.id
+            ).first()
+            
+            if not dataset:
+                return False
+            
+            # Remove document associations
+            LLMDatasetDocument.query.filter_by(dataset_id=dataset_id).delete()
+            
+            # Delete dataset
+            db.session.delete(dataset)
+            db.session.commit()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error deleting dataset {dataset_id}: {e}")
+            return False
 
+# Initialize fallback document service
+document_service = DocumentServiceFallback()
 
 @api_bp.route('/documents', methods=['GET'])
 def get_documents():
@@ -76,7 +394,6 @@ def get_documents():
             ErrorResponse(ErrorType.API_ERROR, "Failed to retrieve documents")
         )), 500
 
-
 @api_bp.route('/documents/upload', methods=['POST'])
 def upload_documents():
     """Upload new documents"""
@@ -100,17 +417,17 @@ def upload_documents():
                 continue
                 
             try:
-                # Create FileUpload object
-                file_upload = FileUpload(
-                    filename=file.filename,
-                    content=file.read(),
-                    content_type=file.content_type or 'application/octet-stream',
-                    size=len(file.read())
-                )
+                # Create simple file upload object (fallback)
+                file_upload = type('FileUpload', (), {
+                    'filename': file.filename,
+                    'content': file.read(),
+                    'content_type': file.content_type or 'application/octet-stream',
+                    'size': 0
+                })()
                 
-                # Reset file pointer and read again for processing
                 file.seek(0)
                 file_upload.content = file.read()
+                file_upload.size = len(file_upload.content)
                 
                 # Process the file
                 result = document_service.process_file_upload(file_upload)
@@ -148,7 +465,6 @@ def upload_documents():
             ErrorResponse(ErrorType.UPLOAD_ERROR, "Upload processing failed")
         )), 500
 
-
 @api_bp.route('/documents/<document_id>', methods=['GET'])
 def get_document(document_id):
     """Get specific document details"""
@@ -168,7 +484,6 @@ def get_document(document_id):
             ErrorResponse(ErrorType.API_ERROR, "Failed to retrieve document")
         )), 500
 
-
 @api_bp.route('/documents/<document_id>', methods=['DELETE'])
 def delete_document(document_id):
     """Delete a document"""
@@ -187,7 +502,6 @@ def delete_document(document_id):
         return jsonify(ApiResponse.error(
             ErrorResponse(ErrorType.API_ERROR, "Failed to delete document")
         )), 500
-
 
 @api_bp.route('/documents/bulk-delete', methods=['POST'])
 def bulk_delete_documents():
@@ -236,14 +550,12 @@ def bulk_delete_documents():
             ErrorResponse(ErrorType.API_ERROR, "Bulk deletion failed")
         )), 500
 
-
 @api_bp.route('/documents/datasets', methods=['GET'])
 def get_datasets():
     """Get list of document datasets"""
     try:
         datasets = document_service.list_datasets()
         
-        # Get statistics for each dataset
         result_datasets = []
         for dataset in datasets:
             dataset_dict = dataset.to_dict()
@@ -259,7 +571,6 @@ def get_datasets():
         return jsonify(ApiResponse.error(
             ErrorResponse(ErrorType.API_ERROR, "Failed to retrieve datasets")
         )), 500
-
 
 @api_bp.route('/documents/datasets', methods=['POST'])
 def create_dataset():
@@ -280,7 +591,6 @@ def create_dataset():
         description = data.get('description', '').strip()
         document_ids = data.get('document_ids', [])
         
-        # Validate document IDs if provided
         if document_ids and not isinstance(document_ids, list):
             return jsonify(ApiResponse.error(
                 ErrorResponse(ErrorType.VALIDATION_ERROR, "Document IDs must be a list")
@@ -302,7 +612,6 @@ def create_dataset():
         return jsonify(ApiResponse.error(
             ErrorResponse(ErrorType.API_ERROR, "Failed to create dataset")
         )), 500
-
 
 @api_bp.route('/documents/datasets/<dataset_id>', methods=['GET'])
 def get_dataset(dataset_id):
@@ -337,7 +646,6 @@ def get_dataset(dataset_id):
         return jsonify(ApiResponse.error(
             ErrorResponse(ErrorType.API_ERROR, "Failed to retrieve dataset")
         )), 500
-
 
 @api_bp.route('/documents/datasets/<dataset_id>', methods=['PUT'])
 def update_dataset(dataset_id):
@@ -420,7 +728,6 @@ def update_dataset(dataset_id):
         return jsonify(ApiResponse.error(
             ErrorResponse(ErrorType.API_ERROR, "Failed to update dataset")
         )), 500
-
 
 @api_bp.route('/documents/datasets/<dataset_id>', methods=['DELETE'])
 def delete_dataset(dataset_id):

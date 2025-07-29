@@ -3,23 +3,36 @@
 This module provides a unified LLM service that combines the functionality of both
 LLMService and EnhancedLLMService with integration to the base service architecture.
 """
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import json
 import os
 import threading
 import time
+import random
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from queue import Queue, Empty
+from dataclasses import dataclass
+from enum import Enum
+from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 from packaging import version
 
 from src.config.unified_config import config
 from src.services.base_service import BaseService, ServiceStatus
+from src.services.score_validation_service import score_validator, ScoreValidationResult
+from src.services.processing_error_handler import processing_error_handler, ErrorContext, ErrorCategory
+from src.services.fallback_manager import fallback_manager
+from src.services.retry_manager import retry_manager
+from src.services.cache_manager import cache_manager
+from src.services.enhanced_logging_service import enhanced_logging_service, LogCategory, log_operation
+from src.services.performance_monitor import performance_monitor, track_operation
 from utils.logger import logger
 
 # Load environment variables
 load_dotenv()
-
 
 class LLMServiceError(Exception):
     """Exception raised for errors in the LLM service."""
@@ -45,6 +58,301 @@ class LLMServiceError(Exception):
             return f"[{self.error_code}] {self.message}"
         return self.message
 
+class RateLimitManager:
+    """Manages rate limiting for API calls"""
+    
+    def __init__(self, requests_per_minute: int = 60, requests_per_hour: int = 3600):
+        self.requests_per_minute = requests_per_minute
+        self.requests_per_hour = requests_per_hour
+        self.minute_requests = []
+        self.hour_requests = []
+        self.lock = threading.Lock()
+    
+    def can_make_request(self) -> bool:
+        """Check if a request can be made within rate limits"""
+        current_time = time.time()
+        
+        with self.lock:
+            # Clean old requests
+            self.minute_requests = [t for t in self.minute_requests if current_time - t < 60]
+            self.hour_requests = [t for t in self.hour_requests if current_time - t < 3600]
+            
+            # Check limits
+            if len(self.minute_requests) >= self.requests_per_minute:
+                return False
+            if len(self.hour_requests) >= self.requests_per_hour:
+                return False
+            
+            return True
+    
+    def record_request(self):
+        """Record a successful request"""
+        current_time = time.time()
+        with self.lock:
+            self.minute_requests.append(current_time)
+            self.hour_requests.append(current_time)
+    
+    def get_wait_time(self) -> float:
+        """Get time to wait before next request"""
+        current_time = time.time()
+        
+        with self.lock:
+            # Clean old requests
+            self.minute_requests = [t for t in self.minute_requests if current_time - t < 60]
+            self.hour_requests = [t for t in self.hour_requests if current_time - t < 3600]
+            
+            wait_times = []
+            
+            # Check minute limit
+            if len(self.minute_requests) >= self.requests_per_minute:
+                oldest_minute = min(self.minute_requests)
+                wait_times.append(60 - (current_time - oldest_minute))
+            
+            # Check hour limit
+            if len(self.hour_requests) >= self.requests_per_hour:
+                oldest_hour = min(self.hour_requests)
+                wait_times.append(3600 - (current_time - oldest_hour))
+            
+            return max(wait_times) if wait_times else 0
+
+class ConnectionPool:
+    """Connection pool for managing multiple API clients"""
+    
+    def __init__(self, pool_size: int = 5, api_key: str = None, base_url: str = None):
+        self.pool_size = pool_size
+        self.api_key = api_key
+        self.base_url = base_url
+        self.pool = Queue(maxsize=pool_size)
+        self.lock = threading.Lock()
+        self.created_connections = 0
+        
+        # Pre-populate pool
+        self._initialize_pool()
+    
+    def _initialize_pool(self):
+        """Initialize the connection pool"""
+        from openai import OpenAI
+        
+        for _ in range(self.pool_size):
+            try:
+                client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+                self.pool.put(client, block=False)
+                self.created_connections += 1
+            except Exception as e:
+                logger.error(f"Failed to create connection for pool: {e}")
+                break
+    
+    def get_connection(self, timeout: float = 5.0):
+        """Get a connection from the pool"""
+        try:
+            return self.pool.get(timeout=timeout)
+        except Empty:
+            with self.lock:
+                if self.created_connections < self.pool_size * 2:  # Allow some overflow
+                    from openai import OpenAI
+                    client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+                    self.created_connections += 1
+                    return client
+            raise LLMServiceError("Connection pool exhausted", error_code="POOL_EXHAUSTED")
+    
+    def return_connection(self, connection):
+        """Return a connection to the pool"""
+        try:
+            self.pool.put(connection, block=False)
+        except:
+            # Pool is full, connection will be garbage collected
+            pass
+
+@dataclass
+class ResponseParsingStrategy:
+    """Strategy for parsing LLM responses"""
+    name: str
+    parser_func: callable
+    priority: int = 0  # Higher priority tried first
+
+class ResponseParser:
+    """Enhanced response parser with multiple fallback strategies"""
+    
+    def __init__(self):
+        self.strategies = []
+        self._setup_default_strategies()
+    
+    def _setup_default_strategies(self):
+        """Setup default parsing strategies"""
+        # JSON parsing strategies
+        self.add_strategy(ResponseParsingStrategy(
+            "direct_json", self._parse_direct_json, priority=100
+        ))
+        
+        self.add_strategy(ResponseParsingStrategy(
+            "extract_json", self._parse_extract_json, priority=90
+        ))
+        
+        self.add_strategy(ResponseParsingStrategy(
+            "clean_and_parse", self._parse_clean_json, priority=80
+        ))
+        
+        # Fallback strategies
+        self.add_strategy(ResponseParsingStrategy(
+            "regex_extraction", self._parse_regex_extraction, priority=70
+        ))
+        
+        self.add_strategy(ResponseParsingStrategy(
+            "pattern_matching", self._parse_pattern_matching, priority=60
+        ))
+        
+        self.add_strategy(ResponseParsingStrategy(
+            "llm_restructure", self._parse_llm_restructure, priority=50
+        ))
+    
+    def add_strategy(self, strategy: ResponseParsingStrategy):
+        """Add a parsing strategy"""
+        self.strategies.append(strategy)
+        self.strategies.sort(key=lambda s: s.priority, reverse=True)
+    
+    def parse_response(self, response_text: str, expected_format: str = "json") -> Dict[str, Any]:
+        """Parse response using multiple fallback strategies"""
+        for strategy in self.strategies:
+            try:
+                result = strategy.parser_func(response_text, expected_format)
+                if result:
+                    logger.debug(f"Successfully parsed response using strategy: {strategy.name}")
+                    return result
+            except Exception as e:
+                logger.debug(f"Strategy {strategy.name} failed: {e}")
+                continue
+        
+        # All strategies failed
+        logger.error("All parsing strategies failed")
+        return self._create_error_response(response_text)
+    
+    def _parse_direct_json(self, text: str, expected_format: str) -> Optional[Dict[str, Any]]:
+        """Try direct JSON parsing"""
+        if expected_format == "json":
+            return json.loads(text.strip())
+        return None
+    
+    def _parse_extract_json(self, text: str, expected_format: str) -> Optional[Dict[str, Any]]:
+        """Extract JSON from text using regex"""
+        import re
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if json_match and expected_format == "json":
+            return json.loads(json_match.group())
+        return None
+    
+    def _parse_clean_json(self, text: str, expected_format: str) -> Optional[Dict[str, Any]]:
+        """Clean text and try JSON parsing"""
+        if expected_format != "json":
+            return None
+        
+        # Remove common prefixes/suffixes
+        cleaned = text.strip()
+        prefixes = ["```json", "```", "JSON:", "Response:", "Result:"]
+        suffixes = ["```"]
+        
+        for prefix in prefixes:
+            if cleaned.startswith(prefix):
+                cleaned = cleaned[len(prefix):].strip()
+        
+        for suffix in suffixes:
+            if cleaned.endswith(suffix):
+                cleaned = cleaned[:-len(suffix)].strip()
+        
+        return json.loads(cleaned)
+    
+    def _parse_regex_extraction(self, text: str, expected_format: str) -> Optional[Dict[str, Any]]:
+        """Extract structured data using regex patterns"""
+        if expected_format == "grading":
+            return self._extract_grading_data(text)
+        return None
+    
+    def _parse_pattern_matching(self, text: str, expected_format: str) -> Optional[Dict[str, Any]]:
+        """Use pattern matching for known formats"""
+        if expected_format == "grading":
+            return self._pattern_match_grading(text)
+        return None
+    
+    def _parse_llm_restructure(self, text: str, expected_format: str) -> Optional[Dict[str, Any]]:
+        """Use LLM to restructure response (placeholder)"""
+        # This would use the LLM service itself to restructure
+        # For now, return None to avoid circular dependency
+        return None
+    
+    def _extract_grading_data(self, text: str) -> Dict[str, Any]:
+        """Extract grading data using regex patterns"""
+        import re
+        
+        # Score extraction patterns
+        score_patterns = [
+            r'score[:\s]*(\d+)',
+            r'grade[:\s]*(\d+)',
+            r'(\d+)\s*(?:points?|%|/100)',
+        ]
+        
+        extracted_score = None
+        for pattern in score_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                try:
+                    score = int(match.group(1))
+                    if 0 <= score <= 100:
+                        extracted_score = score
+                        break
+                except ValueError:
+                    continue
+        
+        if extracted_score is not None:
+            return {
+                "overall_grade": {"score": extracted_score, "feedback": "Extracted from text"},
+                "criteria_scores": {
+                    "accuracy": extracted_score,
+                    "completeness": extracted_score,
+                    "understanding": extracted_score,
+                    "clarity": extracted_score
+                },
+                "strengths": [],
+                "areas_for_improvement": ["Manual review recommended"]
+            }
+        
+        return None
+    
+    def _pattern_match_grading(self, text: str) -> Dict[str, Any]:
+        """Pattern match for grading responses"""
+        lines = text.split('\n')
+        result = {
+            "overall_grade": {"score": 0, "feedback": "Pattern matched"},
+            "criteria_scores": {"accuracy": 0, "completeness": 0, "understanding": 0, "clarity": 0},
+            "strengths": [],
+            "areas_for_improvement": []
+        }
+        
+        for line in lines:
+            line = line.strip()
+            if any(word in line.lower() for word in ['score', 'grade', 'points']):
+                # Try to extract numeric value
+                import re
+                numbers = re.findall(r'\d+', line)
+                if numbers:
+                    score = int(numbers[0])
+                    if 0 <= score <= 100:
+                        result["overall_grade"]["score"] = score
+                        for key in result["criteria_scores"]:
+                            result["criteria_scores"][key] = score
+                        break
+        
+        return result if result["overall_grade"]["score"] > 0 else None
+    
+    def _create_error_response(self, original_text: str) -> Dict[str, Any]:
+        """Create error response when all parsing fails"""
+        return {
+            "overall_grade": {"score": 0, "feedback": "PARSING FAILED - REQUIRES MANUAL REVIEW"},
+            "criteria_scores": {"accuracy": 0, "completeness": 0, "understanding": 0, "clarity": 0},
+            "strengths": [],
+            "areas_for_improvement": ["SYSTEM ERROR: Response parsing failed"],
+            "requires_manual_review": True,
+            "error_type": "parsing_error",
+            "original_response": original_text[:500]  # Truncate for logging
+        }
 
 class ConsolidatedLLMService(BaseService):
     """Consolidated LLM service with enhanced functionality and base service integration."""
@@ -95,9 +403,47 @@ class ConsolidatedLLMService(BaseService):
         self._cache_timestamps = {}
         self._cache_lock = threading.Lock()
         
+        # Advanced retry configuration
+        self.exponential_backoff = True
+        self.max_backoff_delay = 60.0  # Maximum delay between retries
+        self.jitter = True  # Add randomness to retry delays
+        
+        # Prompt optimization settings
+        self.prompt_templates = {}
+        self.response_validators = {}
+        
+        # MCP protocol support
+        self.mcp_enabled = os.getenv("MCP_ENABLED", "False").lower() == "true"
+        self.mcp_tools = []
+        
+        # Performance tracking
+        self.request_count = 0
+        self.total_tokens_used = 0
+        self.average_response_time = 0.0
+        
+        # Enhanced features
+        self.rate_limiter = RateLimitManager(
+            requests_per_minute=int(os.getenv("LLM_REQUESTS_PER_MINUTE", "60")),
+            requests_per_hour=int(os.getenv("LLM_REQUESTS_PER_HOUR", "3600"))
+        )
+        self.connection_pool = None
+        self.response_parser = ResponseParser()
+        
         # Client initialization
         self.client = None
         self.supports_json = False
+        
+        if self.api_key:
+            try:
+                pool_size = int(os.getenv("LLM_CONNECTION_POOL_SIZE", "3"))
+                self.connection_pool = ConnectionPool(
+                    pool_size=pool_size,
+                    api_key=self.api_key,
+                    base_url=self.base_url
+                )
+                logger.info(f"Initialized LLM connection pool with {pool_size} connections")
+            except Exception as e:
+                logger.warning(f"Failed to initialize connection pool: {e}")
         
         # Set initial status based on API key availability
         if not self.api_key:
@@ -140,7 +486,6 @@ class ConsolidatedLLMService(BaseService):
                         "model": self.model,
                         "messages": [{"role": "user", "content": "test"}],
                         "temperature": 0.0
-                        # No token limits for unrestricted responses
                     }
                     
                     if self.deterministic and self.seed is not None:
@@ -234,7 +579,6 @@ class ConsolidatedLLMService(BaseService):
                 self._response_cache.clear()
                 self._cache_timestamps.clear()
             
-            # Close client if needed
             self.client = None
             
             logger.info("LLM service cleanup completed")
@@ -273,8 +617,22 @@ class ConsolidatedLLMService(BaseService):
         return self.status in [ServiceStatus.HEALTHY, ServiceStatus.DEGRADED]
 
     def _get_cache_key(self, *args) -> str:
-        """Generate cache key from arguments."""
-        return str(hash(str(args)))
+        """Generate deterministic cache key from arguments."""
+        import hashlib
+        
+        # Create a deterministic string representation
+        normalized_args = []
+        for arg in args:
+            if isinstance(arg, str):
+                # Normalize whitespace and case for consistency
+                normalized = ' '.join(str(arg).strip().split())
+                normalized_args.append(normalized)
+            else:
+                normalized_args.append(str(arg))
+        
+        # Create consistent cache key using SHA-256
+        cache_content = '|'.join(normalized_args)
+        return hashlib.sha256(cache_content.encode('utf-8')).hexdigest()
 
     def _get_cached_response(self, cache_key: str) -> Optional[Any]:
         """Get cached response if valid."""
@@ -295,7 +653,6 @@ class ConsolidatedLLMService(BaseService):
     def _cache_response(self, cache_key: str, response: Any) -> None:
         """Cache response with size limit."""
         with self._cache_lock:
-            # Remove oldest entries if cache is full
             if len(self._response_cache) >= self.cache_size:
                 oldest_key = min(self._cache_timestamps.keys(), 
                                key=lambda k: self._cache_timestamps[k])
@@ -365,293 +722,315 @@ class ConsolidatedLLMService(BaseService):
             raise LLMServiceError(f"Failed to generate response: {str(e)}")
 
     def _make_api_call_with_retry(self, params: Dict[str, Any]) -> Any:
-        """Make API call with retry logic."""
+        """Make API call with enhanced retry logic, rate limiting, and connection pooling."""
         last_error = None
+        start_time = time.time()
+        client_to_use = None
         
         for attempt in range(self.max_retries):
             try:
-                response = self.client.chat.completions.create(**params)
-                return response
+                # Check rate limiting
+                if not self.rate_limiter.can_make_request():
+                    wait_time = self.rate_limiter.get_wait_time()
+                    if wait_time > 0:
+                        logger.info(f"Rate limit reached, waiting {wait_time:.2f} seconds")
+                        time.sleep(wait_time)
+                
+                if self.connection_pool:
+                    try:
+                        client_to_use = self.connection_pool.get_connection(timeout=5.0)
+                    except Exception as pool_error:
+                        logger.warning(f"Failed to get connection from pool: {pool_error}")
+                        client_to_use = self.client
+                else:
+                    client_to_use = self.client
+                
+                if not client_to_use:
+                    raise LLMServiceError("No client available", error_code="NO_CLIENT")
+                
+                # Make the API call with timeout handling
+                try:
+                    response = client_to_use.chat.completions.create(**params)
+                    
+                    # Record successful request
+                    self.rate_limiter.record_request()
+                    
+                    # Return connection to pool
+                    if self.connection_pool and client_to_use != self.client:
+                        self.connection_pool.return_connection(client_to_use)
+                    
+                    # Update performance metrics
+                    duration = time.time() - start_time
+                    performance_monitor.track_operation("llm_api_call", duration, True, {
+                        'attempt': attempt + 1,
+                        'model': self.model,
+                        'tokens_used': response.usage.total_tokens if hasattr(response, 'usage') and response.usage else 0
+                    })
+                    
+                    return response
+                    
+                except Exception as api_error:
+                    # Return connection to pool even on error
+                    if self.connection_pool and client_to_use != self.client:
+                        self.connection_pool.return_connection(client_to_use)
+                    raise api_error
                 
             except Exception as e:
                 last_error = e
-                logger.warning(f"API call attempt {attempt + 1} failed: {str(e)}")
+                error_str = str(e).lower()
                 
-                if attempt < self.max_retries - 1:
-                    time.sleep(self.retry_delay * (2 ** attempt))
+                # Enhanced error categorization and handling
+                context = ErrorContext(
+                    operation="llm_api_call",
+                    service="consolidated_llm_service",
+                    timestamp=datetime.utcnow(),
+                    request_id=f"llm_{int(time.time())}_{attempt}",
+                    additional_data={
+                        'attempt': attempt + 1,
+                        'max_retries': self.max_retries,
+                        'model': self.model,
+                        'params_size': len(str(params))
+                    }
+                )
                 
+                error_response = processing_error_handler.handle_error(e, context)
+                
+                should_retry = error_response.get('should_retry', False)
+                
+                if any(indicator in error_str for indicator in ['rate limit', '429', 'too many requests']):
+                    # Rate limiting - wait longer
+                    if attempt < self.max_retries - 1:
+                        wait_time = min(60, (2 ** attempt) * 5)  # Exponential backoff up to 60s
+                        logger.warning(f"Rate limited, waiting {wait_time}s before retry {attempt + 1}")
+                        time.sleep(wait_time)
+                        continue
+                
+                elif any(indicator in error_str for indicator in ['timeout', 'connection', 'network']):
+                    # Network issues - retry with exponential backoff
+                    if attempt < self.max_retries - 1 and should_retry:
+                        wait_time = min(30, (1.5 ** attempt) * self.retry_delay)
+                        if self.jitter:
+                            wait_time += random.uniform(0, wait_time * 0.1)
+                        logger.warning(f"Network error, retrying in {wait_time:.2f}s: {e}")
+                        time.sleep(wait_time)
+                        continue
+                
+                elif any(indicator in error_str for indicator in ['server error', '500', '502', '503', '504']):
+                    # Server errors - retry with backoff
+                    if attempt < self.max_retries - 1 and should_retry:
+                        wait_time = min(45, (2 ** attempt) * 2)
+                        logger.warning(f"Server error, retrying in {wait_time}s: {e}")
+                        time.sleep(wait_time)
+                        continue
+                
+                elif any(indicator in error_str for indicator in ['authentication', 'unauthorized', '401']):
+                    # Auth errors - don't retry
+                    logger.error(f"Authentication error, not retrying: {e}")
+                    break
+                
+                elif any(indicator in error_str for indicator in ['invalid', 'bad request', '400']):
+                    # Bad request - don't retry
+                    logger.error(f"Bad request error, not retrying: {e}")
+                    break
+                
+                else:
+                    # Generic retry logic
+                    if attempt < self.max_retries - 1 and should_retry:
+                        wait_time = min(self.max_backoff_delay, self.retry_delay * (2 ** attempt))
+                        if self.jitter:
+                            wait_time += random.uniform(0, wait_time * 0.1)
+                        logger.warning(f"API call failed, retrying in {wait_time:.2f}s: {e}")
+                        time.sleep(wait_time)
+                        continue
+                
+                # Log the error with enhanced context
+                enhanced_logging_service.log_error(
+                    f"LLM API call failed on attempt {attempt + 1}",
+                    LogCategory.API_ERROR,
+                    {
+                        'error': str(e),
+                        'attempt': attempt + 1,
+                        'max_retries': self.max_retries,
+                        'model': self.model,
+                        'error_response': error_response
+                    }
+                )
+        
+        # All retries exhausted
+        duration = time.time() - start_time
+        performance_monitor.track_operation("llm_api_call", duration, False, {
+            'attempts': self.max_retries,
+            'final_error': str(last_error),
+            'model': self.model
+        })
+        
+        fallback_context = ErrorContext(
+            operation="llm_api_call",
+            service="consolidated_llm_service", 
+            timestamp=datetime.utcnow(),
+            additional_data={'final_error': str(last_error)}
+        )
+        
+        fallback_result = fallback_manager.execute_with_fallback(
+            primary_func=lambda: None,  # Already failed
+            fallback_func=self._get_fallback_response,
+            operation="llm_api_call",
+            context=fallback_context,
+            params=params,
+            error=last_error
+        )
+        
+        if fallback_result:
+            logger.info("Using fallback response for LLM API call")
+            return fallback_result
+        
         raise LLMServiceError(
-            f"API call failed after {self.max_retries} attempts", 
+            f"LLM API call failed after {self.max_retries} attempts: {last_error}",
+            error_code="API_CALL_FAILED",
             original_error=last_error
         )
 
-    def get_cache_stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
-        with self._cache_lock:
+    def _get_fallback_response(self, params: Dict[str, Any], error: Exception) -> Any:
+        """Generate fallback response when API calls fail"""
+        try:
+            # Try to get cached response first
+            messages = params.get('messages', [])
+            if len(messages) >= 2:
+                system_prompt = messages[0].get('content', '')
+                user_prompt = messages[1].get('content', '')
+                
+                cached_response = self._get_cached_response(cache_key)
+                if cached_response:
+                    logger.info("Using cached response as fallback")
+                    # Create mock response object
+                    class MockChoice:
+                        def __init__(self, content):
+                            self.message = type('obj', (object,), {'content': content})
+                    
+                    class MockResponse:
+                        def __init__(self, content):
+                            self.choices = [MockChoice(content)]
+                    
+                    return MockResponse(cached_response)
+            
+            # Generate basic fallback response based on context
+            fallback_content = self._generate_basic_fallback(params)
+            
+            class MockChoice:
+                def __init__(self, content):
+                    self.message = type('obj', (object,), {'content': content})
+            
+            class MockResponse:
+                def __init__(self, content):
+                    self.choices = [MockChoice(content)]
+            
+            return MockResponse(fallback_content)
+            
+        except Exception as fallback_error:
+            logger.error(f"Fallback response generation failed: {fallback_error}")
+            return None
+
+    def _generate_basic_fallback(self, params: Dict[str, Any]) -> str:
+        """Generate basic fallback response based on request context"""
+        messages = params.get('messages', [])
+        
+        # Analyze the request to determine appropriate fallback
+        if len(messages) >= 2:
+            user_content = messages[1].get('content', '').lower()
+            
+            # Grading-related fallback
+            if any(keyword in user_content for keyword in ['grade', 'score', 'evaluate', 'assess']):
+                return json.dumps({
+                    "overall_grade": {
+                        "score": 0,
+                        "feedback": "Unable to process request due to service unavailability. Please try again later."
+                    },
+                    "criteria_scores": {
+                        "accuracy": 0,
+                        "completeness": 0,
+                        "understanding": 0,
+                        "clarity": 0
+                    },
+                    "strengths": [],
+                    "areas_for_improvement": ["Service temporarily unavailable - manual review required"],
+                    "requires_manual_review": True,
+                    "fallback_response": True
+                })
+            
+            # Analysis-related fallback
+            elif any(keyword in user_content for keyword in ['analyze', 'review', 'examine']):
+                return "I apologize, but I'm currently unable to process your request due to service unavailability. Please try again in a few moments. If the issue persists, please contact support."
+            
+            # Question-answering fallback
+            elif '?' in user_content:
+                return "I'm sorry, but I'm currently experiencing technical difficulties and cannot provide a response to your question. Please try again later."
+        
+        # Generic fallback
+        return "Service temporarily unavailable. Please try again later."
+
+    def _generate_basic_fallback_content(self, messages: List[Dict[str, str]]) -> str:
+        """Generate basic fallback content based on message context"""
+        try:
+            # Analyze the request type
+            if len(messages) > 1:
+                user_content = messages[-1].get('content', '').lower()
+                
+                # Grading-related fallback
+                if any(keyword in user_content for keyword in ['grade', 'score', 'evaluate', 'assess']):
+                    return json.dumps({
+                        "overall_grade": {
+                            "score": 0,
+                            "percentage": 0,
+                            "letter_grade": "N/A"
+                        },
+                        "detailed_scores": {
+                            "accuracy": 0,
+                            "completeness": 0,
+                            "understanding": 0,
+                            "clarity": 0
+                        },
+                        "strengths": [],
+                        "areas_for_improvement": ["Service temporarily unavailable - manual review required"],
+                        "requires_manual_review": True,
+                        "fallback_response": True
+                    })
+                
+                # Analysis-related fallback
+                elif any(keyword in user_content for keyword in ['analyze', 'review', 'examine']):
+                    return "I apologize, but I'm currently unable to process your request due to service unavailability. Please try again in a few moments."
+                
+                # Question-answering fallback
+                elif '?' in user_content:
+                    return "I'm sorry, but I'm currently experiencing technical difficulties and cannot provide a response to your question. Please try again later."
+            
+            # Generic fallback
+            return "Service temporarily unavailable. Please try again later."
+            
+        except Exception as e:
+            logger.error(f"Error generating fallback content: {e}")
+    
+    def cleanup(self) -> None:
+        """Clean up service resources."""
+        try:
+            with self._cache_lock:
+                self._response_cache.clear()
+            logger.info("ConsolidatedLLMService cleaned up")
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
+    
+    def health_check(self) -> Dict[str, Any]:
+        """Perform health check."""
+        try:
             return {
+                "status": "healthy",
+                "service": "consolidated_llm_service",
                 "cache_size": len(self._response_cache),
-                "max_cache_size": self.cache_size,
-                "cache_ttl": self.cache_ttl,
-                "cache_hits": self.metrics.custom_metrics.get("cache_hits", 0),
-                "cache_misses": self.metrics.custom_metrics.get("cache_misses", 0)
+                "available": self.is_available()
             }
-
-    def clear_cache(self) -> None:
-        """Clear the response cache."""
-        with self._cache_lock:
-            self._response_cache.clear()
-            self._cache_timestamps.clear()
-        logger.info("LLM service cache cleared")
-
-    def preprocess_ocr_text(self, text: str) -> str:
-        """Preprocess OCR text to improve understanding."""
-        if not text:
-            return ""
-        
-        try:
-            with self.track_request("preprocess_ocr"):
-                if self.client and self.is_available():
-                    # Use LLM to preprocess OCR text
-                    system_prompt = """
-You are an OCR text preprocessing expert. Clean and improve the provided OCR text by:
-1. Fixing common OCR artifacts and character recognition errors
-2. Normalizing whitespace and line breaks
-3. Removing headers, footers, page numbers, and watermarks
-4. Fixing punctuation and quote normalization
-5. Preserving all meaningful content and structure
-6. Return only the cleaned text without any explanations
-
-Common OCR fixes:
-- | → I (vertical bar to letter I)
-- 0 → O (zero to letter O when appropriate)
-- 1 → l (one to lowercase L when appropriate)
-- 5 → S (five to letter S when appropriate)
-- 8 → B (eight to letter B when appropriate)
-"""
-                    
-                    user_prompt = f"Clean and preprocess this OCR text:\n\n{text}"  # No text truncation
-                    
-                    response = self.generate_response(
-                        system_prompt=system_prompt,
-                        user_prompt=user_prompt,
-                        temperature=0.1
-                    )
-                    
-                    return response.strip() if response else text
-                else:
-                    # Basic fallback preprocessing
-                    lines = text.split('\n')
-                    cleaned_lines = []
-                    
-                    for line in lines:
-                        line = line.strip()
-                        if line and not line.isdigit():  # Skip page numbers
-                            # Basic character fixes
-                            line = line.replace('|', 'I')
-                            line = line.replace('0', 'O')  # Context-dependent
-                            cleaned_lines.append(line)
-                    
-                    return '\n'.join(cleaned_lines)
-                    
         except Exception as e:
-            logger.error(f"OCR preprocessing failed: {str(e)}")
-            return text  # Return original text on error
-
-    def get_standardized_grading_prompt(self, question: str, model_answer: str, student_answer: str) -> str:
-        """Generate standardized grading prompt."""
-        return f"""
-You are an expert exam grader. Grade the student's answer against the model answer for the given question.
-
-**CRITICAL INSTRUCTIONS:**
-1. You MUST return a valid JSON object with the exact structure shown below
-2. Do NOT include any text before or after the JSON
-3. Use double quotes for all strings in JSON
-4. Ensure all numeric scores are integers between 0-100
-
-**QUESTION:**
-{question}
-
-**MODEL ANSWER:**
-{model_answer}
-
-**STUDENT ANSWER:**
-{student_answer}
-
-**GRADING CRITERIA:**
-- Accuracy: How correct is the student's answer?
-- Completeness: Does the answer address all parts of the question?
-- Understanding: Does the student demonstrate understanding of concepts?
-- Clarity: Is the answer well-organized and clearly expressed?
-
-**REQUIRED JSON OUTPUT FORMAT:**
-{{
-    "overall_grade": {{
-        "score": <integer 0-100>,
-        "feedback": "<detailed feedback explaining the grade>"
-    }},
-    "criteria_scores": {{
-        "accuracy": <integer 0-100>,
-        "completeness": <integer 0-100>,
-        "understanding": <integer 0-100>,
-        "clarity": <integer 0-100>
-    }},
-    "strengths": ["<strength 1>", "<strength 2>"],
-    "areas_for_improvement": ["<improvement 1>", "<improvement 2>"]
-}}
-"""
-
-    def compare_answers(self, question: str, model_answer: str, student_answer: str) -> Dict[str, Any]:
-        """Compare student answer with model answer and return grading results."""
-        try:
-            with self.track_request("compare_answers"):
-                if not self.is_available():
-                    raise LLMServiceError("LLM service not available for grading")
-                
-                # Check cache
-                cache_key = self._get_cache_key(question, model_answer, student_answer)
-                cached_result = self._get_cached_response(cache_key)
-                if cached_result:
-                    return cached_result
-                
-                # Generate grading prompt
-                prompt = self.get_standardized_grading_prompt(question, model_answer, student_answer)
-                
-                # Make API call
-                params = {
-                    "model": self.model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.1,
-                }
-                
-                if self.deterministic and self.seed is not None:
-                    params["seed"] = self.seed
-                
-                response = self._make_api_call_with_retry(params)
-                response_text = response.choices[0].message.content.strip()
-                
-                # Parse and validate response
-                result = self._parse_grading_response(response_text)
-                
-                # Cache result
-                self._cache_response(cache_key, result)
-                
-                return result
-                
-        except Exception as e:
-            logger.error(f"Answer comparison failed: {str(e)}")
-            # Return fallback result
+            logger.error(f"Health check failed: {e}")
             return {
-                "overall_grade": {"score": 0, "feedback": f"Grading failed: {str(e)}"},
-                "criteria_scores": {"accuracy": 0, "completeness": 0, "understanding": 0, "clarity": 0},
-                "strengths": [],
-                "areas_for_improvement": ["Unable to grade due to system error"]
+                "status": "unhealthy",
+                "service": "consolidated_llm_service",
+                "error": str(e)
             }
-
-    def _parse_grading_response(self, response_text: str) -> Dict[str, Any]:
-        """Parse and validate grading response."""
-        # Try direct JSON parsing first
-        try:
-            result = json.loads(response_text)
-            return self._validate_grading_result(result)
-        except json.JSONDecodeError:
-            pass
-        
-        # Try to extract JSON from response
-        import re
-        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-        if json_match:
-            try:
-                result = json.loads(json_match.group())
-                return self._validate_grading_result(result)
-            except json.JSONDecodeError:
-                pass
-        
-        # Fallback: create basic result
-        logger.warning("Could not parse grading response, using fallback")
-        return {
-            "overall_grade": {"score": 50, "feedback": "Unable to parse detailed grading"},
-            "criteria_scores": {"accuracy": 50, "completeness": 50, "understanding": 50, "clarity": 50},
-            "strengths": [],
-            "areas_for_improvement": ["Response parsing failed"]
-        }
-
-    def _validate_grading_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate and normalize grading result."""
-        # Ensure required structure
-        if "overall_grade" not in result:
-            result["overall_grade"] = {"score": 0, "feedback": "Missing overall grade"}
-        
-        if "criteria_scores" not in result:
-            result["criteria_scores"] = {"accuracy": 0, "completeness": 0, "understanding": 0, "clarity": 0}
-        
-        if "strengths" not in result:
-            result["strengths"] = []
-        
-        if "areas_for_improvement" not in result:
-            result["areas_for_improvement"] = []
-        
-        # Validate score ranges
-        if isinstance(result["overall_grade"], dict) and "score" in result["overall_grade"]:
-            score = result["overall_grade"]["score"]
-            if not isinstance(score, int) or score < 0 or score > 100:
-                result["overall_grade"]["score"] = max(0, min(100, int(score) if isinstance(score, (int, float)) else 0))
-        
-        # Validate criteria scores
-        for criterion in ["accuracy", "completeness", "understanding", "clarity"]:
-            if criterion in result["criteria_scores"]:
-                score = result["criteria_scores"][criterion]
-                if not isinstance(score, int) or score < 0 or score > 100:
-                    result["criteria_scores"][criterion] = max(0, min(100, int(score) if isinstance(score, (int, float)) else 0))
-        
-        return result
-
-    def _get_structured_response(self, text: str) -> str:
-        """Use LLM to convert free-form response to valid JSON format."""
-        try:
-            system_prompt = """You are a JSON formatting expert. Convert the provided unstructured response to valid JSON format.
-            
-Rules:
-1. Return ONLY valid JSON, no explanations
-2. Preserve all meaningful data from the input
-3. Use appropriate JSON structure based on content
-4. For grading responses, use keys like 'score', 'feedback', 'confidence', etc.
-5. Ensure all strings are properly quoted
-6. Ensure all numbers are valid JSON numbers"""
-            
-            user_prompt = f"Convert this unstructured response to valid JSON format:\n\n{text}"
-            
-            response = self.generate_response(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                temperature=0.1
-            )
-            
-            return response.strip() if response else text
-            
-        except Exception as e:
-            logger.error(f"Error in _get_structured_response: {str(e)}")
-            # Fallback: try to extract JSON-like content
-            import re
-            json_match = re.search(r'\{.*\}', text, re.DOTALL)
-            if json_match:
-                return json_match.group()
-            return text
-
-
-    def create_chat_completion_batch(self, *args, **kwargs):
-        """
-        Compatibility method for batch processing.
-        This method exists to handle legacy calls that might reference it.
-        """
-        # Remove max_tokens if present as it's not supported in newer versions
-        if 'max_tokens' in kwargs:
-            logger.warning("Removing unsupported 'max_tokens' parameter from batch completion call")
-            del kwargs['max_tokens']
-        
-        # Delegate to the standard completion method
-        return self.client.chat.completions.create(*args, **kwargs)
-
-
-# Backward compatibility aliases
-LLMService = ConsolidatedLLMService
-EnhancedLLMService = ConsolidatedLLMService

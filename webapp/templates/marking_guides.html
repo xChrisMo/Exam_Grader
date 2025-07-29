@@ -16,13 +16,13 @@
                 </p>
             </div>
             <div class="flex space-x-3">
-                <a href="{{ url_for('upload_guide') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <a href="{{ url_for('main.upload_guide') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                     <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                     </svg>
                     Upload Guide
                 </a>
-                <a href="{{ url_for('create_guide') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <a href="{{ url_for('main.upload_guide') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                     <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                     </svg>
@@ -50,15 +50,15 @@
                 </div>
             </div>
             <div class="flex-shrink-0">
-                <a href="{{ url_for('clear_session_guide') }}"
-                   onclick="return confirm('Are you sure you want to clear the current active guide? This will remove it from your session.')"
-                   class="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                   title="Clear current active guide from session">
+                <button type="button" 
+                        onclick="clearCurrentGuide()"
+                        class="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                        title="Clear current active guide from session">
                     <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                     </svg>
                     Clear
-                </a>
+                </button>
             </div>
         </div>
     </div>
@@ -120,13 +120,13 @@
                         <!-- Primary Action Row -->
                         <div class="flex space-x-2 mb-2">
                             {% if guide.id and guide.id|string|length > 0 and guide.id != 'session_guide' and guide.id != '' and guide.id != 'None' and current_guide != (guide.title or guide.name) %}
-                            <a href="{{ url_for('use_guide', guide_id=guide.id) }}"
-                               class="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                            <button type="button" onclick="checkDuplicatesBeforeSelect('{{ guide.id }}', '{{ guide.title or guide.name }}')"
+                                    class="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
                                 <svg class="w-4 h-4 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                                 </svg>
                                 <span class="truncate">Use Guide</span>
-                            </a>
+                            </button>
                             {% else %}
                             <div class="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-lg text-gray-500 bg-gray-100 cursor-not-allowed">
                                 <span class="truncate">{% if guide.id == 'session_guide' %}Active Guide{% else %}In Use{% endif %}</span>
@@ -134,13 +134,13 @@
                             {% endif %}
 
                             {% if guide.id and guide.id|string|length > 0 and guide.id != 'session_guide' and guide.id != '' and guide.id != 'None' %}
-                            <a href="{{ url_for('view_guide_content', guide_id=guide.id) }}"
-                               class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                            <button type="button" onclick="openGuideDetailsPage('{{ guide.id }}')"
+                                    class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
                                 <svg class="w-4 h-4 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                 </svg>
                                 <span class="truncate">Details</span>
-                            </a>
+                            </button>
                             {% endif %}
                         </div>
 
@@ -178,13 +178,13 @@
         <h3 class="mt-2 text-sm font-medium text-gray-900">No marking guides</h3>
         <p class="mt-1 text-sm text-gray-500">Get started by creating your first marking guide or uploading an existing one.</p>
         <div class="mt-6 flex justify-center space-x-3">
-            <a href="{{ url_for('create_guide') }}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+            <a href="{{ url_for('main.upload_guide') }}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                 <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                 </svg>
                 Create New Guide
             </a>
-            <a href="{{ url_for('upload_guide') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+            <a href="{{ url_for('main.upload_guide') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                 <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                 </svg>
@@ -304,6 +304,70 @@
 
 <!-- Toast Container -->
 <div id="toast-container"></div>
+
+<style>
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+}
+
+.toast {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    margin-bottom: 10px;
+    padding: 16px;
+    min-width: 300px;
+    max-width: 500px;
+    opacity: 0;
+    transform: translateX(100%);
+    transition: all 0.3s ease;
+    border-left: 4px solid #10b981;
+}
+
+.toast.success {
+    border-left-color: #10b981;
+}
+
+.toast.error {
+    border-left-color: #ef4444;
+}
+
+.toast.warning {
+    border-left-color: #f59e0b;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.toast .flex {
+    display: flex;
+    align-items: center;
+}
+
+.toast svg {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+}
+
+.toast.success svg {
+    color: #10b981;
+}
+
+.toast.error svg {
+    color: #ef4444;
+}
+
+.toast.warning svg {
+    color: #f59e0b;
+}
+</style>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -361,6 +425,272 @@ function showToast(message, type = 'success') {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
     }, 4000);
+}
+
+// Select guide functionality with enhanced state management
+function selectGuide(guideId, guideName) {
+    if (confirm(`Are you sure you want to set "${guideName}" as your active marking guide?`)) {
+        // Find the button and show loading state
+        const button = document.querySelector(`button[onclick="selectGuide('${guideId}', '${guideName}')"]`);
+        const originalContent = button ? button.innerHTML : '';
+        
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = `
+                <svg class="animate-spin w-4 h-4 mr-1 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span class="truncate">Setting Active...</span>
+            `;
+        }
+        
+        // Store the selected guide in session storage or send to backend
+        fetch('/api/select-guide', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({
+                guide_id: guideId,
+                guide_name: guideName
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update button to show active state immediately
+                if (button) {
+                    button.innerHTML = `
+                        <svg class="w-4 h-4 mr-1 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                        <span class="truncate">Active</span>
+                    `;
+                    button.className = button.className.replace('bg-primary-600 hover:bg-primary-700', 'bg-green-600 hover:bg-green-700');
+                    button.disabled = true;
+                }
+                
+                // Add active indicator to the guide card
+                const guideCard = document.querySelector(`[data-guide-id="${guideId}"]`);
+                if (guideCard) {
+                    // Remove active indicators from other cards
+                    document.querySelectorAll('.guide-card .active-indicator').forEach(indicator => {
+                        indicator.remove();
+                    });
+                    
+                    // Add active indicator to this card
+                    const activeIndicator = document.createElement('div');
+                    activeIndicator.className = 'active-indicator ml-3';
+                    activeIndicator.innerHTML = `
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                            </svg>
+                            Active
+                        </span>
+                    `;
+                    
+                    const cardHeader = guideCard.querySelector('.flex.items-start.justify-between');
+                    if (cardHeader) {
+                        cardHeader.appendChild(activeIndicator);
+                    }
+                }
+                
+                showToast(`"${guideName}" is now your active marking guide`, 'success');
+                
+                // Update current guide section if it exists
+                updateCurrentGuideSection(guideName);
+                
+            } else {
+                // Restore button on error
+                if (button) {
+                    button.disabled = false;
+                    button.innerHTML = originalContent;
+                }
+                showToast(data.message || 'Failed to select guide', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error selecting guide:', error);
+            // Restore button on error
+            if (button) {
+                button.disabled = false;
+                button.innerHTML = originalContent;
+            }
+            showToast('Failed to select guide', 'error');
+        });
+    }
+}
+
+// Update current guide section
+function updateCurrentGuideSection(guideName) {
+    const currentGuideSection = document.querySelector('.current-guide-section');
+    if (currentGuideSection) {
+        // Update existing section
+        const guideNameElement = currentGuideSection.querySelector('strong');
+        if (guideNameElement) {
+            guideNameElement.textContent = guideName;
+        }
+    } else {
+        // Create new current guide section
+        const newSection = document.createElement('div');
+        newSection.className = 'current-guide-section mb-6 bg-green-50 border border-green-200 rounded-lg p-4';
+        newSection.innerHTML = `
+            <div class="flex items-start justify-between">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-green-800">Current Active Guide</h3>
+                        <div class="mt-2 text-sm text-green-700">
+                            <p><strong>${guideName}</strong> is currently being used for grading.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex-shrink-0">
+                    <button type="button" 
+                            onclick="clearCurrentGuide()"
+                            class="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                            title="Clear current active guide from session">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                        Clear
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // Insert before the saved guides section
+        const savedGuidesSection = document.querySelector('.bg-white.shadow.rounded-lg.overflow-hidden');
+        if (savedGuidesSection) {
+            savedGuidesSection.parentNode.insertBefore(newSection, savedGuidesSection);
+        }
+    }
+}
+
+// Open guide details page functionality
+function openGuideDetailsPage(guideId) {
+    // Navigate to the dedicated guide details page
+    window.location.href = `/guides/${guideId}/details`;
+}
+
+// Clear current guide functionality with enhanced feedback
+function clearCurrentGuide() {
+    if (confirm('Are you sure you want to clear the current active guide?')) {
+        const clearButton = document.querySelector('button[onclick="clearCurrentGuide()"]');
+        const originalContent = clearButton ? clearButton.innerHTML : '';
+        
+        if (clearButton) {
+            clearButton.disabled = true;
+            clearButton.innerHTML = `
+                <svg class="animate-spin w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Clearing...
+            `;
+        }
+        
+        fetch('/api/clear-guide', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || ''
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Remove current guide section
+                const currentGuideSection = document.querySelector('.current-guide-section');
+                if (currentGuideSection) {
+                    currentGuideSection.remove();
+                }
+                
+                // Reset all guide buttons to "Use Guide" state
+                document.querySelectorAll('.guide-card button[onclick*="selectGuide"]').forEach(button => {
+                    button.disabled = false;
+                    button.className = button.className.replace('bg-green-600 hover:bg-green-700', 'bg-primary-600 hover:bg-primary-700');
+                    button.innerHTML = `
+                        <svg class="w-4 h-4 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                        <span class="truncate">Use Guide</span>
+                    `;
+                });
+                
+                // Remove active indicators
+                document.querySelectorAll('.guide-card .active-indicator').forEach(indicator => {
+                    indicator.remove();
+                });
+                
+                showToast('Active guide cleared', 'success');
+            } else {
+                // Restore button on error
+                if (clearButton) {
+                    clearButton.disabled = false;
+                    clearButton.innerHTML = originalContent;
+                }
+                showToast(data.message || 'Failed to clear guide', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error clearing guide:', error);
+            // Restore button on error
+            if (clearButton) {
+                clearButton.disabled = false;
+                clearButton.innerHTML = originalContent;
+            }
+            showToast('Failed to clear guide', 'error');
+        });
+    }
+}
+
+// Check for duplicates before selecting guide
+function checkDuplicatesBeforeSelect(guideId, guideName) {
+    fetch(`/api/check-guide-duplicates/${guideId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.has_duplicates) {
+                    const duplicateNames = data.duplicates.map(d => d.title).join(', ');
+                    const confirmMessage = `Warning: Duplicate guides detected (${duplicateNames}). 
+                    
+This may cause confusion during grading. Do you want to proceed anyway?`;
+                    
+                    if (confirm(confirmMessage)) {
+                        selectGuide(guideId, guideName);
+                    }
+                } else if (data.has_similar) {
+                    const similarNames = data.similar.map(s => s.title).join(', ');
+                    const confirmMessage = `Note: Similar guides found (${similarNames}). 
+                    
+Make sure you're selecting the correct guide. Continue?`;
+                    
+                    if (confirm(confirmMessage)) {
+                        selectGuide(guideId, guideName);
+                    }
+                } else {
+                    // No duplicates or similar guides, proceed normally
+                    selectGuide(guideId, guideName);
+                }
+            } else {
+                // If duplicate check fails, proceed with selection anyway
+                console.warn('Duplicate check failed:', data.message);
+                selectGuide(guideId, guideName);
+            }
+        })
+        .catch(error => {
+            console.error('Error checking duplicates:', error);
+            // If duplicate check fails, proceed with selection anyway
+            selectGuide(guideId, guideName);
+        });
 }
 
 // View guide functionality
@@ -500,8 +830,8 @@ async function executeDelete() {
                     // Check if no guides left and show empty state
                     const remainingCards = document.querySelectorAll('.guide-card');
                     setTimeout(function() {
-                                location.reload();
-                            }, 500); // Add a 500ms delay // Always reload to ensure dashboard updates
+                        location.reload();
+                    }, 500); // Add a 500ms delay - Always reload to ensure dashboard updates
                 }, 300);
             }
 

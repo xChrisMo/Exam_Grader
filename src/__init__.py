@@ -13,7 +13,6 @@ __version__ = "0.1.0"
 __author__ = "Exam Grader Team"
 __license__ = "MIT"
 
-
 # Load environment variables
 load_dotenv(".env", override=True)
 

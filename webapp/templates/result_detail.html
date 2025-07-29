@@ -1,0 +1,523 @@
+{% extends "layout.html" %}
+
+{% block title %}Result Details{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <nav class="flex" aria-label="Breadcrumb">
+                    <ol class="flex items-center space-x-4">
+                        <li>
+                            <div>
+                                <a href="{{ url_for('main.dashboard') }}" class="text-gray-400 hover:text-gray-500">
+                                    <svg class="flex-shrink-0 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L9 5.414V17a1 1 0 102 0V5.414l5.293 5.293a1 1 0 001.414-1.414l-7-7z"/>
+                                    </svg>
+                                    <span class="sr-only">Dashboard</span>
+                                </a>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="flex items-center">
+                                <svg class="flex-shrink-0 h-5 w-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                                </svg>
+                                <a href="{{ url_for('main.results') }}" class="ml-4 text-sm font-medium text-gray-500 hover:text-gray-700">Results</a>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="flex items-center">
+                                <svg class="flex-shrink-0 h-5 w-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                                </svg>
+                                <span class="ml-4 text-sm font-medium text-gray-500">Result Details</span>
+                            </div>
+                        </li>
+                    </ol>
+                </nav>
+                <h1 class="mt-2 text-2xl font-bold text-gray-900">Grading Result Details</h1>
+                <p class="mt-2 text-sm text-gray-600">
+                    Detailed view of grading results and feedback.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    {% if result %}
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <!-- Result Summary -->
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Result Summary</h3>
+                <div class="text-center mb-4">
+                    <div class="text-4xl font-bold mb-2">
+                        {% if result.total_score is not none and result.max_score %}
+                            <span class="text-primary-600">{{ "%.1f"|format(result.total_score) }}</span>
+                            <span class="text-sm text-gray-500">/ {{ result.max_score }}</span>
+                        {% else %}
+                            <span class="text-gray-400">N/A</span>
+                        {% endif %}
+                    </div>
+                    {% if result.total_score is not none and result.max_score and result.max_score > 0 %}
+                        <div class="text-xl font-semibold text-success-600">
+                            {{ "%.1f"|format((result.total_score / result.max_score) * 100) }}%
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="border-t border-gray-200 pt-4">
+                    <div class="grid grid-cols-2 gap-4 text-center">
+                        <div>
+                            <div class="text-xs text-gray-500 mb-1">Result ID</div>
+                            <div class="font-semibold text-gray-900">{{ result.id[:8] }}...</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-500 mb-1">Created</div>
+                            <div class="font-semibold text-gray-900">
+                                {% if result.created_at %}
+                                    {{ result.created_at.strftime('%Y-%m-%d') }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Submission Info -->
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Submission Details</h3>
+                {% if submission %}
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-500 mb-1">Filename</label>
+                            <div class="font-semibold text-gray-900">{{ submission.filename }}</div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-500 mb-1">Student Name</label>
+                            <div class="font-semibold text-gray-900">{{ submission.student_name or 'Not specified' }}</div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-500 mb-1">File Size</label>
+                            <div class="font-semibold text-gray-900">
+                                {% if submission.file_size %}
+                                    {{ "%.1f"|format(submission.file_size / 1024) }} KB
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-500 mb-1">Uploaded</label>
+                            <div class="font-semibold text-gray-900">
+                                {% if submission.created_at %}
+                                    {{ submission.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="text-gray-500">Submission details not available</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Marking Guide Info -->
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Marking Guide</h3>
+                {% if guide %}
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-500 mb-1">Title</label>
+                            <div class="font-semibold text-gray-900">{{ guide.title }}</div>
+                        </div>
+                        
+                        {% if guide.description %}
+                        <div>
+                            <label class="block text-sm font-medium text-gray-500 mb-1">Description</label>
+                            <div class="text-gray-900">{{ guide.description }}</div>
+                        </div>
+                        {% endif %}
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-500 mb-1">Total Marks</label>
+                            <div class="font-semibold text-gray-900">{{ guide.total_marks or 0 }}</div>
+                        </div>
+                        
+                        {% if guide.questions %}
+                        <div>
+                            <label class="block text-sm font-medium text-gray-500 mb-1">Questions</label>
+                            <div class="font-semibold text-gray-900">{{ guide.questions|length }} questions</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <p class="text-gray-500">Marking guide details not available</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Results -->
+    <div class="bg-white shadow rounded-lg mb-8">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">Detailed Grading Results</h3>
+            {% if result.detailed_results %}
+                {% if result.detailed_results is string %}
+                    <pre class="bg-gray-50 p-4 rounded-md text-sm text-gray-800 whitespace-pre-wrap">{{ result.detailed_results }}</pre>
+                {% else %}
+                    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                        <table class="min-w-full divide-y divide-gray-300">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Question</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Max Score</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Percentage</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comments</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for detail in result.detailed_results %}
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ detail.question or 'N/A' }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ detail.score or 0 }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ detail.max_score or 0 }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {% if detail.score and detail.max_score and detail.max_score > 0 %}
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-100 text-success-800">
+                                                {{ "%.1f"|format((detail.score / detail.max_score) * 100) }}%
+                                            </span>
+                                        {% else %}
+                                            <span class="text-gray-400">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-6 py-4 text-sm text-gray-900">{{ detail.comments or 'No comments' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+            {% else %}
+                <p class="text-gray-500">No detailed results available</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Feedback -->
+    {% if result.feedback %}
+    <div class="bg-white shadow rounded-lg mb-8">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Feedback</h3>
+            <div class="bg-gray-50 p-4 rounded-md">
+                <div class="text-sm text-gray-800 whitespace-pre-wrap">{{ result.feedback }}</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Processing Metadata -->
+    {% if result.processing_metadata %}
+    <div class="bg-white shadow rounded-lg mb-8">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">Processing Information</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                {% if result.processing_metadata.processing_time %}
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-1">Processing Time</label>
+                    <div class="font-semibold text-gray-900">{{ "%.2f"|format(result.processing_metadata.processing_time) }}s</div>
+                </div>
+                {% endif %}
+                
+                {% if result.processing_metadata.model_used %}
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-1">Model Used</label>
+                    <div class="font-semibold text-gray-900">{{ result.processing_metadata.model_used }}</div>
+                </div>
+                {% endif %}
+                
+                {% if result.processing_metadata.confidence_score %}
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-1">Confidence</label>
+                    <div class="font-semibold text-gray-900">{{ "%.1f"|format(result.processing_metadata.confidence_score * 100) }}%</div>
+                </div>
+                {% endif %}
+                
+                {% if result.processing_metadata.version %}
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-1">Version</label>
+                    <div class="font-semibold text-gray-900">{{ result.processing_metadata.version }}</div>
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if result.processing_metadata.additional_info %}
+            <div class="border-t border-gray-200 pt-6 mt-6">
+                <label class="block text-sm font-medium text-gray-500 mb-2">Additional Information</label>
+                <pre class="bg-gray-50 p-4 rounded-md text-xs text-gray-800 whitespace-pre-wrap">{{ result.processing_metadata.additional_info|tojson(indent=2) }}</pre>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <div class="flex flex-wrap gap-3">
+                <a href="{{ url_for('main.results') }}" 
+                   class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                    Back to Results
+                </a>
+                
+                <button type="button" onclick="exportResult()"
+                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Export Result
+                </button>
+                
+                {% if submission %}
+                <a href="{{ url_for('main.view_submission_content', submission_id=submission.id) }}" 
+                   class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-info-600 hover:bg-info-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-info-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                    </svg>
+                    View Submission
+                </a>
+                {% endif %}
+                
+                <button type="button" onclick="regenerateResult()"
+                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-warning-600 hover:bg-warning-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-warning-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Regenerate
+                </button>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- No Result State -->
+    <div class="text-center py-12">
+        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">Result Not Found</h3>
+        <p class="mt-1 text-sm text-gray-500">
+            The requested grading result could not be found or you don't have permission to view it.
+        </p>
+        <div class="mt-6">
+            <a href="{{ url_for('main.results') }}" 
+               class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Back to Results
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Ensure ExamGrader is available
+if (typeof ExamGrader === 'undefined') {
+    console.warn('ExamGrader not defined, creating minimal fallback');
+    window.ExamGrader = {
+        notificationManager: {
+            notify: function (message, type) {
+                console.log('Notification (' + type + '): ' + message);
+                alert(type.toUpperCase() + ': ' + message);
+            }
+        }
+    };
+}
+
+function showNotification(message, type) {
+    if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+        ExamGrader.notificationManager.notify(message, type);
+    } else {
+        // Fallback to custom notification
+        showCustomNotification(message, type);
+    }
+}
+
+function showCustomNotification(message, type) {
+    const notification = document.createElement('div');
+    const bgColor = type === 'success' ? 'bg-success-100 border-success-500 text-success-700' : 
+                   type === 'error' ? 'bg-danger-100 border-danger-500 text-danger-700' :
+                   'bg-info-100 border-info-500 text-info-700';
+    
+    notification.className = `fixed top-4 right-4 max-w-sm w-full ${bgColor} border-l-4 p-4 rounded shadow-lg z-50`;
+    notification.innerHTML = `
+        <div class="flex">
+            <div class="flex-shrink-0">
+                ${type === 'success' ? 
+                    '<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>' :
+                    '<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>'
+                }
+            </div>
+            <div class="ml-3">
+                <p class="text-sm font-medium">${message}</p>
+            </div>
+            <div class="ml-auto pl-3">
+                <button type="button" class="inline-flex text-gray-400 hover:text-gray-600" onclick="this.parentElement.parentElement.parentElement.remove()">
+                    <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+function exportResult() {
+    const resultId = '{{ result.id if result else "" }}';
+    
+    if (!resultId) {
+        showNotification('No result ID available for export', 'error');
+        return;
+    }
+    
+    // Show loading state
+    const exportBtn = document.querySelector('button[onclick="exportResult()"]');
+    let originalText = '';
+    
+    if (exportBtn) {
+        originalText = exportBtn.innerHTML;
+        exportBtn.innerHTML = `
+            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Exporting...
+        `;
+        exportBtn.disabled = true;
+    }
+    
+    fetch(`/processing/export/${resultId}`, {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Export failed: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Create and download JSON file
+            const blob = new Blob([JSON.stringify(data.data, null, 2)], {
+                type: 'application/json'
+            });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `result_${resultId}.json`;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showNotification('Result exported successfully!', 'success');
+        } else {
+            throw new Error(data.error || 'Export failed');
+        }
+    })
+    .catch(error => {
+        console.error('Export error:', error);
+        showNotification('Failed to export result: ' + error.message, 'error');
+    })
+    .finally(() => {
+        // Restore button state
+        if (exportBtn) {
+            exportBtn.innerHTML = originalText;
+            exportBtn.disabled = false;
+        }
+    });
+}
+
+function regenerateResult() {
+    const resultId = '{{ result.id if result else "" }}';
+    const submissionId = '{{ submission.id if submission else "" }}';
+    const guideId = '{{ guide.id if guide else "" }}';
+    
+    if (!submissionId || !guideId) {
+        showNotification('Missing submission or guide information for regeneration', 'error');
+        return;
+    }
+    
+    if (!confirm('Are you sure you want to regenerate this result? This will create a new grading result and may take some time.')) {
+        return;
+    }
+    
+    // Show loading notification
+    showNotification('Redirecting to processing...', 'info');
+    
+    try {
+        // Redirect to processing with the submission and guide
+        const url = `/processing/unified?submission_id=${encodeURIComponent(submissionId)}&guide_id=${encodeURIComponent(guideId)}`;
+        window.location.href = url;
+    } catch (error) {
+        console.error('Regeneration error:', error);
+        showNotification('Failed to start regeneration: ' + error.message, 'error');
+    }
+}
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Result detail page initialized');
+    
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', function(event) {
+        // Ctrl/Cmd + E for export
+        if ((event.ctrlKey || event.metaKey) && event.key === 'e') {
+            event.preventDefault();
+            exportResult();
+        }
+        
+        // Ctrl/Cmd + R for regenerate (override default refresh)
+        if ((event.ctrlKey || event.metaKey) && event.key === 'r' && event.shiftKey) {
+            event.preventDefault();
+            regenerateResult();
+        }
+    });
+});
+</script>
+{% endblock %}

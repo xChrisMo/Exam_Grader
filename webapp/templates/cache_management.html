@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Cache Management - Exam Grader</title>
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -198,10 +199,12 @@
 
             async clearCache(cacheType) {
                 try {
+                    const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content');
                     const response = await fetch('/api/cache/clear', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken,
                         },
                         body: JSON.stringify({ cache_type: cacheType })
                     });

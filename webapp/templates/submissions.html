@@ -39,7 +39,7 @@
           Clear Cache
         </button>
         <a
-           href="{{ url_for('reprocess_submissions') }}"
+           href="{{ url_for('processing.unified_processing') }}"
            class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
            title="Reprocess submissions with missing text content"
          >
@@ -65,7 +65,7 @@
           Cache: <span id="cache-entries">Loading...</span>
         </div>
         <a
-          href="{{ url_for('upload_submission') }}"
+          href="{{ url_for('main.upload_submission') }}"
           class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
         >
           <svg
@@ -117,7 +117,7 @@
                 Total Submissions
               </dt>
               <dd class="text-lg font-medium text-gray-900" id="total-submissions-count">
-                {{ submissions|length }}
+                {{ submissions.total if submissions else 0 }}
               </dd>
             </dl>
           </div>
@@ -153,7 +153,7 @@
                 Processed
               </dt>
               <dd class="text-lg font-medium text-gray-900" id="processed-submissions-count">
-                {{ submissions|selectattr('processed')|list|length }}
+                {{ submissions.items|selectattr('processed')|list|length if submissions else 0 }}
               </dd>
             </dl>
           </div>
@@ -189,7 +189,7 @@
                 Pending
               </dt>
               <dd class="text-lg font-medium text-gray-900" id="pending-submissions-count">
-                {{ submissions|rejectattr('processed')|list|length }}
+                {{ submissions.items|rejectattr('processed')|list|length if submissions else 0 }}
               </dd>
             </dl>
           </div>
@@ -373,7 +373,7 @@
               >
                 <div class="flex items-center space-x-2">
                   <a
-                    href="{{ url_for('view_submission_content', submission_id=submission.id) }}"
+                    href="{{ url_for('main.view_submission_content', submission_id=submission.id) }}"
                     class="text-primary-600 hover:text-primary-900"
                   >
                     View Content
@@ -434,7 +434,7 @@
     </p>
     <div class="mt-6">
       <a
-        href="{{ url_for('upload_submission') }}"
+        href="{{ url_for('main.upload_submission') }}"
         class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
       >
         <svg
@@ -711,10 +711,12 @@ ExamGrader.notificationManager.notify(data.error || 'An unknown error occurred.'
         clearButton.disabled = true;
       }
 
+      const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content');
       fetch("/api/clear-cache", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken,
         },
       })
         .then((response) => response.json())

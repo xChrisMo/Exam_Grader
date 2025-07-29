@@ -12,7 +12,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from src.services.base_service import BaseService, ServiceStatus
 from utils.logger import logger
 
-
 class ConsolidatedGradingService(BaseService):
     """Consolidated grading service with enhanced functionality and base service integration."""
 
@@ -44,7 +43,6 @@ class ConsolidatedGradingService(BaseService):
         self.cache_size = cache_size
         self.cache_ttl = cache_ttl
         
-        # Cache for grading results
         self._grading_cache = {}
         self._cache_timestamps = {}
         
@@ -118,7 +116,6 @@ class ConsolidatedGradingService(BaseService):
 
     def _cache_result(self, cache_key: str, result: Any) -> None:
         """Cache result with size limit."""
-        # Remove oldest entries if cache is full
         if len(self._grading_cache) >= self.cache_size:
             oldest_key = min(self._cache_timestamps.keys(), 
                            key=lambda k: self._cache_timestamps[k])
@@ -159,7 +156,6 @@ class ConsolidatedGradingService(BaseService):
                 if cached_result:
                     return cached_result
 
-                # Handle different input types for marking guide
                 if isinstance(marking_guide_content, dict):
                     marking_guide_data = marking_guide_content
                     marking_guide_text = marking_guide_data.get('content', '')
@@ -167,7 +163,6 @@ class ConsolidatedGradingService(BaseService):
                     marking_guide_text = str(marking_guide_content)
                     marking_guide_data = {'content': marking_guide_text}
 
-                # Get mapped questions if not provided
                 if not mapped_questions:
                     mapped_questions = self._get_mapped_questions(
                         marking_guide_text, 
@@ -180,7 +175,6 @@ class ConsolidatedGradingService(BaseService):
                     self._cache_result(cache_key, result)
                     return result
 
-                # Grade using batch processing for efficiency
                 grading_result = self.grade_submission_batch(
                     mapped_questions, 
                     marking_guide_text
@@ -210,7 +204,6 @@ class ConsolidatedGradingService(BaseService):
             with self.track_request("grade_batch"):
                 all_grades = []
                 
-                # Process in batches for efficiency
                 for i in range(0, len(mapped_qa_pairs), self.max_batch_size):
                     batch = mapped_qa_pairs[i:i + self.max_batch_size]
                     batch_grades = self._grade_batch_llm(batch, marking_guide)
@@ -279,25 +272,25 @@ class ConsolidatedGradingService(BaseService):
         system_prompt = """You are an expert exam grader. Grade student answers efficiently and consistently.
 
 GRADING RULES:
-1. Score each answer 0-100 based on correctness and completeness
+1. Score each answer from 0 to the maximum score specified for that question
 2. Provide concise feedback (max 50 words per answer)
 3. Be consistent and fair across all answers
 4. Focus on key concepts and accuracy
 5. Return structured JSON output only
 
-SCORING SCALE:
-- 90-100: Excellent, complete, accurate
-- 80-89: Good, mostly correct, minor gaps
-- 70-79: Satisfactory, some errors or omissions
-- 60-69: Below average, significant issues
-- 0-59: Poor, major errors or incomplete
+SCORING GUIDELINES:
+- Award full marks for complete, accurate answers
+- Deduct points proportionally for errors, omissions, or incomplete responses
+- Consider partial credit for partially correct answers
+- Use the full range from 0 to max_score for each question
 
 Output JSON format:
 {
   "grades": [
     {
       "question_id": "Q1",
-      "score": 85,
+      "score": 8.5,
+      "max_score": 10,
       "feedback": "Good understanding but missing key detail about..."
     }
   ]
@@ -316,9 +309,10 @@ GRADE THESE ANSWERS:
             question = qa.get('question_text', qa.get('question', f"Question {i}"))
             answer = qa.get('answer_text', qa.get('student_answer', qa.get('answer', '')))
             question_id = qa.get('question_id', f"Q{i}")
+            max_score = qa.get('max_score', 10.0)  # Default to 10 if not specified
             
             user_prompt += f"""
-{i}. ID: {question_id}
+{i}. ID: {question_id} (Max Score: {max_score} points)
 Question: {question}
 Student Answer: {answer}
 """
@@ -332,7 +326,6 @@ Student Answer: {answer}
             try:
                 result = json.loads(response)
             except json.JSONDecodeError:
-                # Use LLM to extract and clean JSON if available
                 if self.llm_service:
                     json_cleaning_prompt = f"""
 Extract and clean the JSON from this response. Return only valid JSON:
@@ -384,10 +377,14 @@ Return format: {{"grades": [...]}}
 
     def _validate_and_clean_grade(self, grade: Dict, qa_pair: Dict) -> Dict:
         """Validate and clean individual grade."""
+        # Get max score from qa_pair or grade, default to 10.0
+        max_score = qa_pair.get('max_score', grade.get('max_score', 10.0))
+        
         # Ensure required fields
         validated = {
             'question_id': grade.get('question_id', qa_pair.get('question_id', 'Unknown')),
-            'score': self._validate_score(grade.get('score', 0)),
+            'score': self._validate_score(grade.get('score', 0), max_score),
+            'max_score': float(max_score),
             'feedback': self._clean_feedback(grade.get('feedback', 'No feedback provided')),
             'question_text': qa_pair.get('question_text', qa_pair.get('question', '')),
             'student_answer': qa_pair.get('answer_text', qa_pair.get('student_answer', qa_pair.get('answer', '')))
@@ -395,13 +392,13 @@ Return format: {{"grades": [...]}}
         
         return validated
 
-    def _validate_score(self, score: Any) -> int:
-        """Validate and normalize score to 0-100 range."""
+    def _validate_score(self, score: Any, max_score: float = 100.0) -> float:
+        """Validate and normalize score to 0-max_score range."""
         try:
             score = float(score)
-            return max(0, min(100, int(round(score))))
+            return max(0.0, min(max_score, round(score, 2)))
         except (ValueError, TypeError):
-            return 0
+            return 0.0
 
     def _clean_feedback(self, feedback: str) -> str:
         """Clean and truncate feedback."""
@@ -414,28 +411,30 @@ Return format: {{"grades": [...]}}
 
     def _grade_single_qa_pair(self, qa_pair: Dict, marking_guide: str) -> Dict:
         """Grade a single Q&A pair as fallback."""
+        max_score = qa_pair.get('max_score', 10.0)
+        
         try:
             if self.llm_service:
-                # Use LLM for single grading
-                system_prompt = """Grade this single answer on a scale of 0-100. Provide brief feedback.
+                system_prompt = f"""Grade this single answer on a scale of 0-{max_score}. Provide brief feedback.
 
 Return JSON format:
-{
-  "score": 85,
+{{
+  "score": 8.5,
+  "max_score": {max_score},
   "feedback": "Good answer but missing..."
-}"""
+}}"""
                 
                 question = qa_pair.get('question_text', qa_pair.get('question', ''))
                 answer = qa_pair.get('answer_text', qa_pair.get('student_answer', qa_pair.get('answer', '')))
                 
-                user_prompt = f"""Question: {question}
+                user_prompt = f"""Question: {question} (Max Score: {max_score} points)
 Student Answer: {answer}
 Marking Guide: {marking_guide[:500]}"""
                 
                 response = self.llm_service.generate_response(
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
-                    temperature=0.1
+                    temperature=0.0  # Changed from 0.1 to 0.0 for full determinism
                 )
                 
                 try:
@@ -444,10 +443,11 @@ Marking Guide: {marking_guide[:500]}"""
                 except json.JSONDecodeError:
                     pass
             
-            # Fallback to basic scoring
+            # Fallback to basic scoring (50% of max score)
             return {
                 'question_id': qa_pair.get('question_id', 'Unknown'),
-                'score': 50,  # Default middle score
+                'score': round(max_score * 0.5, 2),
+                'max_score': max_score,
                 'feedback': 'Automatic grading not available',
                 'question_text': qa_pair.get('question_text', qa_pair.get('question', '')),
                 'student_answer': qa_pair.get('answer_text', qa_pair.get('student_answer', qa_pair.get('answer', '')))
@@ -457,7 +457,8 @@ Marking Guide: {marking_guide[:500]}"""
             logger.error(f"Single Q&A grading failed: {str(e)}")
             return {
                 'question_id': qa_pair.get('question_id', 'Unknown'),
-                'score': 0,
+                'score': 0.0,
+                'max_score': max_score,
                 'feedback': f'Grading error: {str(e)}',
                 'question_text': qa_pair.get('question_text', qa_pair.get('question', '')),
                 'student_answer': qa_pair.get('answer_text', qa_pair.get('student_answer', qa_pair.get('answer', '')))
@@ -474,13 +475,13 @@ Marking Guide: {marking_guide[:500]}"""
                 'summary': {'total_questions': 0, 'average_score': 0}
             }
         
-        total_score = sum(grade['score'] for grade in grades)
-        max_possible = len(grades) * 100
+        total_score = sum(grade.get('score', 0) for grade in grades)
+        max_possible = sum(grade.get('max_score', 10.0) for grade in grades)
         percentage = (total_score / max_possible * 100) if max_possible > 0 else 0
         
         return {
-            'total_score': total_score,
-            'max_possible_score': max_possible,
+            'total_score': round(total_score, 2),
+            'max_possible_score': round(max_possible, 2),
             'percentage': round(percentage, 2),
             'letter_grade': self._calculate_letter_grade(percentage),
             'detailed_grades': grades,
@@ -524,11 +525,9 @@ Marking Guide: {marking_guide[:500]}"""
         """Optimized single submission grading with optional pre-mapped data."""
         try:
             with self.track_request("grade_optimized"):
-                # Use pre-mapped data if available, otherwise map first
                 if mapped_data and 'mappings' in mapped_data:
                     qa_pairs = mapped_data['mappings']
                 else:
-                    # Fall back to mapping if not provided
                     qa_pairs = self._get_mapped_questions(marking_guide, submission_content)
                 
                 if not qa_pairs:
@@ -574,7 +573,6 @@ Marking Guide: {marking_guide[:500]}"""
         self._grading_cache.clear()
         self._cache_timestamps.clear()
         logger.info("Grading service caches cleared")
-
 
 # Backward compatibility aliases
 GradingService = ConsolidatedGradingService

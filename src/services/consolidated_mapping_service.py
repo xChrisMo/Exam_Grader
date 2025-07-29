@@ -11,7 +11,6 @@ import time
 from src.services.base_service import BaseService, ServiceStatus
 from utils.logger import logger
 
-
 class ConsolidatedMappingService(BaseService):
     """Consolidated mapping service with enhanced functionality and base service integration."""
 
@@ -37,11 +36,9 @@ class ConsolidatedMappingService(BaseService):
         self.cache_size = cache_size
         self.cache_ttl = cache_ttl
         
-        # Cache for mapping results
         self._mapping_cache = {}
         self._cache_timestamps = {}
         
-        # Cache for guide type determination
         self._guide_type_cache = {}
         
         # Set initial status
@@ -115,7 +112,6 @@ class ConsolidatedMappingService(BaseService):
 
     def _cache_result(self, cache_key: str, result: Any) -> None:
         """Cache result with size limit."""
-        # Remove oldest entries if cache is full
         if len(self._mapping_cache) >= self.cache_size:
             oldest_key = min(self._cache_timestamps.keys(), 
                            key=lambda k: self._cache_timestamps[k])
@@ -137,7 +133,6 @@ class ConsolidatedMappingService(BaseService):
         try:
             with self.track_request("preprocess_content"):
                 if self.llm_service and hasattr(self.llm_service, 'preprocess_ocr_text'):
-                    # Use LLM service's OCR preprocessing if available
                     return self.llm_service.preprocess_ocr_text(content)
                 elif self.llm_service and hasattr(self.llm_service, 'generate_response'):
                     # Use general LLM preprocessing
@@ -233,7 +228,6 @@ You are a text cleaning expert. Clean and optimize the provided text by:
         try:
             with self.track_request("determine_guide_type"):
                 if not self.llm_service:
-                    # Default to questions if no LLM service
                     result = ("questions", 0.5)
                     self._guide_type_cache[cache_key] = result
                     return result
@@ -265,7 +259,6 @@ Output JSON format:
                         temperature=0.0
                     )
                 else:
-                    # Fallback for older LLM service interface
                     params = {
                         "model": self.llm_service.model,
                         "messages": [
@@ -309,26 +302,152 @@ Output JSON format:
             self._guide_type_cache[cache_key] = result
             return result
 
+    def _intelligent_truncate(self, content: str, max_chars: int) -> str:
+        """Truncate content at natural boundaries (sentences, questions) to preserve meaning."""
+        if len(content) <= max_chars:
+            return content
+        
+        # Try to truncate at natural boundaries
+        truncated = content[:max_chars]
+        
+        sentence_boundaries = [
+            truncated.rfind('.'),
+            truncated.rfind('?'),
+            truncated.rfind('!'),
+            truncated.rfind('\n\n'),  # Paragraph breaks
+        ]
+        
+        # Find the best boundary (latest position that keeps at least 80% of content)
+        min_keep = int(max_chars * 0.8)
+        best_boundary = -1
+        
+        for boundary in sentence_boundaries:
+            if boundary > min_keep:
+                best_boundary = max(best_boundary, boundary)
+        
+        if best_boundary > 0:
+            # Truncate at natural boundary
+            result = content[:best_boundary + 1]
+            logger.info(f"Intelligently truncated content from {len(content)} to {len(result)} chars at natural boundary")
+            return result
+        else:
+            # No good boundary found, truncate with indicator
+            result = content[:max_chars] + "... [CONTENT TRUNCATED - FULL TEXT NEEDED FOR COMPLETE ANALYSIS]"
+            logger.warning(f"Hard truncated content from {len(content)} to {max_chars} chars - may affect accuracy")
+            return result
+
     def _parse_json_response(self, response_text: str) -> Dict[str, Any]:
-        """Parse JSON response with fallback handling."""
+        """Parse JSON response with multiple strategies for improved reliability."""
+        if not response_text or not response_text.strip():
+            logger.warning("Empty response text provided for JSON parsing")
+            return {}
+        
+        # Strategy 1: Direct parsing
         try:
-            # Try direct JSON parsing first
-            return json.loads(response_text)
+            return json.loads(response_text.strip())
         except json.JSONDecodeError:
             pass
         
-        # Try to extract JSON from response
+        # Strategy 2: Extract JSON block with markdown formatting
         import re
-        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-        if json_match:
-            try:
-                return json.loads(json_match.group())
-            except json.JSONDecodeError:
-                pass
+        try:
+            json_block_match = re.search(r'```json\s*(\{.*?\})\s*```', response_text, re.DOTALL | re.IGNORECASE)
+            if json_block_match:
+                return json.loads(json_block_match.group(1))
+        except json.JSONDecodeError:
+            pass
         
-        # Return empty dict as fallback
-        logger.warning("Could not parse JSON response, using fallback")
+        # Strategy 3: Find first complete JSON object
+        try:
+            json_object = self._find_complete_json(response_text)
+            if json_object:
+                return json.loads(json_object)
+        except json.JSONDecodeError:
+            pass
+        
+        # Strategy 4: Extract JSON with broader pattern
+        try:
+            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response_text, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+        except json.JSONDecodeError:
+            pass
+        
+        # Strategy 5: Try to fix common JSON issues
+        try:
+            fixed_json = self._fix_common_json_issues(response_text)
+            if fixed_json:
+                return json.loads(fixed_json)
+        except json.JSONDecodeError:
+            pass
+        
+        logger.error(f"All JSON parsing strategies failed for response: {response_text[:200]}...")
         return {}
+
+    def _find_complete_json(self, text: str) -> Optional[str]:
+        """Find the first complete JSON object in text."""
+        import re
+        
+        start_pos = text.find('{')
+        if start_pos == -1:
+            return None
+        
+        # Count braces to find matching closing brace
+        brace_count = 0
+        in_string = False
+        escape_next = False
+        
+        for i, char in enumerate(text[start_pos:], start_pos):
+            if escape_next:
+                escape_next = False
+                continue
+                
+            if char == '\\':
+                escape_next = True
+                continue
+                
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+                
+            if not in_string:
+                if char == '{':
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        return text[start_pos:i+1]
+        
+        return None
+
+    def _fix_common_json_issues(self, text: str) -> Optional[str]:
+        """Attempt to fix common JSON formatting issues."""
+        import re
+        
+        # Extract potential JSON content
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if not json_match:
+            return None
+        
+        json_text = json_match.group()
+        
+        # Fix common issues
+        fixes = [
+            # Fix single quotes to double quotes
+            (r"'([^']*)':", r'"\1":'),
+            # Fix unquoted keys
+            (r'(\w+):', r'"\1":'),
+            # Fix trailing commas
+            (r',\s*}', '}'),
+            (r',\s*]', ']'),
+            # Fix missing quotes around string values
+            (r':\s*([^",\[\]{}]+)(?=\s*[,}])', r': "\1"'),
+        ]
+        
+        for pattern, replacement in fixes:
+            json_text = re.sub(pattern, replacement, json_text)
+        
+        return json_text
 
     def map_submission_to_guide(
         self,
@@ -399,10 +518,10 @@ Rules:
 """
             
             user_prompt = f"""MARKING GUIDE (Questions):
-{guide_clean[:1500]}
+{self._intelligent_truncate(guide_clean, 1500)}
 
 STUDENT SUBMISSION (Answers):
-{submission_clean[:2000]}
+{self._intelligent_truncate(submission_clean, 2000)}
 
 Return JSON format:
 {{
@@ -416,11 +535,11 @@ Return JSON format:
   ]
 }}"""
 
-            response_text = self.llm_service.generate_response(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                temperature=0.1
-            )
+                    response_text = self.llm_service.generate_response(
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                        temperature=0.0  # Changed from 0.1 to 0.0 for full determinism
+                    )
 
             return self._parse_json_response(response_text)
 
@@ -498,7 +617,6 @@ Return JSON format:
         self._cache_timestamps.clear()
         self._guide_type_cache.clear()
         logger.info("Mapping service caches cleared")
-
 
 # Backward compatibility aliases
 MappingService = ConsolidatedMappingService

@@ -28,30 +28,26 @@ class StartupValidator:
         errors = []
         
         # Check main app file
-        app_file = self.project_root / "webapp/exam_grader_app.py"
+        app_file = self.project_root / "webapp/app.py"
         if not app_file.exists():
-            errors.append("Main application file missing: webapp/exam_grader_app.py")
+            errors.append("Main application file missing: webapp/app.py")
             return False, errors
         
         try:
             app_content = app_file.read_text()
             
-            # Check for batch processing functions
             if "process_batch_submission" not in app_content:
                 errors.append("Missing function: process_batch_submission")
             
             if "process_single_submission" not in app_content:
                 errors.append("Missing function: process_single_submission")
             
-            # Check for correct template usage
             if "upload_submission_multiple.html" not in app_content:
                 errors.append("Not using multiple file upload template")
             
-            # Check for BatchProcessingService import/usage
             if "BatchProcessingService" not in app_content:
                 errors.append("BatchProcessingService not integrated")
             
-            # Check for parse function import
             if "parse_student_submission" not in app_content:
                 errors.append("parse_student_submission not imported")
             
@@ -76,7 +72,6 @@ class StartupValidator:
             try:
                 template_content = multiple_template.read_text()
                 
-                # Check for batch processing elements
                 required_elements = [
                     'name="uploadMode"',
                     'id="batch-options"',
@@ -112,7 +107,6 @@ class StartupValidator:
         try:
             service_content = service_file.read_text()
             
-            # Check for required methods
             required_methods = [
                 "process_files_batch",
                 "_process_parallel",
@@ -124,7 +118,6 @@ class StartupValidator:
                 if f"def {method}" not in service_content:
                     errors.append(f"Missing method in batch service: {method}")
             
-            # Check for proper imports
             if "from werkzeug.datastructures import FileStorage" not in service_content:
                 errors.append("Missing FileStorage import in batch service")
                 
@@ -186,35 +179,37 @@ class StartupValidator:
     
     def print_validation_report(self, results: Dict[str, any]):
         """Print a formatted validation report."""
-        print("\n" + "="*60)
-        print("🔍 STARTUP VALIDATION REPORT")
-        print("="*60)
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info("\n" + "="*60)
+        logger.info("🔍 STARTUP VALIDATION REPORT")
+        logger.info("="*60)
         
         if results["overall_valid"]:
-            print("✅ ALL VALIDATIONS PASSED")
-            print("🚀 Application is ready to start with batch processing functionality")
+            logger.info("✅ ALL VALIDATIONS PASSED")
+            logger.info("🚀 Application is ready to start with batch processing functionality")
         else:
-            print("❌ VALIDATION FAILURES DETECTED")
-            print(f"📊 Total errors: {results['total_errors']}")
+            logger.error("❌ VALIDATION FAILURES DETECTED")
+            logger.error(f"📊 Total errors: {results['total_errors']}")
         
-        print("\n📋 DETAILED RESULTS:")
-        print("-" * 40)
+        logger.info("\n📋 DETAILED RESULTS:")
+        logger.info("-" * 40)
         
         for validation_name, validation_result in results["validations"].items():
             status = "✅" if validation_result["valid"] else "❌"
-            print(f"{status} {validation_name.replace('_', ' ').title()}")
+            logger.info(f"{status} {validation_name.replace('_', ' ').title()}")
             
             if validation_result["errors"]:
                 for error in validation_result["errors"]:
-                    print(f"   • {error}")
+                    logger.error(f"   • {error}")
         
         if not results["overall_valid"]:
-            print("\n⚠️ CRITICAL ISSUES FOUND:")
-            print("The application may not function correctly with batch processing.")
-            print("Please fix the above issues before starting the application.")
+            logger.warning("\n⚠️ CRITICAL ISSUES FOUND:")
+            logger.warning("The application may not function correctly with batch processing.")
+            logger.warning("Please fix the above issues before starting the application.")
         
-        print("\n" + "="*60)
-
+        logger.info("\n" + "="*60)
 
 def validate_on_startup(project_root: str = None) -> bool:
     """Run startup validation and return success status."""
@@ -222,7 +217,6 @@ def validate_on_startup(project_root: str = None) -> bool:
     results = validator.validate_all()
     validator.print_validation_report(results)
     return results["overall_valid"]
-
 
 if __name__ == "__main__":
     # Run validation when called directly

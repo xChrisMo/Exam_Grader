@@ -8,7 +8,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
-
 class SchemaMigration:
     """Represents a single database schema migration."""
     
@@ -20,7 +19,6 @@ class SchemaMigration:
     
     def __str__(self):
         return f"Migration {self.version}: {self.description}"
-
 
 class MigrationManager:
     """Enhanced migration manager with schema versioning."""
@@ -117,7 +115,6 @@ class MigrationManager:
             """
         ))
         
-        # Migration 004: Add advanced composite indexes for complex queries
         migrations.append(SchemaMigration(
             version="004",
             description="Add advanced composite indexes for complex query optimization",

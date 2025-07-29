@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from utils.logger import logger
 from src.parsing.parse_submission import DocumentParser
 
-
 @dataclass
 class MarkingGuide:
     """Class representing a parsed marking guide."""
@@ -21,7 +20,6 @@ class MarkingGuide:
     file_type: str
     title: Optional[str] = None
     extraction_method: Optional[str] = None
-
 
 def parse_marking_guide(file_path: str) -> Tuple[Optional[MarkingGuide], Optional[str]]:
     """Parse a marking guide from a file.
@@ -38,7 +36,6 @@ def parse_marking_guide(file_path: str) -> Tuple[Optional[MarkingGuide], Optiona
         filename = os.path.basename(file_path)
         logger.info(f"📄 Processing Word document: {filename}")
         
-        # Check if file exists
         if not os.path.exists(file_path):
             error_msg = f"File not found: {file_path}"
             logger.error(f"✗ {error_msg}")
@@ -47,13 +44,11 @@ def parse_marking_guide(file_path: str) -> Tuple[Optional[MarkingGuide], Optiona
         # Get file type
         mime_type = DocumentParser.get_file_type(file_path)
         
-        # Extract file type from MIME type or file extension
         if mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
             file_type = "docx"
         elif mime_type == "application/msword":
             file_type = "doc"
         else:
-            # Fallback to extension if MIME type is not recognized
             file_type = os.path.splitext(file_path)[1].lower().lstrip('.')
             if file_type not in ['docx', 'doc']:
                 error_msg = f"Only Word documents are supported. Found: {mime_type}"
@@ -64,7 +59,6 @@ def parse_marking_guide(file_path: str) -> Tuple[Optional[MarkingGuide], Optiona
         raw_content = ""
         extraction_method = "unknown"
         
-        # Extract text from Word document (no OCR processing)
         try:
             raw_content = DocumentParser.extract_text_from_docx(file_path)
             extraction_method = f"{file_type}_text_extraction"

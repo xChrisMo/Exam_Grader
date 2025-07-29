@@ -105,7 +105,7 @@
   <!-- Main Layout -->
   <div class="flex h-full">
     <!-- Sidebar -->
-    <div class="hidden lg:flex lg:flex-shrink-0">
+    <div id="sidebar" class="hidden lg:flex lg:flex-shrink-0">
       <div class="flex flex-col w-64">
         <div class="flex flex-col flex-grow bg-white border-r border-gray-200 pt-5 pb-4 overflow-y-auto">
           <!-- Logo -->
@@ -129,10 +129,10 @@
 
           <!-- Navigation -->
           <nav class="mt-8 flex-1 px-2 space-y-1">
-            <a href="{{ url_for('dashboard') }}"
-              class="nav-link {% if request.endpoint == 'dashboard' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+            <a href="{{ url_for('main.dashboard') }}"
+              class="nav-link {% if request.endpoint == 'main.dashboard' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
               <svg
-                class="{% if request.endpoint == 'dashboard' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                class="{% if request.endpoint == 'main.dashboard' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
@@ -142,10 +142,10 @@
               <span data-i18n="nav_dashboard">Dashboard</span>
             </a>
 
-            <a href="{{ url_for('upload_guide') }}"
-              class="nav-link {% if request.endpoint == 'upload_guide' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+            <a href="{{ url_for('main.upload_guide') }}"
+              class="nav-link {% if request.endpoint == 'main.upload_guide' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
               <svg
-                class="{% if request.endpoint == 'upload_guide' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                class="{% if request.endpoint == 'main.upload_guide' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -153,10 +153,10 @@
               <span data-i18n="nav_create_guide">Create Guide</span>
             </a>
 
-            <a href="{{ url_for('marking_guides') }}"
-              class="nav-link {% if request.endpoint in ['marking_guides', 'create_guide'] %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+            <a href="{{ url_for('main.guides') }}"
+              class="nav-link {% if request.endpoint in ['main.guides', 'main.create_guide'] %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
               <svg
-                class="{% if request.endpoint in ['marking_guides', 'create_guide'] %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                class="{% if request.endpoint in ['main.guides', 'main.create_guide'] %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -164,38 +164,38 @@
               <span data-i18n="nav_view_guides">View Guides</span>
             </a>
 
-            <a href="{{ url_for('upload_submission') }}"
-              class="nav-link {% if request.endpoint == 'upload_submission' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+            <a href="{{ url_for('main.upload_submission') }}"
+              class="nav-link {% if request.endpoint == 'main.upload_submission' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
               <svg
-                class="{% if request.endpoint == 'upload_submission' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                class="{% if request.endpoint == 'main.upload_submission' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
-              <span data-i18n="nav_submissions">Submissions</span>
+              <span data-i18n="nav_upload_submission">Upload Submission</span>
             </a>
 
-            {% if session.get('submissions') %}
-            <a href="{{ url_for('view_submissions') }}"
-              class="nav-link {% if request.endpoint == 'view_submissions' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+            <a href="{{ url_for('main.submissions') }}"
+              class="nav-link {% if request.endpoint == 'main.submissions' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
               <svg
-                class="{% if request.endpoint == 'view_submissions' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                class="{% if request.endpoint == 'main.submissions' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <span data-i18n="nav_submissions">Submissions</span>
+              <span data-i18n="nav_view_submissions">View Submissions</span>
+              {% if session.get('total_submissions', 0) > 0 %}
               <span class="ml-auto bg-primary-100 text-primary-600 py-0.5 px-2 rounded-full text-xs font-medium">
                 {{ session.get('total_submissions', 0) }}
               </span>
+              {% endif %}
             </a>
-            {% endif %}
 
             <!-- Enhanced Processing -->
-            <a href="{{ url_for('enhanced_processing') }}"
-              class="nav-link {% if request.endpoint == 'enhanced_processing' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+            <a href="{{ url_for('processing.unified_processing') }}"
+              class="nav-link {% if request.endpoint == 'processing.unified_processing' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
               <svg
-                class="{% if request.endpoint == 'enhanced_processing' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                class="{% if request.endpoint == 'processing.unified_processing' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
@@ -215,10 +215,10 @@
             </a>
 
             {% if session.get('last_grading_result') %}
-            <a href="{{ url_for('view_results') }}"
-              class="nav-link {% if request.endpoint == 'view_results' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+            <a href="{{ url_for('main.results') }}"
+              class="nav-link {% if request.endpoint == 'main.results' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
               <svg
-                class="{% if request.endpoint == 'view_results' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                class="{% if request.endpoint == 'main.results' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -228,10 +228,10 @@
             {% endif %}
 
             <!-- Settings -->
-            <a href="{{ url_for('settings') }}"
-              class="nav-link {% if request.endpoint == 'settings' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+            <a href="{{ url_for('main.settings') }}"
+              class="nav-link {% if request.endpoint == 'main.settings' %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md">
               <svg
-                class="{% if request.endpoint == 'settings' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
+                class="{% if request.endpoint == 'main.settings' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -301,10 +301,10 @@
             </div>
 
             <!-- User Menu -->
-            {% if session.get('logged_in') %}
+            {% if current_user.is_authenticated %}
             <div class="relative">
               <div class="flex items-center space-x-3">
-                <span class="text-sm text-gray-700">{{ session.get('username', 'User') }}</span>
+                <span class="text-sm text-gray-700">{{ current_user.username }}</span>
                 <div class="relative">
                   <button type="button"
                     class="bg-white rounded-full flex text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
@@ -326,7 +326,7 @@
                     <div class="py-1" role="none">
                       <a href="{{ url_for('auth.profile') }}"
                         class="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Your Profile</a>
-                      <a href="{{ url_for('settings') }}"
+                      <a href="{{ url_for('main.settings') }}"
                         class="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Settings</a>
                       <div class="border-t border-gray-100"></div>
                       <a href="{{ url_for('auth.logout') }}"
@@ -393,9 +393,61 @@
     });
   </script>
 
-  <!-- User Menu JavaScript -->
+  <!-- Mobile Menu JavaScript -->
   <script>
     document.addEventListener('DOMContentLoaded', function () {
+      // Mobile menu toggle
+      const mobileMenuButton = document.querySelector('button[class*="lg:hidden"]');
+      const sidebar = document.getElementById('sidebar');
+      
+      if (mobileMenuButton && sidebar) {
+        mobileMenuButton.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // Toggle mobile sidebar visibility
+          if (sidebar.classList.contains('hidden')) {
+            sidebar.classList.remove('hidden');
+            sidebar.classList.add('fixed', 'inset-0', 'z-50', 'lg:relative', 'lg:inset-auto');
+            // Add backdrop
+            const backdrop = document.createElement('div');
+            backdrop.className = 'fixed inset-0 bg-gray-600 bg-opacity-75 z-40 lg:hidden';
+            backdrop.id = 'mobile-sidebar-backdrop';
+            document.body.appendChild(backdrop);
+          } else {
+            sidebar.classList.add('hidden');
+            sidebar.classList.remove('fixed', 'inset-0', 'z-50', 'lg:relative', 'lg:inset-auto');
+            // Remove backdrop
+            const backdrop = document.getElementById('mobile-sidebar-backdrop');
+            if (backdrop) {
+              backdrop.remove();
+            }
+          }
+        });
+
+        // Close mobile menu when clicking backdrop
+        document.addEventListener('click', function (e) {
+          if (e.target.id === 'mobile-sidebar-backdrop') {
+            sidebar.classList.add('hidden');
+            sidebar.classList.remove('fixed', 'inset-0', 'z-50', 'lg:relative', 'lg:inset-auto');
+            e.target.remove();
+          }
+        });
+
+        // Close mobile menu on window resize to desktop
+        window.addEventListener('resize', function () {
+          if (window.innerWidth >= 1024) {
+            sidebar.classList.add('hidden', 'lg:flex');
+            sidebar.classList.remove('fixed', 'inset-0', 'z-50', 'lg:relative', 'lg:inset-auto');
+            const backdrop = document.getElementById('mobile-sidebar-backdrop');
+            if (backdrop) {
+              backdrop.remove();
+            }
+          }
+        });
+      }
+
+      // User menu functionality
       const userMenuButton = document.getElementById('user-menu-button');
       const userMenu = document.getElementById('user-menu');
 
@@ -444,8 +496,16 @@
     // Initialize ExamGrader config from server data
     function initializeExamGraderConfig() {
       if (typeof ExamGrader !== 'undefined' && ExamGrader.config) {
-        ExamGrader.config.maxFileSize = {{ max_file_size }};
+        // Set max file size with fallback
+        ExamGrader.config.maxFileSize = {{ max_file_size if max_file_size is defined else 104857600 }};
+        
+        // Set allowed file types with fallback
+        {% if allowed_types is defined %}
         ExamGrader.config.allowedFileTypes = {{ allowed_types | tojson | safe }};
+        {% else %}
+        ExamGrader.config.allowedFileTypes = [".pdf", ".docx", ".doc", ".txt", ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".gif"];
+        {% endif %}
+        
         console.log('ExamGrader config initialized:', ExamGrader.config);
       } else {
         // Retry after a short delay if ExamGrader is not ready

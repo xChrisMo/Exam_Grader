@@ -11,7 +11,6 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-
 class SQLiteOptimizer:
     """Handles SQLite database optimizations and WAL mode setup."""
     
@@ -33,7 +32,6 @@ class SQLiteOptimizer:
             # Convert to absolute path
             db_path = Path(database_path).resolve()
             
-            # Create directory if it doesn't exist
             db_path.parent.mkdir(parents=True, exist_ok=True)
             
             # Connect to database
@@ -75,13 +73,11 @@ class SQLiteOptimizer:
     def _apply_performance_optimizations(cursor: sqlite3.Cursor):
         """Apply additional SQLite performance optimizations."""
         try:
-            # Set synchronous mode to NORMAL for better performance with WAL
             cursor.execute("PRAGMA synchronous=NORMAL;")
             
             # Increase cache size (negative value means KB, positive means pages)
             cursor.execute("PRAGMA cache_size=-64000;")  # 64MB cache
             
-            # Set temp store to memory for better performance
             cursor.execute("PRAGMA temp_store=MEMORY;")
             
             # Set busy timeout to 30 seconds
@@ -131,7 +127,6 @@ class SQLiteOptimizer:
             cursor.execute("PRAGMA foreign_keys;")
             status['foreign_keys'] = cursor.fetchone()[0]
             
-            # Check if WAL files exist
             db_path = Path(database_path)
             wal_file = db_path.with_suffix(db_path.suffix + '-wal')
             shm_file = db_path.with_suffix(db_path.suffix + '-shm')
@@ -166,7 +161,6 @@ class SQLiteOptimizer:
                 logger.info("Not a SQLite database, skipping optimizations")
                 return True
             
-            # Extract file path from SQLite URL
             db_path = database_url.replace('sqlite:///', '')
             
             logger.info(f"Optimizing SQLite database: {db_path}")
@@ -184,7 +178,6 @@ class SQLiteOptimizer:
         except Exception as e:
             logger.error(f"Failed to optimize database on startup: {str(e)}")
             return False
-
 
 def initialize_sqlite_optimizations(database_url: str) -> bool:
     """

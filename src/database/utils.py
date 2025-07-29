@@ -28,7 +28,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-
 class DatabaseUtils:
     """Utility class for database operations."""
     
@@ -190,7 +189,6 @@ class DatabaseUtils:
         try:
             from .models import Submission, db
 
-            # Use bulk update for better performance
             updated = Submission.query.filter(
                 Submission.id.in_(submission_ids)
             ).update(

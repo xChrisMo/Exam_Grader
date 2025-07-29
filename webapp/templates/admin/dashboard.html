@@ -1,0 +1,160 @@
+{% extends "layout.html" %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">
+                <i class="fas fa-tachometer-alt"></i> Admin Dashboard
+            </h1>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ stats.total_users or 0 }}</h4>
+                            <p class="mb-0">Total Users</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-users fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ stats.total_guides or 0 }}</h4>
+                            <p class="mb-0">Marking Guides</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-book fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ stats.total_submissions or 0 }}</h4>
+                            <p class="mb-0">Submissions</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-file-alt fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ stats.processed_submissions or 0 }}</h4>
+                            <p class="mb-0">Processed</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-check-circle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-clock"></i> Recent Submissions</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_submissions %}
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Student</th>
+                                        <th>File</th>
+                                        <th>Status</th>
+                                        <th>Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for submission in recent_submissions %}
+                                    <tr>
+                                        <td>{{ submission.student_name or 'Unknown' }}</td>
+                                        <td>{{ submission.filename }}</td>
+                                        <td>
+                                            <span class="badge badge-{% if submission.processing_status == 'completed' %}success{% elif submission.processing_status == 'failed' %}danger{% else %}warning{% endif %}">
+                                                {{ submission.processing_status.title() }}
+                                            </span>
+                                        </td>
+                                        <td>{{ submission.created_at.strftime('%Y-%m-%d %H:%M') if submission.created_at else 'N/A' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted">No recent submissions</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-heartbeat"></i> System Health</h5>
+                </div>
+                <div class="card-body">
+                    {% if service_health %}
+                        <div class="mb-3">
+                            <strong>Overall Status:</strong>
+                            <span class="badge badge-{% if service_health.overall_status == 'healthy' %}success{% elif service_health.overall_status == 'warning' %}warning{% else %}danger{% endif %}">
+                                {{ service_health.overall_status.title() }}
+                            </span>
+                        </div>
+                        {% if service_health.services %}
+                            {% for service, status in service_health.services.items() %}
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>{{ service.title() }}:</span>
+                                <span class="badge badge-{% if status == 'healthy' %}success{% elif status == 'warning' %}warning{% else %}danger{% endif %}">
+                                    {{ status.title() }}
+                                </span>
+                            </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% else %}
+                        <p class="text-muted">Health information unavailable</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh dashboard every 30 seconds
+setInterval(function() {
+    location.reload();
+}, 30000);
+</script>
+{% endblock %}

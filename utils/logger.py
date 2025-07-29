@@ -13,7 +13,6 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-# Try to import comprehensive logging system
 try:
     from src.logging import get_application_logger, setup_application_logging
     from src.logging.comprehensive_logger import ComprehensiveLogger, LogLevel
@@ -22,7 +21,6 @@ except ImportError:
     COMPREHENSIVE_LOGGING_AVAILABLE = False
     ComprehensiveLogger = None
     LogLevel = None
-
 
 def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
     """
@@ -49,9 +47,7 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
     # Fall back to basic logging configuration
     logger = logging.getLogger(name)
 
-    # Only configure if it hasn't been configured before
     if not logger.handlers:
-        # Set log level from environment or default to INFO
         log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 
         # Validate log level
@@ -93,7 +89,6 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
                     encoding='utf-8'
                 )
             except Exception as e:
-                # Fallback to basic file handler if rotation fails
                 temp_logger = logging.getLogger("setup_fallback")
                 temp_logger.warning(f"Failed to create rotating file handler: {e}, using basic file handler")
                 file_handler = logging.FileHandler(str(log_file), mode='a', delay=True, encoding='utf-8')
@@ -114,7 +109,6 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
         logger.propagate = False
 
     return logger
-
 
 class Logger:
     """Enhanced logger with additional features."""
@@ -238,7 +232,6 @@ class Logger:
             ) * 100
             self.info(f"  Cache Hit Rate: {cache_hit_rate:.2f}%")
 
-    # Keep existing specialized logging methods for backward compatibility
     def log_error(
         self, error_type: str, message: str, context: Optional[Dict[str, Any]] = None
     ) -> None:
@@ -345,7 +338,6 @@ class Logger:
         else:
             self.log_metric("errors")
             self.logger.error(f"OCR failed on {file_path}")
-
 
 # Create default logger instance
 logger = Logger()

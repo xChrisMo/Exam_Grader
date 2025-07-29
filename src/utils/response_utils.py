@@ -13,11 +13,9 @@ from ..models.api_responses import (
 )
 from ..models.validation import ValidationResult, ValidationError
 
-
 def generate_request_id() -> str:
     """Generate a unique request ID."""
     return str(uuid.uuid4())
-
 
 def get_processing_time() -> float:
     """Get processing time from request start."""
@@ -26,7 +24,6 @@ def get_processing_time() -> float:
         return (time.time() - start_time) * 1000  # Convert to milliseconds
     return None
 
-
 def create_metadata(request_id: str = None, warnings: List[str] = None) -> APIMetadata:
     """Create API metadata with request tracking."""
     return APIMetadata(
@@ -34,7 +31,6 @@ def create_metadata(request_id: str = None, warnings: List[str] = None) -> APIMe
         processing_time_ms=get_processing_time(),
         warnings=warnings or []
     )
-
 
 def standardize_response(func: Callable) -> Callable:
     """Decorator to standardize API responses."""
@@ -95,7 +91,6 @@ def standardize_response(func: Callable) -> Callable:
     
     return wrapper
 
-
 def success_response(data: Any = None, message: str = None, status_code: int = 200) -> Tuple[Dict[str, Any], int]:
     """Create a standardized success response."""
     response = APIResponse.success(
@@ -104,7 +99,6 @@ def success_response(data: Any = None, message: str = None, status_code: int = 2
         metadata=create_metadata(getattr(g, 'request_id', None))
     )
     return response.to_dict(), status_code
-
 
 def error_response(
     message: str, 
@@ -122,7 +116,6 @@ def error_response(
     )
     response.metadata = create_metadata(getattr(g, 'request_id', None))
     return response.to_dict(), status_code
-
 
 def validation_error_response(
     validation_result: ValidationResult,
@@ -155,7 +148,6 @@ def validation_error_response(
     
     return response.to_dict(), status_code
 
-
 def paginated_response(
     items: List[Any],
     page: int = 1,
@@ -179,7 +171,6 @@ def paginated_response(
     
     return response.to_dict(), status_code
 
-
 def loading_response(
     operation_id: str,
     message: str = "Processing...",
@@ -196,7 +187,6 @@ def loading_response(
     
     return response.to_dict(), status_code
 
-
 def not_found_response(resource: str = "Resource") -> Tuple[Dict[str, Any], int]:
     """Create a standardized not found response."""
     return error_response(
@@ -204,7 +194,6 @@ def not_found_response(resource: str = "Resource") -> Tuple[Dict[str, Any], int]
         error_code=ErrorCode.NOT_FOUND,
         status_code=404
     )
-
 
 def unauthorized_response(message: str = "Authentication required") -> Tuple[Dict[str, Any], int]:
     """Create a standardized unauthorized response."""
@@ -214,7 +203,6 @@ def unauthorized_response(message: str = "Authentication required") -> Tuple[Dic
         status_code=401
     )
 
-
 def forbidden_response(message: str = "Access denied") -> Tuple[Dict[str, Any], int]:
     """Create a standardized forbidden response."""
     return error_response(
@@ -222,7 +210,6 @@ def forbidden_response(message: str = "Access denied") -> Tuple[Dict[str, Any], 
         error_code=ErrorCode.AUTHORIZATION_ERROR,
         status_code=403
     )
-
 
 def service_unavailable_response(service: str = "Service") -> Tuple[Dict[str, Any], int]:
     """Create a standardized service unavailable response."""
@@ -232,7 +219,6 @@ def service_unavailable_response(service: str = "Service") -> Tuple[Dict[str, An
         status_code=503
     )
 
-
 def rate_limit_response(message: str = "Rate limit exceeded") -> Tuple[Dict[str, Any], int]:
     """Create a standardized rate limit response."""
     return error_response(
@@ -240,7 +226,6 @@ def rate_limit_response(message: str = "Rate limit exceeded") -> Tuple[Dict[str,
         error_code=ErrorCode.RATE_LIMIT_EXCEEDED,
         status_code=429
     )
-
 
 def processing_error_response(
     message: str = "Processing failed",
@@ -253,7 +238,6 @@ def processing_error_response(
         status_code=422,
         details=details
     )
-
 
 def handle_service_errors(func: Callable) -> Callable:
     """Decorator to handle common service errors."""
@@ -284,7 +268,6 @@ def handle_service_errors(func: Callable) -> Callable:
     
     return wrapper
 
-
 def extract_pagination_params(default_per_page: int = 20, max_per_page: int = 100) -> Tuple[int, int]:
     """Extract and validate pagination parameters from request."""
     try:
@@ -294,13 +277,11 @@ def extract_pagination_params(default_per_page: int = 20, max_per_page: int = 10
     except (ValueError, TypeError):
         return 1, default_per_page
 
-
 def format_datetime(dt: datetime) -> str:
     """Format datetime for API responses."""
     if dt:
         return dt.isoformat()
     return None
-
 
 def sanitize_response_data(data: Any) -> Any:
     """Sanitize data for JSON serialization."""
@@ -315,7 +296,6 @@ def sanitize_response_data(data: Any) -> Any:
         return sanitize_response_data(data.__dict__)
     else:
         return data
-
 
 def create_error_response(message: str, error_code: str = None, status_code: int = 500, details: Dict[str, Any] = None) -> Tuple[Dict[str, Any], int]:
     """Create a standardized error response.

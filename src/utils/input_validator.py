@@ -6,7 +6,6 @@ user inputs, and API requests to prevent security vulnerabilities.
 """
 from typing import Dict, Union
 
-
 try:
     import magic
     MAGIC_AVAILABLE = True
@@ -23,7 +22,6 @@ except ImportError:
     import logging
     logger = logging.getLogger(__name__)
 
-
 @dataclass
 class ValidationResult:
     """Result of input validation."""
@@ -31,7 +29,6 @@ class ValidationResult:
     message: str
     details: Dict[str, any] = None
     risk_level: str = "low"  # low, medium, high, critical
-
 
 class InputValidator:
     """
@@ -96,7 +93,6 @@ class InputValidator:
         try:
             file_path = Path(file_path)
             
-            # Check if file exists
             if not file_path.exists():
                 return ValidationResult(
                     is_valid=False,
@@ -124,12 +120,10 @@ class InputValidator:
             if not mime_result.is_valid:
                 return mime_result
             
-            # Scan file content for dangerous patterns
             content_result = self.scan_file_content(file_path)
             if not content_result.is_valid:
                 return content_result
             
-            # Calculate file hash for integrity
             file_hash = self._calculate_file_hash(file_path)
             
             return ValidationResult(
@@ -178,7 +172,6 @@ class InputValidator:
                     risk_level="medium"
                 )
             
-            # Check for dangerous characters
             dangerous_chars = ['<', '>', ':', '"', '|', '?', '*', '\0']
             for char in dangerous_chars:
                 if char in filename:
@@ -188,7 +181,6 @@ class InputValidator:
                         risk_level="high"
                     )
             
-            # Check for path traversal attempts
             if '..' in filename or filename.startswith('/') or filename.startswith('\\'):
                 return ValidationResult(
                     is_valid=False,
@@ -196,7 +188,6 @@ class InputValidator:
                     risk_level="critical"
                 )
             
-            # Check for reserved names (Windows)
             reserved_names = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 
                             'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 
                             'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9']
@@ -240,7 +231,6 @@ class InputValidator:
             # Get file extension
             extension = file_path.suffix.lower().lstrip('.')
             
-            # Check if extension is allowed
             if extension not in self.allowed_file_types:
                 return ValidationResult(
                     is_valid=False,
@@ -254,7 +244,6 @@ class InputValidator:
                 try:
                     mime_type = magic.from_file(str(file_path), mime=True)
                 except Exception:
-                    # Fallback if python-magic fails
                     logger.warning("python-magic failed, skipping MIME type validation")
                     return ValidationResult(
                         is_valid=True,
@@ -263,7 +252,6 @@ class InputValidator:
                         risk_level="low"
                     )
             else:
-                # Fallback if python-magic is not available
                 logger.warning("python-magic not available, skipping MIME type validation")
                 return ValidationResult(
                     is_valid=True,
@@ -272,7 +260,6 @@ class InputValidator:
                     risk_level="low"
                 )
             
-            # Check if MIME type matches allowed types for extension
             allowed_mimes = self.allowed_file_types[extension]
             if mime_type not in allowed_mimes:
                 return ValidationResult(
@@ -320,7 +307,6 @@ class InputValidator:
                     risk_level="low"
                 )
             
-            # Read file content (limit to first 1MB for performance)
             max_scan_size = 1024 * 1024  # 1MB
             try:
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -330,7 +316,6 @@ class InputValidator:
                 with open(file_path, 'r', encoding='latin-1', errors='ignore') as f:
                     content = f.read(max_scan_size)
             
-            # Scan for dangerous patterns
             detected_patterns = []
             for pattern in self.dangerous_patterns:
                 if pattern in content.lower():
@@ -390,7 +375,6 @@ class InputValidator:
                     risk_level="medium"
                 )
             
-            # Scan for dangerous patterns
             detected_patterns = []
             for pattern in self.dangerous_patterns:
                 if pattern in text.lower():
@@ -433,7 +417,6 @@ class InputValidator:
         except Exception as e:
             logger.error(f"Hash calculation error: {str(e)}")
             return "unknown"
-
 
 # Global validator instance
 input_validator = InputValidator()

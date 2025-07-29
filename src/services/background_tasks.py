@@ -35,7 +35,6 @@ celery_app.conf.update(
     worker_max_tasks_per_child=1000,
 )
 
-
 class BackgroundTaskService:
     """Service for managing background tasks and job processing."""
     
@@ -68,10 +67,8 @@ class BackgroundTaskService:
             'info': task.info if hasattr(task, 'info') else None,
         }
 
-
 # Global instance
 background_service = BackgroundTaskService()
-
 
 @celery_app.task(bind=True, name='process_ocr')
 def process_ocr_task(self, submission_id: str, file_path: str, user_id: str):
@@ -86,7 +83,6 @@ def process_ocr_task(self, submission_id: str, file_path: str, user_id: str):
     try:
         logger.info(f"Starting OCR processing for submission {submission_id}")
         
-        # Initialize services if needed
         if not background_service.ocr_service:
             background_service.init_services()
         
@@ -115,7 +111,7 @@ def process_ocr_task(self, submission_id: str, file_path: str, user_id: str):
         
         # Update submission with extracted text
         with current_app.app_context():
-            submission = Submission.query.get(submission_id)
+            submission = db.session.get(Submission, submission_id)
             if submission:
                 submission.content_text = extracted_text
                 submission.processing_status = 'ocr_completed'
@@ -143,7 +139,7 @@ def process_ocr_task(self, submission_id: str, file_path: str, user_id: str):
         
         # Update submission status
         with current_app.app_context():
-            submission = Submission.query.get(submission_id)
+            submission = db.session.get(Submission, submission_id)
             if submission:
                 submission.processing_status = 'failed'
                 submission.processing_error = str(e)
@@ -154,9 +150,7 @@ def process_ocr_task(self, submission_id: str, file_path: str, user_id: str):
             user_id, os.path.basename(file_path), 'failed', 0.0, f"OCR processing failed: {str(e)}"
         )
         
-        # Re-raise for Celery to handle
         raise Exception({"error": "OCR_FAILED", "message": str(e)})
-
 
 @celery_app.task(bind=True, name='process_llm_grading')
 def process_llm_grading_task(self, submission_id: str, marking_guide_id: str, user_id: str, num_questions: int = None):
@@ -172,7 +166,6 @@ def process_llm_grading_task(self, submission_id: str, marking_guide_id: str, us
     try:
         logger.info(f"Starting LLM grading for submission {submission_id}")
         
-        # Initialize services if needed
         if not background_service.llm_service:
             background_service.init_services()
         
@@ -184,8 +177,8 @@ def process_llm_grading_task(self, submission_id: str, marking_guide_id: str, us
         
         # Get submission and marking guide
         with current_app.app_context():
-            submission = Submission.query.get(submission_id)
-            marking_guide = MarkingGuide.query.get(marking_guide_id)
+            submission = db.session.get(Submission, submission_id)
+            marking_guide = db.session.get(MarkingGuide, marking_guide_id)
             
             if not submission:
                 raise Exception(f"Submission {submission_id} not found")
@@ -301,7 +294,7 @@ def process_llm_grading_task(self, submission_id: str, marking_guide_id: str, us
         
         # Update submission status
         with current_app.app_context():
-            submission = Submission.query.get(submission_id)
+            submission = db.session.get(Submission, submission_id)
             if submission:
                 submission.processing_status = 'failed'
                 submission.processing_error = str(e)
@@ -312,9 +305,7 @@ def process_llm_grading_task(self, submission_id: str, marking_guide_id: str, us
             user_id, filename if 'filename' in locals() else 'Unknown', 'failed', 0.0, f"LLM grading failed: {str(e)}"
         )
         
-        # Re-raise for Celery to handle
         raise Exception({"error": "LLM_GRADING_FAILED", "message": str(e)})
-
 
 @celery_app.task(bind=True, name='process_batch_grading')
 def process_batch_grading_task(self, submission_ids: List[str], marking_guide_id: str, user_id: str, num_questions: int = None):
@@ -330,7 +321,6 @@ def process_batch_grading_task(self, submission_ids: List[str], marking_guide_id
     try:
         logger.info(f"Starting batch grading for {len(submission_ids)} submissions")
         
-        # Initialize services if needed
         if not background_service.llm_service:
             background_service.init_services()
         
@@ -357,7 +347,6 @@ def process_batch_grading_task(self, submission_ids: List[str], marking_guide_id
                     countdown=0
                 )
                 
-                # Wait for result (with timeout)
                 task_result = result.get(timeout=300)  # 5 minutes timeout
                 
                 if task_result and task_result.get('status') == 'success':
@@ -398,7 +387,6 @@ def process_batch_grading_task(self, submission_ids: List[str], marking_guide_id
     except Exception as e:
         logger.exception(f"Batch grading failed: {str(e)}")
         raise Exception({"error": "BATCH_GRADING_FAILED", "message": str(e)})
-
 
 def init_background_tasks(app):
     """Initialize background task service with Flask app."""

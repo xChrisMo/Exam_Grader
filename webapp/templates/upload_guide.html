@@ -40,6 +40,23 @@
                               placeholder="Enter guide description"></textarea>
                 </div>
 
+                <!-- AI Processing Option -->
+                <div class="mb-6">
+                    <div class="flex items-center">
+                        <input id="auto_process" name="auto_process" type="checkbox" checked
+                               class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                        <label for="auto_process" class="ml-2 block text-sm text-gray-900">
+                            Automatically extract questions using AI
+                        </label>
+                    </div>
+                    <p class="mt-1 text-sm text-gray-500">
+                        <svg class="inline w-4 h-4 mr-1 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                        When enabled, the system will use AI to automatically extract questions and marking criteria from your guide. You can also do this later from the guide details page.
+                    </p>
+                </div>
+
                 <!-- File Upload Area -->
                 <div class="mb-6">
                     <label for="guide_file" class="block text-sm font-medium text-gray-700 mb-2">
@@ -469,77 +486,61 @@ document.addEventListener('DOMContentLoaded', function() {
             xhr.addEventListener('load', function() {
                 
                 if (xhr.status === 200) {
-                    // Start processing stages after upload completes with gradual animation
-                    updateProgress('processing', 0);
+                    // Check if auto-processing is enabled
+                    const autoProcessCheckbox = document.getElementById('auto_process');
+                    const isAutoProcessEnabled = autoProcessCheckbox && autoProcessCheckbox.checked;
                     
-                    // Animate processing stage gradually - LLM extraction takes time
-                    setTimeout(function() { 
-                        animateProgress('processing', 0, 50, 15000); // 15 seconds for LLM processing (slow)
-                    }, 500);
-                    
-                    setTimeout(function() { 
-                        animateProgress('processing', 50, 100, 10000); // Additional 10 seconds for complex processing
-                    }, 16000);
-                    
-                    // Start extracting stage - content validation
-                    setTimeout(function() { 
-                        updateProgress('extracting', 0);
-                        setTimeout(function() {
-                            animateProgress('extracting', 0, 100, 8000); // 8 seconds for content validation
-                        }, 500);
-                    }, 27000);
-                    
-                    // Start storing stage - database operations
-                    setTimeout(function() { 
-                        updateProgress('storing', 0);
-                        setTimeout(function() {
-                            animateProgress('storing', 0, 100, 3000); // 3 seconds for database storage
-                        }, 500);
-                    }, 36000);
-                    
-                    // Complete the process
-                    setTimeout(function() {
-                        progressBar.style.width = '100%';
-                        progressText.textContent = 'Complete! 100%';
-                        const progressLabel = progressDiv.querySelector('.text-sm.font-medium');
-                        if (progressLabel) {
-                            progressLabel.textContent = 'Upload Complete';
-                        }
+                    if (isAutoProcessEnabled) {
+                        // Show extended processing for LLM extraction
+                        updateProgress('processing', 0);
                         
-                        setTimeout(function() {
-                            progressDiv.classList.add('hidden');
-                            submitBtn.disabled = false;
-                            
-                            try {
-                                const response = JSON.parse(xhr.responseText);
-                                if (response.success || response.status === 'success') {
-                                    showMessage(response.message || 'Guide uploaded successfully!', 'success');
-                                    setTimeout(function() {
-                                        window.location.href = '/dashboard';
-                                    }, 2000);
-                                } else {
-                                    // Handle upload errors for Word documents
-                                    let errorMessage = response.error || response.message || 'Upload failed';
-                                    if (errorMessage.toLowerCase().includes('word document') || 
-                                        errorMessage.toLowerCase().includes('docx') ||
-                                        errorMessage.toLowerCase().includes('unsupported')) {
-                                        errorMessage = 'Please upload a valid Word document (.docx or .doc file). Other file formats are not supported.';
-                                    } else if (errorMessage.toLowerCase().includes('empty') || 
-                                              errorMessage.toLowerCase().includes('insufficient text')) {
-                                        errorMessage = 'The Word document appears to be empty or contains insufficient text. Please check your document and try again.';
-                                    } else if (errorMessage.toLowerCase().includes('timeout')) {
-                                        errorMessage = 'Upload timed out. The file may be too large or complex. Please try a smaller file or contact support.';
-                                    }
-                                    showMessage(errorMessage, 'error');
-                                }
-                            } catch (e) {
-                                showMessage('Guide uploaded successfully!', 'success');
-                                setTimeout(function() {
-                                    window.location.href = '/dashboard';
-                                }, 2000);
+                        // Stage 1: Text extraction (faster)
+                        setTimeout(function() { 
+                            animateProgress('processing', 0, 30, 3000); // 3 seconds for text extraction
+                        }, 500);
+                        
+                        // Stage 2: LLM question extraction (slower)
+                        setTimeout(function() { 
+                            updateProgress('extracting', 0);
+                            const progressLabel = progressDiv.querySelector('.text-sm.font-medium');
+                            if (progressLabel) {
+                                progressLabel.textContent = 'AI is extracting questions...';
                             }
-                        }, 800);
-                    }, 3200);
+                            animateProgress('extracting', 0, 80, 20000); // 20 seconds for LLM processing
+                        }, 4000);
+                        
+                        // Stage 3: Validation and storage
+                        setTimeout(function() { 
+                            updateProgress('storing', 0);
+                            const progressLabel = progressDiv.querySelector('.text-sm.font-medium');
+                            if (progressLabel) {
+                                progressLabel.textContent = 'Validating and storing results...';
+                            }
+                            animateProgress('storing', 0, 100, 4000); // 4 seconds for validation and storage
+                        }, 25000);
+                        
+                        // Complete after LLM processing
+                        setTimeout(function() {
+                            completeUpload();
+                        }, 30000);
+                    } else {
+                        // Quick processing for upload-only (no LLM)
+                        updateProgress('processing', 0);
+                        
+                        setTimeout(function() { 
+                            animateProgress('processing', 0, 60, 2000); // 2 seconds for basic processing
+                        }, 500);
+                        
+                        setTimeout(function() { 
+                            updateProgress('storing', 0);
+                            animateProgress('storing', 0, 100, 1500); // 1.5 seconds for storage
+                        }, 3000);
+                        
+                        // Complete quickly for basic upload
+                        setTimeout(function() {
+                            completeUpload();
+                        }, 5000);
+                    }
                 } else {
                     // Handle error responses immediately
                     progressDiv.classList.add('hidden');
@@ -547,6 +548,56 @@ document.addEventListener('DOMContentLoaded', function() {
                     showMessage('Upload failed. Please try again.', 'error');
                 }
             });
+            
+            // Function to complete the upload process
+            function completeUpload() {
+                progressBar.style.width = '100%';
+                progressText.textContent = 'Complete! 100%';
+                const progressLabel = progressDiv.querySelector('.text-sm.font-medium');
+                if (progressLabel) {
+                    progressLabel.textContent = 'Upload Complete';
+                }
+                
+                setTimeout(function() {
+                    progressDiv.classList.add('hidden');
+                    submitBtn.disabled = false;
+                    
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.success || response.status === 'success') {
+                            showMessage(response.message || 'Guide uploaded successfully!', 'success');
+                            setTimeout(function() {
+                                window.location.href = '/guides';
+                            }, 2000);
+                        } else {
+                            // Handle upload errors
+                            let errorMessage = response.error || response.message || 'Upload failed';
+                            if (errorMessage.toLowerCase().includes('word document') || 
+                                errorMessage.toLowerCase().includes('docx') ||
+                                errorMessage.toLowerCase().includes('unsupported')) {
+                                errorMessage = 'Please upload a valid Word document (.docx or .doc file). Other file formats are not supported.';
+                            } else if (errorMessage.toLowerCase().includes('empty') || 
+                                      errorMessage.toLowerCase().includes('insufficient text')) {
+                                errorMessage = 'The Word document appears to be empty or contains insufficient text. Please check your document and try again.';
+                            } else if (errorMessage.toLowerCase().includes('timeout')) {
+                                errorMessage = 'Upload timed out. The file may be too large or complex. Please try a smaller file or contact support.';
+                            }
+                            showMessage(errorMessage, 'error');
+                        }
+                    } catch (e) {
+                        // Parse the response text to show appropriate message
+                        const responseText = xhr.responseText;
+                        if (responseText.includes('extracted') && responseText.includes('questions')) {
+                            showMessage('Guide uploaded and processed successfully!', 'success');
+                        } else {
+                            showMessage('Guide uploaded successfully!', 'success');
+                        }
+                        setTimeout(function() {
+                            window.location.href = '/guides';
+                        }, 2000);
+                    }
+                }, 800);
+            }
             
             xhr.addEventListener('error', function() {
                 progressDiv.classList.add('hidden');

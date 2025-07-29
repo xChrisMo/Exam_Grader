@@ -20,7 +20,6 @@ except ImportError:
 
 from utils.logger import logger
 
-
 class QueryCache:
     """Simple in-memory cache for query results."""
     
@@ -128,10 +127,8 @@ class QueryCache:
             'entries': list(self.cache.keys())
         }
 
-
 # Global cache instance
 _query_cache = QueryCache()
-
 
 def cached_query(timeout: int = 300, key_prefix: str = ""):
     """Decorator for caching query results.
@@ -147,7 +144,6 @@ def cached_query(timeout: int = 300, key_prefix: str = ""):
             func_name = f"{key_prefix}{func.__module__}.{func.__name__}"
             cache_key = _query_cache._generate_key(func_name, args, kwargs)
             
-            # Try to get from cache
             cached_result = _query_cache.get(cache_key)
             if cached_result is not None:
                 logger.debug(f"Cache hit for {func_name}")
@@ -167,7 +163,6 @@ def cached_query(timeout: int = 300, key_prefix: str = ""):
         
         return wrapper
     return decorator
-
 
 def invalidate_cache_pattern(pattern: str) -> int:
     """Invalidate cache entries matching a pattern.
@@ -192,17 +187,14 @@ def invalidate_cache_pattern(pattern: str) -> int:
     logger.info(f"Invalidated {invalidated} cache entries matching pattern: {pattern}")
     return invalidated
 
-
 def get_cache_stats() -> Dict[str, Any]:
     """Get global cache statistics."""
     return _query_cache.get_stats()
-
 
 def clear_cache() -> None:
     """Clear all cached data."""
     _query_cache.clear()
     logger.info("Cache cleared")
-
 
 # Performance monitoring decorator
 def monitor_performance(log_slow_queries: bool = True, slow_threshold: float = 1.0):

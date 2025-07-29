@@ -18,7 +18,6 @@ from dataclasses import dataclass, field
 from threading import Lock
 from logging.handlers import RotatingFileHandler
 
-# Try to import enhanced error handling
 try:
     from src.exceptions.error_tracker import ErrorTracker
     ENHANCED_ERROR_HANDLING_AVAILABLE = True
@@ -26,7 +25,6 @@ except ImportError:
     ENHANCED_ERROR_HANDLING_AVAILABLE = False
     ApplicationError = None
     ErrorTracker = None
-
 
 class LogLevel(Enum):
     """Enhanced log levels with additional granularity."""
@@ -38,7 +36,6 @@ class LogLevel(Enum):
     CRITICAL = 50
     AUDIT = 60
     SECURITY = 70
-
 
 @dataclass
 class LogContext:
@@ -66,7 +63,6 @@ class LogContext:
             'span_id': self.span_id,
             **self.additional_data
         }
-
 
 class ComprehensiveLogger:
     """Advanced logger with comprehensive features."""
@@ -123,7 +119,6 @@ class ComprehensiveLogger:
         }
         self._metrics_lock = Lock()
         
-        # Context stack for nested operations
         self.context_stack: List[LogContext] = []
         self._context_lock = Lock()
         
@@ -183,7 +178,6 @@ class ComprehensiveLogger:
             error_file_handler.setFormatter(self._create_detailed_formatter())
             self.logger.addHandler(error_file_handler)
             
-            # Security log file (if enabled)
             if self.enable_security_logging:
                 security_file_handler = RotatingFileHandler(
                     self.log_dir / f'{self.name}_security.log',
@@ -195,7 +189,6 @@ class ComprehensiveLogger:
                 security_file_handler.setFormatter(self._create_security_formatter())
                 self.logger.addHandler(security_file_handler)
             
-            # JSON structured log file (if enabled)
             if self.enable_json:
                 json_file_handler = RotatingFileHandler(
                     self.log_dir / f'{self.name}_structured.jsonl',
@@ -247,7 +240,6 @@ class ComprehensiveLogger:
                     'process': record.process
                 }
                 
-                # Add exception info if present
                 if record.exc_info:
                     log_entry['exception'] = {
                         'type': record.exc_info[0].__name__,
@@ -255,7 +247,6 @@ class ComprehensiveLogger:
                         'traceback': traceback.format_exception(*record.exc_info)
                     }
                 
-                # Add context if available
                 if hasattr(record, 'context'):
                     log_entry['context'] = record.context
                 
@@ -411,7 +402,6 @@ class ComprehensiveLogger:
                 'recent_warnings': self.performance_metrics['warnings'][-10:]  # Last 10 warnings
             }
 
-
 class PerformanceLogger(ComprehensiveLogger):
     """Specialized logger for performance monitoring."""
     
@@ -465,7 +455,6 @@ class PerformanceLogger(ComprehensiveLogger):
         self.warning(f"Unknown operation ID: {operation_id}")
         return None
 
-
 class SecurityLogger(ComprehensiveLogger):
     """Specialized logger for security events."""
     
@@ -516,7 +505,6 @@ class SecurityLogger(ComprehensiveLogger):
         
         self.security(f"Suspicious activity detected: {description}", context)
 
-
 class AuditLogger(ComprehensiveLogger):
     """Specialized logger for audit trails."""
     
@@ -565,11 +553,9 @@ class AuditLogger(ComprehensiveLogger):
         
         self.audit(f"System event: {event_type} - {description}", context)
 
-
 # Global logger registry
 _logger_registry: Dict[str, ComprehensiveLogger] = {}
 _registry_lock = Lock()
-
 
 def get_logger(name: str, logger_type: str = 'comprehensive', **kwargs) -> ComprehensiveLogger:
     """Get or create a logger instance.
@@ -594,7 +580,6 @@ def get_logger(name: str, logger_type: str = 'comprehensive', **kwargs) -> Compr
                 _logger_registry[name] = ComprehensiveLogger(name, **kwargs)
         
         return _logger_registry[name]
-
 
 def setup_logging(
     log_level: Union[str, LogLevel] = LogLevel.INFO,

@@ -20,7 +20,6 @@ except ImportError:
     import logging
     logger = logging.getLogger(__name__)
 
-
 @dataclass
 class HealthStatus:
     """Health status for a component."""
@@ -30,7 +29,6 @@ class HealthStatus:
     details: Dict[str, Any]
     response_time_ms: float
     last_checked: str
-
 
 class HealthChecker:
     """
@@ -364,7 +362,6 @@ class HealthChecker:
         """Cache health check results."""
         # Implement caching logic here
         pass
-
 
 # Global health checker instance
 health_checker = HealthChecker()

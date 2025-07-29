@@ -7,7 +7,6 @@ from sqlalchemy import create_engine, inspect
 
 logger = logging.getLogger(__name__)
 
-
 class MigrationManager:
     """Manages database migrations and schema updates."""
     
@@ -20,7 +19,6 @@ class MigrationManager:
         try:
             logger.info("Starting database migration...")
             
-            # Create database file if it doesn't exist (for SQLite)
             if isinstance(self.database_url, str) and self.database_url.startswith('sqlite:///'):
                 db_path = self.database_url.replace('sqlite:///', '')
                 db_dir = Path(db_path).parent
@@ -30,7 +28,6 @@ class MigrationManager:
                     Path(db_path).touch()
                     logger.info(f"Created database file: {db_path}")
             
-            # Check if migration is needed
             if self._is_migration_needed():
                 logger.info("Migration needed, creating tables...")
                 self._create_tables()
@@ -72,14 +69,12 @@ class MigrationManager:
 
             inspector = inspect(self.engine)
             
-            # Check if 'sessions' table exists and drop it if it does
             if self.engine.dialect.has_table(self.engine.connect(), "sessions"):
                 db.metadata.tables['sessions'].drop(self.engine)
                 logger.info("Dropped 'sessions' table to apply schema changes.")
 
             # Handle 'submissions' table migration more carefully
             if self.engine.dialect.has_table(self.engine.connect(), "submissions"):
-                # Check if 'processed' column exists in 'submissions' table
                 columns = inspector.get_columns('submissions')
                 column_names = [col['name'] for col in columns]
                 if 'processed' not in column_names:

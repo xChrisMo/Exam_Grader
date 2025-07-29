@@ -7,7 +7,6 @@ from pathlib import Path
 
 from .unified_config import UnifiedConfig
 
-
 class ConfigurationUtils:
     """Utility functions for configuration management."""
     
@@ -69,7 +68,6 @@ class ConfigurationUtils:
         from dotenv import dotenv_values
         env_vars = dotenv_values(env_file_path)
         
-        # Check for required variables
         required_vars = [
             "SECRET_KEY",
             "DATABASE_URL",
@@ -131,7 +129,6 @@ class ConfigurationUtils:
             obj1 = getattr(config1, section)
             obj2 = getattr(config2, section)
             
-            # Get all attributes from both objects
             attrs1 = {k: v for k, v in obj1.__dict__.items() if not k.startswith('_')}
             attrs2 = {k: v for k, v in obj2.__dict__.items() if not k.startswith('_')}
             
@@ -237,7 +234,6 @@ class ConfigurationUtils:
             health["overall_status"] = "warning"
         
         return health
-
 
 class ConfigurationMigrationTool:
     """Tool for migrating configuration between versions."""

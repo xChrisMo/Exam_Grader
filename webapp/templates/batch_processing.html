@@ -1,0 +1,466 @@
+{% extends "layout.html" %}
+
+{% block title %}Batch Processing{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">Batch Processing</h1>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><a href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+                        <li class="breadcrumb-item"><a href="{{ url_for('processing.unified_processing') }}">Processing</a></li>
+                        <li class="breadcrumb-item active">Batch Processing</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Select Marking Guide</h5>
+                </div>
+                <div class="card-body">
+                    {% if guides %}
+                        <select id="guide-select" class="form-select">
+                            <option value="">Choose a marking guide...</option>
+                            {% for guide in guides %}
+                            <option value="{{ guide.id }}" data-title="{{ guide.title }}" data-marks="{{ guide.total_marks or 0 }}">
+                                {{ guide.title }} ({{ guide.total_marks or 0 }} marks)
+                            </option>
+                            {% endfor %}
+                        </select>
+                        
+                        <div id="guide-info" class="mt-3" style="display: none;">
+                            <div class="alert alert-info">
+                                <h6 class="alert-heading">Selected Guide</h6>
+                                <p class="mb-1"><strong>Title:</strong> <span id="guide-title"></span></p>
+                                <p class="mb-0"><strong>Total Marks:</strong> <span id="guide-marks"></span></p>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <h6 class="alert-heading">No Marking Guides</h6>
+                            <p class="mb-0">You need to upload and process a marking guide first.</p>
+                            <hr>
+                            <a href="{{ url_for('main.upload_guide') }}" class="btn btn-primary btn-sm">
+                                Upload Marking Guide
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Select Submissions</h5>
+                </div>
+                <div class="card-body">
+                    {% if submissions %}
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="select-all">
+                                <label class="form-check-label" for="select-all">
+                                    <strong>Select All Submissions</strong>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="submission-list" style="max-height: 300px; overflow-y: auto;">
+                            {% for submission in submissions %}
+                            <div class="form-check mb-2">
+                                <input class="form-check-input submission-checkbox" type="checkbox" 
+                                       value="{{ submission.id }}" id="submission-{{ submission.id }}">
+                                <label class="form-check-label" for="submission-{{ submission.id }}">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>{{ submission.filename }}</strong>
+                                            {% if submission.student_name %}
+                                                <br><small class="text-muted">{{ submission.student_name }}</small>
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-end">
+                                            <small class="text-muted">
+                                                {{ submission.created_at.strftime('%Y-%m-%d') if submission.created_at else 'N/A' }}
+                                            </small>
+                                            {% if submission.processing_status %}
+                                                <br><span class="badge bg-{{ 'success' if submission.processing_status == 'completed' else 'warning' if submission.processing_status == 'processing' else 'secondary' }}">
+                                                    {{ submission.processing_status.title() }}
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <span id="selected-count">0</span> of {{ submissions|length }} submissions selected
+                            </small>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <h6 class="alert-heading">No Submissions</h6>
+                            <p class="mb-0">You need to upload submissions first.</p>
+                            <hr>
+                            <a href="{{ url_for('main.upload_submission') }}" class="btn btn-primary btn-sm">
+                                Upload Submissions
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if guides and submissions %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Processing Options</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="parallel-processing" checked>
+                                <label class="form-check-label" for="parallel-processing">
+                                    <strong>Parallel Processing</strong>
+                                    <br><small class="text-muted">Process multiple submissions simultaneously for faster results</small>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="detailed-feedback" checked>
+                                <label class="form-check-label" for="detailed-feedback">
+                                    <strong>Detailed Feedback</strong>
+                                    <br><small class="text-muted">Generate comprehensive feedback for each submission</small>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="export-results">
+                                <label class="form-check-label" for="export-results">
+                                    <strong>Auto-Export Results</strong>
+                                    <br><small class="text-muted">Automatically export results when processing completes</small>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="email-notification">
+                                <label class="form-check-label" for="email-notification">
+                                    <strong>Email Notification</strong>
+                                    <br><small class="text-muted">Send email when batch processing is complete</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">Ready to Process</h6>
+                            <small class="text-muted">
+                                Select a marking guide and submissions to begin batch processing
+                            </small>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-primary btn-lg" id="start-batch-processing" disabled>
+                                <i class="fas fa-play"></i> Start Batch Processing
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Progress Modal -->
+    <div class="modal fade" id="progress-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Batch Processing Progress</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>Overall Progress</span>
+                            <span id="progress-text">0%</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar" id="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h4 text-primary" id="total-count">0</div>
+                                <small class="text-muted">Total</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h4 text-info" id="processed-count">0</div>
+                                <small class="text-muted">Processed</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h4 text-success" id="successful-count">0</div>
+                                <small class="text-muted">Successful</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h4 text-danger" id="failed-count">0</div>
+                                <small class="text-muted">Failed</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Current Status</label>
+                        <div id="current-status" class="alert alert-info">
+                            Initializing batch processing...
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Processing Log</label>
+                        <div id="processing-log" class="bg-light p-3 rounded" style="height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px;">
+                            <!-- Log entries will be added here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancel-processing">Cancel Processing</button>
+                    <button type="button" class="btn btn-primary" id="view-results" style="display: none;">View Results</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let processingInterval = null;
+let currentTaskId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const guideSelect = document.getElementById('guide-select');
+    const selectAllCheckbox = document.getElementById('select-all');
+    const submissionCheckboxes = document.querySelectorAll('.submission-checkbox');
+    const startButton = document.getElementById('start-batch-processing');
+    const selectedCountSpan = document.getElementById('selected-count');
+
+    // Guide selection handler
+    if (guideSelect) {
+        guideSelect.addEventListener('change', function() {
+            const guideInfo = document.getElementById('guide-info');
+            if (this.value) {
+                const option = this.options[this.selectedIndex];
+                document.getElementById('guide-title').textContent = option.dataset.title;
+                document.getElementById('guide-marks').textContent = option.dataset.marks;
+                guideInfo.style.display = 'block';
+            } else {
+                guideInfo.style.display = 'none';
+            }
+            updateStartButton();
+        });
+    }
+
+    // Select all handler
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            submissionCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateSelectedCount();
+            updateStartButton();
+        });
+    }
+
+    // Individual checkbox handlers
+    submissionCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            updateSelectedCount();
+            updateStartButton();
+            
+            // Update select all checkbox
+            const checkedCount = document.querySelectorAll('.submission-checkbox:checked').length;
+            selectAllCheckbox.checked = checkedCount === submissionCheckboxes.length;
+            selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < submissionCheckboxes.length;
+        });
+    });
+
+    // Start processing button
+    if (startButton) {
+        startButton.addEventListener('click', startBatchProcessing);
+    }
+
+    // Cancel processing button
+    document.getElementById('cancel-processing').addEventListener('click', cancelProcessing);
+
+    // View results button
+    document.getElementById('view-results').addEventListener('click', function() {
+        window.location.href = '{{ url_for("main.results") }}';
+    });
+
+    function updateSelectedCount() {
+        const checkedCount = document.querySelectorAll('.submission-checkbox:checked').length;
+        selectedCountSpan.textContent = checkedCount;
+    }
+
+    function updateStartButton() {
+        const guideSelected = guideSelect && guideSelect.value;
+        const submissionsSelected = document.querySelectorAll('.submission-checkbox:checked').length > 0;
+        startButton.disabled = !guideSelected || !submissionsSelected;
+    }
+});
+
+function startBatchProcessing() {
+    const guideId = document.getElementById('guide-select').value;
+    const submissionIds = Array.from(document.querySelectorAll('.submission-checkbox:checked'))
+        .map(cb => cb.value);
+
+    if (!guideId || submissionIds.length === 0) {
+        alert('Please select a marking guide and at least one submission');
+        return;
+    }
+
+    // Get processing options
+    const options = {
+        parallel_processing: document.getElementById('parallel-processing').checked,
+        detailed_feedback: document.getElementById('detailed-feedback').checked,
+        export_results: document.getElementById('export-results').checked,
+        email_notification: document.getElementById('email-notification').checked
+    };
+
+    // Show progress modal
+    const progressModal = new bootstrap.Modal(document.getElementById('progress-modal'));
+    progressModal.show();
+
+    // Initialize progress display
+    document.getElementById('total-count').textContent = submissionIds.length;
+    document.getElementById('processed-count').textContent = '0';
+    document.getElementById('successful-count').textContent = '0';
+    document.getElementById('failed-count').textContent = '0';
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('progress-text').textContent = '0%';
+    document.getElementById('processing-log').innerHTML = '';
+
+    // Start batch processing
+    fetch('/processing/batch', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({
+            guide_id: guideId,
+            submission_ids: submissionIds,
+            options: options
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update progress display with results
+            updateProgressDisplay(data);
+            addLogEntry('Batch processing completed successfully');
+            
+            // Show view results button
+            document.getElementById('view-results').style.display = 'inline-block';
+            document.getElementById('cancel-processing').textContent = 'Close';
+        } else {
+            addLogEntry('Batch processing failed: ' + (data.error || 'Unknown error'), 'error');
+            document.getElementById('current-status').className = 'alert alert-danger';
+            document.getElementById('current-status').textContent = 'Processing failed';
+        }
+    })
+    .catch(error => {
+        console.error('Batch processing error:', error);
+        addLogEntry('Network error: ' + error.message, 'error');
+        document.getElementById('current-status').className = 'alert alert-danger';
+        document.getElementById('current-status').textContent = 'Network error occurred';
+    });
+}
+
+function updateProgressDisplay(data) {
+    if (data.results) {
+        const totalCount = data.results.length;
+        const successfulCount = data.successful || 0;
+        const failedCount = totalCount - successfulCount;
+        
+        document.getElementById('total-count').textContent = totalCount;
+        document.getElementById('processed-count').textContent = totalCount;
+        document.getElementById('successful-count').textContent = successfulCount;
+        document.getElementById('failed-count').textContent = failedCount;
+        
+        const percentage = totalCount > 0 ? 100 : 0;
+        document.getElementById('progress-bar').style.width = percentage + '%';
+        document.getElementById('progress-text').textContent = percentage + '%';
+        
+        document.getElementById('current-status').className = 'alert alert-success';
+        document.getElementById('current-status').textContent = `Processing complete: ${successfulCount} successful, ${failedCount} failed`;
+        
+        // Add individual results to log
+        data.results.forEach(result => {
+            const status = result.success ? 'success' : 'error';
+            const message = result.success 
+                ? `✓ Processed submission ${result.submission_id} (Score: ${result.score || 'N/A'})`
+                : `✗ Failed to process submission ${result.submission_id}: ${result.error || 'Unknown error'}`;
+            addLogEntry(message, status);
+        });
+    }
+}
+
+function addLogEntry(message, type = 'info') {
+    const log = document.getElementById('processing-log');
+    const timestamp = new Date().toLocaleTimeString();
+    const className = type === 'error' ? 'text-danger' : type === 'success' ? 'text-success' : 'text-info';
+    
+    const entry = document.createElement('div');
+    entry.className = className;
+    entry.textContent = `[${timestamp}] ${message}`;
+    
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+}
+
+function cancelProcessing() {
+    if (processingInterval) {
+        clearInterval(processingInterval);
+        processingInterval = null;
+    }
+    
+    // Close modal
+    const progressModal = bootstrap.Modal.getInstance(document.getElementById('progress-modal'));
+    if (progressModal) {
+        progressModal.hide();
+    }
+}
+</script>
+{% endblock %}

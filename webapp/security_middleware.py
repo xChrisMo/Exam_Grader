@@ -1,4 +1,3 @@
-# Security middleware for production
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -47,7 +46,6 @@ def add_security_headers(app: Flask):
         
         return response
     
-    # Configure for reverse proxy if needed
     if app.config.get('BEHIND_PROXY'):
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
     

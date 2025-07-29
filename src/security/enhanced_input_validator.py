@@ -19,6 +19,7 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 try:
+    from werkzeug.exceptions import BadRequest
 except ImportError:
     # Fallback error classes
     class ValidationError(Exception):
@@ -26,7 +27,6 @@ except ImportError:
     
     class SecurityError(Exception):
         pass
-
 
 class FileValidator:
     """Enhanced file validation with security checks."""
@@ -97,11 +97,9 @@ class FileValidator:
             extension = file_path.suffix.lower()
             file_info['extension'] = extension
             
-            # Check if extension is allowed
             if extension not in cls.ALLOWED_EXTENSIONS:
                 return False, f"File type '{extension}' is not allowed", file_info
             
-            # Read file content for validation
             file_obj.seek(0)
             file_content = file_obj.read()
             file_obj.seek(0)  # Reset for later use
@@ -148,17 +146,14 @@ class FileValidator:
         if len(filename) > 255:
             return False, "Filename too long (max 255 characters)"
         
-        # Check for dangerous characters
         dangerous_chars = ['<', '>', ':', '"', '|', '?', '*', '\x00']
         for char in dangerous_chars:
             if char in filename:
                 return False, f"Filename contains invalid character: {char}"
         
-        # Check for path traversal
         if '..' in filename or filename.startswith('/') or filename.startswith('\\'):
             return False, "Filename contains path traversal patterns"
         
-        # Check for reserved names (Windows)
         reserved_names = [
             'CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4',
             'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3',
@@ -202,7 +197,6 @@ class FileValidator:
         if len(file_content) < 4:
             return False, "File too small to validate signature"
         
-        # Check for dangerous signatures
         for signature, description in cls.DANGEROUS_SIGNATURES.items():
             if file_content.startswith(signature):
                 return False, f"Dangerous file type detected: {description}"
@@ -229,7 +223,6 @@ class FileValidator:
     @classmethod
     def _validate_mime_type(cls, file_content: bytes, filename: str) -> Tuple[bool, Optional[str], str]:
         """Validate MIME type."""
-        # Get MIME type from filename
         mime_type, _ = mimetypes.guess_type(filename)
         
         if not mime_type:
@@ -238,7 +231,6 @@ class FileValidator:
         # Get file extension
         extension = Path(filename).suffix.lower()
         
-        # Check if MIME type matches allowed types for extension
         if extension in cls.ALLOWED_EXTENSIONS:
             allowed_mimes = cls.ALLOWED_EXTENSIONS[extension]
             if mime_type not in allowed_mimes:
@@ -249,13 +241,11 @@ class FileValidator:
     @classmethod
     def _validate_file_content(cls, file_content: bytes, extension: str) -> Tuple[bool, Optional[str]]:
         """Validate file content for malicious patterns."""
-        # Convert to string for text-based checks (ignore encoding errors)
         try:
             content_str = file_content.decode('utf-8', errors='ignore')
         except:
             content_str = str(file_content)
         
-        # Check for script injections in text files
         if extension in ['.txt']:
             script_patterns = [
                 r'<script[^>]*>',
@@ -270,7 +260,6 @@ class FileValidator:
                 if re.search(pattern, content_str, re.IGNORECASE):
                     return False, "Potentially malicious script content detected"
         
-        # Check for embedded executables in any file
         executable_patterns = [
             b'\x4D\x5A',  # PE header
             b'\x7F\x45\x4C\x46',  # ELF header
@@ -287,7 +276,6 @@ class FileValidator:
     def _generate_file_hash(cls, file_content: bytes) -> str:
         """Generate SHA-256 hash of file content."""
         return hashlib.sha256(file_content).hexdigest()
-
 
 class FormValidator:
     """Enhanced form input validation."""
@@ -333,17 +321,14 @@ class FormValidator:
                 field_errors = []
                 value = form_data.get(field_name)
                 
-                # Check if field is required
                 if rules.get('required', False) and (value is None or str(value).strip() == ''):
                     field_errors.append(f"{field_name} is required")
                     continue
                 
-                # Skip validation if field is empty and not required
                 if value is None or str(value).strip() == '':
                     sanitized_data[field_name] = ''
                     continue
                 
-                # Convert to string for validation
                 str_value = str(value).strip()
                 
                 # Length validation
@@ -384,7 +369,6 @@ class FormValidator:
                 sanitized_value = cls._sanitize_input(str_value, rules.get('sanitize_html', True))
                 sanitized_data[field_name] = sanitized_value
                 
-                # Store errors if any
                 if field_errors:
                     errors[field_name] = field_errors
             
@@ -417,7 +401,6 @@ class FormValidator:
         text = re.sub(r'\s+', ' ', text).strip()
         
         return text
-
 
 class APIValidator:
     """API request validation."""
@@ -463,7 +446,6 @@ class APIValidator:
                         if max_length and len(str(value)) > max_length:
                             return False, f"Field '{field_name}' exceeds maximum length of {max_length}", None
                         
-                        # Check for dangerous patterns
                         if FormValidator._contains_dangerous_pattern(str(value)):
                             return False, f"Field '{field_name}' contains potentially dangerous content", None
                     
@@ -493,12 +475,10 @@ class APIValidator:
         
         return True
 
-
 # Global validator instances
 file_validator = FileValidator()
 form_validator = FormValidator()
 api_validator = APIValidator()
-
 
 def validate_file_upload(file_obj, filename: str) -> Tuple[bool, Optional[str], Dict[str, Any]]:
     """Convenience function for file validation.
@@ -512,7 +492,6 @@ def validate_file_upload(file_obj, filename: str) -> Tuple[bool, Optional[str], 
     """
     return file_validator.validate_file(file_obj, filename)
 
-
 def validate_form_input(form_data: Dict[str, Any], validation_rules: Dict[str, Dict[str, Any]]) -> Tuple[bool, Dict[str, List[str]], Dict[str, Any]]:
     """Convenience function for form validation.
     
@@ -524,7 +503,6 @@ def validate_form_input(form_data: Dict[str, Any], validation_rules: Dict[str, D
         Tuple of (is_valid, errors, sanitized_data)
     """
     return form_validator.validate_form_data(form_data, validation_rules)
-
 
 def validate_api_request(request_data: Any, schema: Dict[str, Any]) -> Tuple[bool, Optional[str], Any]:
     """Convenience function for API validation.

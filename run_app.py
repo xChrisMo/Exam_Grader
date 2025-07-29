@@ -23,7 +23,7 @@ sys.path.insert(0, str(project_root))
 load_dotenv()
 
 # Set default environment variables
-os.environ.setdefault("FLASK_APP", "webapp.exam_grader_app")
+os.environ.setdefault("FLASK_APP", "webapp.app")
 os.environ.setdefault("FLASK_ENV", "development")
 os.environ.setdefault("HOST", "127.0.0.1")
 os.environ.setdefault("PORT", "8501")
@@ -49,7 +49,7 @@ def shutdown_handler(sig=None, frame=None):
         
         # Import cleanup functions
         try:
-            from webapp.exam_grader_app import cleanup_services
+            from webapp.app_factory import cleanup_services
             cleanup_services()
         except ImportError:
             print("⚠️  No cleanup services found")
@@ -59,7 +59,7 @@ def shutdown_handler(sig=None, frame=None):
         # Close database connections
         try:
             from src.database import db
-            from webapp.exam_grader_app import app
+            from webapp.app import app
             try:
                 with app.app_context():
                     db.session.close()
@@ -107,8 +107,8 @@ def main():
         signal.signal(signal.SIGINT, lambda sig, frame: shutdown_handler())
         signal.signal(signal.SIGTERM, lambda sig, frame: shutdown_handler())
         
-        # Import the Flask app
-        from webapp.exam_grader_app import app
+        # Import the Flask app (new clean architecture)
+        from webapp.app import app
         
         # Get configuration from environment
         host = os.getenv("HOST", "127.0.0.1")

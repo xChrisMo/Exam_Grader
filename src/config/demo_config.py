@@ -15,7 +15,6 @@ sys.path.insert(0, str(project_root))
 from src.config.unified_config import UnifiedConfig
 from src.config.config_utils import ConfigurationUtils
 
-
 def main():
     """Demonstrate the unified configuration system."""
     print("🔧 Exam Grader - Unified Configuration System Demo")
@@ -113,7 +112,6 @@ def main():
     print("  • Health checking and monitoring")
     print("  • Flask integration")
     print("  • Configuration utilities")
-
 
 if __name__ == "__main__":
     main()

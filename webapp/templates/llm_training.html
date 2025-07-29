@@ -2,6 +2,10 @@
 
 {% block title %}LLM Training - Exam Grader{% endblock %}
 
+{% block head %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+
 {% block extra_css %}
 <style>
     .training-container {
@@ -447,6 +451,43 @@
         color: #1f2937;
         margin-bottom: 12px;
     }
+
+    /* Animation keyframes for notifications */
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+
+    /* Spinner animation */
+    @keyframes spin {
+        from {
+            transform: rotate(0deg);
+        }
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .animate-spin {
+        animation: spin 1s linear infinite;
+    }
 </style>
 {% endblock %}
 
@@ -528,6 +569,9 @@
                 <button class="btn btn-secondary" onclick="documentManager.testFunctionality()">
                     <i class="fas fa-vial"></i> Test
                 </button>
+                <button class="btn btn-secondary" onclick="documentManager.cleanupAllData()" title="Remove all mock/test data">
+                    <i class="fas fa-broom"></i> Clean Up
+                </button>
                 <button class="btn btn-primary" onclick="showCreateTrainingModal()">
                     <i class="fas fa-play"></i> Start Training
                 </button>
@@ -562,6 +606,48 @@
                 <p>Create your first training job to start fine-tuning models.</p>
                 <button class="btn btn-primary" onclick="showCreateTrainingModal()">
                     <i class="fas fa-play"></i> Start Training
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Model Testing Section -->
+    <div class="training-section">
+        <div class="section-header">
+            <h2 class="section-title">Model Testing</h2>
+            <button class="btn btn-primary" onclick="showCreateTestModal()">
+                <i class="fas fa-vial"></i> Create Test
+            </button>
+        </div>
+
+        <!-- Testing Statistics -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="total-tests">0</div>
+                <div class="stat-label">Total Tests</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="running-tests">0</div>
+                <div class="stat-label">Running</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="completed-tests">0</div>
+                <div class="stat-label">Completed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="average-accuracy">0%</div>
+                <div class="stat-label">Avg Accuracy</div>
+            </div>
+        </div>
+
+        <!-- Model Tests List -->
+        <div id="model-tests-container">
+            <div class="empty-state" id="tests-empty-state">
+                <div class="empty-state-icon">🧪</div>
+                <h3>No model tests</h3>
+                <p>Create your first model test to validate training performance.</p>
+                <button class="btn btn-primary" onclick="showCreateTestModal()">
+                    <i class="fas fa-vial"></i> Create Test
                 </button>
             </div>
         </div>
@@ -794,8 +880,156 @@
         </div>
     </div>
 </div>
+
+<!-- Create Model Test Modal -->
+<div class="modal" id="create-test-modal">
+    <div class="modal-content large">
+        <div class="modal-header">
+            <h3 class="modal-title">Create Model Test</h3>
+            <button class="close-btn" onclick="hideCreateTestModal()">&times;</button>
+        </div>
+        <form id="create-test-form">
+            <div class="form-group">
+                <label class="form-label" for="test-name">Test Name</label>
+                <input type="text" id="test-name" class="form-input" placeholder="Enter test name" required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="test-description">Description (Optional)</label>
+                <textarea id="test-description" class="form-input" rows="3" placeholder="Describe this test"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="test-training-job">Select Trained Model</label>
+                <select id="test-training-job" class="form-select" required>
+                    <option value="">Select a completed training job...</option>
+                </select>
+            </div>
+
+            <div class="config-section">
+                <div class="config-title">Test Configuration</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="test-confidence-threshold">Confidence Threshold</label>
+                        <input type="number" id="test-confidence-threshold" class="form-input" value="0.8" min="0.1" max="1.0" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="test-comparison-mode">Comparison Mode</label>
+                        <select id="test-comparison-mode" class="form-select">
+                            <option value="strict">Strict</option>
+                            <option value="lenient">Lenient</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="test-feedback-level">Feedback Level</label>
+                    <select id="test-feedback-level" class="form-select">
+                        <option value="basic">Basic</option>
+                        <option value="detailed" selected>Detailed</option>
+                        <option value="comprehensive">Comprehensive</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="hideCreateTestModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Test</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Upload Test Submissions Modal -->
+<div class="modal" id="upload-test-submissions-modal">
+    <div class="modal-content large">
+        <div class="modal-header">
+            <h3 class="modal-title">Upload Test Submissions</h3>
+            <button class="close-btn" onclick="hideUploadTestSubmissionsModal()">&times;</button>
+        </div>
+        <div id="test-upload-area" style="border: 2px dashed #d1d5db; border-radius: 8px; padding: 40px; text-align: center; margin-bottom: 20px;">
+            <div style="font-size: 2rem; margin-bottom: 16px; opacity: 0.5;">📝</div>
+            <p>Drag and drop student submissions here or <button type="button" class="btn btn-primary" onclick="document.getElementById('test-file-input').click()">browse files</button></p>
+            <p style="font-size: 0.875rem; color: #6b7280; margin-top: 8px;">Supported formats: PDF, TXT, DOCX</p>
+            <input type="file" id="test-file-input" multiple accept=".pdf,.txt,.docx" style="display: none;">
+        </div>
+        
+        <div id="test-files-list" style="display: none;">
+            <h4>Selected Files:</h4>
+            <div id="test-files-container"></div>
+        </div>
+        
+        <div id="test-upload-progress" style="display: none;">
+            <div style="background: #f3f4f6; border-radius: 8px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span>Uploading test submissions...</span>
+                    <span id="test-upload-percentage">0%</span>
+                </div>
+                <div style="background: #e5e7eb; border-radius: 4px; height: 8px;">
+                    <div id="test-upload-bar" style="background: #3b82f6; height: 100%; border-radius: 4px; width: 0%; transition: width 0.3s;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+            <button type="button" class="btn btn-secondary" onclick="hideUploadTestSubmissionsModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" id="upload-test-submissions-btn" onclick="uploadTestSubmissions()" disabled>Upload Submissions</button>
+        </div>
+    </div>
+</div>
+
+<!-- Test Results Modal -->
+<div class="modal" id="test-results-modal">
+    <div class="modal-content large">
+        <div class="modal-header">
+            <h3 class="modal-title" id="test-results-title">Test Results</h3>
+            <button class="close-btn" onclick="hideTestResultsModal()">&times;</button>
+        </div>
+        <div id="test-results-content">
+            <!-- Test results will be loaded here -->
+        </div>
+    </div>
+</div>
+
+<!-- Edit Document Modal -->
+<div class="modal" id="edit-document-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">Edit Document</h3>
+            <button class="close-btn" onclick="hideEditDocumentModal()">&times;</button>
+        </div>
+        <form id="edit-document-form">
+            <input type="hidden" id="edit-document-id">
+            <div class="form-group">
+                <label class="form-label" for="edit-document-name">Document Name</label>
+                <input type="text" id="edit-document-name" class="form-input" placeholder="Enter document name" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="edit-document-dataset">Dataset</label>
+                <select id="edit-document-dataset" class="form-select">
+                    <option value="">Unassigned</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Document Information</label>
+                <div style="background: #f9fafb; padding: 12px; border-radius: 6px; font-size: 0.875rem; color: #6b7280;">
+                    <div>File Type: <span id="edit-document-type"></span></div>
+                    <div>File Size: <span id="edit-document-size"></span></div>
+                    <div>Word Count: <span id="edit-document-words"></span></div>
+                    <div>Uploaded: <span id="edit-document-date"></span></div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="hideEditDocumentModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/error-handler.js') }}"></script>
 <script src="{{ url_for('static', filename='js/llm-training.js') }}"></script>
+<script src="{{ url_for('static', filename='js/model-testing.js') }}"></script>
 {% endblock %}

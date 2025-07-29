@@ -30,14 +30,12 @@ except ImportError:
 try:
     from flask import request, session, g
 except ImportError:
-    # Fallback for non-Flask environments
     class UserMixin:
         pass
     
     request = None
     session = {}
     g = type('obj', (object,), {})()
-
 
 class UserRole(Enum):
     """User roles with hierarchical permissions."""
@@ -60,7 +58,6 @@ class UserRole(Enum):
         """Check if this role has required permission level."""
         hierarchy = self.get_hierarchy()
         return hierarchy.get(self.value, 0) >= hierarchy.get(required_role.value, 0)
-
 
 class Permission(Enum):
     """System permissions."""
@@ -86,7 +83,6 @@ class Permission(Enum):
     VIEW_LOGS = "view_logs"
     SYSTEM_CONFIG = "system_config"
     BACKUP_RESTORE = "backup_restore"
-
 
 @dataclass
 class UserSession:
@@ -121,7 +117,6 @@ class UserSession:
     def update_activity(self):
         """Update last activity timestamp."""
         self.last_activity = datetime.utcnow()
-
 
 class PasswordPolicy:
     """Password policy enforcement."""
@@ -180,7 +175,6 @@ class PasswordPolicy:
             "letmein", "welcome", "monkey", "1234567890", "abc123"
         }
         return password.lower() in common_passwords
-
 
 class PasswordHasher:
     """Secure password hashing using PBKDF2."""
@@ -245,7 +239,6 @@ class PasswordHasher:
             logger.error(f"Error verifying password: {str(e)}")
             return False
 
-
 class RolePermissionManager:
     """Manage role-based permissions."""
     
@@ -308,7 +301,6 @@ class RolePermissionManager:
         role_permissions = cls.get_role_permissions(role)
         return permission in role_permissions
 
-
 class AuthenticationManager:
     """Manage user authentication and sessions."""
     
@@ -341,7 +333,6 @@ class AuthenticationManager:
             Tuple of (success, error_message, user_session)
         """
         try:
-            # Check for account lockout
             if self._is_account_locked(username):
                 logger.warning(f"Authentication attempt for locked account: {username}")
                 return False, "Account is temporarily locked due to too many failed attempts", None
@@ -402,12 +393,10 @@ class AuthenticationManager:
             if not user_session:
                 return False, None
             
-            # Check if session is expired
             if user_session.is_expired(self.session_timeout):
                 self._invalidate_session(session_id)
                 return False, None
             
-            # Check if account is locked
             if user_session.is_locked():
                 self._invalidate_session(session_id)
                 return False, None
@@ -468,7 +457,6 @@ class AuthenticationManager:
         Returns:
             User data dictionary or None
         """
-        # Query the actual database for user data
         try:
             from src.database.models import User
             user = User.query.filter_by(username=username).first()
@@ -526,7 +514,6 @@ class AuthenticationManager:
         if len(attempts) < self.max_failed_attempts:
             return False
         
-        # Check if lockout period has expired
         latest_attempt = max(attempts)
         lockout_until = latest_attempt + timedelta(minutes=self.lockout_duration)
         
@@ -564,13 +551,10 @@ class AuthenticationManager:
         if username in self.failed_attempts:
             del self.failed_attempts[username]
 
-
-# Decorators for authentication and authorization
 def require_auth(f):
     """Decorator to require authentication."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Get session from Flask session or request headers
         session_id = session.get('session_id') or request.headers.get('X-Session-ID')
         
         if not session_id:
@@ -590,7 +574,6 @@ def require_auth(f):
     
     return decorated_function
 
-
 def require_permission(permission: Permission):
     """Decorator to require specific permission."""
     def decorator(f):
@@ -607,7 +590,6 @@ def require_permission(permission: Permission):
         return decorated_function
     
     return decorator
-
 
 def require_role(role: UserRole):
     """Decorator to require specific role or higher."""
@@ -626,10 +608,8 @@ def require_role(role: UserRole):
     
     return decorator
 
-
 # Global authentication manager instance
 auth_manager = None
-
 
 def init_auth_manager(session_timeout: int = 30, max_failed_attempts: int = 5, lockout_duration: int = 15) -> AuthenticationManager:
     """Initialize global authentication manager.
@@ -645,7 +625,6 @@ def init_auth_manager(session_timeout: int = 30, max_failed_attempts: int = 5, l
     global auth_manager
     auth_manager = AuthenticationManager(session_timeout, max_failed_attempts, lockout_duration)
     return auth_manager
-
 
 def get_auth_manager() -> Optional[AuthenticationManager]:
     """Get global authentication manager instance.

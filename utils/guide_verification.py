@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 from typing import Optional
 from utils.logger import logger
 
-
 def is_guide_in_use(guide_id) -> bool:
     """
     Check if a marking guide is currently being used for processing.
@@ -19,7 +18,6 @@ def is_guide_in_use(guide_id) -> bool:
         # Import here to avoid circular imports
         from src.database.models import Submission, GradingResult
         
-        # Check for submissions currently being processed with this guide
         active_submissions = Submission.query.filter(
             Submission.marking_guide_id == guide_id,
             Submission.processing_status.in_(['processing', 'pending'])
@@ -29,7 +27,6 @@ def is_guide_in_use(guide_id) -> bool:
             logger.warning(f"Guide {guide_id} is currently in use by {active_submissions} active submissions")
             return True
             
-        # Check for recent grading results (within last 5 minutes)
         # This indicates recent processing activity
         recent_threshold = datetime.utcnow() - timedelta(minutes=5)
         recent_results = GradingResult.query.filter(
@@ -45,5 +42,4 @@ def is_guide_in_use(guide_id) -> bool:
         
     except Exception as e:
         logger.error(f"Error checking if guide {guide_id} is in use: {str(e)}")
-        # Default to allowing processing if check fails
         return False

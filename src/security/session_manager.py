@@ -12,7 +12,6 @@ import json
 import secrets
 from datetime import datetime, timedelta
 
-
 # Import Flask request with fallback
 try:
     from flask import request, has_request_context
@@ -28,7 +27,6 @@ logger = logging.getLogger(__name__)
 try:
     from src.database.models import Session as SessionModel, db
 except ImportError:
-    # Fallback for when models aren't available yet
     db = None
     SessionModel = None
     User = None
@@ -39,11 +37,9 @@ try:
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 except ImportError:
-    # Fallback for when cryptography isn't available
     Fernet = None
     hashes = None
     PBKDF2HMAC = None
-
 
 class SessionEncryption:
     """Handles session data encryption and decryption."""
@@ -56,7 +52,6 @@ class SessionEncryption:
     def _get_fernet(self) -> Fernet:
         """Get or create Fernet instance for encryption."""
         if self._fernet is None:
-            # Derive key from secret
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
@@ -85,7 +80,6 @@ class SessionEncryption:
             logger.error(f"Failed to decrypt session data: {str(e)}")
             # Return None instead of empty dict to ensure consistent behavior with get_session
             return None
-
 
 class SecureSessionManager:
     """
@@ -182,7 +176,6 @@ class SecureSessionManager:
             if not session_id:
                 return None
 
-            # Get session from database
             session = SessionModel.query.filter_by(
                 id=session_id,
                 is_active=True
@@ -419,7 +412,6 @@ class SecureSessionManager:
         current_ip = self._get_client_ip()
         current_user_agent = self._get_user_agent()
 
-        # Allow IP changes for mobile users but log them
         if str(session.ip_address) != current_ip:
             logger.info(
                 f"IP change detected for session {session.id}: {session.ip_address} -> {current_ip}"

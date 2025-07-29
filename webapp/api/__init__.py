@@ -1,14 +1,12 @@
 """
-API package for LLM Training Page
+API Module
+
+This module provides unified API endpoints with standardized error handling,
+status reporting, and monitoring capabilities.
 """
 
-from flask import Blueprint
+from .unified_api import unified_api_bp
+from .status_api import status_api_bp
+from .error_handlers import APIErrorHandler
 
-# Create API blueprint
-api_bp = Blueprint('api', __name__, url_prefix='/api')
-
-# Import route modules
-from . import models
-from . import documents
-from . import training
-from . import reports
+__all__ = ['unified_api_bp', 'status_api_bp', 'APIErrorHandler']

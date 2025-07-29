@@ -17,7 +17,6 @@ from pathlib import Path
 
 from utils.logger import logger
 
-
 class SecurityUtils:
     """Utility class for security-related operations."""
     
@@ -62,7 +61,6 @@ class SecurityUtils:
         if len(secret_key) < 32:
             return False, "Secret key must be at least 32 characters long"
         
-        # Check for common weak patterns
         weak_patterns = [
             "your_secret_key_here",
             "change_me",
@@ -78,7 +76,6 @@ class SecurityUtils:
             if pattern in secret_lower:
                 return False, f"Secret key contains weak pattern: {pattern}"
         
-        # Check for sufficient entropy (basic check)
         unique_chars = len(set(secret_key))
         if unique_chars < 16:
             return False, "Secret key has insufficient entropy (too few unique characters)"
@@ -131,7 +128,6 @@ class SecurityUtils:
             'recommendations': []
         }
         
-        # Check for sensitive variables
         sensitive_vars = [
             'SECRET_KEY',
             'HANDWRITING_OCR_API_KEY',
@@ -146,7 +142,6 @@ class SecurityUtils:
                 audit_results['warnings'].append(f"{var} is not set")
                 continue
             
-            # Check for placeholder values
             placeholder_patterns = [
                 'your_',
                 'change_me',
@@ -164,13 +159,11 @@ class SecurityUtils:
                     )
                     break
             
-            # Specific checks for SECRET_KEY
             if var == 'SECRET_KEY':
                 is_valid, error = SecurityUtils.validate_secret_key(value)
                 if not is_valid:
                     audit_results['issues'].append(f"SECRET_KEY validation failed: {error}")
         
-        # Check for debug mode in production
         debug_mode = os.getenv('DEBUG', 'False').lower()
         if debug_mode == 'true':
             audit_results['warnings'].append("Debug mode is enabled")
@@ -257,7 +250,6 @@ class SecurityUtils:
             'recommendations': []
         }
         
-        # Scan key files for secrets
         key_files = [
             Path('.env'),
             Path('config.py'),
@@ -297,7 +289,6 @@ class SecurityUtils:
         
         return report
 
-
 def generate_secure_config_template() -> str:
     """Generate a secure configuration template.
     
@@ -331,7 +322,6 @@ FORCE_HTTPS=True
 # Remember to:
 # 1. Replace placeholder API keys with real values
 # 2. Keep this file secure and never commit to version control
-# 3. Use different keys for different environments
 """
     
     return template

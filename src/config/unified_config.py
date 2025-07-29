@@ -22,23 +22,17 @@ except ImportError:
     import logging
     logger = logging.getLogger(__name__)
 
-# Load environment variables from multiple sources
 def load_environment_variables():
     """Load environment variables from multiple .env files with priority."""
-    # Load from instance/.env first (highest priority)
     instance_env = Path("instance/.env")
     if instance_env.exists():
         load_dotenv(instance_env, override=True)
 
-    
-    # Load from root .env (lower priority)
     root_env = Path(".env")
     if root_env.exists():
         load_dotenv(root_env, override=False)  # Don't override instance settings
 
-
 load_environment_variables()
-
 
 @dataclass
 class SecurityConfig:
@@ -60,7 +54,6 @@ class SecurityConfig:
         if self.secret_key and len(self.secret_key) < 32:
             raise ValueError("SECRET_KEY must be at least 32 characters long")
 
-
 @dataclass
 class DatabaseConfig:
     """Database configuration settings."""
@@ -75,7 +68,6 @@ class DatabaseConfig:
         """Validate database configuration."""
         if not self.database_url:
             raise ValueError("DATABASE_URL is required")
-
 
 @dataclass
 class FileConfig:
@@ -108,13 +100,11 @@ class FileConfig:
         """Validate and setup file configuration."""
         self.max_content_length = self.max_file_size_mb * 1024 * 1024
 
-        # Create directories if they don't exist
         for directory in [self.temp_dir, self.output_dir, self.upload_dir]:
             directory.mkdir(exist_ok=True)
 
         if self.max_file_size_mb <= 0:
             raise ValueError("max_file_size_mb must be positive")
-
 
 @dataclass
 class APIConfig:
@@ -151,7 +141,6 @@ class APIConfig:
                 "DeepSeek API key not configured - LLM features will be limited"
             )
 
-
 @dataclass
 class CacheConfig:
     """Caching configuration settings."""
@@ -165,7 +154,6 @@ class CacheConfig:
         valid_types = ["simple", "memory"]
         if self.cache_type not in valid_types:
             raise ValueError(f"cache_type must be one of {valid_types}")
-
 
 @dataclass
 class LoggingConfig:
@@ -183,7 +171,6 @@ class LoggingConfig:
         if self.log_level.upper() not in valid_levels:
             raise ValueError(f"log_level must be one of {valid_levels}")
 
-
 @dataclass
 class ServerConfig:
     """Server configuration settings."""
@@ -198,7 +185,6 @@ class ServerConfig:
         """Validate server configuration."""
         if not (1 <= self.port <= 65535):
             raise ValueError("port must be between 1 and 65535")
-
 
 class ConfigurationMigrator:
     """Handles migration of deprecated environment variables to new names."""
@@ -230,7 +216,6 @@ class ConfigurationMigrator:
             logger.info(f"Migrated {len(migrated)} deprecated environment variables")
         
         return migrated
-
 
 class ConfigurationValidator:
     """Validates configuration settings and provides helpful error messages."""
@@ -289,7 +274,6 @@ class ConfigurationValidator:
                     warnings.append(f"Failed to create database directory {db_dir}: {e}")
         
         return warnings
-
 
 class UnifiedConfig:
     """
@@ -353,7 +337,6 @@ class UnifiedConfig:
                         fmt = "." + fmt
                     supported_formats.append(fmt)
         
-        # Use default formats if none were provided
         if not supported_formats:
             supported_formats = [
                 ".pdf",
@@ -428,7 +411,6 @@ class UnifiedConfig:
         if not secret_key:
             if self.environment == "production":
                 raise ValueError("SECRET_KEY must be set in production environment")
-            # Generate a secure key for development
             secret_key = secrets.token_hex(32)
             logger.warning(
                 "Using generated SECRET_KEY for development. Set SECRET_KEY environment variable for production."
@@ -652,7 +634,6 @@ class UnifiedConfig:
         ]
         
         return "\n".join(template_lines)
-
 
 # Global configuration instance
 config = UnifiedConfig()

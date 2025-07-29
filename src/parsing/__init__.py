@@ -22,5 +22,4 @@ Example:
     ```
 """
 
-
 __all__ = ["parse_student_submission"]

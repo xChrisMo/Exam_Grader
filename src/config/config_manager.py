@@ -1,14 +1,13 @@
-import os
-from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+import os
 
+from dataclasses import dataclass
 from dotenv import load_dotenv
+from typing import List
 
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
-
 
 @dataclass
 class Config:
@@ -41,7 +40,6 @@ class Config:
         if not self.handwriting_ocr_api_key:
             logger.warning("HandwritingOCR API key not configured - OCR service will be disabled")
 
-
 class ConfigManager:
     """Manages application configuration."""
 
@@ -63,7 +61,6 @@ class ConfigManager:
 
     def _initialize(self):
         """Internal initialization method."""
-        # Load environment variables from root .env file
         load_dotenv(".env", override=True)
 
         # Create configuration object

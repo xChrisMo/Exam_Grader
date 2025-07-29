@@ -17,7 +17,7 @@ print("Creating database...")
 
 try:
     # Import Flask app to trigger initialization
-    from webapp.exam_grader_app import app
+    from webapp.app import app
     from src.database.models import db
     
     with app.app_context():

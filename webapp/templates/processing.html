@@ -1,5 +1,9 @@
 {% extends "layout.html" %}
 
+{% block head %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="bg-white shadow overflow-hidden sm:rounded-lg">
@@ -56,10 +60,10 @@
                     <p class="text-sm text-gray-500 mt-2">Your submissions have been processed successfully.</p>
                     
                     <div class="mt-6">
-                        <a href="{{ url_for('view_results') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" role="button" tabindex="0">
+                        <a href="{{ url_for('main.results') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" role="button" tabindex="0">
                             View Results
                         </a>
-                        <a href="{{ url_for('dashboard') }}" class="ml-3 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" role="button" tabindex="0">
+                        <a href="{{ url_for('main.dashboard') }}" class="ml-3 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" role="button" tabindex="0">
                             Return to Dashboard
                         </a>
                     </div>
@@ -81,7 +85,7 @@
                             </svg>
                             Retry Processing
                         </button>
-                        <a href="{{ url_for('dashboard') }}" class="ml-3 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" role="button" tabindex="0">
+                        <a href="{{ url_for('main.dashboard') }}" class="ml-3 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" role="button" tabindex="0">
                             Return to Dashboard
                         </a>
                     </div>
@@ -97,12 +101,15 @@
     document.addEventListener('DOMContentLoaded', function() {
         // Get progress ID from URL parameter or session
         const urlParams = new URLSearchParams(window.location.search);
-        const progressId = urlParams.get('progress_id') || '{{ session.get("current_progress_id", "") }}';
+        const progressId = urlParams.get('progress_id') || '';
         
         if (!progressId) {
+            console.warn('No progress ID found in URL parameters');
             showError('No progress ID found. Please return to the dashboard and try again.');
             return;
         }
+        
+        console.log('Starting progress tracking for ID:', progressId);
         
         // Start polling for progress updates
         startProgressPolling(progressId);
@@ -123,103 +130,153 @@
                 clearInterval(window.progressPollingInterval);
             }
             
-            // Poll every 2 seconds
-            window.progressPollingInterval = setInterval(async () => {
-                try {
-                    const progress = await getProgress(progressId);
-                    updateProgressUI(progress);
-                    
-                    // Check if processing is complete or failed
-                    if (progress.status === 'completed') {
-                        stopProgressPolling();
-                        showComplete();
-                    } else if (progress.status === 'failed') {
-                        stopProgressPolling();
-                        showError(progress.message || 'Processing failed');
-                    }
-                } catch (error) {
-                    console.error('Error polling for progress:', error);
-                    // Don't stop polling immediately on network errors, retry a few times
-                    if (window.progressErrorCount === undefined) {
-                        window.progressErrorCount = 0;
-                    }
-                    window.progressErrorCount++;
-                    
-                    if (window.progressErrorCount >= 5) {
-                        stopProgressPolling();
-                        showError('Error checking progress: ' + error.message);
-                    }
-                }
-            }, 2000);
+            // Reset error count
+            window.progressErrorCount = 0;
+            
+            // Poll every 2 seconds with exponential backoff on errors
+            let pollInterval = 2000; // Start with 2 seconds
+            
+            function poll() {
+                getProgress(progressId)
+                    .then(progressData => {
+                        updateProgressUI(progressData);
+                        
+                        // Check status from either nested or flat structure
+                        const status = progressData.status || (progressData.progress && progressData.progress.status) || 'processing';
+                        const message = progressData.message || (progressData.progress && progressData.progress.message) || 'Processing failed';
+                        
+                        // Check if processing is complete or failed
+                        if (status === 'completed') {
+                            stopProgressPolling();
+                            showComplete();
+                        } else if (status === 'failed' || status === 'error') {
+                            stopProgressPolling();
+                            showError(message);
+                        } else {
+                            // Reset poll interval on successful request
+                            pollInterval = 2000;
+                            window.progressPollingInterval = setTimeout(poll, pollInterval);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error polling for progress:', error);
+                        
+                        // Don't stop polling immediately on network errors, retry a few times
+                        if (window.progressErrorCount === undefined) {
+                            window.progressErrorCount = 0;
+                        }
+                        window.progressErrorCount++;
+                        
+                        if (window.progressErrorCount >= 5) {
+                            stopProgressPolling();
+                            showError('Connection error: Unable to check progress. Please check your internet connection and try again.');
+                        } else {
+                            console.log(`Retrying progress check (attempt ${window.progressErrorCount}/5)`);
+                            // Exponential backoff: increase interval on errors
+                            pollInterval = Math.min(pollInterval * 1.5, 10000); // Max 10 seconds
+                            window.progressPollingInterval = setTimeout(poll, pollInterval);
+                        }
+                    });
+            }
+            
+            // Start polling
+            poll();
         }
         
         function stopProgressPolling() {
             if (window.progressPollingInterval) {
-                clearInterval(window.progressPollingInterval);
+                clearTimeout(window.progressPollingInterval);
                 window.progressPollingInterval = null;
                 console.log('Progress polling stopped');
             }
         }
         
         async function getProgress(progressId) {
-            const response = await fetch(`/api/progress/${progressId}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': ExamGrader.csrf.getToken()
-                },
-                credentials: 'same-origin'
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error ${response.status}`);
+            try {
+                const response = await fetch(`/processing/api/status/${progressId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || ''
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('Progress session not found. The processing may have completed or expired.');
+                    } else if (response.status >= 500) {
+                        throw new Error('Server error occurred. Please try again later.');
+                    } else {
+                        throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+                    }
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to get progress information');
+                }
+                
+                // Reset error count on successful request
+                window.progressErrorCount = 0;
+                
+                // Return the full data object to handle both structures
+                return data;
+            } catch (error) {
+                console.error('Progress fetch error:', error);
+                throw error;
             }
-            
-            const data = await response.json();
-            
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to get progress');
-            }
-            
-            // Reset error count on successful request
-            window.progressErrorCount = 0;
-            
-            return data.progress;
         }
         
-        function updateProgressUI(progress) {
+        function updateProgressUI(progressData) {
             const progressBar = document.getElementById('progress-bar');
             const progressText = document.getElementById('progress-text');
             const progressDetails = document.getElementById('progress-details');
             const progressEta = document.getElementById('progress-eta');
             
+            // Handle both nested progress object and flat structure
+            const progress = progressData.progress || progressData;
+            const percentage = progress.percentage || progressData.progress || 0;
+            const currentOperation = progress.current_operation || progressData.current_operation || 'Processing...';
+            const currentStep = progress.current_step || progressData.current_step || 1;
+            const totalSteps = progress.total_steps || progressData.total_steps || 3;
+            const submissionIndex = progress.submission_index || progressData.submission_index || 1;
+            const totalSubmissions = progress.total_submissions || progressData.total_submissions || 1;
+            const estimatedTime = progress.estimated_time_remaining || progressData.estimated_time_remaining;
+            const details = progress.details || progressData.details;
+            const status = progress.status || progressData.status || 'processing';
+            
             if (progressBar) {
-                progressBar.style.width = `${progress.percentage}%`;
+                progressBar.style.width = `${percentage}%`;
+                progressBar.setAttribute('aria-valuenow', percentage);
             }
             
             if (progressText) {
-                progressText.textContent = progress.current_operation || 'Processing...';
+                progressText.textContent = currentOperation;
             }
             
             if (progressDetails) {
-                const details = progress.details ||
-                    `Step ${progress.current_step}/${progress.total_steps} - Submission ${progress.submission_index}/${progress.total_submissions}`;
-                progressDetails.textContent = details;
+                const detailsText = details || 
+                    `Step ${currentStep}/${totalSteps} - Submission ${submissionIndex}/${totalSubmissions}`;
+                progressDetails.textContent = detailsText;
             }
             
-            if (progressEta && progress.estimated_time_remaining) {
-                const eta = Math.round(progress.estimated_time_remaining);
+            if (progressEta && estimatedTime) {
+                const eta = Math.round(estimatedTime);
                 progressEta.textContent = `Estimated time remaining: ${eta}s`;
+            } else if (progressEta) {
+                progressEta.textContent = '';
             }
             
             // Update processing steps based on current operation
-            updateProcessingSteps(progress.current_operation);
+            updateProcessingSteps(currentOperation);
             
             // Update status color based on progress status
-            if (progress.status === 'completed') {
+            if (status === 'completed') {
                 progressBar.classList.remove('bg-blue-600');
                 progressBar.classList.add('bg-green-600');
-            } else if (progress.status === 'error') {
+            } else if (status === 'error' || status === 'failed') {
                 progressBar.classList.remove('bg-blue-600');
                 progressBar.classList.add('bg-red-600');
             }
@@ -262,10 +319,13 @@
             document.getElementById('processing-status').classList.add('hidden');
             document.getElementById('processing-complete').classList.remove('hidden');
             
-            // Auto-redirect to dashboard after 3 seconds to clear button loading state
+            // Auto-redirect to results page after 5 seconds, but allow user to click immediately
             setTimeout(() => {
-                window.location.href = '{{ url_for("dashboard") }}';
-            }, 3000);
+                // Only redirect if user hasn't already clicked a button
+                if (document.getElementById('processing-complete').style.display !== 'none') {
+                    window.location.href = '{{ url_for("main.results") }}';
+                }
+            }, 5000);
         }
         
         function showError(message) {
@@ -279,7 +339,7 @@
                 // Show loading state
                 const retryButton = document.getElementById('retry-button');
                 if (retryButton) {
-                    ExamGrader.utils.showButtonLoading(retryButton, 'Retrying...');
+                    retryButton.innerHTML = '<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Retrying...';
                     retryButton.disabled = true;
                 }
                 
@@ -288,40 +348,46 @@
                 document.getElementById('processing-status').classList.remove('hidden');
                 
                 // Get CSRF token
-                const csrfToken = ExamGrader.csrf.getToken();
+                const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || '';
                 
-                // Retry the processing
-                const response = await fetch('/api/process-unified-ai', {
+                // Try to retry the processing using the API
+                const response = await fetch('/processing/api/retry', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': csrfToken
                     },
-                    body: JSON.stringify({}),
+                    body: JSON.stringify({
+                        progress_id: progressId
+                    }),
                     credentials: 'same-origin'
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 
                 const data = await response.json();
                 
-                if (data.success && data.progress_id) {
-                    // Start polling with new progress ID
-                    startProgressPolling(data.progress_id);
+                if (data.success) {
+                    // Restart progress polling with the same progress ID
+                    startProgressPolling(progressId);
                 } else {
                     throw new Error(data.error || 'Retry failed');
                 }
                 
             } catch (error) {
                 console.error('Retry failed:', error);
-                showError(`Retry failed: ${error.message}`);
+                let errorMessage = 'Retry failed';
+                if (error.message) {
+                    errorMessage += `: ${error.message}`;
+                }
+                showError(errorMessage);
                 
                 // Reset retry button
                 const retryButton = document.getElementById('retry-button');
                 if (retryButton) {
-                    ExamGrader.utils.hideButtonLoading(retryButton);
+                    retryButton.innerHTML = '<svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>Retry Processing';
                     retryButton.disabled = false;
                 }
             }

@@ -18,13 +18,11 @@ except ImportError:
     import logging
     logger = logging.getLogger(__name__)
 
-
 class CircuitState(Enum):
     """Circuit breaker states."""
     CLOSED = "closed"      # Normal operation
     OPEN = "open"          # Circuit is open, calls fail fast
     HALF_OPEN = "half_open"  # Testing if service is back
-
 
 @dataclass
 class CircuitBreakerConfig:
@@ -34,11 +32,9 @@ class CircuitBreakerConfig:
     success_threshold: int = 3          # Successes needed to close from half-open
     timeout: float = 30.0               # Request timeout in seconds
 
-
 class CircuitBreakerError(Exception):
     """Exception raised when circuit breaker is open."""
     pass
-
 
 class CircuitBreaker:
     """
@@ -90,7 +86,6 @@ class CircuitBreaker:
             Exception: Original function exceptions
         """
         with self._lock:
-            # Check if circuit should be opened
             if self.state == CircuitState.OPEN:
                 if self._should_attempt_reset():
                     self.state = CircuitState.HALF_OPEN
@@ -181,7 +176,6 @@ class CircuitBreaker:
             self.last_failure_time = 0
             logger.info(f"Circuit breaker '{self.name}' manually reset to CLOSED")
 
-
 def circuit_breaker(name: str, config: CircuitBreakerConfig = None):
     """
     Decorator for applying circuit breaker to functions.
@@ -200,14 +194,11 @@ def circuit_breaker(name: str, config: CircuitBreakerConfig = None):
         def wrapper(*args, **kwargs):
             return breaker.call(func, *args, **kwargs)
         
-        # Attach breaker to function for external access
         wrapper.circuit_breaker = breaker
         return wrapper
     
     return decorator
 
-
-# Global circuit breakers for common services
 llm_circuit_breaker = CircuitBreaker(
     "llm_service",
     CircuitBreakerConfig(
@@ -227,7 +218,6 @@ ocr_circuit_breaker = CircuitBreaker(
         timeout=60.0
     )
 )
-
 
 def get_all_circuit_breakers() -> dict:
     """Get status of all circuit breakers."""

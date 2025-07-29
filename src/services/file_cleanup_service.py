@@ -14,7 +14,6 @@ from pathlib import Path
 from src.database.models import MarkingGuide, Submission, db
 from utils.logger import logger
 
-
 @dataclass
 class CleanupStats:
     """Statistics for cleanup operations."""
@@ -35,7 +34,6 @@ class CleanupStats:
             "errors": self.errors,
             "duration_seconds": round(self.duration_seconds, 2),
         }
-
 
 class FileCleanupService:
     """
@@ -94,6 +92,10 @@ class FileCleanupService:
             self._stop_cleanup.set()
             self._cleanup_thread.join(timeout=30)
             logger.info("Stopped scheduled file cleanup")
+    
+    def stop(self):
+        """Stop the file cleanup service (alias for stop_scheduled_cleanup)."""
+        self.stop_scheduled_cleanup()
 
     def _cleanup_worker(self):
         """Background worker for scheduled cleanup."""
@@ -111,7 +113,6 @@ class FileCleanupService:
             except Exception as e:
                 logger.error(f"Error in scheduled cleanup: {str(e)}")
 
-            # Wait for next cleanup cycle
             self._stop_cleanup.wait(self._cleanup_interval)
 
     def cleanup_all(self) -> CleanupStats:
@@ -149,7 +150,6 @@ class FileCleanupService:
 
         total_stats.duration_seconds = time.time() - start_time
 
-        # Only log if there's something meaningful to report
         if total_stats.files_deleted > 0 or total_stats.errors > 0:
             logger.info(f"Cleanup completed: {total_stats.files_deleted} files deleted, "
                        f"{total_stats.bytes_freed_mb:.1f}MB freed"
@@ -231,7 +231,6 @@ class FileCleanupService:
             # Import here to avoid circular imports
             from src.database.models import MarkingGuide, Submission, db
 
-            # Check if we have app context, if not skip database cleanup
             try:
                 from flask import has_app_context
 
@@ -331,7 +330,6 @@ class FileCleanupService:
             # Import here to avoid circular imports
             from src.database.models import MarkingGuide, Submission
 
-            # Check if we have app context, if not skip database cleanup
             try:
                 from flask import has_app_context
 
@@ -344,7 +342,6 @@ class FileCleanupService:
                 logger.warning("Flask not available, skipping orphaned files cleanup")
                 return stats
 
-            # Get all file paths from database
             db_file_paths = set()
 
             # Submission files
@@ -361,7 +358,6 @@ class FileCleanupService:
                 if guide.file_path:
                     db_file_paths.add(Path(guide.file_path).resolve())
 
-            # Check upload directory for orphaned files
             for directory in [self.upload_dir, self.output_dir]:
                 if not directory.exists():
                     continue
@@ -371,7 +367,6 @@ class FileCleanupService:
                         stats.files_scanned += 1
 
                         try:
-                            # Check if file is referenced in database
                             if file_path.resolve() not in db_file_paths:
                                 # Check file age
                                 file_mtime = datetime.fromtimestamp(

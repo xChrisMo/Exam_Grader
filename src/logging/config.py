@@ -12,7 +12,6 @@ try:
     from .log_aggregator import LogAggregator
     from .flask_integration import FlaskLoggingIntegration
 except ImportError:
-    # Fallback for standalone usage
     ComprehensiveLogger = None
     LogLevel = None
     setup_comprehensive_logging = None
@@ -20,7 +19,6 @@ except ImportError:
     setup_structured_logging = None
     LogAggregator = None
     FlaskLoggingIntegration = None
-
 
 class LoggingConfiguration:
     """Centralized logging configuration manager."""
@@ -232,7 +230,6 @@ class LoggingConfiguration:
             }
         }
         
-        # Add aggregator metrics if available
         if self.log_aggregator:
             try:
                 aggregator_metrics = self.log_aggregator.get_metrics()
@@ -240,7 +237,6 @@ class LoggingConfiguration:
             except Exception as e:
                 metrics['aggregator_error'] = str(e)
         
-        # Add Flask metrics if available
         if self.flask_integration:
             try:
                 flask_metrics = self.flask_integration.get_request_metrics()
@@ -270,10 +266,8 @@ class LoggingConfiguration:
             'configured': self._configured
         }
 
-
 # Global configuration instance
 _global_config: Optional[LoggingConfiguration] = None
-
 
 def setup_application_logging(
     app_name: str = 'exam_grader',
@@ -294,7 +288,6 @@ def setup_application_logging(
     """
     global _global_config
     
-    # Get configuration from environment if not provided
     if log_level is None:
         log_level = os.getenv('LOG_LEVEL', 'INFO')
     
@@ -321,7 +314,6 @@ def setup_application_logging(
     
     return _global_config
 
-
 def get_application_logger(name: Optional[str] = None) -> Optional[ComprehensiveLogger]:
     """Get application logger instance.
     
@@ -335,7 +327,6 @@ def get_application_logger(name: Optional[str] = None) -> Optional[Comprehensive
         return _global_config.get_logger(name)
     return None
 
-
 def get_application_structured_logger(name: Optional[str] = None) -> Optional[StructuredLogger]:
     """Get application structured logger instance.
     
@@ -348,7 +339,6 @@ def get_application_structured_logger(name: Optional[str] = None) -> Optional[St
     if _global_config:
         return _global_config.get_structured_logger(name)
     return None
-
 
 def get_logging_metrics() -> Dict[str, Any]:
     """Get application logging metrics.

@@ -23,7 +23,6 @@ except ImportError:
 
     logger = logging.getLogger(__name__)
 
-
 class SecretsEncryption:
     """Handles encryption and decryption of secrets."""
 
@@ -72,7 +71,6 @@ class SecretsEncryption:
         """Get the salt used for key derivation."""
         return self.salt
 
-
 class SecretsManager:
     """
     Secure secrets manager for API keys and sensitive configuration.
@@ -103,7 +101,6 @@ class SecretsManager:
         """Get master key from environment or generate one."""
         master_key = os.getenv("SECRETS_MASTER_KEY")
         if not master_key:
-            # Generate a master key for development
             master_key = base64.urlsafe_b64encode(os.urandom(32)).decode()
             logger.warning(
                 "Generated temporary master key. Set SECRETS_MASTER_KEY environment variable for production."
@@ -206,7 +203,6 @@ class SecretsManager:
             Secret value or default
         """
         try:
-            # First check environment variables (for backward compatibility)
             env_value = os.getenv(key)
             if env_value:
                 return env_value
@@ -376,10 +372,8 @@ class SecretsManager:
 
         return validation_results
 
-
 # Global secrets manager instance
 secrets_manager = SecretsManager()
-
 
 # Initialize with common API keys
 def initialize_secrets():
@@ -391,7 +385,6 @@ def initialize_secrets():
         "DATABASE_URL",
     ]
 
-    # Import from environment if available
     imported = secrets_manager.import_from_env(common_secrets)
 
     if imported > 0:

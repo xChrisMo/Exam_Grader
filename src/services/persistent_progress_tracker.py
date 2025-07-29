@@ -10,11 +10,9 @@ try:
     from src.database.models import db
 except ImportError:
     try:
-        # Try alternative import path
         from webapp.database.models import db
     except ImportError:
         try:
-            # Try importing from the main database module
             from src.database import db
         except ImportError:
             # Fallback when db is not available
@@ -58,13 +56,11 @@ except ImportError:
         MessagePriority = None
         WebSocketManager = None
 
-# Handle case where get_logger might be None due to import issues
 if get_logger is not None:
     logger = get_logger(__name__)
 else:
     import logging
     logger = logging.getLogger(__name__)
-
 
 class PersistentProgressTracker:
     """Enhanced progress tracker with database persistence and recovery capabilities."""
@@ -81,7 +77,6 @@ class PersistentProgressTracker:
         self.logger = logger
         self.db_available = db is not None and ProgressSession is not None
         
-        # In-memory cache for active sessions
         self._active_sessions_cache: Dict[str, Any] = {}
         self._cache_lock = Lock()
         
@@ -239,7 +234,6 @@ class PersistentProgressTracker:
             # Emit real-time update
             self._emit_progress_update(session_id, progress_update)
             
-            # Record metrics if provided
             if metrics:
                 self._record_metrics(session_id, metrics)
             
@@ -299,7 +293,6 @@ class PersistentProgressTracker:
                 db.session.add(final_update)
                 db.session.commit()
             
-            # Remove from cache
             with self._cache_lock:
                 self._active_sessions_cache.pop(session_id, None)
             
@@ -428,7 +421,6 @@ class PersistentProgressTracker:
                 recovery_status="pending"
             )
             
-            # Reset session state for recovery
             if recovery_type == "restart":
                 if hasattr(progress_session, 'current_step'):
                     progress_session.current_step = 0
@@ -735,12 +727,10 @@ class PersistentProgressTracker:
         except Exception as e:
             logger.warning(f"Failed to record metrics for {session_id}: {e}")
 
-
 # Global instance - create with error handling
 try:
     persistent_progress_tracker = PersistentProgressTracker()
 except Exception as e:
-    # Fallback instance if initialization fails
     import logging
     fallback_logger = logging.getLogger(__name__)
     fallback_logger.warning(f"Failed to initialize PersistentProgressTracker: {e}")

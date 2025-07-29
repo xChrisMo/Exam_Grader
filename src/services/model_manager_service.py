@@ -11,7 +11,6 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 from datetime import datetime
 
-# Import ValidationResult from training_service to avoid circular imports
 # We'll define it locally to avoid the circular dependency
 class ValidationResult:
     """Validation result helper class"""
@@ -46,10 +45,7 @@ class ValidationResult:
             return ""
         return "; ".join([error['message'] for error in self.errors])
 
-
-
 logger = logging.getLogger(__name__)
-
 
 class ModelProvider(Enum):
     """Supported model providers"""
@@ -58,14 +54,12 @@ class ModelProvider(Enum):
     ANTHROPIC = "anthropic"
     HUGGINGFACE = "huggingface"
 
-
 class ModelStatus(Enum):
     """Model availability status"""
     AVAILABLE = "available"
     UNAVAILABLE = "unavailable"
     MAINTENANCE = "maintenance"
     DEPRECATED = "deprecated"
-
 
 @dataclass
 class LLMModel:
@@ -114,7 +108,6 @@ class LLMModel:
         
         return cls(**data)
 
-
 @dataclass
 class TrainingConfig:
     """Training configuration data structure"""
@@ -133,7 +126,6 @@ class TrainingConfig:
     def from_dict(cls, data: Dict[str, Any]) -> 'TrainingConfig':
         """Create from dictionary"""
         return cls(**data)
-
 
 class ModelManagerService:
     """Service for managing LLM models and their configurations"""
@@ -372,7 +364,6 @@ class ModelManagerService:
             if not model:
                 return False
             
-            # Check if API key is available for models that require it
             if model.requires_api_key:
                 api_key_available = self._check_api_key_availability(model.provider)
                 if not api_key_available:
@@ -434,7 +425,6 @@ class ModelManagerService:
         except Exception as e:
             logger.error(f"Error updating status for model {model_id}: {str(e)}")
             return False
-
 
 # Global instance
 model_manager_service = ModelManagerService()

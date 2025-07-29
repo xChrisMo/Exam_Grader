@@ -22,7 +22,6 @@ from src.services.model_manager_service import model_manager_service, TrainingCo
 from src.services.consolidated_llm_service import ConsolidatedLLMService
 from utils.logger import logger
 
-
 class TrainingStatus(Enum):
     """Training job status"""
     PENDING = "pending"
@@ -32,7 +31,6 @@ class TrainingStatus(Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
-
 
 @dataclass
 class TrainingJob:
@@ -86,7 +84,6 @@ class TrainingJob:
             data['end_time'] = datetime.fromisoformat(data['end_time'])
         return cls(**data)
 
-
 class TrainingService(BaseService):
     """Service for managing LLM training operations"""
 
@@ -101,7 +98,6 @@ class TrainingService(BaseService):
     async def initialize(self) -> bool:
         """Initialize the training service"""
         try:
-            # Initialize LLM service for training operations
             self.llm_service = ConsolidatedLLMService()
             if hasattr(self.llm_service, 'initialize'):
                 try:
@@ -261,8 +257,8 @@ class TrainingService(BaseService):
         
         self._add_job_log(job_id, "Loading dataset...")
         
-        # TODO: Load actual dataset from dataset_id
-        # For now, simulate data preparation
+        # Dataset loading implementation deferred
+        # Currently using simulated data preparation
         time.sleep(2)
         
         self._add_job_log(job_id, "Preprocessing training data...")
@@ -279,7 +275,6 @@ class TrainingService(BaseService):
         total_epochs = job.config.epochs
         
         for epoch in range(1, total_epochs + 1):
-            # Check if job was cancelled
             current_job = self.get_training_job(job_id)
             if not current_job or current_job.status == TrainingStatus.CANCELLED:
                 return
@@ -376,7 +371,6 @@ class TrainingService(BaseService):
                 if status == TrainingStatus.TRAINING and not job.start_time:
                     job.start_time = datetime.now()
                 
-                # Update database if callback is available
                 if hasattr(self, '_db_update_callback') and self._db_update_callback:
                     try:
                         self._db_update_callback(job_id, status.value, error_message, None)
@@ -469,10 +463,8 @@ class TrainingService(BaseService):
         """Set callback function to update database when job status changes"""
         self._db_update_callback = callback
 
-
 # Global instance
 training_service = TrainingService()
-
 
 class ValidationResult:
     """Validation result helper class"""

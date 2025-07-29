@@ -6,7 +6,6 @@ from enum import Enum
 from typing import Optional, Dict, Any, List
 import hashlib
 
-
 class DocumentType(Enum):
     """Supported document types."""
     PDF = "pdf"
@@ -14,14 +13,12 @@ class DocumentType(Enum):
     DOCX = "docx"
     JSON = "json"
 
-
 class DocumentStatus(Enum):
     """Document processing status."""
     PENDING = "pending"
     PROCESSING = "processing"
     PROCESSED = "processed"
     FAILED = "failed"
-
 
 @dataclass
 class DocumentMetadata:
@@ -49,7 +46,6 @@ class DocumentMetadata:
             "upload_date": self.upload_date.isoformat(),
             "processed_date": self.processed_date.isoformat() if self.processed_date else None
         }
-
 
 @dataclass
 class ProcessedDocument:
@@ -106,7 +102,6 @@ class ProcessedDocument:
             metadata=metadata
         )
 
-
 @dataclass
 class Dataset:
     """Document dataset for training organization."""
@@ -140,7 +135,6 @@ class Dataset:
         if document_id in self.document_ids:
             self.document_ids.remove(document_id)
             self.updated_date = datetime.utcnow()
-
 
 @dataclass
 class DocumentProcessingResult:
@@ -176,7 +170,6 @@ class DocumentProcessingResult:
             error_message=error_message,
             warnings=warnings or []
         )
-
 
 @dataclass
 class FileUpload:

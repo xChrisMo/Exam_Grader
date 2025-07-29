@@ -128,31 +128,28 @@
 document.addEventListener('DOMContentLoaded', function() {
     let selectedGuide = null;
     let selectedSubmissions = [];
+    let progressPollingInterval = null;
+    let progressRetryCount = 0;
+    const MAX_PROGRESS_RETRIES = 5;
     
     const startButton = document.getElementById('start-processing');
     const statusDiv = document.getElementById('processing-status');
     const progressSection = document.getElementById('progress-section');
     const resultsSection = document.getElementById('results-section');
     
-    // Initialize the page state
+    // Initialize the page
     initializePage();
-    
-    // Load marking guides only - submissions will load when guide is selected
     loadMarkingGuides();
     
     function initializePage() {
-        // Clear any existing selections first
         selectedSubmissions = [];
         selectedGuide = null;
         
-        // Simply hide the submissions container instead of removing it
         const container = document.getElementById('submissions-container');
         const loadingDiv = document.getElementById('submissions-loading');
         
         if (container) {
             container.classList.add('hidden');
-            container.style.display = 'none';
-            console.log('Submissions container hidden');
         }
         
         if (loadingDiv) {
@@ -160,38 +157,39 @@ document.addEventListener('DOMContentLoaded', function() {
             loadingDiv.classList.remove('hidden');
         }
         
-        // Initialize processing button state
         updateProcessingButton();
         
-        console.log('Page initialized - submissions container hidden');
+        // Set up event listeners
+        startButton.addEventListener('click', function() {
+            if (selectedGuide && selectedSubmissions.length > 0) {
+                startEnhancedProcessing();
+            }
+        });
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', function() {
+            clearProgressPolling();
+        });
     }
     
-    startButton.addEventListener('click', function() {
-        if (selectedGuide && selectedSubmissions.length > 0) {
-            startEnhancedProcessing();
+    async function loadMarkingGuides() {
+        try {
+            const response = await fetch('/refactored/api/marking-guides');
+            const data = await response.json();
+            
+            if (data.success) {
+                populateMarkingGuideSelect(data.guides || []);
+            } else {
+                throw new Error(data.error || 'Failed to load marking guides');
+            }
+        } catch (error) {
+            console.error('Error loading marking guides:', error);
+            const select = document.getElementById('marking-guide-select');
+            if (select) {
+                select.innerHTML = '<option value="">Error loading marking guides</option>';
+            }
         }
-    });
-    
-    function loadMarkingGuides() {
-        fetch('/refactored/api/marking-guides')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    populateMarkingGuideSelect(data.guides || []);
-                } else {
-                    throw new Error(data.error || 'Failed to load marking guides');
-                }
-            })
-            .catch(error => {
-                console.error('Error loading marking guides:', error);
-                const select = document.getElementById('marking-guide-select');
-                if (select) {
-                    select.innerHTML = '<option value="">Error loading marking guides</option>';
-                }
-            });
     }
-    
-
     
     function populateMarkingGuideSelect(guides) {
         const select = document.getElementById('marking-guide-select');
@@ -217,8 +215,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const selectedValue = this.value;
             if (selectedValue) {
                 selectedGuide = selectedValue;
-                showGuideInfo(guides.find(g => g.id == selectedValue));
-                // Load submissions for the selected guide
+                const selectedGuideData = guides.find(g => g.id == selectedValue);
+                showGuideInfo(selectedGuideData);
                 loadSubmissionsForGuide(selectedValue);
             } else {
                 selectedGuide = null;
@@ -293,154 +291,56 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function loadSubmissionsForGuide(guideId) {
-        console.log(`=== Loading submissions for guide ID: ${guideId} ===`);
-        
+    async function loadSubmissionsForGuide(guideId) {
         const loadingDiv = document.getElementById('submissions-loading');
-        const submissionsContainer = document.getElementById('submissions-container');
-        
-        console.log('Loading div found:', !!loadingDiv);
-        console.log('Submissions container found:', !!submissionsContainer);
         
         if (loadingDiv) {
             loadingDiv.textContent = 'Loading submissions...';
             loadingDiv.classList.remove('hidden');
         }
         
-        // Restore the submissions container if it was removed
-        if (!submissionsContainer && window.originalSubmissionsContainer) {
-            console.log('Restoring submissions container from stored HTML');
-            const submissionsSection = loadingDiv ? loadingDiv.parentNode : null;
-            if (submissionsSection) {
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = window.originalSubmissionsContainer;
-                const restoredContainer = tempDiv.firstChild;
-                
-                if (loadingDiv) {
-                    loadingDiv.parentNode.insertBefore(restoredContainer, loadingDiv.nextSibling);
-                    console.log('Submissions container restored to DOM');
-                } else {
-                    submissionsSection.appendChild(restoredContainer);
-                    console.log('Submissions container restored to DOM (fallback)');
-                }
-            }
-        } else if (submissionsContainer) {
-            console.log('Submissions container already exists in DOM');
-        }
-        
-        // Clear previous selections
         selectedSubmissions = [];
         
-        // Load all user submissions and show them (they will be processed with the selected guide)
-        console.log('Loading all user submissions');
-        const allApiUrl = '/refactored/api/submissions';
-        console.log('Making API call to:', allApiUrl);
-        
-        fetch(allApiUrl)
-            .then(response => {
-                console.log('API Response status:', response.status);
-                console.log('API Response ok:', response.ok);
-                return response.json();
-            })
-            .then(data => {
-                console.log('API Response data:', data);
-                
-                if (data.success) {
-                    const allSubmissions = data.submissions || [];
-                    console.log(`Found ${allSubmissions.length} total user submissions`);
-                    
-                    if (allSubmissions.length > 0) {
-                        console.log('Displaying all submissions');
-                        displaySubmissions(allSubmissions);
-                        if (loadingDiv) {
-                            loadingDiv.innerHTML = `
-                                <div class="text-blue-600 text-sm mb-2">
-                                    <p><strong>Showing all your submissions (${allSubmissions.length} found)</strong></p>
-                                    <p>These submissions will be processed using the selected marking guide.</p>
-                                </div>
-                            `;
-                        }
-                    } else {
-                        console.log('No submissions found');
-                        if (loadingDiv) {
-                            loadingDiv.innerHTML = `
-                                <div class="text-yellow-600 text-sm">
-                                    <p>No submissions found in your account.</p>
-                                    <p>Please upload some submissions first.</p>
-                                </div>
-                            `;
-                        }
-                    }
-                } else {
-                    throw new Error(data.error || 'Failed to load submissions');
-                }
-            })
-            .catch(error => {
-                console.error('Error loading submissions:', error);
-                if (loadingDiv) {
-                    loadingDiv.innerHTML = `
-                        <div class="text-red-600 text-sm">
-                            <p>Error loading submissions: ${error.message}</p>
-                            <p>Please try again or check the console for more details.</p>
-                        </div>
-                    `;
-                }
-            });
-        
-        function loadAllUserSubmissions() {
-            console.log('Loading all user submissions as fallback');
-            const allApiUrl = '/refactored/api/submissions';
-            console.log('Making all submissions API call to:', allApiUrl);
+        try {
+            const response = await fetch('/refactored/api/submissions');
+            const data = await response.json();
             
-            fetch(allApiUrl)
-                .then(response => {
-                    console.log('All submissions API Response status:', response.status);
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('All submissions API Response data:', data);
-                    
-                    if (data.success) {
-                        const submissions = data.submissions || [];
-                        console.log(`Found ${submissions.length} total user submissions`);
-                        
-                        if (submissions.length > 0) {
-                            displaySubmissions(submissions);
-                            // Update loading message to explain what's shown
-                            if (loadingDiv) {
-                                loadingDiv.innerHTML = `
-                                    <div class="text-blue-600 text-sm mb-2">
-                                        <p><strong>Showing all your submissions (${submissions.length} found)</strong></p>
-                                        <p>These submissions will be processed using the selected marking guide.</p>
-                                        <p class="text-xs text-gray-500 mt-1">Note: Submissions are not pre-linked to this guide, but can be processed with it.</p>
-                                    </div>
-                                `;
-                            }
-                        } else {
-                            if (loadingDiv) {
-                                loadingDiv.innerHTML = `
-                                    <div class="text-yellow-600 text-sm">
-                                        <p>No submissions found in your account.</p>
-                                        <p>Please upload some submissions first.</p>
-                                    </div>
-                                `;
-                            }
-                        }
-                    } else {
-                        throw new Error(data.error || 'Failed to load submissions');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading all submissions:', error);
+            if (data.success) {
+                const allSubmissions = data.submissions || [];
+                
+                if (allSubmissions.length > 0) {
+                    displaySubmissions(allSubmissions);
                     if (loadingDiv) {
                         loadingDiv.innerHTML = `
-                            <div class="text-red-600 text-sm">
-                                <p>Error loading submissions: ${error.message}</p>
-                                <p>Please try again or check the console for more details.</p>
+                            <div class="text-blue-600 text-sm mb-2">
+                                <p><strong>Showing all your submissions (${allSubmissions.length} found)</strong></p>
+                                <p>These submissions will be processed using the selected marking guide.</p>
                             </div>
                         `;
                     }
-                });
+                } else {
+                    if (loadingDiv) {
+                        loadingDiv.innerHTML = `
+                            <div class="text-yellow-600 text-sm">
+                                <p>No submissions found in your account.</p>
+                                <p>Please upload some submissions first.</p>
+                            </div>
+                        `;
+                    }
+                }
+            } else {
+                throw new Error(data.error || 'Failed to load submissions');
+            }
+        } catch (error) {
+            console.error('Error loading submissions:', error);
+            if (loadingDiv) {
+                loadingDiv.innerHTML = `
+                    <div class="text-red-600 text-sm">
+                        <p>Error loading submissions: ${error.message}</p>
+                        <p>Please try again or check the console for more details.</p>
+                    </div>
+                `;
+            }
         }
     }
     
@@ -457,7 +357,6 @@ document.addEventListener('DOMContentLoaded', function() {
             loadingDiv.classList.remove('hidden');
         }
         
-        // Clear selections
         selectedSubmissions = [];
         updateSelectedCount();
     }
@@ -466,7 +365,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const container = document.getElementById('submissions-container');
         const loadingDiv = document.getElementById('submissions-loading');
         const submissionsList = document.getElementById('submissions-list');
-        const selectedCount = document.getElementById('selected-count');
         
         if (!container || !submissionsList) {
             console.error('Submissions container elements not found');
@@ -486,21 +384,8 @@ document.addEventListener('DOMContentLoaded', function() {
             loadingDiv.classList.add('hidden');
         }
         
-        // Force show the container with multiple methods
         container.classList.remove('hidden');
         container.style.display = 'block';
-        container.style.visibility = 'visible';
-        container.style.opacity = '1';
-        
-        console.log('=== CONTAINER VISIBILITY DEBUG ===');
-        console.log('Submissions container should now be visible');
-        console.log('Container classes:', container.className);
-        console.log('Container style.display:', container.style.display);
-        console.log('Container offsetHeight:', container.offsetHeight);
-        console.log('Container offsetWidth:', container.offsetWidth);
-        console.log('Container is hidden:', container.classList.contains('hidden'));
-        console.log('Container computed style:', window.getComputedStyle(container).display);
-        console.log('=== END DEBUG ===');
         
         const submissionsHtml = submissions.map(submission => `
             <div class="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer submission-item" 
@@ -518,13 +403,20 @@ document.addEventListener('DOMContentLoaded', function() {
         
         submissionsList.innerHTML = submissionsHtml;
         
-        // Add event listeners for checkboxes and items
+        // Add event listeners
+        setupSubmissionEventListeners();
+        updateSelectedCount();
+    }
+    
+    function setupSubmissionEventListeners() {
+        // Checkbox event listeners
         document.querySelectorAll('.submission-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', function() {
                 toggleSubmissionSelection(this.dataset.submissionId);
             });
         });
         
+        // Item click event listeners
         document.querySelectorAll('.submission-item').forEach(item => {
             item.addEventListener('click', function(e) {
                 if (e.target.type !== 'checkbox') {
@@ -535,7 +427,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
         
-        // Add select all/clear all handlers
+        // Select all/clear all handlers
         const selectAllBtn = document.getElementById('select-all-btn');
         const clearAllBtn = document.getElementById('clear-all-btn');
         
@@ -545,22 +437,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (clearAllBtn) {
             clearAllBtn.addEventListener('click', clearAllSubmissions);
         }
-        
-        updateSelectedCount();
     }
-    
-
     
     function toggleSubmissionSelection(submissionId) {
         const index = selectedSubmissions.indexOf(submissionId);
         const checkbox = document.querySelector(`input[data-submission-id="${submissionId}"]`);
         
         if (index > -1) {
-            // Deselect
             selectedSubmissions.splice(index, 1);
             if (checkbox) checkbox.checked = false;
         } else {
-            // Select
             selectedSubmissions.push(submissionId);
             if (checkbox) checkbox.checked = true;
         }
@@ -617,7 +503,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function startEnhancedProcessing() {
+    async function startEnhancedProcessing() {
         startButton.disabled = true;
         startButton.textContent = 'Processing...';
         
@@ -629,94 +515,117 @@ document.addEventListener('DOMContentLoaded', function() {
             progressSection.classList.remove('hidden');
         }
         
-        // Get CSRF token
-        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-        
-        // Get max questions to answer value
-        const maxQuestionsInput = document.getElementById('max-questions-input');
-        const maxQuestionsToAnswer = maxQuestionsInput && maxQuestionsInput.value ? 
-            parseInt(maxQuestionsInput.value) : null;
-        
-        // Prepare request data
-        const requestData = {
-            marking_guide_id: selectedGuide,
-            submission_ids: selectedSubmissions
-        };
-        
-        // Add max_questions_to_answer if specified
-        if (maxQuestionsToAnswer && maxQuestionsToAnswer > 0) {
-            requestData.max_questions_to_answer = maxQuestionsToAnswer;
-        }
-        
-        console.log('Starting enhanced processing with data:', requestData);
-        
-        // Start the processing
-        fetch('/api/enhanced-processing/start', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
-            body: JSON.stringify(requestData)
-        })
-        .then(response => response.json())
-        .then(data => {
+        try {
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            const maxQuestionsInput = document.getElementById('max-questions-input');
+            const maxQuestionsToAnswer = maxQuestionsInput && maxQuestionsInput.value ? 
+                parseInt(maxQuestionsInput.value) : null;
+            
+            const requestData = {
+                marking_guide_id: selectedGuide,
+                submission_ids: selectedSubmissions
+            };
+            
+            if (maxQuestionsToAnswer && maxQuestionsToAnswer > 0) {
+                requestData.max_questions_to_answer = maxQuestionsToAnswer;
+            }
+            
+            console.log('Starting enhanced processing with data:', requestData);
+            
+            const response = await fetch('/api/enhanced-processing/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify(requestData)
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
             if (data.success) {
                 monitorProgress(data.task_id);
             } else {
-                if (statusDiv) {
-                    statusDiv.innerHTML = `<div class="text-red-600">Error: ${data.error}</div>`;
-                }
-                startButton.disabled = false;
-                startButton.textContent = 'Start Enhanced Processing';
+                throw new Error(data.error || 'Processing failed to start');
             }
-        })
-        .catch(error => {
+        } catch (error) {
+            console.error('Error starting processing:', error);
             if (statusDiv) {
                 statusDiv.innerHTML = `<div class="text-red-600">Error: ${error.message}</div>`;
             }
-            startButton.disabled = false;
-            startButton.textContent = 'Start Enhanced Processing';
-        });
+            resetProcessingButton();
+        }
     }
     
     function monitorProgress(taskId) {
-        const progressContainer = document.getElementById('progress-container');
+        progressRetryCount = 0;
         
         function checkProgress() {
             fetch(`/api/enhanced-processing/progress/${taskId}`)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    if (!data.success) {
+                        throw new Error(data.error || 'Unknown error');
+                    }
+                    
+                    progressRetryCount = 0;
                     updateProgressDisplay(data);
                     
                     if (data.status === 'completed') {
+                        clearProgressPolling();
                         showResults(data.results);
-                        startButton.disabled = false;
-                        startButton.textContent = 'Start Enhanced Processing';
-                        updateProcessingButton();
+                        resetProcessingButton();
                     } else if (data.status === 'failed') {
+                        clearProgressPolling();
                         if (statusDiv) {
-                            statusDiv.innerHTML = `<div class="text-red-600">Processing failed: ${data.error}</div>`;
+                            statusDiv.innerHTML = `<div class="text-red-600">Processing failed: ${data.message || data.error || 'Unknown error'}</div>`;
                         }
-                        startButton.disabled = false;
-                        startButton.textContent = 'Start Enhanced Processing';
-                        updateProcessingButton();
+                        resetProcessingButton();
                     } else {
-                        // Poll more frequently for real-time updates (every 500ms for smooth progress)
-                        setTimeout(checkProgress, 500);
+                        const pollInterval = Math.min(2000 + (progressRetryCount * 1000), 5000);
+                        progressPollingInterval = setTimeout(checkProgress, pollInterval);
                     }
                 })
                 .catch(error => {
-                    if (statusDiv) {
-                        statusDiv.innerHTML = `<div class="text-red-600">Error monitoring progress: ${error.message}</div>`;
+                    console.error('Progress monitoring error:', error);
+                    progressRetryCount++;
+                    
+                    if (progressRetryCount >= MAX_PROGRESS_RETRIES) {
+                        clearProgressPolling();
+                        if (statusDiv) {
+                            statusDiv.innerHTML = `<div class="text-red-600">Error monitoring progress: ${error.message}. Please refresh the page and try again.</div>`;
+                        }
+                        resetProcessingButton();
+                    } else {
+                        const retryDelay = Math.min(1000 * Math.pow(2, progressRetryCount), 10000);
+                        progressPollingInterval = setTimeout(checkProgress, retryDelay);
                     }
-                    startButton.disabled = false;
-                    startButton.textContent = 'Start Enhanced Processing';
-                    updateProcessingButton();
                 });
         }
         
         checkProgress();
+    }
+    
+    function clearProgressPolling() {
+        if (progressPollingInterval) {
+            clearTimeout(progressPollingInterval);
+            progressPollingInterval = null;
+        }
+    }
+    
+    function resetProcessingButton() {
+        startButton.disabled = false;
+        startButton.textContent = 'Start Enhanced Processing';
+        updateProcessingButton();
     }
     
     function updateProgressDisplay(data) {
@@ -728,20 +637,40 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         const progress = data.progress || 0;
-        const currentStep = data.current_step || 'Initializing';
+        const message = data.message || 'Processing...';
+        const currentFile = data.current_file || '';
+        const results = data.results || {};
         
         progressContainer.innerHTML = `
-            <div class="mb-4">
-                <div class="flex justify-between text-sm text-gray-600 mb-1">
-                    <span>${currentStep}</span>
-                    <span>${progress}%</span>
+            <div class="mb-6">
+                <div class="flex justify-between text-sm text-gray-600 mb-2">
+                    <span>${message}</span>
+                    <span>${Math.round(progress)}%</span>
                 </div>
-                <div class="w-full bg-gray-200 rounded-full h-2">
-                    <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: ${progress}%"></div>
+                <div class="w-full bg-gray-200 rounded-full h-3">
+                    <div class="bg-blue-600 h-3 rounded-full transition-all duration-300" style="width: ${progress}%"></div>
                 </div>
             </div>
-            <div class="text-sm text-gray-600">
-                ${data.message || 'Processing...'}
+            
+            ${currentFile ? `
+                <div class="mb-4 text-sm text-gray-600">
+                    <strong>Current file:</strong> ${currentFile}
+                </div>
+            ` : ''}
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                <div class="bg-blue-50 p-3 rounded-lg">
+                    <div class="text-lg font-semibold text-blue-600">${results.total_count || 0}</div>
+                    <div class="text-xs text-blue-800">Total Submissions</div>
+                </div>
+                <div class="bg-green-50 p-3 rounded-lg">
+                    <div class="text-lg font-semibold text-green-600">${results.successful_count || 0}</div>
+                    <div class="text-xs text-green-800">Successful</div>
+                </div>
+                <div class="bg-red-50 p-3 rounded-lg">
+                    <div class="text-lg font-semibold text-red-600">${results.failed_count || 0}</div>
+                    <div class="text-xs text-red-800">Failed</div>
+                </div>
             </div>
         `;
     }
@@ -749,7 +678,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function showResults(results) {
         const resultsContainer = document.getElementById('results-container');
         
-        // Check if the element exists before trying to set innerHTML
         if (!resultsContainer) {
             console.error('Results container element not found');
             return;
@@ -757,26 +685,66 @@ document.addEventListener('DOMContentLoaded', function() {
         
         resultsSection.classList.remove('hidden');
         
+        const details = results.details || [];
+        const successfulResults = details.filter(r => r.success);
+        const failedResults = details.filter(r => !r.success);
+        
         resultsContainer.innerHTML = `
-            <div class="space-y-4">
+            <div class="space-y-6">
+                <!-- Summary Statistics -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="bg-blue-50 p-4 rounded-lg">
-                        <h3 class="font-medium text-blue-900">Guides Processed</h3>
-                        <p class="text-2xl font-bold text-blue-600">${results.guides_processed || 0}</p>
+                    <div class="bg-blue-50 p-4 rounded-lg text-center">
+                        <h3 class="font-medium text-blue-900">Total Processed</h3>
+                        <p class="text-2xl font-bold text-blue-600">${results.total_count || 0}</p>
                     </div>
-                    <div class="bg-green-50 p-4 rounded-lg">
-                        <h3 class="font-medium text-green-900">Submissions Mapped</h3>
-                        <p class="text-2xl font-bold text-green-600">${results.submissions_mapped || 0}</p>
+                    <div class="bg-green-50 p-4 rounded-lg text-center">
+                        <h3 class="font-medium text-green-900">Successful</h3>
+                        <p class="text-2xl font-bold text-green-600">${results.successful_count || 0}</p>
                     </div>
-                    <div class="bg-purple-50 p-4 rounded-lg">
-                        <h3 class="font-medium text-purple-900">Grades Generated</h3>
-                        <p class="text-2xl font-bold text-purple-600">${results.grades_generated || 0}</p>
+                    <div class="bg-red-50 p-4 rounded-lg text-center">
+                        <h3 class="font-medium text-red-900">Failed</h3>
+                        <p class="text-2xl font-bold text-red-600">${results.failed_count || 0}</p>
                     </div>
                 </div>
-                <div class="mt-6">
+                
+                <!-- Successful Results -->
+                ${successfulResults.length > 0 ? `
+                    <div>
+                        <h3 class="text-lg font-medium text-green-900 mb-3">Successfully Processed</h3>
+                        <div class="space-y-2">
+                            ${successfulResults.map(result => `
+                                <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                                    <span class="font-medium">${result.filename}</span>
+                                    <span class="text-green-600">Score: ${result.score || 'N/A'}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Failed Results -->
+                ${failedResults.length > 0 ? `
+                    <div>
+                        <h3 class="text-lg font-medium text-red-900 mb-3">Failed to Process</h3>
+                        <div class="space-y-2">
+                            ${failedResults.map(result => `
+                                <div class="p-3 bg-red-50 rounded-lg">
+                                    <div class="font-medium text-red-900">${result.filename}</div>
+                                    <div class="text-sm text-red-700">${result.error || 'Unknown error'}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Action Buttons -->
+                <div class="flex space-x-4">
                     <a href="/results" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out">
                         View Detailed Results
                     </a>
+                    <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out">
+                        Process More Submissions
+                    </button>
                 </div>
             </div>
         `;

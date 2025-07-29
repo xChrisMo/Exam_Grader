@@ -28,7 +28,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-
 class ErrorHandler:
     """Centralized error handling utility."""
     
@@ -102,7 +101,6 @@ class ErrorHandler:
         """Clear error log."""
         self.error_log.clear()
         logger.info("Error log cleared")
-
 
 class ProgressTracker:
     """Track progress of long-running operations."""
@@ -209,11 +207,9 @@ class ProgressTracker:
         if to_remove:
             logger.info(f"Cleaned up {len(to_remove)} old operations")
 
-
 # Global instances
 error_handler = ErrorHandler()
 progress_tracker = ProgressTracker()
-
 
 def handle_error(error: Union[Exception, ApplicationError], context: str = "", user_message: str = None, flash_message: bool = True, user_id: str = None):
     """Handle error with logging and user notification.
@@ -225,7 +221,6 @@ def handle_error(error: Union[Exception, ApplicationError], context: str = "", u
         flash_message: Whether to flash message to user
         user_id: User ID if available
     """
-    # Use enhanced error handling if available
     if ENHANCED_ERROR_HANDLING_AVAILABLE and enhanced_error_handler:
         try:
             context_dict = {'legacy_context': context} if context else {}
@@ -242,7 +237,6 @@ def handle_error(error: Union[Exception, ApplicationError], context: str = "", u
     # Fallback to legacy error handling
     error_handler.log_error(error, context, user_id)
     
-    # Flash message to user if requested
     if flash_message:
         if user_message:
             message = user_message
@@ -251,7 +245,6 @@ def handle_error(error: Union[Exception, ApplicationError], context: str = "", u
         else:
             message = format_error_for_user(error)
         flash(message, 'error')
-
 
 def create_user_notification(message: str, category: str = 'info', persistent: bool = False):
     """Create user notification.
@@ -262,7 +255,6 @@ def create_user_notification(message: str, category: str = 'info', persistent: b
         persistent: Whether notification should persist across requests
     """
     if persistent:
-        # Store in session for persistence
         notifications = session.get('persistent_notifications', [])
         notifications.append({
             'message': message,
@@ -271,9 +263,7 @@ def create_user_notification(message: str, category: str = 'info', persistent: b
         })
         session['persistent_notifications'] = notifications[-10:]  # Keep last 10
     else:
-        # Use flash for temporary notifications
         flash(message, category)
-
 
 def get_persistent_notifications() -> List[Dict]:
     """Get persistent notifications from session.
@@ -283,11 +273,9 @@ def get_persistent_notifications() -> List[Dict]:
     """
     return session.get('persistent_notifications', [])
 
-
 def clear_persistent_notifications():
     """Clear persistent notifications from session."""
     session.pop('persistent_notifications', None)
-
 
 def safe_execute(func, *args, context: str = "", default_return=None, **kwargs):
     """Safely execute function with error handling.
@@ -307,7 +295,6 @@ def safe_execute(func, *args, context: str = "", default_return=None, **kwargs):
     except Exception as e:
         handle_error(e, context, flash_message=False)
         return default_return
-
 
 def validate_input(value: Any, validator_func, error_message: str = "Invalid input"):
     """Validate input with custom validator.
@@ -331,7 +318,6 @@ def validate_input(value: Any, validator_func, error_message: str = "Invalid inp
         handle_error(e, "Input validation")
         raise
 
-
 def format_error_for_user(error: Union[Exception, ApplicationError]) -> str:
     """Format error message for user display.
     
@@ -345,7 +331,6 @@ def format_error_for_user(error: Union[Exception, ApplicationError]) -> str:
     if hasattr(error, 'user_message') and error.user_message:
         return error.user_message
     
-    # Use enhanced error handling if available
     if ENHANCED_ERROR_HANDLING_AVAILABLE and enhanced_error_handler:
         try:
             return enhanced_error_handler.get_user_friendly_message(error)
@@ -378,7 +363,6 @@ def format_error_for_user(error: Union[Exception, ApplicationError]) -> str:
     
     return user_friendly_messages.get(error_type, f"An unexpected error occurred: {str(error)}")
 
-
 def add_recent_activity(activity_type: str, message: str, icon: str = 'info'):
     """Add activity to recent activity log.
     
@@ -400,7 +384,6 @@ def add_recent_activity(activity_type: str, message: str, icon: str = 'info'):
     except Exception as e:
         logger.error(f"Error adding recent activity: {str(e)}")
 
-
 def get_recent_activity(limit: int = 10) -> List[Dict]:
     """Get recent activity from session.
     
@@ -415,3 +398,37 @@ def get_recent_activity(limit: int = 10) -> List[Dict]:
     except Exception as e:
         logger.error(f"Error getting recent activity: {str(e)}")
         return []
+
+def handle_api_error(error: Union[Exception, ApplicationError], status_code: int = 500):
+    """Handle API errors and return appropriate JSON response.
+    
+    Args:
+        error: Exception or ApplicationError that occurred
+        status_code: HTTP status code to return
+        
+    Returns:
+        Tuple of (JSON response dict, status_code)
+    """
+    from flask import jsonify
+    
+    # Log the error
+    error_handler.log_error(error, "API Error")
+    
+    if hasattr(error, 'user_message') and error.user_message:
+        message = error.user_message
+    else:
+        message = format_error_for_user(error)
+    
+    error_response = {
+        'success': False,
+        'error': message,
+        'error_type': type(error).__name__
+    }
+    
+    if hasattr(error, 'error_code'):
+        error_response['error_code'] = error.error_code.value if hasattr(error.error_code, 'value') else str(error.error_code)
+    
+    if hasattr(error, 'error_id'):
+        error_response['error_id'] = error.error_id
+    
+    return jsonify(error_response), status_code

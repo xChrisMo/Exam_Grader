@@ -14,7 +14,6 @@ from enum import Enum
 import uuid
 from typing import Optional, Dict, Any, List, Union
 
-
 class StructuredLogLevel(Enum):
     """Structured log levels with numeric values."""
     TRACE = 5
@@ -25,7 +24,6 @@ class StructuredLogLevel(Enum):
     CRITICAL = 50
     SECURITY = 60
     AUDIT = 70
-
 
 @dataclass
 class StructuredLogEntry:
@@ -81,7 +79,6 @@ class StructuredLogEntry:
         """Convert to JSON string."""
         return json.dumps(self.to_dict(), indent=indent, default=str)
 
-
 class StructuredFormatter(logging.Formatter):
     """Custom formatter for structured logging."""
     
@@ -94,7 +91,6 @@ class StructuredFormatter(logging.Formatter):
         super().__init__()
         self.include_extra = include_extra
         
-        # Fields to exclude from extra
         self.exclude_fields = {
             'name', 'msg', 'args', 'levelname', 'levelno', 'pathname',
             'filename', 'module', 'lineno', 'funcName', 'created',
@@ -115,14 +111,12 @@ class StructuredFormatter(logging.Formatter):
             thread_id=record.thread
         )
         
-        # Add hostname if available
         import socket
         try:
             entry.hostname = socket.gethostname()
         except Exception:
             pass
         
-        # Extract structured fields from record
         if hasattr(record, 'correlation_id'):
             entry.correlation_id = record.correlation_id
         if hasattr(record, 'user_id'):
@@ -168,7 +162,6 @@ class StructuredFormatter(logging.Formatter):
                     entry.extra[key] = value
         
         return entry.to_json()
-
 
 class StructuredLogger:
     """Structured logger with JSON output and field validation."""
@@ -447,7 +440,6 @@ class StructuredLogger:
             user_agent: User agent string
             **kwargs: Additional structured fields
         """
-        # Use operation from kwargs if provided, otherwise default to 'http_request'
         operation = kwargs.pop('operation', 'http_request')
         extra = self._prepare_extra(
             operation=operation,
@@ -501,7 +493,6 @@ class StructuredLogger:
         
         self.logger.error(message, exc_info=True, extra=extra)
         return error_id
-
 
 class StructuredLoggerManager:
     """Manager for structured loggers."""
@@ -577,10 +568,8 @@ class StructuredLoggerManager:
         for logger in self.loggers.values():
             logger.clear_context()
 
-
 # Global manager instance
 _manager = StructuredLoggerManager()
-
 
 def get_structured_logger(name: str, **config) -> StructuredLogger:
     """Get structured logger instance.
@@ -593,7 +582,6 @@ def get_structured_logger(name: str, **config) -> StructuredLogger:
         StructuredLogger instance
     """
     return _manager.get_logger(name, **config)
-
 
 def configure_structured_logging(
     level: Union[str, int, StructuredLogLevel] = StructuredLogLevel.INFO,
@@ -616,7 +604,6 @@ def configure_structured_logging(
         validate_fields=validate_fields
     )
 
-
 def set_global_context(**kwargs):
     """Set global context for all structured loggers.
     
@@ -624,7 +611,6 @@ def set_global_context(**kwargs):
         **kwargs: Context fields to set
     """
     _manager.set_global_context(**kwargs)
-
 
 def clear_global_context():
     """Clear global context for all structured loggers."""

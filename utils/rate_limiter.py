@@ -14,7 +14,6 @@ from flask import request, jsonify, flash, redirect, url_for
 
 logger = logging.getLogger(__name__)
 
-
 class RateLimiter:
     """Simple in-memory rate limiter."""
     
@@ -40,7 +39,6 @@ class RateLimiter:
         while self.requests[identifier] and self.requests[identifier][0] <= now - window:
             self.requests[identifier].popleft()
         
-        # Check if limit exceeded
         if len(self.requests[identifier]) >= limit:
             return True
         
@@ -111,10 +109,8 @@ class RateLimiter:
         
         return self.requests[identifier][0] + window
 
-
 # Global rate limiter instance
 rate_limiter = RateLimiter()
-
 
 class IPWhitelist:
     """IP whitelist for bypassing rate limits."""
@@ -142,12 +138,9 @@ class IPWhitelist:
         self.whitelisted_ips.clear()
         logger.info("Cleared IP whitelist")
 
-
 # Global IP whitelist instance
 ip_whitelist = IPWhitelist()
 
-
-# Enhanced rate limiter with additional methods for tests
 class EnhancedRateLimiter(RateLimiter):
     """Enhanced rate limiter with additional functionality for testing."""
 
@@ -173,10 +166,8 @@ class EnhancedRateLimiter(RateLimiter):
             "whitelisted_count": len(self.whitelist)
         }
 
-
 # Replace global rate limiter with enhanced version
 rate_limiter = EnhancedRateLimiter()
-
 
 def get_client_identifier() -> str:
     """Get client identifier for rate limiting.
@@ -184,7 +175,6 @@ def get_client_identifier() -> str:
     Returns:
         Client identifier string
     """
-    # Try to get real IP from headers (for reverse proxy setups)
     real_ip = request.headers.get('X-Real-IP')
     if real_ip:
         return real_ip
@@ -196,7 +186,6 @@ def get_client_identifier() -> str:
     
     # Fallback to remote address
     return request.remote_addr or 'unknown'
-
 
 def rate_limit_with_whitelist(limit: int = 100, window: int = 3600, per: str = 'hour'):
     """Rate limiting decorator with whitelist support.
@@ -233,13 +222,12 @@ def rate_limit_with_whitelist(limit: int = 100, window: int = 3600, per: str = '
                     }), 429
                 else:
                     flash(f'Too many requests. Please wait before trying again. Limit: {limit} per {per}', 'warning')
-                    return redirect(url_for('dashboard'))
+                    return redirect(url_for('main.dashboard'))
             
             return f(*args, **kwargs)
         
         return decorated_function
     return decorator
-
 
 def get_rate_limit_status(identifier: Optional[str] = None) -> Dict:
     """Get rate limit status for identifier.
@@ -270,7 +258,6 @@ def get_rate_limit_status(identifier: Optional[str] = None) -> Dict:
         'is_whitelisted': is_whitelisted
     }
 
-
 def add_to_whitelist(identifier: str):
     """Add identifier to rate limit whitelist.
     
@@ -278,7 +265,6 @@ def add_to_whitelist(identifier: str):
         identifier: Identifier to whitelist
     """
     rate_limiter.add_to_whitelist(identifier)
-
 
 def remove_from_whitelist(identifier: str):
     """Remove identifier from rate limit whitelist.
@@ -288,28 +274,22 @@ def remove_from_whitelist(identifier: str):
     """
     rate_limiter.remove_from_whitelist(identifier)
 
-
 def clear_rate_limit_data():
     """Clear all rate limit data (for testing/admin purposes)."""
     rate_limiter.requests.clear()
     logger.info("Cleared all rate limit data")
 
-
-# Predefined rate limit decorators for common use cases
 def api_rate_limit(f):
     """Rate limit for API endpoints (stricter)."""
     return rate_limit_with_whitelist(limit=50, window=3600, per='hour')(f)
-
 
 def upload_rate_limit(f):
     """Rate limit for file uploads (more restrictive)."""
     return rate_limit_with_whitelist(limit=20, window=3600, per='hour')(f)
 
-
 def general_rate_limit(f):
     """General rate limit for web pages."""
     return rate_limit_with_whitelist(limit=200, window=3600, per='hour')(f)
-
 
 def strict_rate_limit(f):
     """Strict rate limit for sensitive operations."""

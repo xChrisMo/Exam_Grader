@@ -2,13 +2,11 @@
 Provides real-time communication for dashboard updates, progress tracking, and notifications.
 Integrated with enhanced WebSocketManager for comprehensive connection handling."""
 
-
 from typing import Dict, Any, Optional
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from src.logging import get_logger
 from src.services.websocket_manager import WebSocketManager, MessagePriority
 
-# Handle case where get_logger might be None due to import issues
 if get_logger is not None:
     logger = get_logger(__name__)
 else:
@@ -17,7 +15,6 @@ else:
 
 # Initialize SocketIO
 socketio = SocketIO(cors_allowed_origins="*", async_mode='threading')
-
 
 class RealtimeService:
     """Real-time service for WebSocket communication and live updates."""
@@ -274,10 +271,8 @@ class RealtimeService:
         if self.websocket_manager:
             self.websocket_manager.disconnect_user(user_id, reason)
 
-
 # Global instance
 realtime_service = RealtimeService()
-
 
 def init_realtime_service(app):
     """Initialize the realtime service with Flask app.
