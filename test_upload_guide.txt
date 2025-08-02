@@ -1,0 +1,9 @@
+Final Upload Test Guide
+
+This guide tests the complete upload workflow.
+
+Question 1: Basic test question
+Answer: Test answer
+Points: 10
+
+This is a minimal test guide to verify upload functionality.

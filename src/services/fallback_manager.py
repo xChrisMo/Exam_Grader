@@ -8,7 +8,7 @@ allowing the system to continue functioning even when primary services are unava
 import time
 import asyncio
 from typing import Dict, List, Optional, Any, Callable, Union, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from dataclasses import dataclass
 from functools import wraps
@@ -301,7 +301,7 @@ class FallbackManager:
                 
                 # Update method statistics
                 method.success_count += 1
-                method.last_used = datetime.utcnow()
+                method.last_used = datetime.now(timezone.utc)
                 method.success_rate = method.success_count / (method.success_count + method.failure_count)
                 
                 # Close circuit breaker on success
@@ -392,7 +392,7 @@ class FallbackManager:
                 
                 # Update method statistics
                 method.success_count += 1
-                method.last_used = datetime.utcnow()
+                method.last_used = datetime.now(timezone.utc)
                 method.success_rate = method.success_count / (method.success_count + method.failure_count)
                 
                 # Close circuit breaker on success
@@ -458,7 +458,7 @@ class FallbackManager:
         
         breaker = self.circuit_breakers[key]
         
-        if breaker['state'] == 'open' and datetime.utcnow() > breaker['reset_time']:
+        if breaker['state'] == 'open' and datetime.now(timezone.utc) > breaker['reset_time']:
             breaker['state'] = 'half_open'
             logger.info(f"Circuit breaker for {key} moved to half-open state")
         
@@ -487,11 +487,11 @@ class FallbackManager:
                 logger.info(f"Circuit breaker for {key} closed after successful execution")
         else:
             breaker['failure_count'] += 1
-            breaker['last_failure_time'] = datetime.utcnow()
+            breaker['last_failure_time'] = datetime.now(timezone.utc)
             
             if breaker['failure_count'] >= 5:  # Configurable threshold
                 breaker['state'] = 'open'
-                breaker['reset_time'] = datetime.utcnow() + timedelta(minutes=5)  # Configurable reset time
+                breaker['reset_time'] = datetime.now(timezone.utc) + timedelta(minutes=5)  # Configurable reset time
                 logger.warning(f"Circuit breaker for {key} opened due to repeated failures")
     
     def _close_circuit_breaker(self, operation: str, method_name: str):
@@ -546,7 +546,7 @@ class FallbackManager:
         
         if cache_key in self.cached_results:
             cached_data, timestamp = self.cached_results[cache_key]
-            if datetime.utcnow() - timestamp < self.cache_ttl:
+            if datetime.now(timezone.utc) - timestamp < self.cache_ttl:
                 logger.info("Using cached LLM response")
                 return cached_data
         
@@ -655,7 +655,7 @@ class FallbackManager:
         
         if cache_key in self.cached_results:
             cached_data, timestamp = self.cached_results[cache_key]
-            if datetime.utcnow() - timestamp < self.cache_ttl:
+            if datetime.now(timezone.utc) - timestamp < self.cache_ttl:
                 logger.info("Using cached grading result")
                 return cached_data
         
@@ -763,7 +763,7 @@ class FallbackManager:
         if ttl is None:
             ttl = self.cache_ttl
         
-        self.cached_results[key] = (result, datetime.utcnow())
+        self.cached_results[key] = (result, datetime.now(timezone.utc))
         logger.debug(f"Cached result with key: {key}")
 
 # Global instance

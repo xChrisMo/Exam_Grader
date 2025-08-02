@@ -21,7 +21,7 @@ class ValidationService:
     def __init__(self):
         self.validation_rules = {
             'dataset': {
-                'min_documents': 5,
+                'min_documents': 1,
                 'min_total_words': 1000,
                 'max_document_size_mb': 50,
                 'supported_formats': ['.txt', '.pdf', '.docx', '.html', '.md', '.json']
@@ -246,7 +246,7 @@ class ValidationService:
             else:
                 dataset_validation = self.validate_dataset_integrity(dataset_id)
                 if not dataset_validation['valid']:
-                    validation_result['errors'].append('Selected dataset is not valid for training')
+                    validation_result['errors'].extend(dataset_validation['errors'])
                     validation_result['valid'] = False
                 elif dataset_validation['warnings']:
                     validation_result['warnings'].extend([

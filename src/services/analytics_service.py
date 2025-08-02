@@ -8,7 +8,7 @@ operations, including performance metrics, trends, and comparative analysis.
 import json
 import statistics
 from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
 from src.database.models import db, LLMTrainingJob, LLMModelTest, LLMDataset, LLMDocument
@@ -64,7 +64,7 @@ class AnalyticsService:
                 'metrics': {},
                 'insights': [],
                 'recommendations': [],
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(timezone.utc).isoformat()
             }
             
             # Calculate each metric type
@@ -666,7 +666,7 @@ class AnalyticsService:
                 'jobs': [],
                 'metrics_comparison': {},
                 'recommendations': [],
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(timezone.utc).isoformat()
             }
             
             # Collect job data

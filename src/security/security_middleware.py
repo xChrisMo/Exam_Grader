@@ -22,7 +22,7 @@ except ImportError:
     g = None
     abort = None
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 try:
     from utils.logger import logger
@@ -431,7 +431,7 @@ class SecurityMiddleware:
             g.security_context = {
                 'request_id': self._generate_request_id(),
                 'client_ip': self.request_validator._get_client_ip(request),
-                'timestamp': datetime.utcnow(),
+                'timestamp': datetime.now(timezone.utc),
                 'validated': True
             }
             

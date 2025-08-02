@@ -8,7 +8,7 @@ and detailed error reporting for processing operations.
 
 import asyncio
 from typing import Dict, List, Optional, Any, Callable, Union
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass
 
 from src.services.processing_error_handler import (
@@ -96,7 +96,7 @@ class EnhancedProcessingErrorSystem:
         Returns:
             ProcessingResult with execution results
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         
         # Create error context
         context = ErrorContext(
@@ -120,7 +120,7 @@ class EnhancedProcessingErrorSystem:
                 )
                 
                 if retry_result.success:
-                    execution_time = (datetime.utcnow() - start_time).total_seconds()
+                    execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
                     
                     return ProcessingResult(
                         success=True,
@@ -156,7 +156,7 @@ class EnhancedProcessingErrorSystem:
                     **kwargs
                 )
                 
-                execution_time = (datetime.utcnow() - start_time).total_seconds()
+                execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
                 
                 if fallback_result.success:
                     return ProcessingResult(
@@ -178,7 +178,7 @@ class EnhancedProcessingErrorSystem:
             # Execute directly without protection
             else:
                 result = func(*args, **kwargs)
-                execution_time = (datetime.utcnow() - start_time).total_seconds()
+                execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
                 
                 return ProcessingResult(
                     success=True,
@@ -219,7 +219,7 @@ class EnhancedProcessingErrorSystem:
         """
         Execute async function with comprehensive error protection.
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         
         # Create error context
         context = ErrorContext(
@@ -243,7 +243,7 @@ class EnhancedProcessingErrorSystem:
                 )
                 
                 if retry_result.success:
-                    execution_time = (datetime.utcnow() - start_time).total_seconds()
+                    execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
                     
                     return ProcessingResult(
                         success=True,
@@ -279,7 +279,7 @@ class EnhancedProcessingErrorSystem:
                     **kwargs
                 )
                 
-                execution_time = (datetime.utcnow() - start_time).total_seconds()
+                execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
                 
                 if fallback_result.success:
                     return ProcessingResult(
@@ -305,7 +305,7 @@ class EnhancedProcessingErrorSystem:
                 else:
                     result = func(*args, **kwargs)
                 
-                execution_time = (datetime.utcnow() - start_time).total_seconds()
+                execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
                 
                 return ProcessingResult(
                     success=True,
@@ -351,7 +351,7 @@ class EnhancedProcessingErrorSystem:
             **kwargs
         )
         
-        execution_time = (datetime.utcnow() - context.timestamp).total_seconds()
+        execution_time = (datetime.now(timezone.utc) - context.timestamp).total_seconds()
         
         if fallback_result.success:
             return ProcessingResult(
@@ -394,7 +394,7 @@ class EnhancedProcessingErrorSystem:
             **kwargs
         )
         
-        execution_time = (datetime.utcnow() - context.timestamp).total_seconds()
+        execution_time = (datetime.now(timezone.utc) - context.timestamp).total_seconds()
         
         if fallback_result.success:
             return ProcessingResult(
@@ -428,7 +428,7 @@ class EnhancedProcessingErrorSystem:
             category = ErrorCategory(error_response['category'])
             self.error_reporter.report_error(error, context, category)
         
-        execution_time = (datetime.utcnow() - context.timestamp).total_seconds()
+        execution_time = (datetime.now(timezone.utc) - context.timestamp).total_seconds()
         
         return ProcessingResult(
             success=False,

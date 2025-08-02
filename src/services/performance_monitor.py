@@ -10,7 +10,7 @@ import time
 import threading
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from collections import deque, defaultdict
 import statistics
@@ -97,7 +97,7 @@ class OperationStats:
             return 0.0
         
         # Calculate based on recent activity (last hour)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         time_window = timedelta(hours=1)
         
         # This is a simplified calculation
@@ -107,7 +107,7 @@ class OperationStats:
     def update(self, duration: float, success: bool):
         """Update statistics with new data point"""
         self.total_requests += 1
-        self.last_updated = datetime.utcnow()
+        self.last_updated = datetime.now(timezone.utc)
         
         if success:
             self.successful_requests += 1
@@ -179,7 +179,7 @@ class AlertRule:
         
         # Check cooldown
         if self.last_triggered:
-            cooldown_elapsed = (datetime.utcnow() - self.last_triggered).total_seconds()
+            cooldown_elapsed = (datetime.now(timezone.utc) - self.last_triggered).total_seconds()
             if cooldown_elapsed < self.cooldown_seconds:
                 return False
         
@@ -276,7 +276,7 @@ class PerformanceMonitor:
                 operation=operation,
                 metric_type=MetricType.DURATION,
                 value=duration,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 metadata=metadata or {}
             )
             self._metrics.append(metric)
@@ -295,7 +295,7 @@ class PerformanceMonitor:
                 operation=operation,
                 metric_type=metric_type,
                 value=value,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 metadata=metadata or {}
             )
             self._metrics.append(metric)
@@ -482,7 +482,7 @@ class PerformanceMonitor:
     
     def _trigger_alert(self, rule: AlertRule, operation: str, value: float):
         """Trigger an alert"""
-        rule.last_triggered = datetime.utcnow()
+        rule.last_triggered = datetime.now(timezone.utc)
         
         alert = PerformanceAlert(
             operation=operation,
@@ -491,7 +491,7 @@ class PerformanceMonitor:
             message=f"{operation} {rule.metric_type.value} {rule.condition} {rule.threshold} (actual: {value})",
             value=value,
             threshold=rule.threshold,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
         
         self._alerts.append(alert)
@@ -520,7 +520,7 @@ class PerformanceMonitor:
                 'metrics': [metric.to_dict() for metric in self._metrics],
                 'operation_stats': self.get_all_operation_stats(),
                 'alerts': [alert.to_dict() for alert in self._alerts],
-                'exported_at': datetime.utcnow().isoformat()
+                'exported_at': datetime.now(timezone.utc).isoformat()
             }
             
             try:

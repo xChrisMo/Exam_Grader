@@ -7,7 +7,7 @@ including logging errors, tracking service health, and managing performance metr
 
 import time
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from sqlalchemy import func, desc, and_, or_
 
 from src.database.models import (
@@ -231,7 +231,7 @@ class ErrorTrackingService:
                 alert_data=alert_data or {},
                 context_data={
                     'created_by': 'system',
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             )
             
@@ -251,7 +251,7 @@ class ErrorTrackingService:
                            service_name: Optional[str] = None) -> Dict[str, Any]:
         """Get error statistics for the specified time period"""
         try:
-            since = datetime.utcnow() - timedelta(hours=hours)
+            since = datetime.now(timezone.utc) - timedelta(hours=hours)
             
             query = ProcessingError.query.filter(ProcessingError.created_at >= since)
             if service_name:
@@ -299,7 +299,7 @@ class ErrorTrackingService:
                                  hours: int = 24) -> List[Dict[str, Any]]:
         """Get service health history"""
         try:
-            since = datetime.utcnow() - timedelta(hours=hours)
+            since = datetime.now(timezone.utc) - timedelta(hours=hours)
             
             health_records = ServiceHealth.query.filter(
                 ServiceHealth.service_name == service_name,
@@ -317,7 +317,7 @@ class ErrorTrackingService:
                               hours: int = 24) -> Dict[str, Any]:
         """Get performance metrics summary"""
         try:
-            since = datetime.utcnow() - timedelta(hours=hours)
+            since = datetime.now(timezone.utc) - timedelta(hours=hours)
             
             query = PerformanceMetrics.query.filter(PerformanceMetrics.created_at >= since)
             if service_name:
@@ -407,7 +407,7 @@ class ErrorTrackingService:
             
             error.resolved = True
             error.resolution_notes = resolution_notes
-            error.resolved_at = datetime.utcnow()
+            error.resolved_at = datetime.now(timezone.utc)
             error.resolved_by = resolved_by
             
             db.session.commit()
@@ -426,7 +426,7 @@ class ErrorTrackingService:
                 return False
             
             alert.status = 'acknowledged'
-            alert.acknowledged_at = datetime.utcnow()
+            alert.acknowledged_at = datetime.now(timezone.utc)
             alert.acknowledged_by = acknowledged_by
             
             db.session.commit()
@@ -440,7 +440,7 @@ class ErrorTrackingService:
     def cleanup_old_records(self, days_to_keep: int = 30) -> Dict[str, int]:
         """Clean up old records to prevent database bloat"""
         try:
-            cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
             
             # Count records to be deleted
             old_errors = ProcessingError.query.filter(

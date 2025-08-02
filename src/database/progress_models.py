@@ -1,7 +1,7 @@
 """Database models for progress tracking persistence."""
 from typing import Any, Dict, Optional
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     JSON,
@@ -87,7 +87,7 @@ class ProgressSession(BaseModel, TimestampMixin):
         if not self.start_time or self.status != "active":
             return None
         
-        elapsed = (datetime.utcnow() - self.start_time).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - self.start_time).total_seconds()
         progress_percentage = self.calculate_progress_percentage()
         
         if progress_percentage <= 0:
@@ -107,7 +107,7 @@ class ProgressSession(BaseModel, TimestampMixin):
     def complete(self, status: str = "completed", end_time: Optional[datetime] = None):
         """Mark session as completed."""
         self.status = status
-        self.end_time = end_time or datetime.utcnow()
+        self.end_time = end_time or datetime.now(timezone.utc)
         self.current_step = self.total_steps
         self.current_submission = self.total_submissions
     

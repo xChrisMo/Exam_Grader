@@ -8,7 +8,7 @@ with dependency tracking, lifecycle management, and service discovery.
 import threading
 import time
 from typing import Dict, List, Optional, Any, Set, Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from enum import Enum
 
@@ -103,7 +103,7 @@ class ServiceRegistry:
                 state=ServiceState.REGISTERED,
                 dependencies=dependencies or [],
                 dependents=[],
-                registration_time=datetime.utcnow(),
+                registration_time=datetime.now(timezone.utc),
                 last_health_check=None,
                 health_status=ServiceStatus.UNKNOWN,
                 metadata=metadata or {},
@@ -246,14 +246,14 @@ class ServiceRegistry:
                     status = ServiceStatus.HEALTHY if service_info.state == ServiceState.RUNNING else ServiceStatus.UNHEALTHY
                 
                 service_info.health_status = status
-                service_info.last_health_check = datetime.utcnow()
+                service_info.last_health_check = datetime.now(timezone.utc)
                 
                 return status
                 
             except Exception as e:
                 logger.error(f"Health check failed for service '{name}': {e}")
                 service_info.health_status = ServiceStatus.UNHEALTHY
-                service_info.last_health_check = datetime.utcnow()
+                service_info.last_health_check = datetime.now(timezone.utc)
                 return ServiceStatus.UNHEALTHY
     
     def get_registry_status(self) -> Dict[str, Any]:
@@ -273,7 +273,7 @@ class ServiceRegistry:
                 'service_groups': {group: len(services) for group, services in self.service_groups.items()},
                 'initialization_order': self.initialization_order.copy(),
                 'auto_start_enabled': self.auto_start_services,
-                'registry_timestamp': datetime.utcnow().isoformat()
+                'registry_timestamp': datetime.now(timezone.utc).isoformat()
             }
     
     def _dependencies_ready(self, service_name: str) -> bool:

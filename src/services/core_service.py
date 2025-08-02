@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 from src.services.base_service import BaseService, ServiceStatus
 from src.database.models import db, MarkingGuide, Submission, GradingResult, Mapping
@@ -105,7 +105,7 @@ class CoreService(BaseService):
                 error_context = ErrorContext(
                     operation=f"initialize_{service_name}_service",
                     service="core_service",
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     user_id=None,
                     request_id=f"init_{service_name}_{int(time.time())}",
                     additional_data={'service_name': service_name}
@@ -127,7 +127,7 @@ class CoreService(BaseService):
                     
                     self._initialization_status[service_name] = {
                         'success': success,
-                        'timestamp': datetime.utcnow(),
+                        'timestamp': datetime.now(timezone.utc),
                         'error': None
                     }
                     
@@ -157,7 +157,7 @@ class CoreService(BaseService):
                     
                     self._initialization_status[service_name] = {
                         'success': False,
-                        'timestamp': datetime.utcnow(),
+                        'timestamp': datetime.now(timezone.utc),
                         'error': error_msg
                     }
                     self._dependency_errors.append(error_msg)
@@ -533,7 +533,7 @@ class CoreService(BaseService):
                 metadata={
                     'guide_id': request.guide_id,
                     'submission_id': request.submission_id,
-                    'processed_at': datetime.utcnow().isoformat()
+                    'processed_at': datetime.now(timezone.utc).isoformat()
                 }
             )
             
@@ -911,7 +911,7 @@ class CoreService(BaseService):
         """Get detailed service initialization status."""
         return {
             'core_service_initialized': self._initialized,
-            'initialization_timestamp': datetime.utcnow().isoformat(),
+            'initialization_timestamp': datetime.now(timezone.utc).isoformat(),
             'services': self._initialization_status.copy(),
             'dependency_errors': self._dependency_errors.copy(),
             'service_health': {
@@ -941,7 +941,7 @@ class CoreService(BaseService):
             'service_health': self.get_service_health(),
             'cache_size': len(self._processing_cache),
             'dependency_errors': len(self._dependency_errors),
-            'last_check': datetime.utcnow().isoformat(),
+            'last_check': datetime.now(timezone.utc).isoformat(),
             'metrics': self.metrics.to_dict()
         }
     
@@ -1004,7 +1004,7 @@ class CoreService(BaseService):
                     # Update initialization status
                     self._initialization_status[service_name] = {
                         'success': success,
-                        'timestamp': datetime.utcnow(),
+                        'timestamp': datetime.now(timezone.utc),
                         'error': None if success else f"Restart failed"
                     }
                     

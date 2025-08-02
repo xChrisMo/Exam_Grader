@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 import base64
 import json
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 # Import Flask request with fallback
 try:
@@ -128,8 +128,8 @@ class SecureSessionManager:
             session_data.update(
                 {
                     "user_id": user_id,
-                    "created_at": datetime.utcnow().isoformat(),
-                    "last_accessed": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "last_accessed": datetime.now(timezone.utc).isoformat(),
                 }
             )
 
@@ -145,7 +145,7 @@ class SecureSessionManager:
                 id=session_id,
                 user_id=user_id,
                 data=encrypted_data,
-                expires_at=datetime.utcnow() + timedelta(seconds=self.session_timeout if not remember_me else 86400),
+                expires_at=datetime.now(timezone.utc) + timedelta(seconds=self.session_timeout if not remember_me else 86400),
                 ip_address=ip_address,
                 user_agent=user_agent,
                 is_active=True,
@@ -200,7 +200,7 @@ class SecureSessionManager:
                 self._current_session = session
                 
                 # Update last accessed time
-                session.last_accessed = datetime.utcnow()
+                session.last_accessed = datetime.now(timezone.utc)
                 db.session.commit()
                 
                 return session_data
@@ -232,11 +232,11 @@ class SecureSessionManager:
                 return False
 
             # Update session data
-            session_data["last_accessed"] = datetime.utcnow().isoformat()
+            session_data["last_accessed"] = datetime.now(timezone.utc).isoformat()
             encrypted_data = self.encryption.encrypt_data(session_data)
 
             session.data = encrypted_data
-            session.last_accessed = datetime.utcnow()
+            session.last_accessed = datetime.now(timezone.utc)
 
             db.session.commit()
 
@@ -351,7 +351,7 @@ class SecureSessionManager:
         """
         try:
             expired_sessions = SessionModel.query.filter(
-                SessionModel.expires_at < datetime.utcnow()
+                SessionModel.expires_at < datetime.now(timezone.utc)
             ).all()
 
             count = 0

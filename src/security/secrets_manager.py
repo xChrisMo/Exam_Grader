@@ -8,7 +8,7 @@ sensitive configuration data using encryption and secure key derivation.
 import base64
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
@@ -175,7 +175,7 @@ class SecretsManager:
             True if successful
         """
         try:
-            current_time = datetime.utcnow().isoformat()
+            current_time = datetime.now(timezone.utc).isoformat()
             self._secrets_cache[key] = {
                 "value": value,
                 "description": description or "",
@@ -330,7 +330,7 @@ class SecretsManager:
         try:
             with open(env_file, "w") as f:
                 f.write("# Exported secrets from Exam Grader\n")
-                f.write(f"# Generated at: {datetime.utcnow().isoformat()}\n\n")
+                f.write(f"# Generated at: {datetime.now(timezone.utc).isoformat()}\n\n")
 
                 for key, data in self._secrets_cache.items():
                     description = data.get("description", "")

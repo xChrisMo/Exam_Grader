@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 from flask.sessions import SessionInterface, SessionMixin
 from typing import Any, Dict
@@ -90,7 +90,7 @@ class SecureSessionInterface(SessionInterface):
                 logger.debug(f"Session {session.sid} updated in DB.")
 
             # Set the session cookie
-            expires = datetime.utcnow() + timedelta(seconds=self.session_manager.session_timeout)
+            expires = datetime.now(timezone.utc) + timedelta(seconds=self.session_manager.session_timeout)
             response.set_cookie(
                 self.session_cookie_name,
                 session.sid,
@@ -114,8 +114,8 @@ def _update_session(self, sid: str, session_data: Dict[str, Any]):
         if session_record:
             encrypted_data = self.encryption.encrypt_data(session_data)
             session_record.data = encrypted_data
-            session_record.last_accessed = datetime.utcnow()
-            session_record.expires_at = datetime.utcnow() + timedelta(seconds=self.session_timeout)
+            session_record.last_accessed = datetime.now(timezone.utc)
+            session_record.expires_at = datetime.now(timezone.utc) + timedelta(seconds=self.session_timeout)
             db.session.commit()
             logger.debug(f"Session {sid} data updated in DB.")
         else:
@@ -128,8 +128,8 @@ def _update_session_last_accessed(self, sid: str):
     try:
         session_record = SessionModel.query.filter_by(id=sid).first()
         if session_record:
-            session_record.last_accessed = datetime.utcnow()
-            session_record.expires_at = datetime.utcnow() + timedelta(seconds=self.session_timeout)
+            session_record.last_accessed = datetime.now(timezone.utc)
+            session_record.expires_at = datetime.now(timezone.utc) + timedelta(seconds=self.session_timeout)
             db.session.commit()
             logger.debug(f"Session {sid} last_accessed updated in DB.")
         else:

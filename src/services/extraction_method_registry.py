@@ -9,7 +9,7 @@ the best extraction method based on file characteristics and success rates.
 import time
 from typing import Dict, List, Callable, Optional, Any, Tuple
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from enum import Enum
 
@@ -300,7 +300,7 @@ class ExtractionMethodRegistry:
         try:
             # Update metrics
             method_info.total_attempts += 1
-            method_info.last_used = datetime.utcnow()
+            method_info.last_used = datetime.now(timezone.utc)
             
             # Call the extraction method
             content, metadata = method_info.func(file_path, context)
@@ -381,7 +381,7 @@ class ExtractionMethodRegistry:
     
     def _check_method_availability(self, method_info: ExtractionMethodInfo) -> bool:
         """Check if a method's dependencies are available"""
-        method_info.last_availability_check = datetime.utcnow()
+        method_info.last_availability_check = datetime.now(timezone.utc)
         
         for dependency in method_info.dependencies:
             try:

@@ -8,7 +8,7 @@ the comprehensive logging system when available, with fallback to basic logging.
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -131,7 +131,7 @@ class Logger:
 
         # Performance metrics
         self.metrics = {
-            "start_time": datetime.now(),
+            "start_time": datetime.now(timezone.utc),
             "api_calls": 0,
             "cache_hits": 0,
             "cache_misses": 0,
@@ -193,7 +193,7 @@ class Logger:
             'error_message': str(error),
             'context': context,
             'user_id': user_id,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
         self.logger.error(
@@ -213,7 +213,7 @@ class Logger:
 
     def log_performance(self) -> None:
         """Log performance metrics."""
-        duration = (datetime.now() - self.metrics["start_time"]).total_seconds()
+        duration = (datetime.now(timezone.utc) - self.metrics["start_time"]).total_seconds()
         self.info("Performance Metrics:")
         self.info(f"  Duration: {duration:.2f} seconds")
         self.info(f"  API Calls: {self.metrics['api_calls']}")

@@ -11,7 +11,7 @@ import psutil
 import platform
 import threading
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
@@ -263,7 +263,7 @@ class DiagnosticCollector:
             metrics['system'] = {
                 'cpu_usage_history': [],  # Would need to track over time
                 'memory_usage_history': [],  # Would need to track over time
-                'current_timestamp': datetime.utcnow().isoformat()
+                'current_timestamp': datetime.now(timezone.utc).isoformat()
             }
             
             return metrics
@@ -390,7 +390,7 @@ class DiagnosticCollector:
             
             # Create diagnostic report
             report = DiagnosticReport(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 system_info=system_info,
                 process_info=process_info,
                 service_health=service_health,
@@ -414,7 +414,7 @@ class DiagnosticCollector:
             logger.error(f"Failed to collect full diagnostic: {e}")
             # Return minimal report on error
             return DiagnosticReport(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 system_info=self.collect_system_info(),
                 process_info=self.collect_process_info(),
                 service_health={},

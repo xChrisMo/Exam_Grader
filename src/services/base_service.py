@@ -5,7 +5,7 @@ import time
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import threading
 from contextlib import contextmanager
@@ -147,7 +147,7 @@ class BaseService(ABC):
     def track_request(self, operation_name=None):
         """Context manager to track request metrics."""
         start_time = time.time()
-        request_time = datetime.utcnow()
+        request_time = datetime.now(timezone.utc)
         
         try:
             with self._lock:

@@ -9,7 +9,7 @@ import time
 import random
 import traceback
 from typing import Dict, List, Optional, Any, Callable, Union
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from dataclasses import dataclass
 
@@ -227,7 +227,7 @@ class ProcessingErrorHandler:
                 'context': {
                     'operation': context.operation if context else 'unknown',
                     'service': context.service if context else 'unknown',
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             }
     

@@ -10,7 +10,7 @@ import re
 import time
 import hashlib
 from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from utils.logger import logger
@@ -66,7 +66,7 @@ class FileProcessingService:
             'user_id': file_info.get('user_id'),
             'request_id': file_info.get('request_id', f'file_proc_{int(time.time())}'),
             'file_info': file_info,
-            'processing_start': datetime.utcnow()
+            'processing_start': datetime.now(timezone.utc)
         }
         
         processing_attempts = []
@@ -114,7 +114,7 @@ class FileProcessingService:
                     'content_hash': self.calculate_file_hash(file_path),
                     'extraction_metadata': chain_result.metadata,
                     'quality_level': validation_result.quality.value,
-                    'processing_timestamp': datetime.utcnow().isoformat()
+                    'processing_timestamp': datetime.now(timezone.utc).isoformat()
                 }
                 
                 logger.info(f"Successfully processed {file_path} using {chain_result.method_used} "
@@ -165,7 +165,7 @@ class FileProcessingService:
                         'content_hash': self.calculate_file_hash(file_path),
                         'extraction_metadata': extraction_result.metadata,
                         'quality_level': validation_result.quality.value,
-                        'processing_timestamp': datetime.utcnow().isoformat()
+                        'processing_timestamp': datetime.now(timezone.utc).isoformat()
                     }
                     
                     logger.info(f"Successfully processed {file_path} using extraction registry "
@@ -185,7 +185,7 @@ class FileProcessingService:
             error_context = ErrorContext(
                 operation="file_processing_with_fallback",
                 service="file_processing_service",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 user_id=context.get('user_id'),
                 request_id=context.get('request_id'),
                 additional_data={
@@ -542,7 +542,7 @@ class FileProcessingService:
             'content_hash': self.calculate_file_hash(file_path),
             'extraction_metadata': {'error': 'All methods failed'},
             'quality_level': 'invalid',
-            'processing_timestamp': datetime.utcnow().isoformat()
+            'processing_timestamp': datetime.now(timezone.utc).isoformat()
         }
 
     def _create_error_result(self, file_path: str, start_time: float, 
@@ -573,7 +573,7 @@ class FileProcessingService:
             'content_hash': None,
             'extraction_metadata': {'error': error_message},
             'quality_level': 'invalid',
-            'processing_timestamp': datetime.utcnow().isoformat()
+            'processing_timestamp': datetime.now(timezone.utc).isoformat()
         }
     
     def _extract_primary(self, file_path: str, file_extension: str) -> str:
@@ -923,7 +923,7 @@ class FileProcessingService:
         # Add retry metadata
         retry_info = file_info.copy()
         retry_info['retry_attempt'] = retry_info.get('processing_retries', 0) + 1
-        retry_info['retry_timestamp'] = datetime.utcnow().isoformat()
+        retry_info['retry_timestamp'] = datetime.now(timezone.utc).isoformat()
         
         # Process with enhanced logging
         result = self.process_file_with_fallback(file_path, retry_info)

@@ -2,7 +2,7 @@
 from typing import Dict, List
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -383,7 +383,7 @@ class MigrationManager:
                     """), {
                         'version': migration.version,
                         'description': migration.description,
-                        'applied_at': datetime.utcnow()
+                        'applied_at': datetime.now(timezone.utc)
                     })
             
             logger.info(f"Successfully applied migration {migration.version}")

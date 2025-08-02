@@ -1,6 +1,6 @@
 """Enhanced Progress Tracker with Database Persistence and Recovery."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional
 
@@ -493,7 +493,7 @@ class PersistentProgressTracker:
             if db is None or not hasattr(db, 'session'):
                 return 0
                 
-            cutoff_date = datetime.utcnow() - timedelta(days=days_old)
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_old)
             
             # Delete old completed sessions and their updates
             deleted_count = (
@@ -536,7 +536,7 @@ class PersistentProgressTracker:
             if db is None or not hasattr(db, 'session'):
                 return []
                 
-            cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
             
             query = db.session.query(ProgressMetrics).filter(
                 ProgressMetrics.measurement_time >= cutoff_time

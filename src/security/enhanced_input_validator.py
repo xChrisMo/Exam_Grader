@@ -10,7 +10,7 @@ import html
 import mimetypes
 import hashlib
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 try:
     from utils.logger import logger
@@ -84,7 +84,7 @@ class FileValidator:
                 'extension': '',
                 'mime_type': '',
                 'hash': '',
-                'validation_timestamp': datetime.utcnow().isoformat()
+                'validation_timestamp': datetime.now(timezone.utc).isoformat()
             }
             
             # Validate filename

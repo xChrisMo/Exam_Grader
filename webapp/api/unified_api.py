@@ -8,7 +8,7 @@ request tracking, and performance monitoring for all processing operations.
 import time
 import asyncio
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
 
@@ -92,7 +92,7 @@ def process_single_submission():
             
             # Update submission status
             submission.processing_status = 'processing'
-            submission.updated_at = datetime.utcnow()
+            submission.updated_at = datetime.now(timezone.utc)
             db.session.commit()
             
             # Create processing request
@@ -116,7 +116,7 @@ def process_single_submission():
                     submission.processing_status = 'failed'
                     submission.processing_error = result.error
                 
-                submission.updated_at = datetime.utcnow()
+                submission.updated_at = datetime.now(timezone.utc)
                 db.session.commit()
                 
                 # Prepare response data
@@ -165,7 +165,7 @@ def process_single_submission():
                 # Handle processing errors
                 submission.processing_status = 'failed'
                 submission.processing_error = str(processing_error)
-                submission.updated_at = datetime.utcnow()
+                submission.updated_at = datetime.now(timezone.utc)
                 db.session.commit()
                 
                 response, status = api_error_handler.create_error_response(
@@ -262,7 +262,7 @@ def process_batch_submissions():
                     
                     # Update submission status
                     submission.processing_status = 'processing'
-                    submission.updated_at = datetime.utcnow()
+                    submission.updated_at = datetime.now(timezone.utc)
                     db.session.commit()
                     
                     # Create processing request
@@ -287,7 +287,7 @@ def process_batch_submissions():
                         submission.processing_error = result.error
                         failed_count += 1
                     
-                    submission.updated_at = datetime.utcnow()
+                    submission.updated_at = datetime.now(timezone.utc)
                     db.session.commit()
                     
                     # Add result
@@ -312,7 +312,7 @@ def process_batch_submissions():
                         if submission:
                             submission.processing_status = 'failed'
                             submission.processing_error = str(sub_error)
-                            submission.updated_at = datetime.utcnow()
+                            submission.updated_at = datetime.now(timezone.utc)
                             db.session.commit()
                     except:
                         pass

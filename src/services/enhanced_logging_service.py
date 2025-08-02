@@ -11,7 +11,7 @@ import time
 import threading
 from typing import Dict, List, Optional, Any, Callable, Union
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from pathlib import Path
 import logging
@@ -193,7 +193,7 @@ class MetricsLogHandler(LogHandler):
                              self.metrics.logs_by_level.get('CRITICAL', 0))
                 self.metrics.error_rate = error_logs / max(1, self.metrics.total_logs)
                 
-                self.metrics.last_updated = datetime.utcnow()
+                self.metrics.last_updated = datetime.now(timezone.utc)
             
             return True
             
@@ -302,7 +302,7 @@ class EnhancedLoggingService:
         """Log a structured entry"""
         
         entry = StructuredLogEntry(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             level=level,
             category=category,
             service=service,

@@ -157,12 +157,22 @@ const SettingsManager = {
                 return false;
             }
             
+            // Get CSRF token
+            const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+                             document.querySelector('input[name=csrf_token]')?.value;
+            
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            };
+            
+            if (csrfToken) {
+                headers['X-CSRFToken'] = csrfToken;
+            }
+            
             const response = await fetch('/api/settings', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
+                headers: headers,
                 body: JSON.stringify(settingsData)
             });
             
@@ -296,11 +306,21 @@ const SettingsManager = {
         try {
             this.showLoading(true);
             
+            // Get CSRF token
+            const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+                             document.querySelector('input[name=csrf_token]')?.value;
+            
+            const headers = {
+                'X-Requested-With': 'XMLHttpRequest'
+            };
+            
+            if (csrfToken) {
+                headers['X-CSRFToken'] = csrfToken;
+            }
+            
             const response = await fetch('/api/settings/reset', {
                 method: 'POST',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                headers: headers
             });
             
             const result = await response.json();

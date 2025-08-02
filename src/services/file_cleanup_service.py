@@ -8,7 +8,7 @@ from typing import Any, Dict
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 from src.database.models import MarkingGuide, Submission, db
@@ -221,7 +221,7 @@ class FileCleanupService:
             Cleanup statistics
         """
         stats = CleanupStats()
-        cutoff_date = datetime.utcnow() - timedelta(days=self.upload_file_max_age_days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=self.upload_file_max_age_days)
 
         logger.info(
             f"Cleaning up uploads older than {self.upload_file_max_age_days} days"

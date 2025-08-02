@@ -8,7 +8,7 @@ for monitoring system health, service availability, and performance metrics.
 import time
 import psutil
 from typing import Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
 
@@ -33,7 +33,7 @@ def system_health():
         request_id = f"health_{int(time.time() * 1000)}"
         
         health_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'request_id': request_id,
             'overall_status': 'healthy',
             'services': {},
@@ -228,7 +228,7 @@ def service_status():
         request_id = f"services_{int(time.time() * 1000)}"
         
         services_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'services': {}
         }
         
@@ -285,10 +285,10 @@ def performance_metrics():
         request_id = f"perf_{int(time.time() * 1000)}"
         
         hours = request.args.get('hours', 24, type=int)
-        since = datetime.utcnow() - timedelta(hours=hours)
+        since = datetime.now(timezone.utc) - timedelta(hours=hours)
         
         performance_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'time_range_hours': hours,
             'metrics': {}
         }
@@ -361,7 +361,7 @@ def processing_status(task_id):
             'current_file': progress_data.get('current_file', ''),
             'guide_title': progress_data.get('guide_title', ''),
             'started_at': progress_data.get('started_at'),
-            'updated_at': progress_data.get('updated_at', datetime.utcnow().isoformat()),
+            'updated_at': progress_data.get('updated_at', datetime.now(timezone.utc).isoformat()),
             'results': {
                 'total_count': progress_data['total_count'],
                 'processed_count': progress_data['processed_count'],
@@ -397,7 +397,7 @@ def database_status():
         request_id = f"db_status_{int(time.time() * 1000)}"
         
         db_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'connection': {},
             'statistics': {},
             'health': {}
@@ -429,13 +429,13 @@ def database_status():
                 'grading_results': GradingResult.query.count(),
                 'recent_activity': {
                     'guides_last_24h': MarkingGuide.query.filter(
-                        MarkingGuide.created_at >= datetime.utcnow() - timedelta(hours=24)
+                        MarkingGuide.created_at >= datetime.now(timezone.utc) - timedelta(hours=24)
                     ).count(),
                     'submissions_last_24h': Submission.query.filter(
-                        Submission.created_at >= datetime.utcnow() - timedelta(hours=24)
+                        Submission.created_at >= datetime.now(timezone.utc) - timedelta(hours=24)
                     ).count(),
                     'results_last_24h': GradingResult.query.filter(
-                        GradingResult.created_at >= datetime.utcnow() - timedelta(hours=24)
+                        GradingResult.created_at >= datetime.now(timezone.utc) - timedelta(hours=24)
                     ).count()
                 }
             }
@@ -481,7 +481,7 @@ def system_alerts():
         limit = request.args.get('limit', 50, type=int)
         
         alerts_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'filter': {
                 'level': level,
                 'limit': limit

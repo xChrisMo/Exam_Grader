@@ -2,7 +2,7 @@
 from typing import Dict, List, Optional
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import create_engine, inspect, text
 from flask import current_app
@@ -253,7 +253,7 @@ class DatabaseOptimizer:
             Dictionary containing optimization status and recommendations.
         """
         report = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'database_url': self.database_url,
             'indexes': self.validate_indexes(),
             'foreign_keys': self.validate_foreign_keys(),

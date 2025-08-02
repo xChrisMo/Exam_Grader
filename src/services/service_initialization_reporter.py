@@ -9,7 +9,7 @@ import time
 import threading
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 import json
 
@@ -89,7 +89,7 @@ class ServiceInitializationReport:
                   metadata: Optional[Dict[str, Any]] = None):
         """Add an initialization event"""
         event = InitializationEvent(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             service_name=self.service_name,
             phase=phase,
             message=message,
@@ -161,12 +161,12 @@ class ServiceInitializationReporter:
         """Mark the start of service initialization"""
         with self._lock:
             if self.initialization_start_time is None:
-                self.initialization_start_time = datetime.utcnow()
+                self.initialization_start_time = datetime.now(timezone.utc)
                 self._add_system_event("System initialization started")
             
             report = self.reports.get(service_name)
             if report:
-                report.start_time = datetime.utcnow()
+                report.start_time = datetime.now(timezone.utc)
                 report.add_event(
                     InitializationPhase.INITIALIZING,
                     f"Starting initialization of {service_name}"
@@ -299,7 +299,7 @@ class ServiceInitializationReporter:
             if self.initialization_end_time is not None:
                 return  # Already finalized
             
-            self.initialization_end_time = datetime.utcnow()
+            self.initialization_end_time = datetime.now(timezone.utc)
             
             # Calculate overall success
             critical_services = [
@@ -347,7 +347,7 @@ class ServiceInitializationReporter:
     def _add_system_event(self, message: str):
         """Add a system-wide initialization event"""
         event = InitializationEvent(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             service_name="system",
             phase=InitializationPhase.INITIALIZING,
             message=message
@@ -378,7 +378,7 @@ class ServiceInitializationReporter:
             
             duration = None
             if self.initialization_start_time:
-                end_time = self.initialization_end_time or datetime.utcnow()
+                end_time = self.initialization_end_time or datetime.now(timezone.utc)
                 duration = (end_time - self.initialization_start_time).total_seconds()
             
             return {
@@ -414,7 +414,7 @@ class ServiceInitializationReporter:
         report_data = {
             'summary': self.get_initialization_summary(),
             'services': self.get_all_reports(),
-            'exported_at': datetime.utcnow().isoformat()
+            'exported_at': datetime.now(timezone.utc).isoformat()
         }
         
         try:

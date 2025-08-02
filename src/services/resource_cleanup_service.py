@@ -15,7 +15,7 @@ import gc
 import psutil
 from typing import Dict, List, Optional, Any, Callable, Set
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from pathlib import Path
 import weakref
@@ -142,7 +142,7 @@ class TemporaryFileManager:
         """Clean up temporary files"""
         start_time = time.time()
         max_age = max_age or self.file_age_threshold
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         
         items_cleaned = 0
         bytes_freed = 0
@@ -217,7 +217,7 @@ class TemporaryFileManager:
         
         try:
             temp_dir = Path(tempfile.gettempdir())
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
             
             for item in temp_dir.glob(pattern):
                 try:
@@ -297,7 +297,7 @@ class MemoryCleanupManager:
         self.cleanup_callbacks: List[Callable[[], int]] = []
         self.weak_references: List[weakref.ref] = []
         self.memory_threshold = 0.85  # 85% memory usage threshold
-        self.last_cleanup = datetime.utcnow()
+        self.last_cleanup = datetime.now(timezone.utc)
         self.cleanup_interval = timedelta(minutes=5)
     
     def register_cleanup_callback(self, callback: Callable[[], int]):
@@ -372,7 +372,7 @@ class MemoryCleanupManager:
         
         self.weak_references = alive_refs
         
-        self.last_cleanup = datetime.utcnow()
+        self.last_cleanup = datetime.now(timezone.utc)
         duration_ms = (time.time() - start_time) * 1000
         
         return CleanupResult(
@@ -487,7 +487,7 @@ class ResourceCleanupService:
                 )
             
             max_age = timedelta(days=max_age_days)
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
             
             for log_file in log_path.rglob("*.log*"):
                 try:

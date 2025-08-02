@@ -7,9 +7,10 @@ file uploads, and basic functionality.
 
 import os
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_required, current_user
+from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 
 from src.database.models import db, MarkingGuide, Submission
@@ -229,25 +230,35 @@ def upload_guide():
                     os.remove(file_path)
                 return redirect(request.url)
             
-            # Calculate content hash for duplicate detection
-            import hashlib
-            with open(file_path, 'rb') as f:
-                content_hash = hashlib.sha256(f.read()).hexdigest()
+            # Extract text content for duplicate detection
+            content_text = ""
+            try:
+                from src.parsing.parse_guide import parse_marking_guide
+                content_text = parse_marking_guide(file_path)
+            except Exception as e:
+                logger.warning(f"Could not extract text for duplicate detection: {e}")
             
-            # Check for duplicate content
-            existing_content = MarkingGuide.query.filter(
-                MarkingGuide.user_id == current_user.id,
-                MarkingGuide.content_hash == content_hash,
-                MarkingGuide.is_active == True
-            ).first()
-            
-            if existing_content:
-                logger.warning(f"Duplicate content found, existing guide: {existing_content.title}")
-                flash(f'A guide with identical content already exists: "{existing_content.title}". Please upload a different file.', 'error')
-                # Clean up uploaded file
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                return redirect(request.url)
+            # Check for duplicate content using text content hash
+            content_hash = ""
+            if content_text:
+                from src.utils.content_deduplication import check_marking_guide_duplicate, get_deduplication_response, calculate_content_hash
+                
+                is_duplicate, existing_guide = check_marking_guide_duplicate(
+                    user_id=current_user.id,
+                    content=content_text,
+                    db_session=db.session
+                )
+                
+                if is_duplicate:
+                    logger.warning(f"Duplicate content found, existing guide: {existing_guide.title}")
+                    flash(f'A guide with identical content already exists: "{existing_guide.title}". Please upload a different file.', 'error')
+                    # Clean up uploaded file
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                    return redirect(request.url)
+                
+                # Calculate content hash for the new guide
+                content_hash = calculate_content_hash(content_text)
             
             # Create a new marking guide with all required fields
             guide = MarkingGuide(
@@ -258,6 +269,7 @@ def upload_guide():
                 file_path=file_path,
                 file_size=file_size,
                 file_type=file_type,
+                content_text=content_text,
                 content_hash=content_hash,
                 questions=[],  # Initialize as empty list
                 total_marks=0.0,
@@ -424,6 +436,35 @@ def upload_submission():
                         processing_status = 'failed'
                         processing_error = str(processing_error_ex)
                     
+                    # Check for duplicate content if text was extracted successfully
+                    content_hash = ""
+                    if extracted_text and processing_status == 'completed':
+                        from src.utils.content_deduplication import check_submission_duplicate, calculate_content_hash
+                        
+                        is_duplicate, existing_submission = check_submission_duplicate(
+                            user_id=current_user.id,
+                            content=extracted_text,
+                            db_session=db.session
+                        )
+                        
+                        if is_duplicate:
+                            logger.warning(f"Duplicate content found for {filename}, existing submission: {existing_submission.filename}")
+                            # Clean up uploaded file since it's a duplicate
+                            try:
+                                os.remove(file_path)
+                            except OSError:
+                                pass
+                            
+                            failed_count += 1
+                            errors.append({
+                                'filename': file.filename,
+                                'error': f'A submission with identical content already exists: "{existing_submission.filename}"'
+                            })
+                            continue  # Skip creating this submission
+                        
+                        # Calculate content hash for the new submission
+                        content_hash = calculate_content_hash(extracted_text)
+                    
                     # Create a new submission with extracted text
                     submission = Submission(
                         user_id=current_user.id,
@@ -434,6 +475,7 @@ def upload_submission():
                         file_type=file_type,
                         student_name=request.form.get('student_name', ''),
                         content_text=extracted_text,
+                        content_hash=content_hash,
                         ocr_confidence=ocr_confidence,
                         processing_status=processing_status,
                         processing_error=processing_error
@@ -753,7 +795,7 @@ def api_export_results():
     try:
         from src.database.models import GradingResult
         import json
-        from datetime import datetime
+        from datetime import datetime, timezone
         
         results = GradingResult.query.join(Submission).filter(
             Submission.user_id == current_user.id
@@ -1451,7 +1493,7 @@ def api_select_guide():
         session['active_guide_questions_count'] = len(guide.questions)
         
         # Update guide's last used timestamp
-        guide.updated_at = datetime.utcnow()
+        guide.updated_at = datetime.now(timezone.utc)
         db.session.commit()
         
         logger.info(f"Successfully selected guide {guide_id} for user {current_user.id}")
@@ -1945,22 +1987,29 @@ def check_service_status():
         
         # Check database
         try:
-            db.session.execute('SELECT 1')
+            db.session.execute(db.text('SELECT 1'))
+            db.session.commit()
             status['database'] = True
-        except Exception:
+        except Exception as e:
+            logger.error(f"Database check failed: {e}")
             status['database'] = False
         
-        # Check LLM service (mock check)
-        status['llm_service'] = True  # Would implement actual check
+        # Check LLM service
+        status['llm_service'] = check_llm_service_status()
         
-        # Check OCR service (mock check)
-        status['ocr_service'] = True  # Would implement actual check
+        # Check OCR service
+        status['ocr_service'] = check_ocr_service_status()
+        
+        # Check AI service (general AI functionality)
+        status['ai_service'] = check_ai_service_status()
         
         # Check file storage
         try:
             upload_dir = os.path.join(current_app.root_path, '..', 'uploads')
+            os.makedirs(upload_dir, exist_ok=True)
             status['file_storage'] = os.path.exists(upload_dir) and os.access(upload_dir, os.W_OK)
-        except Exception:
+        except Exception as e:
+            logger.error(f"File storage check failed: {e}")
             status['file_storage'] = False
         
         return status
@@ -1968,6 +2017,79 @@ def check_service_status():
     except Exception as e:
         logger.error(f"Error checking service status: {e}")
         return {}
+
+def check_llm_service_status():
+    """Check if LLM service is available."""
+    try:
+        from src.database.models import UserSettings
+        from src.services.consolidated_llm_service import ConsolidatedLLMService
+        
+        # Try to initialize LLM service
+        llm_service = ConsolidatedLLMService()
+        
+        # Check if we have API configuration
+        try:
+            default_settings = UserSettings.get_default_settings()
+            if not default_settings.get('llm_api_key'):
+                # Check if there are any user settings with API keys
+                user_with_key = UserSettings.query.filter(
+                    UserSettings.llm_api_key_encrypted.isnot(None)
+                ).first()
+                if not user_with_key:
+                    return False
+        except AttributeError:
+            # If get_default_settings doesn't exist, just check for any user with API key
+            user_with_key = UserSettings.query.filter(
+                UserSettings.llm_api_key_encrypted.isnot(None)
+            ).first()
+            if not user_with_key:
+                return False
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"LLM service check failed: {e}")
+        return False
+
+def check_ocr_service_status():
+    """Check if OCR service is available."""
+    try:
+        from src.services.consolidated_ocr_service import ConsolidatedOCRService
+        
+        # Try to initialize OCR service
+        ocr_service = ConsolidatedOCRService()
+        
+        # Check if Tesseract is available (fallback OCR)
+        import subprocess
+        try:
+            result = subprocess.run(['tesseract', '--version'], 
+                                  capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                return True
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+        
+        # Check if we have API configuration for external OCR
+        from src.database.models import UserSettings
+        user_with_ocr = UserSettings.query.filter(
+            UserSettings.ocr_api_key_encrypted.isnot(None)
+        ).first()
+        
+        return user_with_ocr is not None
+        
+    except Exception as e:
+        logger.error(f"OCR service check failed: {e}")
+        return False
+
+def check_ai_service_status():
+    """Check if AI service is available."""
+    try:
+        # AI service is available if either LLM or OCR is available
+        return check_llm_service_status() or check_ocr_service_status()
+        
+    except Exception as e:
+        logger.error(f"AI service check failed: {e}")
+        return False
 
 @main_bp.route('/api/settings', methods=['GET', 'POST'])
 @login_required
@@ -2104,7 +2226,7 @@ def api_settings_export():
     try:
         from src.database.models import UserSettings
         import json
-        from datetime import datetime
+        from datetime import datetime, timezone
         
         user_settings = UserSettings.get_or_create_for_user(current_user.id)
         settings_data = user_settings.to_dict()

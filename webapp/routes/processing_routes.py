@@ -242,21 +242,110 @@ def processing_status(submission_id):
 def view_result(result_id):
     """View detailed processing result."""
     try:
-        result = GradingResult.query.filter_by(
-            id=result_id, 
+        # Check if this is a GradingSession ID or a single GradingResult ID
+        from src.database.models import GradingSession, Mapping
+        
+        # First try to find as a GradingSession
+        grading_session = GradingSession.query.filter_by(
+            id=result_id,
             user_id=current_user.id
         ).first()
         
-        if not result:
-            flash('Result not found', 'error')
-            return redirect(url_for('main.results'))
-        
-        # Get related records
-        submission = db.session.get(Submission, result.submission_id)
-        guide = db.session.get(MarkingGuide, result.marking_guide_id)
+        if grading_session:
+            # This is a grading session - get all related grading results
+            grading_results = GradingResult.query.filter_by(
+                grading_session_id=result_id
+            ).all()
+            
+            if not grading_results:
+                flash('No grading results found for this session', 'error')
+                return redirect(url_for('main.results'))
+            
+            # Use the first result as the primary result for compatibility
+            result = grading_results[0]
+            submission = db.session.get(Submission, result.submission_id)
+            guide = db.session.get(MarkingGuide, result.marking_guide_id)
+            
+            # Calculate session-level totals
+            total_score = sum(gr.score for gr in grading_results if gr.score)
+            max_score = sum(gr.max_score for gr in grading_results if gr.max_score)
+            
+            # Create a session-level result object
+            class SessionResult:
+                def __init__(self, session, results, submission):
+                    self.id = session.id
+                    self.submission_id = session.submission_id
+                    self.marking_guide_id = session.marking_guide_id
+                    self.total_score = total_score
+                    self.max_score = max_score
+                    self.percentage = (total_score / max_score * 100) if max_score > 0 else 0
+                    self.feedback = None  # Session doesn't have overall feedback
+                    self.detailed_results = None  # Will use grading_results instead
+                    self.processing_metadata = None
+                    self.created_at = session.created_at
+                    self.updated_at = session.updated_at
+                    self.grading_results = results  # Individual question results
+                    
+                    # Load mappings for each result
+                    for gr in self.grading_results:
+                        if gr.mapping_id:
+                            gr.mapping = db.session.get(Mapping, gr.mapping_id)
+            
+            result = SessionResult(grading_session, grading_results, submission)
+            
+        else:
+            # Try to find as a single GradingResult
+            result = GradingResult.query.filter_by(
+                id=result_id, 
+                user_id=current_user.id
+            ).first()
+            
+            if not result:
+                flash('Result not found', 'error')
+                return redirect(url_for('main.results'))
+            
+            # Get related records
+            submission = db.session.get(Submission, result.submission_id)
+            guide = db.session.get(MarkingGuide, result.marking_guide_id)
+            
+            # For single results, check if it's part of a grading session
+            if result.grading_session_id:
+                # Get all results from the same session
+                session_results = GradingResult.query.filter_by(
+                    grading_session_id=result.grading_session_id
+                ).all()
+                
+                # Load mappings for each result
+                for gr in session_results:
+                    if gr.mapping_id:
+                        gr.mapping = db.session.get(Mapping, gr.mapping_id)
+                
+                result.grading_results = session_results
+                
+                # Calculate session totals
+                result.total_score = sum(gr.score for gr in session_results if gr.score)
+                result.max_score = sum(gr.max_score for gr in session_results if gr.max_score)
+            else:
+                # Single result - make it compatible with the template
+                result.grading_results = [result]
+                if result.mapping_id:
+                    result.mapping = db.session.get(Mapping, result.mapping_id)
         
         # Convert result to dict and enhance with additional analytics
-        result_dict = result.to_dict()
+        if hasattr(result, 'to_dict'):
+            result_dict = result.to_dict()
+        else:
+            result_dict = {
+                'id': result.id,
+                'total_score': result.total_score,
+                'max_score': result.max_score,
+                'percentage': result.percentage,
+                'feedback': getattr(result, 'feedback', None),
+                'detailed_results': getattr(result, 'detailed_results', None),
+                'processing_metadata': getattr(result, 'processing_metadata', None),
+                'created_at': result.created_at.isoformat() if result.created_at else None,
+                'updated_at': result.updated_at.isoformat() if result.updated_at else None
+            }
         
         # Enhance result with comprehensive analytics and formatting
         enhanced_result = enhanced_result_service.enhance_result(
@@ -265,7 +354,7 @@ def view_result(result_id):
             guide.to_dict() if guide else None
         )
         
-        logger.info(f"Enhanced result {result_id} for detailed view")
+        logger.info(f"Enhanced result {result_id} for detailed view with {len(result.grading_results)} individual results")
         
         return render_template('result_detail.html', 
                              result=result,

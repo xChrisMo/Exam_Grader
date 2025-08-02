@@ -8,7 +8,7 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, BinaryIO
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from contextlib import contextmanager
 
 try:
@@ -86,7 +86,7 @@ class SecureFileStorage:
                 'original_filename': filename,
                 'stored_filename': secure_filename,
                 'file_info': file_info,
-                'storage_timestamp': datetime.utcnow().isoformat(),
+                'storage_timestamp': datetime.now(timezone.utc).isoformat(),
                 'size': len(file_content)
             }
             
@@ -146,7 +146,7 @@ class SecureFileStorage:
             Number of files cleaned up
         """
         cleaned_count = 0
-        cutoff_date = datetime.utcnow() - timedelta(days=self.max_storage_days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=self.max_storage_days)
         
         try:
             for directory in [self.processed_path, self.quarantine_path, self.temp_path]:
@@ -182,7 +182,7 @@ class SecureFileStorage:
         # Get file extension
         extension = Path(original_filename).suffix.lower()
         
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         hash_prefix = file_hash[:16] if file_hash else 'unknown'
         
         return f"{timestamp}_{hash_prefix}{extension}"

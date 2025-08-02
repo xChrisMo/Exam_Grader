@@ -7,7 +7,7 @@ health status, performance metrics, and alerting information.
 
 from flask import Blueprint, jsonify, request
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 import json
 
 from src.services.monitoring_dashboard import monitoring_dashboard_service, DashboardType, AlertSeverity
@@ -35,7 +35,7 @@ def get_system_health():
         return jsonify({
             'status': 'success',
             'data': health_status,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -71,7 +71,7 @@ def get_service_health(service_name: str):
                 'service_name': service_name,
                 'health': service_health
             },
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -90,7 +90,7 @@ def get_all_metrics():
         return jsonify({
             'status': 'success',
             'data': metrics,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -139,7 +139,7 @@ def get_metric(metric_name: str):
         return jsonify({
             'status': 'success',
             'data': response_data,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -164,7 +164,7 @@ def get_performance_summary():
         return jsonify({
             'status': 'success',
             'data': summary,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -183,7 +183,7 @@ def get_operation_stats():
         return jsonify({
             'status': 'success',
             'data': stats,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -202,7 +202,7 @@ def list_dashboards():
         return jsonify({
             'status': 'success',
             'data': dashboards,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -227,7 +227,7 @@ def get_dashboard(dashboard_id: str):
         return jsonify({
             'status': 'success',
             'data': dashboard_data,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -272,7 +272,7 @@ def get_alerts():
         return jsonify({
             'status': 'success',
             'data': alerts,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -297,7 +297,7 @@ def resolve_alert(alert_id: str):
         return jsonify({
             'status': 'success',
             'message': f'Alert {alert_id} resolved',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -316,7 +316,7 @@ def get_alert_statistics():
         return jsonify({
             'status': 'success',
             'data': stats,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -365,7 +365,7 @@ def get_system_status():
         return jsonify({
             'status': 'success',
             'data': system_status,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -393,7 +393,7 @@ def export_metrics():
             'status': 'success',
             'data': json.loads(exported_data) if format_type == 'json' else exported_data,
             'format': format_type,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -413,7 +413,7 @@ def reload_monitoring_config():
         return jsonify({
             'status': 'success',
             'message': 'Configuration reload initiated',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:

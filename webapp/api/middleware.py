@@ -8,7 +8,7 @@ and response enhancement for unified API endpoints.
 import time
 import uuid
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import request, g, current_app
 from functools import wraps
 
@@ -54,7 +54,7 @@ class APIMiddleware:
                 'content_type': request.headers.get('Content-Type'),
                 'content_length': request.headers.get('Content-Length'),
                 'remote_addr': request.remote_addr,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
         )
         
@@ -86,7 +86,7 @@ class APIMiddleware:
         
         response.headers['X-Processing-Time'] = f"{processing_time:.2f}ms"
         response.headers['X-API-Version'] = '1.0'
-        response.headers['X-Timestamp'] = datetime.utcnow().isoformat()
+        response.headers['X-Timestamp'] = datetime.now(timezone.utc).isoformat()
         
         if response.is_json and response.get_json():
             try:
@@ -110,7 +110,7 @@ class APIMiddleware:
                 'processing_time_ms': processing_time,
                 'response_size': len(response.get_data()),
                 'content_type': response.headers.get('Content-Type'),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
         )
         
@@ -142,7 +142,7 @@ class APIMiddleware:
                     'endpoint': request.endpoint,
                     'exception': str(exception),
                     'exception_type': type(exception).__name__,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             )
 
@@ -271,7 +271,7 @@ def log_api_usage(operation: str):
                     'path': request.path,
                     'endpoint': request.endpoint,
                     'user_id': getattr(request, 'user_id', None),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             )
             

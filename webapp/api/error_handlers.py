@@ -8,7 +8,7 @@ with consistent response formats, error categorization, and monitoring.
 import time
 import traceback
 from typing import Dict, Any, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import jsonify, request, current_app
 from werkzeug.exceptions import HTTPException
 
@@ -64,7 +64,7 @@ class APIErrorHandler:
         error_context = ErrorContext(
             operation="api_request",
             service="unified_api",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             request_id=request_id,
             additional_data={
                 'endpoint': request.endpoint,
@@ -88,7 +88,7 @@ class APIErrorHandler:
                 'type': type(error).__name__,
                 'message': message or str(error),
                 'details': details or {},
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'request_id': request_id
             },
             'data': None,
@@ -163,7 +163,7 @@ class APIErrorHandler:
                 'endpoint': request.endpoint,
                 'method': request.method,
                 'request_id': request_id,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 **(metadata or {})
             }
         }

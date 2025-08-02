@@ -9,7 +9,7 @@ import time
 import random
 import asyncio
 from typing import Dict, List, Optional, Any, Callable, Union
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from dataclasses import dataclass
 from functools import wraps
@@ -245,7 +245,7 @@ class RetryManager:
                 attempt = RetryAttempt(
                     attempt_number=attempt_num,
                     delay=0.0,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     success=True,
                     execution_time=execution_time
                 )
@@ -280,7 +280,7 @@ class RetryManager:
                     attempt = RetryAttempt(
                         attempt_number=attempt_num,
                         delay=0.0,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(timezone.utc),
                         error=str(e),
                         success=False,
                         execution_time=execution_time
@@ -295,7 +295,7 @@ class RetryManager:
                     attempt = RetryAttempt(
                         attempt_number=attempt_num,
                         delay=delay,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(timezone.utc),
                         error=str(e),
                         success=False,
                         execution_time=execution_time
@@ -309,7 +309,7 @@ class RetryManager:
                     attempt = RetryAttempt(
                         attempt_number=attempt_num,
                         delay=0.0,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(timezone.utc),
                         error=str(e),
                         success=False,
                         execution_time=execution_time
@@ -381,7 +381,7 @@ class RetryManager:
                 attempt = RetryAttempt(
                     attempt_number=attempt_num,
                     delay=0.0,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     success=True,
                     execution_time=execution_time
                 )
@@ -416,7 +416,7 @@ class RetryManager:
                     attempt = RetryAttempt(
                         attempt_number=attempt_num,
                         delay=0.0,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(timezone.utc),
                         error=str(e),
                         success=False,
                         execution_time=execution_time
@@ -431,7 +431,7 @@ class RetryManager:
                     attempt = RetryAttempt(
                         attempt_number=attempt_num,
                         delay=delay,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(timezone.utc),
                         error=str(e),
                         success=False,
                         execution_time=execution_time
@@ -445,7 +445,7 @@ class RetryManager:
                     attempt = RetryAttempt(
                         attempt_number=attempt_num,
                         delay=0.0,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(timezone.utc),
                         error=str(e),
                         success=False,
                         execution_time=execution_time
@@ -560,7 +560,7 @@ class RetryManager:
         
         breaker = self.circuit_breakers[operation]
         
-        if breaker['state'] == 'open' and datetime.utcnow() > breaker['reset_time']:
+        if breaker['state'] == 'open' and datetime.now(timezone.utc) > breaker['reset_time']:
             breaker['state'] = 'half_open'
             logger.info(f"Circuit breaker for '{operation}' moved to half-open state")
         
@@ -589,11 +589,11 @@ class RetryManager:
                 logger.info(f"Circuit breaker for '{operation}' closed after successful execution")
         else:
             breaker['failure_count'] += 1
-            breaker['last_failure_time'] = datetime.utcnow()
+            breaker['last_failure_time'] = datetime.now(timezone.utc)
             
             if breaker['failure_count'] >= breaker['failure_threshold']:
                 breaker['state'] = 'open'
-                breaker['reset_time'] = datetime.utcnow() + timedelta(minutes=breaker['reset_timeout_minutes'])
+                breaker['reset_time'] = datetime.now(timezone.utc) + timedelta(minutes=breaker['reset_timeout_minutes'])
                 logger.warning(f"Circuit breaker for '{operation}' opened due to {breaker['failure_count']} consecutive failures")
     
     def _close_circuit_breaker(self, operation: str):

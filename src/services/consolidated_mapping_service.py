@@ -535,11 +535,11 @@ Return JSON format:
   ]
 }}"""
 
-                    response_text = self.llm_service.generate_response(
-                        system_prompt=system_prompt,
-                        user_prompt=user_prompt,
-                        temperature=0.0  # Changed from 0.1 to 0.0 for full determinism
-                    )
+            response_text = self.llm_service.generate_response(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.0  # Changed from 0.1 to 0.0 for full determinism
+            )
 
             return self._parse_json_response(response_text)
 

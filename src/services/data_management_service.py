@@ -9,7 +9,7 @@ import os
 import shutil
 import hashlib
 from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 from src.database.models import (
@@ -56,7 +56,7 @@ class DataManagementService:
         """
         try:
             validation_result = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'scope': f'user_{user_id}' if user_id else 'system_wide',
                 'issues': [],
                 'warnings': [],
@@ -105,7 +105,7 @@ class DataManagementService:
         except Exception as e:
             logger.error(f"Error validating data integrity: {e}")
             return {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'error': str(e),
                 'issues': [f'Validation failed: {str(e)}'],
                 'warnings': [],
@@ -127,7 +127,7 @@ class DataManagementService:
         """
         try:
             cleanup_result = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'dry_run': dry_run,
                 'scope': f'user_{user_id}' if user_id else 'system_wide',
                 'cleaned_items': {
@@ -166,7 +166,7 @@ class DataManagementService:
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
             return {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'error': str(e),
                 'dry_run': dry_run,
                 'cleaned_items': {},
@@ -186,7 +186,7 @@ class DataManagementService:
         """
         try:
             optimization_result = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'scope': f'user_{user_id}' if user_id else 'system_wide',
                 'optimizations': [],
                 'space_saved_mb': 0,
@@ -229,7 +229,7 @@ class DataManagementService:
         except Exception as e:
             logger.error(f"Error during storage optimization: {e}")
             return {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'error': str(e),
                 'optimizations': [],
                 'space_saved_mb': 0,
@@ -249,7 +249,7 @@ class DataManagementService:
         """
         try:
             backup_result = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'user_id': user_id,
                 'backup_type': backup_type,
                 'backup_path': '',
@@ -296,7 +296,7 @@ class DataManagementService:
         except Exception as e:
             logger.error(f"Error creating backup: {e}")
             return {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'user_id': user_id,
                 'error': str(e),
                 'success': False
@@ -314,7 +314,7 @@ class DataManagementService:
         """
         try:
             stats = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'scope': f'user_{user_id}' if user_id else 'system_wide',
                 'storage_usage': {},
                 'file_counts': {},
@@ -370,7 +370,7 @@ class DataManagementService:
         except Exception as e:
             logger.error(f"Error getting storage statistics: {e}")
             return {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'error': str(e),
                 'storage_usage': {},
                 'file_counts': {},
@@ -398,7 +398,7 @@ class DataManagementService:
             if not doc.text_content and doc.extracted_text:
                 warnings.append(f"Document {doc.name} - Marked as extracted but no content found")
             
-            if doc.created_at < datetime.utcnow() - timedelta(days=365):
+            if doc.created_at < datetime.now(timezone.utc) - timedelta(days=365):
                 usage_count = LLMDatasetDocument.query.filter_by(document_id=doc.id).count()
                 if usage_count == 0:
                     warnings.append(f"Document {doc.name} - Old unused document (1+ years)")
@@ -472,13 +472,13 @@ class DataManagementService:
                     issues.append(f"Training job {job.name} - Referenced dataset not found")
             
             if job.status in ['training', 'preparing']:
-                if job.start_time and job.start_time < datetime.utcnow() - timedelta(hours=24):
+                if job.start_time and job.start_time < datetime.now(timezone.utc) - timedelta(hours=24):
                     warnings.append(f"Training job {job.name} - Stuck in {job.status} state for >24h")
             
             if job.status == 'completed' and job.progress != 100:
                 warnings.append(f"Training job {job.name} - Completed but progress is {job.progress}%")
             
-            if job.status == 'failed' and job.created_at < datetime.utcnow() - timedelta(days=90):
+            if job.status == 'failed' and job.created_at < datetime.now(timezone.utc) - timedelta(days=90):
                 warnings.append(f"Training job {job.name} - Old failed job (>90 days)")
         
         return {
@@ -638,7 +638,7 @@ class DataManagementService:
         
         # Clean up temp directories
         temp_dirs = ['temp', 'webapp/temp']
-        cutoff_date = datetime.utcnow() - timedelta(days=1)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=1)
         
         for temp_dir in temp_dirs:
             if os.path.exists(temp_dir):

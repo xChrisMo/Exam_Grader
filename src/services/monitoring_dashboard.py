@@ -9,7 +9,7 @@ import time
 import threading
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 import json
 
@@ -53,8 +53,8 @@ class Dashboard:
     widgets: List[DashboardWidget] = field(default_factory=list)
     auto_refresh: bool = True
     refresh_interval: int = 30
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    last_updated: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_updated: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 @dataclass
 class MonitoringAlert:
@@ -142,7 +142,7 @@ class SystemHealthCollector(DataCollector):
             cache_stats = cache_manager.get_stats()
             
             return {
-                'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
                 'system_resources': {k: v.to_dict() for k, v in resources.items()},
                 'service_health': health_status if health_status else None,
                 'cache_stats': cache_stats,
@@ -154,7 +154,7 @@ class SystemHealthCollector(DataCollector):
         except Exception as e:
             logger.error(f"Error collecting system health data: {e}")
             return {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'error': str(e),
                 'overall_status': 'error'
             }
@@ -180,7 +180,7 @@ class PerformanceCollector(DataCollector):
             avg_success_rate = sum(stats['success_rate'] for stats in all_stats.values()) / max(1, len(all_stats))
             
             return {
-                'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
                 'summary': summary,
                 'operation_stats': all_stats,
                 'aggregate_metrics': {
@@ -193,7 +193,7 @@ class PerformanceCollector(DataCollector):
         except Exception as e:
             logger.error(f"Error collecting performance data: {e}")
             return {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'error': str(e)
             }
 
@@ -215,7 +215,7 @@ class ErrorTrackingCollector(DataCollector):
             recent_alerts = performance_monitor.get_alerts(limit=50)
             
             return {
-                'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
                 'log_metrics': log_metrics.__dict__ if log_metrics else None,
                 'recent_alerts': recent_alerts,
                 'error_summary': {
@@ -228,7 +228,7 @@ class ErrorTrackingCollector(DataCollector):
         except Exception as e:
             logger.error(f"Error collecting error tracking data: {e}")
             return {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'error': str(e)
             }
 
@@ -460,7 +460,7 @@ class MonitoringDashboardService:
     def create_alert(self, title: str, message: str, severity: AlertSeverity,
                     source: str, metadata: Optional[Dict[str, Any]] = None) -> str:
         """Create a new alert with cooldown logic"""
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         
         cooldown_period = timedelta(minutes=5)
         for existing_alert in reversed(self.alerts[-10:]):  # Check last 10 alerts
@@ -501,7 +501,7 @@ class MonitoringDashboardService:
         for alert in self.alerts:
             if alert.id == alert_id and not alert.resolved:
                 alert.resolved = True
-                alert.resolved_at = datetime.utcnow()
+                alert.resolved_at = datetime.now(timezone.utc)
                 logger.info(f"Alert resolved: {alert_id}")
                 return True
         return False
@@ -541,7 +541,11 @@ class MonitoringDashboardService:
         self._running = False
         if self._monitoring_thread and self._monitoring_thread.is_alive():
             self._monitoring_thread.join(timeout=5)
-        logger.info("Stopped monitoring dashboard service")
+        try:
+            logger.info("Stopped monitoring dashboard service")
+        except Exception:
+            # Ignore logging errors during shutdown
+            pass
     
     def _monitoring_worker(self):
         """Background monitoring worker"""

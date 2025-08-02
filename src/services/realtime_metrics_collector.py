@@ -10,7 +10,7 @@ import threading
 import psutil
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import deque, defaultdict
 from enum import Enum
 import json
@@ -55,7 +55,7 @@ class MetricSeries:
     def add_point(self, value: float, labels: Optional[Dict[str, str]] = None):
         """Add a metric point"""
         point = MetricPoint(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             value=value,
             labels=labels or {}
         )
@@ -67,7 +67,7 @@ class MetricSeries:
     
     def get_average(self, minutes: int = 5) -> float:
         """Get average value over specified minutes"""
-        cutoff_time = datetime.utcnow() - timedelta(minutes=minutes)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=minutes)
         recent_points = [
             p for p in self.points 
             if p.timestamp >= cutoff_time
@@ -80,7 +80,7 @@ class MetricSeries:
     
     def get_max(self, minutes: int = 5) -> float:
         """Get maximum value over specified minutes"""
-        cutoff_time = datetime.utcnow() - timedelta(minutes=minutes)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=minutes)
         recent_points = [
             p for p in self.points 
             if p.timestamp >= cutoff_time
@@ -90,7 +90,7 @@ class MetricSeries:
     
     def get_trend(self, minutes: int = 10) -> str:
         """Get trend direction over specified minutes"""
-        cutoff_time = datetime.utcnow() - timedelta(minutes=minutes)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=minutes)
         recent_points = [
             p for p in self.points 
             if p.timestamp >= cutoff_time
@@ -249,7 +249,7 @@ class RealtimeMetricsCollector:
         if not metric:
             return []
         
-        cutoff_time = datetime.utcnow() - timedelta(minutes=minutes)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=minutes)
         return [
             point.to_dict() 
             for point in metric.points 
@@ -271,7 +271,10 @@ class RealtimeMetricsCollector:
         self._running = False
         if self._monitoring_thread and self._monitoring_thread.is_alive():
             self._monitoring_thread.join(timeout=5)
-        logger.info("Real-time metrics collection stopped")
+        try:
+            logger.info("Real-time metrics collection stopped")
+        except Exception:
+            print("Real-time metrics collection stopped")
     
     def _collection_worker(self):
         """Background collection worker"""
@@ -427,7 +430,7 @@ class RealtimeMetricsCollector:
     
     def get_dashboard_data(self) -> Dict[str, Any]:
         """Get formatted data for monitoring dashboard"""
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         
         # Get key metrics
         key_metrics = {

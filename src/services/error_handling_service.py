@@ -8,7 +8,7 @@ for the LLM training system.
 import traceback
 import time
 from typing import Dict, List, Optional, Any, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 
 from utils.logger import logger
@@ -44,7 +44,7 @@ class LLMTrainingError(Exception):
         self.severity = severity
         self.details = details or {}
         self.recoverable = recoverable
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.now(timezone.utc)
         self.error_id = f"{error_type.value}_{int(time.time())}"
     
     def to_dict(self) -> Dict[str, Any]:
@@ -140,7 +140,7 @@ class LLMTrainingErrorHandler:
                 'recovery_suggestions': recovery_suggestions,
                 'retry_possible': True,
                 'fallback_available': True,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
             
             logger.error(f"File processing error for {file_info.get('name', 'unknown')}: {error}")
@@ -233,7 +233,7 @@ class LLMTrainingErrorHandler:
                 'auto_recovery_options': auto_recovery,
                 'can_resume': 'checkpoint' in context,
                 'estimated_recovery_time': '5-10 minutes',
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
             
             logger.error(f"Training error for job {job_id}: {error}")
@@ -304,7 +304,7 @@ class LLMTrainingErrorHandler:
                 'suggestions': suggestions,
                 'can_auto_fix': validation_type in ['duplicate_data', 'size_constraint'],
                 'severity': 'medium',
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
             
             logger.warning(f"Validation error: {error}")
@@ -487,7 +487,7 @@ class LLMTrainingErrorHandler:
         error_entry = {
             'error': error.to_dict(),
             'context': context or {},
-            'logged_at': datetime.utcnow().isoformat()
+            'logged_at': datetime.now(timezone.utc).isoformat()
         }
         
         self.error_history.append(error_entry)
@@ -529,7 +529,7 @@ class LLMTrainingErrorHandler:
     
     def _calculate_error_rate(self, time_window: timedelta) -> float:
         """Calculate error rate within time window"""
-        cutoff_time = datetime.utcnow() - time_window
+        cutoff_time = datetime.now(timezone.utc) - time_window
         recent_errors = [
             entry for entry in self.error_history
             if datetime.fromisoformat(entry['logged_at']) > cutoff_time

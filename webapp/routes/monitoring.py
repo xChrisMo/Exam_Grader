@@ -5,7 +5,7 @@ Monitoring and health check API routes.
 from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 from src.services.system_monitoring import monitoring_service
 from utils.logger import logger
@@ -121,7 +121,7 @@ def resolve_alert(alert_id):
         for alert in monitoring_service.alerts:
             if alert['id'] == alert_id and not alert.get('resolved', False):
                 alert['resolved'] = True
-                alert['resolved_at'] = datetime.utcnow()
+                alert['resolved_at'] = datetime.now(timezone.utc)
                 alert['resolved_by'] = current_user.id
                 resolved = True
                 break
@@ -155,7 +155,7 @@ def get_simple_status():
         
         return jsonify({
             'status': overall_status.value,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'services': {k: v.status.value for k, v in health_checks.items()}
         })
     except Exception as e:
@@ -173,7 +173,7 @@ def get_metrics_history():
         # Get query parameters
         hours = int(request.args.get('hours', 24))
         
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
         historical_metrics = [
             m.to_dict() for m in monitoring_service.metrics_history 
             if m.timestamp > cutoff_time

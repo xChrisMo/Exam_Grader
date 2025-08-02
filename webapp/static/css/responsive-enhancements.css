@@ -1,0 +1,481 @@
+/* Responsive Enhancements for Exam Grader */
+
+/* Mobile-first responsive design improvements */
+@media (max-width: 640px) {
+  /* Flash messages responsive */
+  #flash-messages {
+    top: 1rem;
+    right: 1rem;
+    left: 1rem;
+    max-width: none;
+  }
+  
+  .flash-message {
+    max-width: none;
+    margin: 0 0 0.5rem 0;
+  }
+  
+  /* Header improvements */
+  header .flex {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  header h1 {
+    font-size: 1rem;
+    line-height: 1.25rem;
+  }
+  
+  /* Hide less important header elements on mobile */
+  .header-storage {
+    display: none;
+  }
+  
+  /* User menu adjustments */
+  .user-menu-wrapper {
+    position: relative;
+  }
+  
+  #user-menu {
+    right: 0;
+    left: auto;
+    min-width: 12rem;
+  }
+}
+
+/* Tablet responsive (641px - 1023px) */
+@media (min-width: 641px) and (max-width: 1023px) {
+  /* Sidebar adjustments for tablet */
+  #sidebar .flex.flex-col.w-64 {
+    width: 18rem;
+  }
+  
+  /* Navigation text sizing */
+  .nav-link span {
+    font-size: 0.875rem;
+  }
+  
+  /* Header spacing */
+  header .flex {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+/* Mobile sidebar enhancements */
+@media (max-width: 1023px) {
+  /* Mobile sidebar full screen */
+  #sidebar.fixed {
+    width: 100vw;
+    height: 100vh;
+    z-index: 50;
+  }
+  
+  #sidebar.fixed .flex.flex-col {
+    width: 80vw;
+    max-width: 20rem;
+    height: 100vh;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Mobile backdrop */
+  #mobile-sidebar-backdrop {
+    backdrop-filter: blur(2px);
+  }
+  
+  /* Close sidebar on nav link click (mobile) */
+  .nav-link {
+    position: relative;
+  }
+}
+
+/* Form responsive improvements */
+@media (max-width: 640px) {
+  /* Form containers */
+  .form-container {
+    padding: 1rem;
+    margin: 0.5rem;
+  }
+  
+  /* Input fields */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="file"],
+  textarea,
+  select {
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: 0.75rem;
+  }
+  
+  /* Buttons */
+  button,
+  .btn {
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    min-height: 44px; /* Touch target size */
+  }
+  
+  /* Upload areas */
+  .upload-area {
+    padding: 2rem 1rem;
+    min-height: 8rem;
+  }
+  
+  .upload-area p {
+    font-size: 0.875rem;
+  }
+}
+
+/* Grid responsive improvements */
+@media (max-width: 640px) {
+  /* Force single column on mobile */
+  .grid-cols-1.md\:grid-cols-2,
+  .grid-cols-1.md\:grid-cols-3,
+  .grid-cols-1.md\:grid-cols-4,
+  .grid-cols-1.lg\:grid-cols-2,
+  .grid-cols-1.lg\:grid-cols-3,
+  .grid-cols-1.lg\:grid-cols-4 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+  
+  /* Card spacing */
+  .grid {
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 768px) {
+  /* Tablet grid adjustments */
+  .md\:grid-cols-3,
+  .md\:grid-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Table responsive improvements */
+@media (max-width: 768px) {
+  /* Responsive tables */
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  table {
+    min-width: 600px;
+  }
+  
+  th, td {
+    padding: 0.5rem;
+    font-size: 0.875rem;
+  }
+  
+  /* Stack table data on very small screens */
+  @media (max-width: 480px) {
+    .table-stack thead {
+      display: none;
+    }
+    
+    .table-stack tbody,
+    .table-stack tr,
+    .table-stack td {
+      display: block;
+    }
+    
+    .table-stack tr {
+      border: 1px solid #e5e7eb;
+      margin-bottom: 1rem;
+      padding: 0.5rem;
+      border-radius: 0.5rem;
+    }
+    
+    .table-stack td {
+      border: none;
+      padding: 0.25rem 0;
+      position: relative;
+      padding-left: 50%;
+    }
+    
+    .table-stack td:before {
+      content: attr(data-label) ": ";
+      position: absolute;
+      left: 0;
+      width: 45%;
+      padding-right: 10px;
+      white-space: nowrap;
+      font-weight: 600;
+      color: #374151;
+    }
+  }
+}
+
+/* Modal responsive improvements */
+@media (max-width: 640px) {
+  .modal-container {
+    margin: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+  }
+  
+  .modal-content {
+    padding: 1rem;
+  }
+  
+  .modal-header {
+    padding: 1rem 1rem 0.5rem;
+  }
+  
+  .modal-footer {
+    padding: 0.5rem 1rem 1rem;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .modal-footer button {
+    width: 100%;
+  }
+}
+
+/* Progress bars and indicators */
+@media (max-width: 640px) {
+  .progress-container {
+    padding: 1rem;
+  }
+  
+  .progress-text {
+    font-size: 0.875rem;
+  }
+  
+  .progress-bar {
+    height: 0.5rem;
+  }
+}
+
+/* Status indicators */
+@media (max-width: 640px) {
+  .status-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  
+  .status-item {
+    padding: 0.75rem;
+  }
+  
+  .status-text {
+    font-size: 0.75rem;
+  }
+}
+
+/* File upload improvements */
+@media (max-width: 640px) {
+  .file-upload-container {
+    padding: 1rem;
+  }
+  
+  .file-list {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  
+  .file-item {
+    padding: 0.5rem;
+    font-size: 0.875rem;
+  }
+  
+  .file-actions {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .file-actions button {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+  }
+}
+
+/* Navigation improvements */
+@media (max-width: 1023px) {
+  .nav-link {
+    padding: 0.75rem 0.5rem;
+  }
+  
+  .nav-link svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  
+  .nav-link span {
+    font-size: 0.875rem;
+  }
+}
+
+/* Content spacing */
+@media (max-width: 640px) {
+  .content-container {
+    padding: 1rem;
+  }
+  
+  .section-spacing {
+    margin-bottom: 1.5rem;
+  }
+  
+  .card-container {
+    padding: 1rem;
+    margin: 0.5rem 0;
+  }
+}
+
+/* Typography responsive */
+@media (max-width: 640px) {
+  h1 {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+  
+  h2 {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+  
+  h3 {
+    font-size: 1.125rem;
+    line-height: 1.5rem;
+  }
+  
+  .text-sm {
+    font-size: 0.875rem;
+  }
+  
+  .text-xs {
+    font-size: 0.75rem;
+  }
+}
+
+/* Touch improvements */
+@media (hover: none) and (pointer: coarse) {
+  /* Touch device optimizations */
+  button,
+  .btn,
+  a,
+  .clickable {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Remove hover states on touch devices */
+  .hover\:bg-gray-50:hover,
+  .hover\:bg-primary-50:hover,
+  .hover\:text-primary-600:hover {
+    background-color: inherit;
+    color: inherit;
+  }
+  
+  /* Add active states for touch feedback */
+  button:active,
+  .btn:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+}
+
+/* Landscape phone adjustments */
+@media (max-width: 896px) and (orientation: landscape) {
+  #sidebar.fixed .flex.flex-col {
+    width: 60vw;
+    max-width: 16rem;
+  }
+  
+  .content-container {
+    padding: 0.5rem 1rem;
+  }
+  
+  header {
+    padding: 0.5rem 1rem;
+  }
+}
+
+/* High DPI display adjustments */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  /* Ensure crisp rendering on high DPI displays */
+  svg,
+  img {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* Dark mode responsive adjustments - only when explicitly set */
+[data-theme="dark"] .bg-white {
+  background-color: #1f2937;
+  color: #f9fafb;
+}
+
+[data-theme="dark"] .text-gray-900 {
+  color: #f9fafb;
+}
+
+[data-theme="dark"] .text-gray-600 {
+  color: #d1d5db;
+}
+
+[data-theme="dark"] .border-gray-200 {
+  border-color: #374151;
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  /* Reduce animations for users who prefer less motion */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus improvements for keyboard navigation */
+@media (prefers-reduced-motion: no-preference) {
+  /* Enhanced focus states */
+  button:focus,
+  a:focus,
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+    transition: outline 0.2s ease;
+  }
+}
+
+/* Print styles */
+@media print {
+  /* Hide navigation and non-essential elements when printing */
+  #sidebar,
+  header,
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-full-width {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Ensure good contrast for printing */
+  * {
+    color: #000 !important;
+    background: #fff !important;
+  }
+  
+  /* Page breaks */
+  .page-break {
+    page-break-before: always;
+  }
+  
+  .no-page-break {
+    page-break-inside: avoid;
+  }
+}

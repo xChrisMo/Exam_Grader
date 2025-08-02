@@ -10,7 +10,7 @@ import re
 import math
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from utils.logger import logger
@@ -126,7 +126,7 @@ class ContentValidator:
         
         # Add metadata
         result.metadata.update({
-            'validation_timestamp': datetime.utcnow().isoformat(),
+            'validation_timestamp': datetime.now(timezone.utc).isoformat(),
             'file_info': file_info,
             'validator_version': '1.0'
         })

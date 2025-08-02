@@ -6,7 +6,7 @@ Requirements: 5.4, 5.5, 5.6
 import json
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -75,7 +75,7 @@ class ReportingService:
                 'description': config.description,
                 'format': config.format,
                 'file_path': report_path,
-                'generated_at': datetime.utcnow(),
+                'generated_at': datetime.now(timezone.utc),
                 'file_size': len(content) if isinstance(content, (str, bytes)) else 0
             }
             
@@ -104,7 +104,7 @@ class ReportingService:
                 'name': 'Sample Training Job',
                 'status': 'completed',
                 'progress': 100,
-                'created_at': datetime.utcnow().isoformat(),
+                'created_at': datetime.now(timezone.utc).isoformat(),
                 'model_name': 'GPT-3.5'
             }
         ]
@@ -115,7 +115,7 @@ class ReportingService:
                 'name': 'Sample Model Test',
                 'status': 'completed',
                 'results': {'accuracy': 0.85},
-                'created_at': datetime.utcnow().isoformat()
+                'created_at': datetime.now(timezone.utc).isoformat()
             }
         ]
         
@@ -130,7 +130,7 @@ class ReportingService:
                 'report_id': str(uuid.uuid4()),
                 'title': config.title,
                 'description': config.description,
-                'generated_at': datetime.utcnow().isoformat(),
+                'generated_at': datetime.now(timezone.utc).isoformat(),
                 'user_id': user_id
             },
             'training_jobs': training_jobs,
@@ -164,7 +164,7 @@ class ReportingService:
         html_content = template.render(
             data=data,
             config=config,
-            generated_at=datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+            generated_at=datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
         )
         
         return html_content

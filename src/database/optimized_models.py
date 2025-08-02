@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 import uuid
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
@@ -151,7 +151,7 @@ class User(UserMixin, db.Model, TimestampMixin, ValidationMixin):
             raise ValueError("Password must be at least 8 characters long")
         
         self.password_hash = generate_password_hash(password)
-        self.password_changed_at = datetime.utcnow()
+        self.password_changed_at = datetime.now(timezone.utc)
 
     def check_password(self, password: str) -> bool:
         """Check password against hash."""
@@ -159,11 +159,11 @@ class User(UserMixin, db.Model, TimestampMixin, ValidationMixin):
 
     def is_locked(self) -> bool:
         """Check if account is locked."""
-        return self.locked_until and self.locked_until > datetime.utcnow()
+        return self.locked_until and self.locked_until > datetime.now(timezone.utc)
 
     def lock_account(self, duration_minutes: int = 30):
         """Lock account for specified duration."""
-        self.locked_until = datetime.utcnow() + timedelta(minutes=duration_minutes)
+        self.locked_until = datetime.now(timezone.utc) + timedelta(minutes=duration_minutes)
         self.failed_login_attempts = 0
 
     def unlock_account(self):
@@ -176,7 +176,7 @@ class User(UserMixin, db.Model, TimestampMixin, ValidationMixin):
         """Check if password is expired (older than 90 days)."""
         if not self.password_changed_at:
             return True
-        return datetime.utcnow() - self.password_changed_at > timedelta(days=90)
+        return datetime.now(timezone.utc) - self.password_changed_at > timedelta(days=90)
 
     def to_dict(self, include_sensitive=False) -> Dict[str, Any]:
         """Convert to dictionary with optional sensitive data."""
@@ -567,12 +567,12 @@ class Session(db.Model, TimestampMixin):
 
     def is_expired(self) -> bool:
         """Check if session is expired."""
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
 
     def extend_session(self, duration_seconds: int = 3600):
         """Extend session expiration."""
-        self.expires_at = datetime.utcnow() + timedelta(seconds=duration_seconds)
-        self.updated_at = datetime.utcnow()
+        self.expires_at = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
+        self.updated_at = datetime.now(timezone.utc)
 
     def invalidate(self):
         """Invalidate session."""

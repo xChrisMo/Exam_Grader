@@ -12,7 +12,7 @@ import hashlib
 import os
 from typing import Dict, List, Optional, Any, Tuple, Union
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from pathlib import Path
 import json
@@ -48,11 +48,11 @@ class CacheEntry:
         """Check if entry is expired"""
         if self.ttl is None:
             return False
-        return (datetime.utcnow() - self.created_at).total_seconds() > self.ttl
+        return (datetime.now(timezone.utc) - self.created_at).total_seconds() > self.ttl
     
     def touch(self):
         """Update access information"""
-        self.last_accessed = datetime.utcnow()
+        self.last_accessed = datetime.now(timezone.utc)
         self.access_count += 1
 
 @dataclass
@@ -142,8 +142,8 @@ class CacheLevel:
                         entry = CacheEntry(
                             key=key,
                             value=None,  # Don't store in memory for disk cache
-                            created_at=datetime.utcnow(),
-                            last_accessed=datetime.utcnow(),
+                            created_at=datetime.now(timezone.utc),
+                            last_accessed=datetime.now(timezone.utc),
                             access_count=1
                         )
                         self._entries[key] = entry
@@ -174,8 +174,8 @@ class CacheLevel:
             entry = CacheEntry(
                 key=key,
                 value=value if self.cache_type != CacheType.DISK else None,
-                created_at=datetime.utcnow(),
-                last_accessed=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                last_accessed=datetime.now(timezone.utc),
                 access_count=1,
                 ttl=ttl,
                 size=size
@@ -690,7 +690,10 @@ class CacheManager:
         self._running = False
         if self._cleanup_thread and self._cleanup_thread.is_alive():
             self._cleanup_thread.join(timeout=5)
-        logger.info("Stopped cache cleanup thread")
+        try:
+            logger.info("Stopped cache cleanup thread")
+        except Exception:
+            print("Stopped cache cleanup thread")
     
     def _cleanup_worker(self):
         """Background cleanup worker"""

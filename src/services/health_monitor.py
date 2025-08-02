@@ -8,7 +8,7 @@ with real-time status tracking, performance metrics, and diagnostic information.
 import time
 import threading
 from typing import Dict, List, Optional, Any, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, asdict
 from enum import Enum
 from collections import deque
@@ -51,7 +51,7 @@ class HealthMetric:
     
     def __post_init__(self):
         if self.timestamp is None:
-            self.timestamp = datetime.utcnow()
+            self.timestamp = datetime.now(timezone.utc)
 
 @dataclass
 class HealthAlert:
@@ -114,7 +114,7 @@ class HealthMonitor:
                 self.services[service_name] = ServiceHealthInfo(
                     service_name=service_name,
                     status=HealthStatus.UNKNOWN,
-                    last_check=datetime.utcnow(),
+                    last_check=datetime.now(timezone.utc),
                     response_time_ms=0.0,
                     error_count=0,
                     success_count=0,
@@ -179,7 +179,7 @@ class HealthMonitor:
                 if service_name in self.services:
                     service_info = self.services[service_name]
                     service_info.status = status
-                    service_info.last_check = datetime.utcnow()
+                    service_info.last_check = datetime.now(timezone.utc)
                     service_info.response_time_ms = response_time
                     service_info.details = details
                     
@@ -211,7 +211,7 @@ class HealthMonitor:
                 if service_name in self.services:
                     service_info = self.services[service_name]
                     service_info.status = HealthStatus.UNHEALTHY
-                    service_info.last_check = datetime.utcnow()
+                    service_info.last_check = datetime.now(timezone.utc)
                     service_info.response_time_ms = response_time
                     service_info.error_count += 1
                     service_info.details = {'error': str(e)}
@@ -279,7 +279,7 @@ class HealthMonitor:
             return {
                 'status': overall_status.value,
                 'message': message,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'services': service_statuses,
                 'summary': {
                     'total': len(self.services),
@@ -311,7 +311,10 @@ class HealthMonitor:
         if self.monitor_thread and self.monitor_thread.is_alive():
             self.monitor_thread.join(timeout=5)
         
-        logger.info("Stopped health monitoring")
+        try:
+            logger.info("Stopped health monitoring")
+        except Exception:
+            print("Stopped health monitoring")
     
     def _monitoring_loop(self):
         """Main monitoring loop."""
@@ -338,7 +341,7 @@ class HealthMonitor:
     
     def _update_uptime(self):
         """Update uptime for all services."""
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         
         with self.lock:
             for service_info in self.services.values():
@@ -418,7 +421,7 @@ class HealthMonitor:
         
         # Check cooldown to prevent spam
         alert_key = f"{service_name}:{severity}:{message}"
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         
         if alert_key in self.last_alerts:
             time_since_last = current_time - self.last_alerts[alert_key]
@@ -484,7 +487,7 @@ class HealthMonitor:
         for alert in self.alerts:
             if alert.alert_id == alert_id:
                 alert.resolved = True
-                alert.resolution_time = datetime.utcnow()
+                alert.resolution_time = datetime.now(timezone.utc)
                 logger.info(f"Resolved alert: {alert_id}")
                 return True
         
@@ -493,7 +496,7 @@ class HealthMonitor:
     
     def _cleanup_old_alerts(self):
         """Clean up old resolved alerts."""
-        cutoff_time = datetime.utcnow() - timedelta(days=7)  # Keep alerts for 7 days
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=7)  # Keep alerts for 7 days
         
         initial_count = len(self.alerts)
         self.alerts = [
@@ -535,7 +538,7 @@ class HealthMonitor:
         
         return {
             'report_type': 'health_monitoring_report',
-            'generated_at': datetime.utcnow().isoformat(),
+            'generated_at': datetime.now(timezone.utc).isoformat(),
             'overall_health': overall_health,
             'service_details': service_details,
             'recent_alerts': recent_alerts,

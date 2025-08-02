@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from utils.logger import logger
 from src.services.processing_error_handler import processing_error_handler, ErrorContext, ErrorCategory
@@ -67,7 +67,7 @@ class FileProcessor(ABC):
         try:
             # Update metrics
             self.metrics.total_attempts += 1
-            self.metrics.last_used = datetime.utcnow()
+            self.metrics.last_used = datetime.now(timezone.utc)
             
             if not self.can_process(file_path):
                 if self._next_processor:
@@ -123,7 +123,7 @@ class FileProcessor(ABC):
             error_context = ErrorContext(
                 operation=f"file_processing_{self.name}",
                 service="file_processor_chain",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 user_id=context.get('user_id'),
                 request_id=context.get('request_id', 'unknown'),
                 additional_data={

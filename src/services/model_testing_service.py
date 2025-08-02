@@ -11,7 +11,7 @@ import time
 import json
 import threading
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import current_app
@@ -182,7 +182,7 @@ class ModelTestingService:
             
             # Update test status
             test_session.status = 'running'
-            test_session.started_at = datetime.utcnow()
+            test_session.started_at = datetime.now(timezone.utc)
             db.session.commit()
             
             logger.info(f"Started model test {test_id}")
@@ -282,7 +282,7 @@ class ModelTestingService:
                 test_session.average_confidence = results_summary['average_confidence']
                 test_session.results = results_summary
                 test_session.status = 'completed'
-                test_session.completed_at = datetime.utcnow()
+                test_session.completed_at = datetime.now(timezone.utc)
                 test_session.processing_duration_ms = int((time.time() - start_time) * 1000)
                 
                 db.session.commit()
@@ -343,7 +343,7 @@ class ModelTestingService:
                     if error_message:
                         test_session.error_message = error_message
                     if status in ['completed', 'failed', 'cancelled']:
-                        test_session.completed_at = datetime.utcnow()
+                        test_session.completed_at = datetime.now(timezone.utc)
                     
                     db.session.commit()
         except Exception as e:
@@ -405,7 +405,7 @@ class ModelTestingService:
             
             # Update status
             test_session.status = 'cancelled'
-            test_session.completed_at = datetime.utcnow()
+            test_session.completed_at = datetime.now(timezone.utc)
             db.session.commit()
             
             # Clean up thread reference

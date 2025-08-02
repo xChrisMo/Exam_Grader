@@ -9,13 +9,7 @@
   <title>{% block title %}{{ page_title }} - Exam Grader{% endblock %}</title>
 
   <!-- CSRF Token for JavaScript -->
-  {% if csrf_token %}
   <meta name="csrf-token" content="{{ csrf_token }}">
-  {% else %}
-  <!-- Generate CSRF token if not available -->
-  {% set csrf_token = csrf_token() %}
-  <meta name="csrf-token" content="{{ csrf_token }}">
-  {% endif %}
 
   <!-- Favicon -->
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon" />
@@ -23,6 +17,10 @@
   <!-- Tailwind CSS - Production Build -->
   <link rel="stylesheet"
     href="{{ url_for('static', filename='css/tailwind.css') }}?v={{ range(1000, 9999) | random }}" />
+  
+  <!-- Responsive Enhancements -->
+  <link rel="stylesheet"
+    href="{{ url_for('static', filename='css/responsive-enhancements.css') }}?v={{ range(1000, 9999) | random }}" />
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -104,9 +102,12 @@
 
   <!-- Main Layout -->
   <div class="flex h-full">
+    <!-- Mobile Sidebar Backdrop -->
+    <div id="mobile-sidebar-backdrop" class="fixed inset-0 bg-gray-600 bg-opacity-75 z-40 lg:hidden hidden"></div>
+    
     <!-- Sidebar -->
-    <div id="sidebar" class="hidden lg:flex lg:flex-shrink-0">
-      <div class="flex flex-col w-64">
+    <div id="sidebar" class="hidden lg:flex lg:flex-shrink-0 lg:relative">
+      <div class="flex flex-col w-64 lg:w-64 sm:w-72">
         <div class="flex flex-col flex-grow bg-white border-r border-gray-200 pt-5 pb-4 overflow-y-auto">
           <!-- Logo -->
           <div class="flex items-center flex-shrink-0 px-4">
@@ -393,12 +394,37 @@
     });
   </script>
 
-  <!-- Mobile Menu JavaScript -->
+  <!-- Enhanced Mobile Menu JavaScript -->
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       // Mobile menu toggle
       const mobileMenuButton = document.querySelector('button[class*="lg:hidden"]');
       const sidebar = document.getElementById('sidebar');
+      const backdrop = document.getElementById('mobile-sidebar-backdrop');
+      
+      function closeMobileMenu() {
+        if (sidebar) {
+          sidebar.classList.add('hidden');
+          sidebar.classList.remove('fixed', 'inset-0', 'z-50');
+        }
+        if (backdrop) {
+          backdrop.classList.add('hidden');
+        }
+        // Remove body scroll lock
+        document.body.style.overflow = '';
+      }
+      
+      function openMobileMenu() {
+        if (sidebar) {
+          sidebar.classList.remove('hidden');
+          sidebar.classList.add('fixed', 'inset-0', 'z-50');
+        }
+        if (backdrop) {
+          backdrop.classList.remove('hidden');
+        }
+        // Prevent body scroll when menu is open
+        document.body.style.overflow = 'hidden';
+      }
       
       if (mobileMenuButton && sidebar) {
         mobileMenuButton.addEventListener('click', function (e) {
@@ -407,42 +433,47 @@
           
           // Toggle mobile sidebar visibility
           if (sidebar.classList.contains('hidden')) {
-            sidebar.classList.remove('hidden');
-            sidebar.classList.add('fixed', 'inset-0', 'z-50', 'lg:relative', 'lg:inset-auto');
-            // Add backdrop
-            const backdrop = document.createElement('div');
-            backdrop.className = 'fixed inset-0 bg-gray-600 bg-opacity-75 z-40 lg:hidden';
-            backdrop.id = 'mobile-sidebar-backdrop';
-            document.body.appendChild(backdrop);
+            openMobileMenu();
           } else {
-            sidebar.classList.add('hidden');
-            sidebar.classList.remove('fixed', 'inset-0', 'z-50', 'lg:relative', 'lg:inset-auto');
-            // Remove backdrop
-            const backdrop = document.getElementById('mobile-sidebar-backdrop');
-            if (backdrop) {
-              backdrop.remove();
-            }
+            closeMobileMenu();
           }
         });
 
         // Close mobile menu when clicking backdrop
-        document.addEventListener('click', function (e) {
-          if (e.target.id === 'mobile-sidebar-backdrop') {
-            sidebar.classList.add('hidden');
-            sidebar.classList.remove('fixed', 'inset-0', 'z-50', 'lg:relative', 'lg:inset-auto');
-            e.target.remove();
-          }
+        if (backdrop) {
+          backdrop.addEventListener('click', function (e) {
+            if (e.target === backdrop) {
+              closeMobileMenu();
+            }
+          });
+        }
+
+        // Close mobile menu when clicking nav links (mobile only)
+        const navLinks = sidebar.querySelectorAll('.nav-link');
+        navLinks.forEach(function(link) {
+          link.addEventListener('click', function() {
+            if (window.innerWidth < 1024) {
+              closeMobileMenu();
+            }
+          });
         });
 
         // Close mobile menu on window resize to desktop
         window.addEventListener('resize', function () {
           if (window.innerWidth >= 1024) {
             sidebar.classList.add('hidden', 'lg:flex');
-            sidebar.classList.remove('fixed', 'inset-0', 'z-50', 'lg:relative', 'lg:inset-auto');
-            const backdrop = document.getElementById('mobile-sidebar-backdrop');
+            sidebar.classList.remove('fixed', 'inset-0', 'z-50');
             if (backdrop) {
-              backdrop.remove();
+              backdrop.classList.add('hidden');
             }
+            document.body.style.overflow = '';
+          }
+        });
+
+        // Close menu on escape key
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape' && !sidebar.classList.contains('hidden') && window.innerWidth < 1024) {
+            closeMobileMenu();
           }
         });
       }
@@ -477,6 +508,7 @@
 
   <!-- Custom JavaScript -->
   <script src="{{ url_for('static', filename='js/translations.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/responsive-mobile.js') }}?v={{ range(1000, 9999) | random }}"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}?v={{ range(1000, 9999) | random }}"></script>
   <script src="{{ url_for('static', filename='js/fixes.js') }}?v={{ range(1000, 9999) | random }}"></script>
   <script src="{{ url_for('static', filename='js/settings.js') }}"></script>

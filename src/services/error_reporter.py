@@ -8,7 +8,7 @@ context enrichment, and integration with the processing error handling system.
 import json
 import traceback
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
@@ -148,7 +148,7 @@ class ErrorReporter:
         tags.append(f"type:{type(error).__name__}")
         
         # Add time-based tags
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         tags.append(f"hour:{now.hour}")
         tags.append(f"day:{now.strftime('%A').lower()}")
         
@@ -311,7 +311,7 @@ class ErrorReporter:
                     if not report.context_data:
                         report.context_data = {}
                     report.context_data['resolved_by'] = resolved_by
-                    report.context_data['resolved_at'] = datetime.utcnow().isoformat()
+                    report.context_data['resolved_at'] = datetime.now(timezone.utc).isoformat()
                 
                 logger.info(f"Error {error_id} marked as resolved by {resolved_by}")
                 return True
@@ -475,7 +475,7 @@ class ErrorReporter:
     
     def clear_old_errors(self, days: int = 30) -> int:
         """Clear errors older than specified days."""
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
         initial_count = len(self.error_reports)
         
         self.error_reports = [r for r in self.error_reports if r.timestamp > cutoff_date]

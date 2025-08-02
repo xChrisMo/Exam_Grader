@@ -8,7 +8,7 @@ they are properly initialized, started, and stopped.
 import time
 import threading
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from src.services.monitoring_dashboard import monitoring_dashboard_service
@@ -173,7 +173,8 @@ class MonitoringServiceManager:
                 logger.warning("Monitoring services are not running")
                 return True
             
-            logger.info("Stopping all monitoring services...")
+            # Log stopping services, fallback to print if logger fails
+            self._safe_log(lambda: logger.info("Stopping all monitoring services"), "Stopping all monitoring services")
             self._running = False
             success_count = 0
             
@@ -185,17 +186,18 @@ class MonitoringServiceManager:
                 try:
                     if self._stop_service(service_name):
                         success_count += 1
-                        logger.info(f"✓ {service_name} stopped successfully")
+                        self._safe_log(lambda: logger.info(f"✓ {service_name} stopped successfully"), f"✓ {service_name} stopped successfully")
                     else:
-                        logger.warning(f"✗ {service_name} failed to stop cleanly")
+                        self._safe_log(lambda: logger.warning(f"✗ {service_name} failed to stop cleanly"), f"✗ {service_name} failed to stop cleanly")
                         
                 except Exception as e:
-                    logger.error(f"✗ {service_name} shutdown error: {e}")
+                    self._safe_log(lambda: logger.error(f"✗ {service_name} shutdown error: {e}"), f"✗ Logging error for {service_name} shutdown: {e}")
+
                     self._services[service_name]['last_error'] = str(e)
                     self._services[service_name]['error_count'] += 1
             
             self._startup_complete = False
-            logger.info(f"Monitoring services shutdown completed: {success_count}/{len(self._startup_order)} services stopped")
+            self._safe_log(lambda: logger.info(f"Monitoring services shutdown completed: {success_count}/{len(self._startup_order)} services stopped"), f"Monitoring services shutdown completed: {success_count}/{len(self._startup_order)} services stopped")
             
             return success_count == len(self._startup_order)
     
@@ -236,7 +238,7 @@ class MonitoringServiceManager:
                 method()
                 
                 # Record startup time
-                service_info['startup_time'] = datetime.utcnow()
+                service_info['startup_time'] = datetime.now(timezone.utc)
                 service_info['state'] = ServiceState.RUNNING
                 service_info['last_error'] = None
                 
@@ -269,19 +271,32 @@ class MonitoringServiceManager:
             
             if hasattr(instance, stop_method):
                 method = getattr(instance, stop_method)
-                method()
-                
+                try:
+                    method()
+                except Exception as e:
+                    try:
+                        logger.error(f"Exception while stopping {service_name}: {e}")
+                    except Exception:
+                        print(f"Exception while stopping {service_name}: {e}")
+                    return False
+
                 service_info['state'] = ServiceState.STOPPED
                 service_info['startup_time'] = None
                 
                 return True
             else:
-                logger.warning(f"Service {service_name} does not have method {stop_method}")
+                try:
+                    logger.warning(f"Service {service_name} does not have method {stop_method}")
+                except Exception:
+                    print(f"Service {service_name} does not have method {stop_method}")
                 service_info['state'] = ServiceState.STOPPED
                 return True
                 
         except Exception as e:
-            logger.error(f"Error stopping service {service_name}: {e}")
+            try:
+                logger.error(f"Error stopping service {service_name}: {e}")
+            except Exception:
+                print(f"Error stopping service {service_name}: {e}")
             service_info['state'] = ServiceState.ERROR
             service_info['last_error'] = str(e)
             service_info['error_count'] += 1
@@ -381,6 +396,12 @@ class MonitoringServiceManager:
         start_success = self._start_service(service_name)
         
         return stop_success and start_success
+    def _safe_log(self, log_call: callable, fallback_message: str) -> None:
+        """Log using given method or fallback to console if logging fails"""
+        try:
+            log_call()
+        except Exception:
+            print(fallback_message)
 
 # Global instance
 monitoring_service_manager = MonitoringServiceManager()

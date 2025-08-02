@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from queue import Queue, Empty
 from dataclasses import dataclass
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 from dotenv import load_dotenv
 from packaging import version
@@ -783,7 +783,7 @@ class ConsolidatedLLMService(BaseService):
                 context = ErrorContext(
                     operation="llm_api_call",
                     service="consolidated_llm_service",
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     request_id=f"llm_{int(time.time())}_{attempt}",
                     additional_data={
                         'attempt': attempt + 1,
@@ -867,7 +867,7 @@ class ConsolidatedLLMService(BaseService):
         fallback_context = ErrorContext(
             operation="llm_api_call",
             service="consolidated_llm_service", 
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             additional_data={'final_error': str(last_error)}
         )
         

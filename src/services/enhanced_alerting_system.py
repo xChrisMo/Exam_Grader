@@ -11,7 +11,7 @@ import smtplib
 import requests
 from typing import Dict, List, Optional, Any, Callable, Union
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -198,7 +198,11 @@ class EnhancedAlertingSystem:
         self._running = False
         if self._monitoring_thread and self._monitoring_thread.is_alive():
             self._monitoring_thread.join(timeout=5)
-        logger.info("Enhanced alerting system monitoring stopped")
+        try:
+            logger.info("Enhanced alerting system monitoring stopped")
+        except Exception:
+            # Ignore logging errors during shutdown
+            pass
     
     def _monitoring_worker(self):
         """Background monitoring worker"""
@@ -372,7 +376,7 @@ class EnhancedAlertingSystem:
         """Trigger an alert with cooldown and escalation logic"""
         with self._lock:
             rule_key = rule.value
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
             
             if rule_key in self._alert_states:
                 alert_state = self._alert_states[rule_key]
@@ -444,14 +448,14 @@ class EnhancedAlertingSystem:
         """Send alert to console"""
         print(f"\n🚨 ALERT [{severity.value.upper()}] {title}")
         print(f"   {message}")
-        print(f"   Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        print(f"   Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
         if metadata:
             print(f"   Metadata: {json.dumps(metadata, indent=2)}")
         print()
     
     def _process_escalations(self):
         """Process alert escalations"""
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         
         with self._lock:
             for rule_key, alert_state in self._alert_states.items():

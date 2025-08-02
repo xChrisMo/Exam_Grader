@@ -8,7 +8,7 @@ to provide comprehensive health monitoring and diagnostic capabilities.
 import threading
 import time
 from typing import Dict, List, Optional, Any, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 from src.services.health_monitor import health_monitor, HealthStatus, HealthAlert
 from src.services.service_registry import service_registry, ServiceState
@@ -221,10 +221,10 @@ class HealthMonitoringSystem:
                 try:
                     # Collect diagnostics periodically
                     if (self.last_diagnostic_collection is None or 
-                        datetime.utcnow() - self.last_diagnostic_collection > timedelta(seconds=self.diagnostic_interval)):
+                        datetime.now(timezone.utc) - self.last_diagnostic_collection > timedelta(seconds=self.diagnostic_interval)):
                         
                         self.diagnostic_collector.collect_full_diagnostic()
-                        self.last_diagnostic_collection = datetime.utcnow()
+                        self.last_diagnostic_collection = datetime.now(timezone.utc)
                     
                     time.sleep(60)  # Check every minute
                     
@@ -257,7 +257,7 @@ class HealthMonitoringSystem:
             
             return {
                 'system_status': system_status,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'monitoring_active': self.monitoring_active,
                 'health_summary': overall_health,
                 'service_registry': registry_status,
@@ -284,7 +284,7 @@ class HealthMonitoringSystem:
             logger.error(f"Failed to get system health status: {e}")
             return {
                 'system_status': 'error',
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'monitoring_active': self.monitoring_active,
                 'error': str(e)
             }
@@ -376,7 +376,7 @@ class HealthMonitoringSystem:
         """Manually trigger diagnostic collection."""
         try:
             report = self.diagnostic_collector.collect_full_diagnostic()
-            self.last_diagnostic_collection = datetime.utcnow()
+            self.last_diagnostic_collection = datetime.now(timezone.utc)
             
             logger.info("Manual diagnostic collection completed")
             return True
@@ -397,7 +397,7 @@ class HealthMonitoringSystem:
             # Combine into comprehensive report
             health_report = {
                 'report_type': 'comprehensive_health_report',
-                'generated_at': datetime.utcnow().isoformat(),
+                'generated_at': datetime.now(timezone.utc).isoformat(),
                 'system_status': system_status,
                 'diagnostic_report': diagnostic_report,
                 'service_details': {}

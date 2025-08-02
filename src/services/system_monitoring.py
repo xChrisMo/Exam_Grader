@@ -5,7 +5,7 @@ System monitoring and health checks service for LLM training system.
 import psutil
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -122,7 +122,7 @@ class SystemMonitoringService:
             error_rate = self._calculate_error_rate()
             
             metrics = SystemMetrics(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 cpu_usage=cpu_usage,
                 memory_usage=memory_usage,
                 disk_usage=disk_usage,
@@ -158,11 +158,11 @@ class SystemMonitoringService:
         # Get recent alerts
         recent_alerts = [alert for alert in self.alerts 
                         if not alert.get('resolved', False) and 
-                        alert['timestamp'] > datetime.utcnow() - timedelta(hours=1)]
+                        alert['timestamp'] > datetime.now(timezone.utc) - timedelta(hours=1)]
         
         return {
             'overall_status': overall_status.value,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'metrics': current_metrics.to_dict(),
             'health_checks': {k: v.to_dict() for k, v in health_checks.items()},
             'active_alerts': recent_alerts,
@@ -206,7 +206,7 @@ class SystemMonitoringService:
     def _calculate_error_rate(self) -> float:
         """Calculate recent error rate from processing metrics."""
         try:
-            one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+            one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
             recent_metrics = ProcessingMetrics.query.filter(
                 ProcessingMetrics.created_at >= one_hour_ago
             ).all()
@@ -228,7 +228,7 @@ class SystemMonitoringService:
         self.metrics_history.append(metrics)
         
         # Clean up old metrics
-        cutoff_time = datetime.utcnow() - timedelta(hours=self.metrics_retention_hours)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=self.metrics_retention_hours)
         self.metrics_history = [m for m in self.metrics_history if m.timestamp > cutoff_time]
     
     def _check_metric_thresholds(self, metrics: SystemMetrics):
@@ -245,7 +245,7 @@ class SystemMonitoringService:
     
     def _create_alert(self, level: str, service: str, message: str, details: Dict[str, Any] = None):
         """Create a new system alert with cooldown logic."""
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         
         cooldown_period = timedelta(minutes=2)
         for existing_alert in reversed(self.alerts[-5:]):  # Check last 5 alerts
@@ -292,7 +292,7 @@ class SystemMonitoringService:
                 status=status,
                 message=message,
                 details={'response_time_ms': response_time},
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 response_time_ms=response_time
             )
             
@@ -302,7 +302,7 @@ class SystemMonitoringService:
                 status=HealthStatus.CRITICAL,
                 message=f"Database connection failed: {str(e)}",
                 details={'error': str(e)},
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 response_time_ms=(time.time() - start_time) * 1000
             )
     
@@ -345,7 +345,7 @@ class SystemMonitoringService:
                     'disk_free_gb': disk.free / (1024**3),
                     'issues': issues
                 },
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 response_time_ms=(time.time() - start_time) * 1000
             )
             
@@ -355,7 +355,7 @@ class SystemMonitoringService:
                 status=HealthStatus.CRITICAL,
                 message=f"File system check failed: {str(e)}",
                 details={'error': str(e)},
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 response_time_ms=(time.time() - start_time) * 1000
             )
     
@@ -365,12 +365,12 @@ class SystemMonitoringService:
         try:
             stuck_jobs = LLMTrainingJob.query.filter(
                 LLMTrainingJob.status.in_(['training', 'preparing']),
-                LLMTrainingJob.updated_at < datetime.utcnow() - timedelta(hours=2)
+                LLMTrainingJob.updated_at < datetime.now(timezone.utc) - timedelta(hours=2)
             ).count()
             
             recent_failures = LLMTrainingJob.query.filter(
                 LLMTrainingJob.status == 'failed',
-                LLMTrainingJob.updated_at > datetime.utcnow() - timedelta(hours=1)
+                LLMTrainingJob.updated_at > datetime.now(timezone.utc) - timedelta(hours=1)
             ).count()
             
             if stuck_jobs > 0:
@@ -391,7 +391,7 @@ class SystemMonitoringService:
                     'stuck_jobs': stuck_jobs,
                     'recent_failures': recent_failures
                 },
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 response_time_ms=(time.time() - start_time) * 1000
             )
             
@@ -401,7 +401,7 @@ class SystemMonitoringService:
                 status=HealthStatus.CRITICAL,
                 message=f"LLM training health check failed: {str(e)}",
                 details={'error': str(e)},
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 response_time_ms=(time.time() - start_time) * 1000
             )
     

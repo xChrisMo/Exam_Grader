@@ -9,7 +9,7 @@ import time
 import threading
 from typing import Dict, List, Optional, Any, Type, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from abc import ABC, abstractmethod
 
@@ -200,7 +200,7 @@ class DependencyInjector:
                 service_info.lifecycle = ServiceLifecycle.RUNNING
                 service_info.initialization_time = time.time() - start_time
                 service_info.health_status = ServiceStatus.HEALTHY
-                service_info.last_health_check = datetime.utcnow()
+                service_info.last_health_check = datetime.now(timezone.utc)
                 
                 logger.info(f"Service {service_name} initialized successfully in {service_info.initialization_time:.3f}s")
                 return True
@@ -217,7 +217,7 @@ class DependencyInjector:
             error_context = ErrorContext(
                 operation="service_initialization",
                 service="dependency_injector",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 additional_data={
                     'service_name': service_name,
                     'error': str(e)
@@ -260,7 +260,7 @@ class DependencyInjector:
                             is_healthy = True
                         
                         service_info.health_status = ServiceStatus.HEALTHY if is_healthy else ServiceStatus.UNHEALTHY
-                        service_info.last_health_check = datetime.utcnow()
+                        service_info.last_health_check = datetime.now(timezone.utc)
                         results[service_name] = is_healthy
                         
                         if not is_healthy:
@@ -488,7 +488,7 @@ class EnhancedCoreService:
             error_context = ErrorContext(
                 operation="core_service_initialization",
                 service=self.name,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 additional_data={
                     'error': str(e),
                     'initialization_results': self.initialization_results

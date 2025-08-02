@@ -7,7 +7,7 @@ endpoint structure with a clean, RESTful interface.
 
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
 from flask import Blueprint, request, jsonify, current_app, g
@@ -21,13 +21,13 @@ from src.models.api_responses import APIResponse, ErrorResponse
 from utils.logger import logger
 
 # Create unified API blueprint
-api = Blueprint('api', __name__, url_prefix='/api/v1')
+api = Blueprint('core_api', __name__, url_prefix='/api/v1')
 
 def api_response(data: Any = None, message: str = None, status: int = 200) -> tuple:
     """Standardized API response format."""
     response = {
         'success': status < 400,
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'request_id': getattr(g, 'request_id', None)
     }
     
@@ -531,7 +531,7 @@ def health_check():
             'api': 'healthy',
             'database': 'healthy',
             'core_service': service_health,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:

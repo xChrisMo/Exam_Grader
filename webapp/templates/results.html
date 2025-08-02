@@ -178,10 +178,10 @@
                                 {{ result.graded_at[:10] if result.graded_at else 'Unknown' }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button type="button" onclick="viewDetails('{{ result.submission_id }}')"
+                                <a href="{{ url_for('processing.view_result', result_id=result.id) }}"
                                     class="text-primary-600 hover:text-primary-900 mr-3">
                                     View Details
-                                </button>
+                                </a>
                                 <a href="{{ url_for('main.view_submission_content', submission_id=result.submission_id) }}"
                                     class="text-info-600 hover:text-info-900 mr-3">
                                     View Content

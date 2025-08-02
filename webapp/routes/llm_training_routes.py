@@ -1,10 +1,10 @@
-"""
+﻿"""
 LLM Training Routes
 
 This module provides routes for the LLM training and fine-tuning interface.
 """
 
-from flask import Blueprint, render_template, request, jsonify, current_app
+from flask import Blueprint, render_template, request, jsonify, current_app, send_file
 from flask_login import login_required, current_user
 from src.database.models import db, LLMDataset, LLMTrainingJob, LLMTrainingReport, LLMDocument, LLMDatasetDocument
 from src.services.llm_training_service import LLMTrainingService
@@ -12,7 +12,8 @@ from utils.logger import logger
 import traceback
 import os
 import re
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
 
 def extract_text_from_file(file_path, file_extension):
     """
@@ -42,20 +43,53 @@ def extract_text_from_file(file_path, file_extension):
         # Process file with fallback mechanisms
         result = file_processor.process_file_with_fallback(file_path, file_info)
         
-        if result['success']:
+        if result['success'] and result.get('text_content', '').strip():
             logger.info(f"Successfully extracted {result['word_count']} words from {file_info['name']} using {result['extraction_method']} method")
             return result['text_content']
         else:
             # Log extraction failure with details
             error_msg = f"Failed to extract text from {file_info['name']}: {'; '.join(result.get('validation_errors', ['Unknown error']))}"
-            logger.error(error_msg)
+            logger.warning(error_msg)
+            
+            # Try OCR extraction for supported formats
+            if file_extension.lower() in ['.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif']:
+                try:
+                    logger.info(f"Attempting OCR extraction for {file_info['name']}")
+                    from src.services.consolidated_ocr_service import ConsolidatedOCRService
+                    ocr_service = ConsolidatedOCRService()
+                    ocr_result = ocr_service.extract_text(file_path)
+                    
+                    if ocr_result and ocr_result.get('text', '').strip():
+                        logger.info(f"Successfully extracted text using OCR from {file_info['name']}")
+                        return ocr_result['text']
+                    else:
+                        logger.warning(f"OCR extraction returned empty text for {file_info['name']}")
+                        
+                except Exception as ocr_error:
+                    logger.error(f"OCR extraction failed for {file_info['name']}: {ocr_error}")
             
             # Try legacy extraction as final fallback
             return _legacy_extract_text_from_file(file_path, file_extension)
             
     except Exception as e:
         logger.error(f"Error in enhanced text extraction for {file_path}: {e}")
-        # Fall back to legacy extraction
+        
+        # Try OCR as fallback for supported formats before legacy extraction
+        if file_extension.lower() in ['.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif']:
+            try:
+                logger.info(f"Attempting OCR fallback for {file_path}")
+                from src.services.consolidated_ocr_service import ConsolidatedOCRService
+                ocr_service = ConsolidatedOCRService()
+                ocr_result = ocr_service.extract_text(file_path)
+                
+                if ocr_result and ocr_result.get('text', '').strip():
+                    logger.info(f"OCR fallback successful for {file_path}")
+                    return ocr_result['text']
+                    
+            except Exception as ocr_error:
+                logger.error(f"OCR fallback failed for {file_path}: {ocr_error}")
+        
+        # Final fallback to legacy extraction
         return _legacy_extract_text_from_file(file_path, file_extension)
 
 def _legacy_extract_text_from_file(file_path, file_extension):
@@ -449,6 +483,48 @@ def index():
         return render_template('error.html', 
                              error_message="Failed to load LLM training page"), 500
 
+@llm_training_bp.route('/api/config')
+@login_required
+def get_config():
+    """Get LLM training configuration"""
+    try:
+        config = {
+            'models': [
+                {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo', 'provider': 'openai'},
+                {'id': 'gpt-4', 'name': 'GPT-4', 'provider': 'openai'},
+                {'id': 'deepseek-chat', 'name': 'DeepSeek Chat', 'provider': 'deepseek'},
+                {'id': 'deepseek-reasoner', 'name': 'DeepSeek Reasoner', 'provider': 'deepseek'}
+            ],
+            'training_defaults': {
+                'epochs': 10,
+                'batch_size': 8,
+                'learning_rate': 0.0001,
+                'max_tokens': 512,
+                'temperature': 0.7
+            },
+            'file_formats': {
+                'training_guides': ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.html', '.htm'],
+                'test_submissions': ['.pdf', '.doc', '.docx', '.txt', '.jpg', '.jpeg', '.png', '.md', '.rtf', '.html', '.htm']
+            },
+            'limits': {
+                'max_file_size_mb': 50,
+                'max_files_per_upload': 10,
+                'max_training_jobs': 5
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'config': config
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting LLM training config: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to load configuration'
+        }), 500
+
 @llm_training_bp.route('/api/datasets')
 @login_required
 def get_datasets():
@@ -469,6 +545,8 @@ def create_dataset():
     """Create a new dataset"""
     try:
         data = request.get_json()
+        
+        # CSRF token is now handled by Flask-WTF automatically via X-CSRFToken header
         
         # Validate required fields
         if not data.get('name'):
@@ -706,12 +784,16 @@ def create_training_job():
         }
         
         for field, message in required_fields.items():
-            if not data.get(field):
+            if not data.get(field) or type(data.get(field)) is not str or not data.get(field).strip():
                 return jsonify({'success': False, 'error': message}), 400
+        
+        # Prepare data for validation service - it expects model_id not model
+        validation_data = data.copy()
+        validation_data['model_id'] = validation_data.get('model')
         
         # Validate training configuration
         validation_service = ValidationService()
-        config_validation = validation_service.validate_training_config(data)
+        config_validation = validation_service.validate_training_config(validation_data)
         
         if not config_validation['valid']:
             return jsonify({
@@ -760,7 +842,7 @@ def create_training_job():
             validation_results={
                 'config_validation': config_validation,
                 'dataset_validation': dataset_validation,
-                'validated_at': datetime.utcnow().isoformat()
+                'validated_at': datetime.now(timezone.utc).isoformat()
             }
         )
         
@@ -769,7 +851,7 @@ def create_training_job():
         
         # Start training asynchronously with enhanced error handling
         try:
-            training_service = LLMTrainingService()
+            training_service = LLMTrainingService(current_app._get_current_object())
             training_service.start_training_async(job.id)
             
             response_data = {
@@ -818,31 +900,166 @@ def create_training_job():
             'can_retry': True
         }), 500
 
+@llm_training_bp.before_request
+def log_request_info():
+    """Log request information for debugging"""
+    if request.endpoint and 'start_training_job' in request.endpoint:
+        logger.info(f"Request to {request.endpoint}: {request.method} {request.url}")
+        logger.info(f"Headers: {dict(request.headers)}")
+        logger.info(f"Is JSON: {request.is_json}")
+        logger.info(f"Content-Type: {request.content_type}")
+        logger.info(f"User authenticated: {current_user.is_authenticated if hasattr(current_user, 'is_authenticated') else 'Unknown'}")
+
 @llm_training_bp.route('/api/training-jobs/<job_id>/start', methods=['POST'])
 @login_required
 def start_training_job(job_id):
-    """Start a training job"""
+    """Start a training job with enhanced error handling and validation"""
     try:
+        logger.info(f"Starting training job {job_id} for user {current_user.id}")
+        
+        # Get job with user verification
         job = LLMTrainingJob.query.filter_by(
             id=job_id, 
             user_id=current_user.id
         ).first()
         
         if not job:
+            logger.warning(f"Training job {job_id} not found for user {current_user.id}")
             return jsonify({'success': False, 'error': 'Training job not found'}), 404
         
-        if job.status not in ['pending', 'failed', 'cancelled']:
-            return jsonify({'success': False, 'error': 'Job cannot be started in current state'}), 400
+        logger.info(f"Job found: {job.name}, current status: {job.status}")
         
-        # Start training
-        training_service = LLMTrainingService()
-        training_service.start_training_async(job_id)
+        # Validate job status
+        valid_start_statuses = ['pending', 'failed', 'cancelled', 'created']
         
-        return jsonify({'success': True})
+        # Handle stuck jobs in preparing status
+        if job.status == 'preparing':
+            # Check if job has been stuck in preparing for more than 2 minutes (reduced from 5)
+            if job.updated_at:
+                time_since_update = datetime.now(timezone.utc) - job.updated_at.replace(tzinfo=timezone.utc)
+                if time_since_update.total_seconds() > 120:  # 2 minutes (reduced threshold)
+                    logger.warning(f"Job {job_id} stuck in preparing status for {time_since_update.total_seconds()} seconds, resetting to pending")
+                    job.status = 'pending'
+                    job.error_message = 'Job was stuck in preparing status and has been reset'
+                    db.session.commit()
+                else:
+                    # Allow restart if job has been preparing for less than 2 minutes but user explicitly requests it
+                    logger.info(f"Job {job_id} is in preparing status for {time_since_update.total_seconds()} seconds, allowing restart")
+                    job.status = 'pending'
+                    job.error_message = 'Job restarted from preparing status by user request'
+                    db.session.commit()
+            else:
+                # No updated_at timestamp, assume it's stuck
+                logger.warning(f"Job {job_id} in preparing status with no timestamp, resetting to pending")
+                job.status = 'pending'
+                job.error_message = 'Job was stuck in preparing status and has been reset'
+                db.session.commit()
+        elif job.status not in valid_start_statuses:
+            return jsonify({
+                'success': False, 
+                'error': f'Job cannot be started from status "{job.status}". Valid statuses: {", ".join(valid_start_statuses)}'
+            }), 400
+        
+        # Pre-start validation
+        try:
+            # Verify dataset exists and has content
+            dataset = LLMDataset.query.filter_by(
+                id=job.dataset_id, 
+                user_id=current_user.id
+            ).first()
+            
+            if not dataset:
+                return jsonify({
+                    'success': False, 
+                    'error': 'Dataset not found or access denied'
+                }), 400
+            
+            if dataset.document_count == 0:
+                return jsonify({
+                    'success': False, 
+                    'error': 'Dataset has no documents. Add documents before starting training.'
+                }), 400
+            
+            # Verify model is available
+            from src.services.llm_training_service import LLMTrainingService
+            training_service = LLMTrainingService(current_app._get_current_object())
+            available_models = training_service.get_available_models()
+            
+            model_ids = [model['id'] for model in available_models]
+            if job.model_id not in model_ids:
+                return jsonify({
+                    'success': False, 
+                    'error': f'Model "{job.model_id}" is not available. Available models: {", ".join(model_ids)}'
+                }), 400
+            
+        except Exception as validation_error:
+            logger.warning(f"Pre-start validation failed for job {job_id}: {validation_error}")
+            return jsonify({
+                'success': False, 
+                'error': f'Pre-start validation failed: {str(validation_error)}'
+            }), 400
+        
+        # Update job status and clear any previous errors
+        job.status = 'pending'
+        job.error_message = None
+        job.progress = 0
+        job.current_epoch = 0
+        
+        # Set total epochs if not set
+        if not job.total_epochs:
+            job.total_epochs = job.config_epochs or 10
+        
+        db.session.commit()
+        logger.info(f"Job {job_id} status updated to pending")
+        
+        try:
+            # Start training asynchronously
+            training_service.start_training_async(job_id)
+            
+            logger.info(f"Training job {job_id} started successfully")
+            return jsonify({
+                'success': True,
+                'message': 'Training job started successfully',
+                'job': {
+                    'id': job.id,
+                    'status': job.status,
+                    'progress': job.progress,
+                    'name': job.name
+                }
+            })
+            
+        except Exception as training_error:
+            logger.error(f"Failed to start training for job {job_id}: {training_error}")
+            logger.error(f"Training error traceback: {traceback.format_exc()}")
+            
+            # Update job status to indicate failure
+            job.status = 'failed'
+            job.error_message = f"Failed to start training: {str(training_error)}"
+            db.session.commit()
+            
+            return jsonify({
+                'success': False, 
+                'error': f'Failed to start training: {str(training_error)}'
+            }), 500
         
     except Exception as e:
-        logger.error(f"Error starting training job: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"Critical error in start_training_job route: {e}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        logger.error(f"Exception traceback: {traceback.format_exc()}")
+        
+        # Try to update job status if we have the job object
+        try:
+            if 'job' in locals() and job:
+                job.status = 'failed'
+                job.error_message = f"Critical error: {str(e)}"
+                db.session.commit()
+        except:
+            pass  # Don't let database update errors mask the original error
+        
+        return jsonify({
+            'success': False, 
+            'error': f'Internal server error: {str(e)}'
+        }), 500
 
 @llm_training_bp.route('/api/training-jobs/<job_id>/cancel', methods=['POST'])
 @login_required
@@ -861,7 +1078,7 @@ def cancel_training_job(job_id):
             return jsonify({'success': False, 'error': 'Job cannot be cancelled in current state'}), 400
         
         # Cancel training
-        training_service = LLMTrainingService()
+        training_service = LLMTrainingService(current_app)
         training_service.cancel_training(job_id)
         
         return jsonify({'success': True})
@@ -883,7 +1100,7 @@ def delete_training_job(job_id):
         if not job:
             return jsonify({'success': False, 'error': 'Training job not found'}), 404
         
-        if job.status in ['training', 'preparing']:
+        if job.status in ['training']:
             return jsonify({
                 'success': False, 
                 'error': 'Cannot delete a running training job. Please cancel it first.'
@@ -960,7 +1177,7 @@ def generate_report():
         db.session.commit()
         
         try:
-            training_service = LLMTrainingService()
+            training_service = LLMTrainingService(current_app)
             training_service.generate_report_async(report.id)
         except Exception as report_error:
             logger.warning(f"Could not generate report automatically: {report_error}")
@@ -1110,7 +1327,7 @@ def get_documents():
 @llm_training_bp.route('/api/documents/upload', methods=['POST'])
 @login_required
 def upload_documents():
-    """Upload documents for training"""
+    """Upload documents for training with duplicate prevention"""
     try:
         if 'files' not in request.files:
             return jsonify({'success': False, 'error': 'No files provided'}), 400
@@ -1120,73 +1337,149 @@ def upload_documents():
             return jsonify({'success': False, 'error': 'No files selected'}), 400
         
         uploaded_documents = []
+        skipped_files = []
+        errors = []
         
         for file in files:
             if file and file.filename:
-                # Generate unique filename
-                import uuid
-                import os
-                from werkzeug.utils import secure_filename
-                
-                original_name = secure_filename(file.filename)
-                file_extension = os.path.splitext(original_name)[1].lower()
-                stored_name = f"{uuid.uuid4()}{file_extension}"
-                
-                upload_dir = os.path.join(current_app.root_path, 'uploads', 'llm_documents')
-                os.makedirs(upload_dir, exist_ok=True)
-                
-                file_path = os.path.join(upload_dir, stored_name)
-                
-                # Save file
-                file.save(file_path)
-                
-                # Get file info
-                file_size = os.path.getsize(file_path)
-                
-                text_content = ""
-                word_count = 0
-                
                 try:
-                    text_content = extract_text_from_file(file_path, file_extension)
-                    if text_content:
-                        word_count = len(text_content.split())
-                        logger.info(f"Extracted {word_count} words from {original_name}")
-                    else:
-                        logger.warning(f"No text content extracted from {original_name}")
-                except Exception as e:
-                    logger.error(f"Error extracting text from {original_name}: {e}")
+                    # Generate unique filename
+                    import uuid
+                    import os
+                    from werkzeug.utils import secure_filename
+                    import hashlib
+                    
+                    original_name = secure_filename(file.filename)
+                    if not original_name:
+                        errors.append(f"Invalid filename: {file.filename}")
+                        continue
+                    
+                    file_extension = os.path.splitext(original_name)[1].lower()
+                    
+                    # Check for existing document with same name and user
+                    existing_doc = LLMDocument.query.filter_by(
+                        user_id=current_user.id,
+                        original_name=original_name
+                    ).first()
+                    
+                    if existing_doc:
+                        skipped_files.append({
+                            'name': original_name,
+                            'reason': 'File already exists'
+                        })
+                        continue
+                    
+                    # Read file content for hash calculation
+                    file.seek(0)  # Reset file pointer
+                    file_content = file.read()
+                    file.seek(0)  # Reset again for saving
+                    
+                    # Calculate file hash to detect duplicates
+                    file_hash = hashlib.md5(file_content).hexdigest()
+                    
+                    # Check for files with similar size (basic duplicate detection)
+                    file_size_bytes = len(file_content)
+                    existing_size_docs = LLMDocument.query.filter_by(
+                        user_id=current_user.id,
+                        file_size=file_size_bytes
+                    ).all()
+                    
+                    # If we find files with same size, do a more detailed check
+                    is_duplicate = False
+                    for existing_doc in existing_size_docs:
+                        if existing_doc.original_name != original_name:  # Different name but same size
+                            # This is a basic duplicate detection - could be enhanced with actual content comparison
+                            is_duplicate = True
+                            skipped_files.append({
+                                'name': original_name,
+                                'reason': f'Similar file already exists ({existing_doc.original_name})'
+                            })
+                            break
+                    
+                    if is_duplicate:
+                        continue
+                    
+                    stored_name = f"{uuid.uuid4()}{file_extension}"
+                    
+                    upload_dir = os.path.join(current_app.root_path, 'uploads', 'llm_documents')
+                    os.makedirs(upload_dir, exist_ok=True)
+                    
+                    file_path = os.path.join(upload_dir, stored_name)
+                    
+                    # Save file
+                    with open(file_path, 'wb') as f:
+                        f.write(file_content)
+                    
+                    # Get file info
+                    file_size = os.path.getsize(file_path)
+                    
                     text_content = ""
                     word_count = 0
-                
-                # Create document record
-                document = LLMDocument(
-                    user_id=current_user.id,
-                    name=original_name,
-                    original_name=original_name,
-                    stored_name=stored_name,
-                    file_type=file_extension[1:] if file_extension else 'unknown',
-                    mime_type=file.mimetype or 'application/octet-stream',
-                    file_size=file_size,
-                    file_path=file_path,
-                    text_content=text_content,
-                    word_count=word_count,
-                    character_count=len(text_content),
-                    extracted_text=bool(text_content)
-                )
-                
-                db.session.add(document)
-                uploaded_documents.append(document)
+                    
+                    try:
+                        text_content = extract_text_from_file(file_path, file_extension)
+                        if text_content:
+                            word_count = len(text_content.split())
+                            logger.info(f"Extracted {word_count} words from {original_name}")
+                        else:
+                            logger.warning(f"No text content extracted from {original_name}")
+                    except Exception as e:
+                        logger.error(f"Error extracting text from {original_name}: {e}")
+                        text_content = ""
+                        word_count = 0
+                    
+                    # Create document record
+                    document = LLMDocument(
+                        user_id=current_user.id,
+                        name=original_name,
+                        original_name=original_name,
+                        stored_name=stored_name,
+                        file_type=file_extension[1:] if file_extension else 'unknown',
+                        mime_type=file.mimetype or 'application/octet-stream',
+                        file_size=file_size,
+                        file_path=file_path,
+                        text_content=text_content,
+                        word_count=word_count,
+                        character_count=len(text_content),
+                        extracted_text=bool(text_content)
+                    )
+                    
+                    db.session.add(document)
+                    uploaded_documents.append(document)
+                    
+                except Exception as e:
+                    logger.error(f"Error processing file {file.filename}: {e}")
+                    errors.append(f"Error processing {file.filename}: {str(e)}")
+                    continue
         
-        db.session.commit()
+        # Commit all successful uploads
+        if uploaded_documents:
+            db.session.commit()
+            logger.info(f"Successfully uploaded {len(uploaded_documents)} documents for user {current_user.id}")
         
-        return jsonify({
+        response_data = {
             'success': True,
             'documents': [doc.to_dict() for doc in uploaded_documents],
             'message': f'Successfully uploaded {len(uploaded_documents)} document(s)'
-        })
+        }
+        
+        # Add warnings for skipped files
+        if skipped_files:
+            response_data['skipped_files'] = skipped_files
+            response_data['message'] += f', skipped {len(skipped_files)} duplicate(s)'
+        
+        # Add errors if any
+        if errors:
+            response_data['errors'] = errors
+            if not uploaded_documents:
+                response_data['success'] = False
+                response_data['message'] = 'No documents were uploaded due to errors'
+        
+        return jsonify(response_data)
         
     except Exception as e:
         logger.error(f"Error uploading documents: {e}")
+        logger.error(traceback.format_exc())
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -1440,11 +1733,6 @@ def get_model_test_status(test_id):
     except Exception as e:
         logger.error(f"Error getting model test status: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
-        
-    except Exception as e:
-        logger.error(f"Error uploading documents: {e}")
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 @llm_training_bp.route('/api/documents/<document_id>', methods=['PUT'])
 @login_required
@@ -1504,6 +1792,169 @@ def update_document(document_id):
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@llm_training_bp.route('/api/datasets/<dataset_id>/documents', methods=['POST'])
+@login_required
+def add_documents_to_dataset(dataset_id):
+    """Add documents to a dataset"""
+    try:
+        # Verify dataset exists and belongs to user
+        dataset = LLMDataset.query.filter_by(
+            id=dataset_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not dataset:
+            return jsonify({'success': False, 'error': 'Dataset not found'}), 404
+        
+        data = request.get_json()
+        if not data or 'document_ids' not in data:
+            return jsonify({'success': False, 'error': 'Document IDs are required'}), 400
+        
+        document_ids = data['document_ids']
+        if not isinstance(document_ids, list) or not document_ids:
+            return jsonify({'success': False, 'error': 'At least one document ID is required'}), 400
+        
+        # Verify all documents exist and belong to user
+        documents = LLMDocument.query.filter(
+            LLMDocument.id.in_(document_ids),
+            LLMDocument.user_id == current_user.id
+        ).all()
+        
+        if len(documents) != len(document_ids):
+            return jsonify({'success': False, 'error': 'Some documents not found or access denied'}), 404
+        
+        # Check for existing associations
+        existing_associations = LLMDatasetDocument.query.filter(
+            LLMDatasetDocument.dataset_id == dataset_id,
+            LLMDatasetDocument.document_id.in_(document_ids)
+        ).all()
+        
+        existing_doc_ids = {assoc.document_id for assoc in existing_associations}
+        new_document_ids = [doc_id for doc_id in document_ids if doc_id not in existing_doc_ids]
+        
+        # Add new associations
+        added_count = 0
+        total_size_added = 0
+        total_words_added = 0
+        
+        for document in documents:
+            if document.id in new_document_ids:
+                dataset_doc = LLMDatasetDocument(
+                    dataset_id=dataset_id,
+                    document_id=document.id
+                )
+                db.session.add(dataset_doc)
+                added_count += 1
+                total_size_added += document.file_size or 0
+                total_words_added += document.word_count or 0
+        
+        # Update dataset counts
+        dataset.document_count += added_count
+        dataset.total_size += total_size_added
+        dataset.total_words += total_words_added
+        
+        db.session.commit()
+        
+        logger.info(f"Added {added_count} documents to dataset {dataset_id} by user {current_user.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully added {added_count} document(s) to dataset',
+            'added_count': added_count,
+            'skipped_count': len(document_ids) - added_count,
+            'dataset': dataset.to_dict()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error adding documents to dataset {dataset_id}: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@llm_training_bp.route('/api/datasets/<dataset_id>/documents/<document_id>', methods=['DELETE'])
+@login_required
+def remove_document_from_dataset(dataset_id, document_id):
+    """Remove a document from a dataset"""
+    try:
+        # Verify dataset exists and belongs to user
+        dataset = LLMDataset.query.filter_by(
+            id=dataset_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not dataset:
+            return jsonify({'success': False, 'error': 'Dataset not found'}), 404
+        
+        # Verify document exists and belongs to user
+        document = LLMDocument.query.filter_by(
+            id=document_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not document:
+            return jsonify({'success': False, 'error': 'Document not found'}), 404
+        
+        # Find and remove the association
+        association = LLMDatasetDocument.query.filter_by(
+            dataset_id=dataset_id,
+            document_id=document_id
+        ).first()
+        
+        if not association:
+            return jsonify({'success': False, 'error': 'Document is not in this dataset'}), 404
+        
+        # Remove association
+        db.session.delete(association)
+        
+        # Update dataset counts
+        dataset.document_count = max(0, dataset.document_count - 1)
+        dataset.total_size = max(0, dataset.total_size - (document.file_size or 0))
+        dataset.total_words = max(0, dataset.total_words - (document.word_count or 0))
+        
+        db.session.commit()
+        
+        logger.info(f"Removed document {document_id} from dataset {dataset_id} by user {current_user.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Document "{document.name}" removed from dataset',
+            'dataset': dataset.to_dict()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error removing document from dataset: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@llm_training_bp.route('/api/datasets/<dataset_id>/documents')
+@login_required
+def get_dataset_documents(dataset_id):
+    """Get documents in a dataset"""
+    try:
+        # Verify dataset exists and belongs to user
+        dataset = LLMDataset.query.filter_by(
+            id=dataset_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not dataset:
+            return jsonify({'success': False, 'error': 'Dataset not found'}), 404
+        
+        # Get documents in the dataset
+        documents = db.session.query(LLMDocument).join(LLMDatasetDocument).filter(
+            LLMDatasetDocument.dataset_id == dataset_id,
+            LLMDocument.user_id == current_user.id
+        ).all()
+        
+        return jsonify({
+            'success': True,
+            'documents': [doc.to_dict() for doc in documents],
+            'dataset': dataset.to_dict()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting dataset documents: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @llm_training_bp.route('/api/documents/<document_id>', methods=['DELETE'])
 @login_required
 def delete_document(document_id):
@@ -1553,7 +2004,7 @@ def delete_document(document_id):
 def refresh_models():
     """Refresh available models list"""
     try:
-        training_service = LLMTrainingService()
+        training_service = LLMTrainingService(current_app)
         models = training_service.get_available_models()
         
         return jsonify({
@@ -1571,7 +2022,7 @@ def refresh_models():
 def get_models():
     """Get available models list"""
     try:
-        training_service = LLMTrainingService()
+        training_service = LLMTrainingService(current_app)
         models = training_service.get_available_models()
         
         return jsonify({
@@ -1588,7 +2039,7 @@ def get_models():
 def test_functionality():
     """Test LLM training functionality"""
     try:
-        training_service = LLMTrainingService()
+        training_service = LLMTrainingService(current_app)
         test_results = training_service.run_system_test()
         
         return jsonify({
@@ -1653,3 +2104,761 @@ def get_stats():
     except Exception as e:
         logger.error(f"Error fetching stats: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+# Enhanced LLM Training Workflow Routes
+
+@llm_training_bp.route('/api/training-guides', methods=['GET'])
+@login_required
+def get_training_guides():
+    """Get all training guides for the current user"""
+    try:
+        # For now, we'll use the existing LLMDocument model to store training guides
+        # with a special type field to distinguish them
+        guides = LLMDocument.query.filter_by(
+            user_id=current_user.id,
+            type='training_guide'
+        ).order_by(LLMDocument.created_at.desc()).all()
+        
+        guides_data = []
+        for guide in guides:
+            guides_data.append({
+                'id': guide.id,
+                'name': guide.name,
+                'description': '',  # Description not stored in model anymore
+                'file_size': guide.file_size,
+                'word_count': guide.word_count or 0,
+                'created_at': guide.created_at.isoformat(),
+                'file_path': guide.file_path
+            })
+        
+        return jsonify({
+            'success': True,
+            'guides': guides_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting training guides: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to load training guides'
+        }), 500
+
+@llm_training_bp.route('/api/training-guides/upload', methods=['POST'])
+@login_required
+def upload_training_guide():
+    """Upload a new training guide"""
+    try:
+        name = request.form.get('name', '').strip()
+        description = request.form.get('description', '').strip()
+        
+        if not name:
+            return jsonify({
+                'success': False,
+                'error': 'Guide name is required'
+            }), 400
+        
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No file provided'
+            }), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': 'No file selected'
+            }), 400
+        
+        # Validate file type
+        allowed_extensions = {'.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.html', '.htm'}
+        file_extension = os.path.splitext(file.filename)[1].lower()
+        
+        if file_extension not in allowed_extensions:
+            return jsonify({
+                'success': False,
+                'error': f'File type {file_extension} not supported. Allowed types: {", ".join(allowed_extensions)}'
+            }), 400
+        
+        # Create upload directory
+        upload_dir = os.path.join(current_app.root_path, 'uploads', 'training_guides')
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Generate unique filename
+        filename = f"{current_user.id}_{int(datetime.now().timestamp())}_{file.filename}"
+        file_path = os.path.join(upload_dir, filename)
+        
+        # Save file
+        file.save(file_path)
+        
+        # Extract text content
+        try:
+            text_content = extract_text_from_file(file_path, file_extension)
+            word_count = len(text_content.split()) if text_content else 0
+        except Exception as e:
+            logger.warning(f"Failed to extract text from training guide {filename}: {e}")
+            text_content = ""
+            word_count = 0
+        
+        # Check for duplicate content
+        from src.utils.content_deduplication import check_llm_document_duplicate, get_deduplication_response, calculate_content_hash
+        
+        is_duplicate, existing_doc = check_llm_document_duplicate(
+            user_id=current_user.id,
+            content=text_content,
+            document_type='training_guide',
+            db_session=db.session
+        )
+        
+        if is_duplicate:
+            # Remove the uploaded file since it's a duplicate
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+            
+            return jsonify(get_deduplication_response(existing_doc, "training guide")), 409
+        
+        # Create database record
+        guide = LLMDocument(
+            user_id=current_user.id,
+            name=name,
+            original_name=file.filename,
+            stored_name=filename,
+            file_type=file_extension,
+            mime_type=file.mimetype or 'application/octet-stream',
+            file_size=os.path.getsize(file_path),
+            file_path=file_path,
+            text_content=text_content,
+            content_hash=calculate_content_hash(text_content),
+            word_count=word_count,
+            character_count=len(text_content) if text_content else 0,
+            extracted_text=bool(text_content),
+            type='training_guide'
+        )
+        
+        db.session.add(guide)
+        db.session.commit()
+        
+        logger.info(f"Training guide uploaded successfully: {name} by user {current_user.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Training guide uploaded successfully',
+            'guide': {
+                'id': guide.id,
+                'name': guide.name,
+                'description': description,
+                'word_count': word_count
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error uploading training guide: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to upload training guide'
+        }), 500
+
+@llm_training_bp.route('/api/training-guides/<guide_id>', methods=['DELETE'])
+@login_required
+def delete_training_guide(guide_id):
+    """Delete a training guide"""
+    try:
+        guide = LLMDocument.query.filter_by(
+            id=guide_id,
+            user_id=current_user.id,
+            type='training_guide'
+        ).first()
+        
+        if not guide:
+            return jsonify({
+                'success': False,
+                'error': 'Training guide not found'
+            }), 404
+        
+        # Delete file
+        try:
+            if os.path.exists(guide.file_path):
+                os.remove(guide.file_path)
+        except Exception as e:
+            logger.warning(f"Failed to delete training guide file {guide.file_path}: {e}")
+        
+        # Delete database record
+        db.session.delete(guide)
+        db.session.commit()
+        
+        logger.info(f"Training guide deleted: {guide.name} by user {current_user.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Training guide deleted successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting training guide: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to delete training guide'
+        }), 500
+
+@llm_training_bp.route('/api/test-submissions', methods=['GET'])
+@login_required
+def get_test_submissions():
+    """Get all test submissions for the current user"""
+    try:
+        submissions = LLMDocument.query.filter_by(
+            user_id=current_user.id,
+            type='test_submission'
+        ).order_by(LLMDocument.created_at.desc()).all()
+        
+        submissions_data = []
+        for submission in submissions:
+            submissions_data.append({
+                'id': submission.id,
+                'name': submission.name,
+                'description': '',  # Description not stored in model anymore
+                'size': submission.file_size,  # Use file_size instead of size
+                'expected_score': None,  # Expected score not stored in model anymore
+                'created_at': submission.created_at.isoformat(),
+                'file_path': submission.file_path
+            })
+        
+        return jsonify({
+            'success': True,
+            'submissions': submissions_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting test submissions: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to load test submissions'
+        }), 500
+
+@llm_training_bp.route('/api/test-submissions/upload', methods=['POST'])
+@login_required
+def upload_test_submission():
+    """Upload a new test submission"""
+    try:
+        name = request.form.get('name', '').strip()
+        description = request.form.get('description', '').strip()
+        expected_score = request.form.get('expected_score')
+        
+        if not name:
+            return jsonify({
+                'success': False,
+                'error': 'Submission name is required'
+            }), 400
+        
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No file provided'
+            }), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': 'No file selected'
+            }), 400
+        
+        # Validate expected score
+        if expected_score:
+            try:
+                expected_score = float(expected_score)
+                if expected_score < 0 or expected_score > 100:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Expected score must be between 0 and 100'
+                    }), 400
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'error': 'Expected score must be a valid number'
+                }), 400
+        
+        # Validate file type
+        allowed_extensions = {'.pdf', '.doc', '.docx', '.txt', '.jpg', '.jpeg', '.png', '.md', '.rtf', '.html', '.htm'}
+        file_extension = os.path.splitext(file.filename)[1].lower()
+        
+        if file_extension not in allowed_extensions:
+            return jsonify({
+                'success': False,
+                'error': f'File type {file_extension} not supported. Allowed types: {", ".join(allowed_extensions)}'
+            }), 400
+        
+        # Create upload directory
+        upload_dir = os.path.join(current_app.root_path, 'uploads', 'test_submissions')
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Generate unique filename
+        filename = f"{current_user.id}_{int(datetime.now().timestamp())}_{file.filename}"
+        file_path = os.path.join(upload_dir, filename)
+        
+        # Save file
+        file.save(file_path)
+        
+        # Extract text content
+        try:
+            text_content = extract_text_from_file(file_path, file_extension)
+            word_count = len(text_content.split()) if text_content else 0
+        except Exception as e:
+            logger.warning(f"Failed to extract text from test submission {filename}: {e}")
+            text_content = ""
+            word_count = 0
+        
+        # Check for duplicate content
+        from src.utils.content_deduplication import check_llm_document_duplicate, get_deduplication_response, calculate_content_hash
+        
+        is_duplicate, existing_doc = check_llm_document_duplicate(
+            user_id=current_user.id,
+            content=text_content,
+            document_type='test_submission',
+            db_session=db.session
+        )
+        
+        if is_duplicate:
+            # Remove the uploaded file since it's a duplicate
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+            
+            return jsonify(get_deduplication_response(existing_doc, "test submission")), 409
+        
+        # Create database record
+        submission = LLMDocument(
+            user_id=current_user.id,
+            name=name,
+            original_name=file.filename,
+            stored_name=filename,
+            file_type=file_extension,
+            mime_type=file.mimetype or 'application/octet-stream',
+            file_size=os.path.getsize(file_path),
+            file_path=file_path,
+            text_content=text_content,
+            content_hash=calculate_content_hash(text_content),
+            word_count=word_count,
+            character_count=len(text_content) if text_content else 0,
+            extracted_text=bool(text_content),
+            type='test_submission'
+        )
+        
+        db.session.add(submission)
+        db.session.commit()
+        
+        logger.info(f"Test submission uploaded successfully: {name} by user {current_user.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Test submission uploaded successfully',
+            'submission': {
+                'id': submission.id,
+                'name': submission.name,
+                'description': description,
+                'expected_score': expected_score
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error uploading test submission: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to upload test submission'
+        }), 500
+
+@llm_training_bp.route('/api/test-submissions/<submission_id>', methods=['DELETE'])
+@login_required
+def delete_test_submission(submission_id):
+    """Delete a test submission"""
+    try:
+        submission = LLMDocument.query.filter_by(
+            id=submission_id,
+            user_id=current_user.id,
+            type='test_submission'
+        ).first()
+        
+        if not submission:
+            return jsonify({
+                'success': False,
+                'error': 'Test submission not found'
+            }), 404
+        
+        # Delete file
+        try:
+            if os.path.exists(submission.file_path):
+                os.remove(submission.file_path)
+        except Exception as e:
+            logger.warning(f"Failed to delete test submission file {submission.file_path}: {e}")
+        
+        # Delete database record
+        db.session.delete(submission)
+        db.session.commit()
+        
+        logger.info(f"Test submission deleted: {submission.name} by user {current_user.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Test submission deleted successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting test submission: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to delete test submission'
+        }), 500
+
+@llm_training_bp.route('/api/comprehensive-reports', methods=['GET'])
+@login_required
+def get_comprehensive_reports():
+    """Get all comprehensive reports for the current user"""
+    try:
+        # For now, we'll use the existing LLMTrainingReport model
+        # and distinguish comprehensive reports by a special type field
+        reports = LLMTrainingReport.query.filter_by(
+            user_id=current_user.id
+        ).filter(
+            LLMTrainingReport.name.like('%Comprehensive%')
+        ).order_by(LLMTrainingReport.created_at.desc()).all()
+        
+        reports_data = []
+        for report in reports:
+            reports_data.append({
+                'id': report.id,
+                'name': report.name,
+                'description': report.description,
+                'status': report.status,
+                'created_at': report.created_at.isoformat(),
+                'model_count': 0,  # Model count not stored in document_metadata anymore
+                'file_path': report.file_path
+            })
+        
+        return jsonify({
+            'success': True,
+            'reports': reports_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting comprehensive reports: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to load comprehensive reports'
+        }), 500
+
+@llm_training_bp.route('/api/comprehensive-reports/generate', methods=['POST'])
+@login_required
+def generate_comprehensive_report():
+    """Generate a comprehensive report"""
+    try:
+        data = request.get_json()
+        
+        name = data.get('name', '').strip()
+        description = data.get('description', '').strip()
+        training_job_ids = data.get('training_job_ids', [])
+        test_submission_ids = data.get('test_submission_ids', [])
+        
+        if not name:
+            return jsonify({
+                'success': False,
+                'error': 'Report name is required'
+            }), 400
+        
+        if not training_job_ids:
+            return jsonify({
+                'success': False,
+                'error': 'At least one training job must be selected'
+            }), 400
+        
+        if not test_submission_ids:
+            return jsonify({
+                'success': False,
+                'error': 'At least one test submission must be selected'
+            }), 400
+        
+        # Validate that all training jobs belong to the current user
+        jobs = LLMTrainingJob.query.filter(
+            LLMTrainingJob.id.in_(training_job_ids),
+            LLMTrainingJob.user_id == current_user.id,
+            LLMTrainingJob.status == 'completed'
+        ).all()
+        
+        if len(jobs) != len(training_job_ids):
+            return jsonify({
+                'success': False,
+                'error': 'Some training jobs not found or not completed'
+            }), 400
+        
+        # Validate that all test submissions belong to the current user
+        submissions = LLMDocument.query.filter(
+            LLMDocument.id.in_(test_submission_ids),
+            LLMDocument.user_id == current_user.id,
+            LLMDocument.type == 'test_submission'
+        ).all()
+        
+        if len(submissions) != len(test_submission_ids):
+            return jsonify({
+                'success': False,
+                'error': 'Some test submissions not found'
+            }), 400
+        
+        # Create comprehensive report record
+        report = LLMTrainingReport(
+            user_id=current_user.id,
+            name=f"Comprehensive Report: {name}",
+            description=description,
+            format='comprehensive',
+            status='generating'
+            # Note: document_metadata field removed from model
+        )
+        
+        db.session.add(report)
+        db.session.commit()
+        
+        # Start report generation asynchronously
+        from src.services.llm_training_service import LLMTrainingService
+        training_service = LLMTrainingService(current_app._get_current_object())
+        training_service.generate_comprehensive_report_async(report.id, jobs, submissions)
+        
+        logger.info(f"Comprehensive report generation started: {name} by user {current_user.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Comprehensive report generation started',
+            'report_id': report.id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error generating comprehensive report: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to generate comprehensive report'
+        }), 500
+
+@llm_training_bp.route('/api/comprehensive-reports/<report_id>', methods=['DELETE'])
+@login_required
+def delete_comprehensive_report(report_id):
+    """Delete a comprehensive report"""
+    try:
+        report = LLMTrainingReport.query.filter_by(
+            id=report_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not report:
+            return jsonify({
+                'success': False,
+                'error': 'Comprehensive report not found'
+            }), 404
+        
+        # Delete file if exists
+        try:
+            if report.file_path and os.path.exists(report.file_path):
+                os.remove(report.file_path)
+        except Exception as e:
+            logger.warning(f"Failed to delete comprehensive report file {report.file_path}: {e}")
+        
+        # Delete database record
+        db.session.delete(report)
+        db.session.commit()
+        
+        logger.info(f"Comprehensive report deleted: {report.name} by user {current_user.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Comprehensive report deleted successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting comprehensive report: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to delete comprehensive report'
+        }), 500
+
+@llm_training_bp.route('/api/comprehensive-reports/<report_id>/download', methods=['GET'])
+@login_required
+def download_comprehensive_report(report_id):
+    """Download a comprehensive report"""
+    try:
+        report = LLMTrainingReport.query.filter_by(
+            id=report_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not report:
+            return jsonify({
+                'success': False,
+                'error': 'Comprehensive report not found'
+            }), 404
+        
+        if report.status != 'completed' or not report.file_path:
+            return jsonify({
+                'success': False,
+                'error': 'Report is not ready for download'
+            }), 400
+        
+        if not os.path.exists(report.file_path):
+            return jsonify({
+                'success': False,
+                'error': 'Report file not found'
+            }), 404
+        
+        return send_file(
+            report.file_path,
+            as_attachment=True,
+            download_name=f"{report.name}.pdf"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error downloading comprehensive report: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to download comprehensive report'
+        }), 500
+
+@llm_training_bp.route('/api/test-submissions/test', methods=['POST'])
+@login_required
+def test_submission_with_models():
+    """Test a submission with selected trained models"""
+    try:
+        data = request.get_json()
+        
+        submission_id = data.get('submission_id')
+        model_ids = data.get('model_ids', [])
+        
+        if not submission_id:
+            return jsonify({
+                'success': False,
+                'error': 'Submission ID is required'
+            }), 400
+        
+        if not model_ids:
+            return jsonify({
+                'success': False,
+                'error': 'At least one model must be selected'
+            }), 400
+        
+        # Validate submission
+        submission = LLMDocument.query.filter_by(
+            id=submission_id,
+            user_id=current_user.id,
+            type='test_submission'
+        ).first()
+        
+        if not submission:
+            return jsonify({
+                'success': False,
+                'error': 'Test submission not found'
+            }), 404
+        
+        # Validate models
+        models = LLMTrainingJob.query.filter(
+            LLMTrainingJob.id.in_(model_ids),
+            LLMTrainingJob.user_id == current_user.id,
+            LLMTrainingJob.status == 'completed'
+        ).all()
+        
+        if len(models) != len(model_ids):
+            return jsonify({
+                'success': False,
+                'error': 'Some models not found or not completed'
+            }), 400
+        
+        # Start testing process asynchronously
+        from src.services.llm_training_service import LLMTrainingService
+        training_service = LLMTrainingService(current_app._get_current_object())
+        training_service.test_submission_with_models_async(submission, models)
+        
+        logger.info(f"Model testing started for submission {submission.name} with {len(models)} models by user {current_user.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Testing started for {len(models)} models'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error starting model testing: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to start model testing'
+        }), 500
+
+@llm_training_bp.route('/api/model-testing-results', methods=['GET'])
+@login_required
+def get_model_testing_results():
+    """Get model testing results for the current user"""
+    try:
+        # For now, we'll create a simple structure to store testing results
+        # In a real implementation, you'd have a dedicated table for this
+        results = []
+        
+        # This is a placeholder - you'd implement actual result storage
+        # For now, return empty results
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting model testing results: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to load model testing results'
+        }), 500
+
+@llm_training_bp.route('/comprehensive-reports/<report_id>/view', methods=['GET'])
+@login_required
+def view_comprehensive_report(report_id):
+    """View a comprehensive report in the browser"""
+    try:
+        report = LLMTrainingReport.query.filter_by(
+            id=report_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not report:
+            return "Report not found", 404
+        
+        if report.status != 'completed':
+            return "Report is not ready yet", 400
+        
+        # For now, return a simple HTML view
+        # In a real implementation, you'd generate a comprehensive HTML report
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>{report.name}</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                .header {{ border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }}
+                .section {{ margin-bottom: 30px; }}
+                .model-result {{ background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>{report.name}</h1>
+                <p><strong>Description:</strong> {report.description or 'No description'}</p>
+                <p><strong>Generated:</strong> {report.created_at.strftime('%Y-%m-%d %H:%M:%S')}</p>
+            </div>
+            
+            <div class="section">
+                <h2>Report Summary</h2>
+                <p>This comprehensive report analyzes the performance of trained models against test submissions.</p>
+                <p><strong>Models Tested:</strong> {len(training_job_ids)}</p>
+                <p><strong>Test Submissions:</strong> {len(test_submission_ids)}</p>
+            </div>
+            
+            <div class="section">
+                <h2>Detailed Results</h2>
+                <p><em>Detailed testing results would be displayed here in a real implementation.</em></p>
+            </div>
+        </body>
+        </html>
+        """
+        
+    except Exception as e:
+        logger.error(f"Error viewing comprehensive report: {e}")

@@ -3,7 +3,7 @@ from typing import List
 
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from celery import Celery
 from celery.utils.log import get_task_logger
@@ -163,7 +163,7 @@ def process_optimized_ocr_task(self, submission_id: int, file_paths: List[str]):
         # Update submission
         submission.raw_text = combined_text.strip()
         submission.status = 'ocr_completed'
-        submission.updated_at = datetime.utcnow()
+        submission.updated_at = datetime.now(timezone.utc)
         
         db.session.commit()
         
@@ -187,7 +187,7 @@ def process_optimized_ocr_task(self, submission_id: int, file_paths: List[str]):
             submission = db.session.get(Submission, submission_id)
             if submission:
                 submission.status = 'ocr_failed'
-                submission.updated_at = datetime.utcnow()
+                submission.updated_at = datetime.now(timezone.utc)
                 db.session.commit()
         except Exception:
             pass
@@ -286,7 +286,7 @@ def process_optimized_full_pipeline(self, submission_ids: List[int], marking_gui
                             submission_id=submission_id,
                             marking_guide_id=marking_guide_id,
                             mapping_data=json.dumps(mapping_data),
-                            created_at=datetime.utcnow()
+                            created_at=datetime.now(timezone.utc)
                         )
                         db.session.add(duplicate_mapping)
                         
@@ -305,7 +305,7 @@ def process_optimized_full_pipeline(self, submission_ids: List[int], marking_gui
                                 letter_grade=grading_data.get('letter_grade', 'F'),
                                 detailed_feedback=json.dumps(grading_data.get('detailed_grades', [])),
                                 summary=json.dumps(grading_data.get('summary', {})),
-                                created_at=datetime.utcnow()
+                                created_at=datetime.now(timezone.utc)
                             )
                             db.session.add(duplicate_grading)
                         
@@ -318,7 +318,7 @@ def process_optimized_full_pipeline(self, submission_ids: List[int], marking_gui
                     submission_id=submission_id,
                     marking_guide_id=marking_guide_id,
                     mapping_data=json.dumps(mapping_data),
-                    created_at=datetime.utcnow()
+                    created_at=datetime.now(timezone.utc)
                 )
                 db.session.add(mapping_obj)
                 
@@ -332,7 +332,7 @@ def process_optimized_full_pipeline(self, submission_ids: List[int], marking_gui
                     letter_grade=grading_data.get('letter_grade', 'F'),
                     detailed_feedback=json.dumps(grading_data.get('detailed_grades', [])),
                     summary=json.dumps(grading_data.get('summary', {})),
-                    created_at=datetime.utcnow()
+                    created_at=datetime.now(timezone.utc)
                 )
                 db.session.add(grade_obj)
                 
@@ -340,7 +340,7 @@ def process_optimized_full_pipeline(self, submission_ids: List[int], marking_gui
                 submission = db.session.get(Submission, submission_id)
                 if submission:
                     submission.status = 'graded'
-                    submission.updated_at = datetime.utcnow()
+                    submission.updated_at = datetime.now(timezone.utc)
                 
                 results.append({
                     'submission_id': submission_id,

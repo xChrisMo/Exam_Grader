@@ -171,52 +171,266 @@
         </div>
     </div>
 
-    <!-- Detailed Results -->
+    <!-- Question-by-Question Breakdown -->
+    {% if result.grading_results %}
     <div class="bg-white shadow rounded-lg mb-8">
         <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">Detailed Grading Results</h3>
-            {% if result.detailed_results %}
-                {% if result.detailed_results is string %}
-                    <pre class="bg-gray-50 p-4 rounded-md text-sm text-gray-800 whitespace-pre-wrap">{{ result.detailed_results }}</pre>
-                {% else %}
-                    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                        <table class="min-w-full divide-y divide-gray-300">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Question</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Max Score</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Percentage</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comments</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                {% for detail in result.detailed_results %}
-                                <tr class="hover:bg-gray-50">
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ detail.question or 'N/A' }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ detail.score or 0 }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ detail.max_score or 0 }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {% if detail.score and detail.max_score and detail.max_score > 0 %}
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-100 text-success-800">
-                                                {{ "%.1f"|format((detail.score / detail.max_score) * 100) }}%
-                                            </span>
-                                        {% else %}
-                                            <span class="text-gray-400">N/A</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="px-6 py-4 text-sm text-gray-900">{{ detail.comments or 'No comments' }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">Question-by-Question Analysis</h3>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-info-100 text-info-800">
+                    {{ result.grading_results|length }} Questions Graded
+                </span>
+            </div>
+            
+            <div class="space-y-6">
+                {% for grading_result in result.grading_results %}
+                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex-1">
+                            <h4 class="text-sm font-semibold text-gray-900 mb-1">
+                                {% if grading_result.mapping and grading_result.mapping.guide_question_text %}
+                                    Question: {{ grading_result.mapping.guide_question_text[:100] }}{% if grading_result.mapping.guide_question_text|length > 100 %}...{% endif %}
+                                {% else %}
+                                    Question {{ loop.index }}
+                                {% endif %}
+                            </h4>
+                            <p class="text-xs text-gray-500">
+                                Question ID: {{ grading_result.mapping.guide_question_id if grading_result.mapping else 'N/A' }}
+                            </p>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <div class="text-right">
+                                <div class="text-lg font-bold text-gray-900">
+                                    {{ "%.1f"|format(grading_result.score) }}/{{ "%.1f"|format(grading_result.max_score) }}
+                                </div>
+                                <div class="text-sm text-gray-500">
+                                    {{ "%.1f"|format(grading_result.percentage) }}%
+                                </div>
+                            </div>
+                            <div class="w-12 h-12 rounded-full flex items-center justify-center
+                                {% if grading_result.percentage >= 80 %}bg-green-100 text-green-600
+                                {% elif grading_result.percentage >= 60 %}bg-yellow-100 text-yellow-600
+                                {% else %}bg-red-100 text-red-600{% endif %}">
+                                {% if grading_result.percentage >= 80 %}
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                {% elif grading_result.percentage >= 60 %}
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                    </svg>
+                                {% else %}
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                    </svg>
+                                {% endif %}
+                            </div>
+                        </div>
                     </div>
+                    
+                    <!-- Expected Answer -->
+                    {% if grading_result.mapping and grading_result.mapping.guide_answer %}
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Expected Answer</label>
+                        <div class="bg-green-50 border-l-4 border-green-400 p-3 rounded-r-md">
+                            <p class="text-sm text-gray-700">{{ grading_result.mapping.guide_answer }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Student Answer -->
+                    {% if grading_result.mapping and grading_result.mapping.submission_answer %}
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Student Answer</label>
+                        <div class="bg-blue-50 border-l-4 border-blue-400 p-3 rounded-r-md">
+                            <p class="text-sm text-gray-700">{{ grading_result.mapping.submission_answer }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Feedback -->
+                    {% if grading_result.feedback %}
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">AI Feedback</label>
+                        <div class="bg-gray-50 border-l-4 border-gray-400 p-3 rounded-r-md">
+                            <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ grading_result.feedback }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Detailed Feedback -->
+                    {% if grading_result.detailed_feedback %}
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Detailed Analysis</label>
+                        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-r-md">
+                            {% if grading_result.detailed_feedback is string %}
+                                <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ grading_result.detailed_feedback }}</p>
+                            {% else %}
+                                <pre class="text-xs text-gray-600 whitespace-pre-wrap">{{ grading_result.detailed_feedback|tojson(indent=2) }}</pre>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Grading Metadata -->
+                    <div class="border-t border-gray-200 pt-3 mt-3">
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-500">
+                            <div>
+                                <span class="font-medium">Method:</span> {{ grading_result.grading_method|title or 'LLM' }}
+                            </div>
+                            {% if grading_result.confidence %}
+                            <div>
+                                <span class="font-medium">Confidence:</span> {{ "%.1f"|format(grading_result.confidence * 100) }}%
+                            </div>
+                            {% endif %}
+                            {% if grading_result.mapping and grading_result.mapping.match_score %}
+                            <div>
+                                <span class="font-medium">Match Score:</span> {{ "%.1f"|format(grading_result.mapping.match_score * 100) }}%
+                            </div>
+                            {% endif %}
+                            <div>
+                                <span class="font-medium">Graded:</span> {{ grading_result.created_at.strftime('%Y-%m-%d %H:%M') if grading_result.created_at else 'N/A' }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Overall Performance Analysis -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Score Distribution -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Score Distribution</h3>
+                {% if result.grading_results %}
+                    {% set score_ranges = {'90-100': 0, '80-89': 0, '70-79': 0, '60-69': 0, 'Below 60': 0} %}
+                    {% for grading_result in result.grading_results %}
+                        {% if grading_result.percentage >= 90 %}
+                            {% set _ = score_ranges.update({'90-100': score_ranges['90-100'] + 1}) %}
+                        {% elif grading_result.percentage >= 80 %}
+                            {% set _ = score_ranges.update({'80-89': score_ranges['80-89'] + 1}) %}
+                        {% elif grading_result.percentage >= 70 %}
+                            {% set _ = score_ranges.update({'70-79': score_ranges['70-79'] + 1}) %}
+                        {% elif grading_result.percentage >= 60 %}
+                            {% set _ = score_ranges.update({'60-69': score_ranges['60-69'] + 1}) %}
+                        {% else %}
+                            {% set _ = score_ranges.update({'Below 60': score_ranges['Below 60'] + 1}) %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <div class="space-y-3">
+                        {% for range, count in score_ranges.items() %}
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-medium text-gray-700">{{ range }}%</span>
+                            <div class="flex items-center space-x-2">
+                                <div class="w-32 bg-gray-200 rounded-full h-2">
+                                    {% set percentage = (count / result.grading_results|length * 100) if result.grading_results|length > 0 else 0 %}
+                                    <div class="h-2 rounded-full {% if range == '90-100' %}bg-green-500{% elif range == '80-89' %}bg-blue-500{% elif range == '70-79' %}bg-yellow-500{% elif range == '60-69' %}bg-orange-500{% else %}bg-red-500{% endif %}" 
+                                         style="width: {{ percentage }}%"></div>
+                                </div>
+                                <span class="text-sm text-gray-500 w-8">{{ count }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-gray-500">No grading results available for analysis</p>
                 {% endif %}
+            </div>
+        </div>
+        
+        <!-- Performance Summary -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Performance Summary</h3>
+                {% if result.grading_results %}
+                    {% set total_questions = result.grading_results|length %}
+                    {% set total_score = result.grading_results|sum(attribute='score') %}
+                    {% set total_max_score = result.grading_results|sum(attribute='max_score') %}
+                    {% set average_percentage = result.grading_results|map(attribute='percentage')|sum / total_questions if total_questions > 0 else 0 %}
+                    {% set high_performers = result.grading_results|selectattr('percentage', 'ge', 80)|list|length %}
+                    {% set low_performers = result.grading_results|selectattr('percentage', 'lt', 60)|list|length %}
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="text-center p-3 bg-blue-50 rounded-lg">
+                            <div class="text-2xl font-bold text-blue-600">{{ total_questions }}</div>
+                            <div class="text-sm text-gray-600">Total Questions</div>
+                        </div>
+                        <div class="text-center p-3 bg-green-50 rounded-lg">
+                            <div class="text-2xl font-bold text-green-600">{{ "%.1f"|format(average_percentage) }}%</div>
+                            <div class="text-sm text-gray-600">Average Score</div>
+                        </div>
+                        <div class="text-center p-3 bg-yellow-50 rounded-lg">
+                            <div class="text-2xl font-bold text-yellow-600">{{ high_performers }}</div>
+                            <div class="text-sm text-gray-600">Above 80%</div>
+                        </div>
+                        <div class="text-center p-3 bg-red-50 rounded-lg">
+                            <div class="text-2xl font-bold text-red-600">{{ low_performers }}</div>
+                            <div class="text-sm text-gray-600">Below 60%</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 pt-4 border-t border-gray-200">
+                        <div class="flex justify-between text-sm text-gray-600">
+                            <span>Total Points Earned:</span>
+                            <span class="font-medium">{{ "%.1f"|format(total_score) }}/{{ "%.1f"|format(total_max_score) }}</span>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="text-gray-500">No performance data available</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Legacy Detailed Results (for backward compatibility) -->
+    {% if result.detailed_results %}
+    <div class="bg-white shadow rounded-lg mb-8">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">Raw Results Data</h3>
+            {% if result.detailed_results is string %}
+                <pre class="bg-gray-50 p-4 rounded-md text-sm text-gray-800 whitespace-pre-wrap">{{ result.detailed_results }}</pre>
             {% else %}
-                <p class="text-gray-500">No detailed results available</p>
+                <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                    <table class="min-w-full divide-y divide-gray-300">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Question</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Max Score</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Percentage</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comments</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for detail in result.detailed_results %}
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ detail.question or 'N/A' }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ detail.score or 0 }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ detail.max_score or 0 }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {% if detail.score and detail.max_score and detail.max_score > 0 %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-100 text-success-800">
+                                            {{ "%.1f"|format((detail.score / detail.max_score) * 100) }}%
+                                        </span>
+                                    {% else %}
+                                        <span class="text-gray-400">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-900">{{ detail.comments or 'No comments' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             {% endif %}
         </div>
     </div>
+    {% endif %}
 
     <!-- Feedback -->
     {% if result.feedback %}

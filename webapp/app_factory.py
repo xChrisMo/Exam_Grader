@@ -93,12 +93,24 @@ def _init_extensions(app: Flask) -> None:
             'total_size_mb': 0,  # Default storage usage
             'max_size_mb': 1000  # Default max storage
         }
+        # Get user settings for theme
+        settings = {'theme': 'light', 'language': 'en'}  # Default settings
+        if current_user.is_authenticated:
+            try:
+                from src.database.models import UserSettings
+                user_settings = UserSettings.query.filter_by(user_id=current_user.id).first()
+                if user_settings:
+                    settings = user_settings.to_dict()
+            except Exception:
+                pass  # Use defaults if there's an error
+        
         return dict(
             csrf_token=generate_csrf(), 
             csrf_token_func=generate_csrf,
             service_status=service_status,
             storage_stats=storage_stats,
             current_user=current_user,
+            settings=settings,
             app_version="1.0.0",
             current_year=2025
         )
@@ -156,8 +168,9 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(reporting_bp)
     
     # Webapp API
-    from webapp.api import unified_api_bp
+    from webapp.api import unified_api_bp, api_bp
     app.register_blueprint(unified_api_bp)
+    app.register_blueprint(api_bp)
     
     # Unified API
     from src.api.unified_api import api
@@ -234,12 +247,26 @@ def _init_monitoring_services(app: Flask) -> None:
 
 def _cleanup_monitoring_services():
     """Clean up monitoring services on shutdown."""
+    import sys
+    
     try:
         from src.services.monitoring_service_manager import monitoring_service_manager
-        monitoring_service_manager.stop_all_services()
-        logger.info("Monitoring services cleaned up")
+        
+        # Stop all services with error handling
+        try:
+            monitoring_service_manager.stop_all_services()
+            print("Monitoring services stopped successfully", file=sys.stderr)
+        except Exception as stop_error:
+            print(f"Error stopping monitoring services: {stop_error}", file=sys.stderr)
+        
+        # Try to log cleanup completion, but don't fail if logger is unavailable
+        try:
+            logger.info("Monitoring services cleaned up")
+        except Exception:
+            print("Monitoring services cleaned up", file=sys.stderr)
+            
     except Exception as e:
-        logger.error(f"Error cleaning up monitoring services: {e}")
+        print(f"Error cleaning up monitoring services: {e}", file=sys.stderr)
 
 def create_database_tables(app: Flask) -> None:
     """Create database tables if they don't exist."""

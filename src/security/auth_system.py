@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Tuple, Any, Set
 from enum import Enum
 from functools import wraps
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 try:
     from utils.logger import logger
@@ -106,17 +106,17 @@ class UserSession:
             return True
         
         timeout = timedelta(minutes=timeout_minutes)
-        return datetime.utcnow() - self.last_activity > timeout
+        return datetime.now(timezone.utc) - self.last_activity > timeout
     
     def is_locked(self) -> bool:
         """Check if user account is locked."""
         if self.locked_until is None:
             return False
-        return datetime.utcnow() < self.locked_until
+        return datetime.now(timezone.utc) < self.locked_until
     
     def update_activity(self):
         """Update last activity timestamp."""
-        self.last_activity = datetime.utcnow()
+        self.last_activity = datetime.now(timezone.utc)
 
 class PasswordPolicy:
     """Password policy enforcement."""
@@ -363,8 +363,8 @@ class AuthenticationManager:
                 role=user_role,
                 permissions=permissions,
                 session_id=session_id,
-                created_at=datetime.utcnow(),
-                last_activity=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                last_activity=datetime.now(timezone.utc),
                 ip_address=ip_address or 'unknown',
                 user_agent=user_agent or 'unknown'
             )
@@ -517,7 +517,7 @@ class AuthenticationManager:
         latest_attempt = max(attempts)
         lockout_until = latest_attempt + timedelta(minutes=self.lockout_duration)
         
-        if datetime.utcnow() > lockout_until:
+        if datetime.now(timezone.utc) > lockout_until:
             # Lockout period expired, clear attempts
             self._clear_failed_attempts(username)
             return False
@@ -533,10 +533,10 @@ class AuthenticationManager:
         if username not in self.failed_attempts:
             self.failed_attempts[username] = []
         
-        self.failed_attempts[username].append(datetime.utcnow())
+        self.failed_attempts[username].append(datetime.now(timezone.utc))
         
         # Keep only recent attempts
-        cutoff_time = datetime.utcnow() - timedelta(hours=1)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=1)
         self.failed_attempts[username] = [
             attempt for attempt in self.failed_attempts[username]
             if attempt > cutoff_time

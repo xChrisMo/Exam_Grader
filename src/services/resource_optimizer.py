@@ -12,7 +12,7 @@ import threading
 import time
 from typing import Dict, List, Optional, Any, Callable, Union
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from enum import Enum
 import weakref
 
@@ -106,8 +106,8 @@ class ResourcePool:
                 resource = self.factory()
                 self._pool.append({
                     'resource': resource,
-                    'created_at': datetime.utcnow(),
-                    'last_used': datetime.utcnow(),
+                    'created_at': datetime.now(timezone.utc),
+                    'last_used': datetime.now(timezone.utc),
                     'use_count': 0
                 })
                 self._created_count += 1
@@ -120,7 +120,7 @@ class ResourcePool:
             if self._pool:
                 resource_info = self._pool.pop(0)
                 resource_id = id(resource_info['resource'])
-                resource_info['last_used'] = datetime.utcnow()
+                resource_info['last_used'] = datetime.now(timezone.utc)
                 resource_info['use_count'] += 1
                 self._in_use[resource_id] = resource_info
                 self._borrowed_count += 1
@@ -131,8 +131,8 @@ class ResourcePool:
                     resource = self.factory()
                     resource_info = {
                         'resource': resource,
-                        'created_at': datetime.utcnow(),
-                        'last_used': datetime.utcnow(),
+                        'created_at': datetime.now(timezone.utc),
+                        'last_used': datetime.now(timezone.utc),
                         'use_count': 1
                     }
                     resource_id = id(resource)
@@ -151,7 +151,7 @@ class ResourcePool:
             resource_id = id(resource)
             if resource_id in self._in_use:
                 resource_info = self._in_use.pop(resource_id)
-                resource_info['last_used'] = datetime.utcnow()
+                resource_info['last_used'] = datetime.now(timezone.utc)
                 
                 if len(self._pool) < self.max_size:
                     self._pool.append(resource_info)
@@ -167,7 +167,7 @@ class ResourcePool:
     def cleanup_idle_resources(self) -> int:
         """Remove idle resources from pool"""
         with self._lock:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             cleaned_count = 0
             
             # Keep only non-idle resources
@@ -251,7 +251,7 @@ class MemoryManager:
             current_usage=current_usage,
             max_usage=max_usage,
             usage_percentage=usage_percentage,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             metadata={
                 'process_memory_mb': current_usage / (1024 * 1024),
                 'system_memory_mb': max_usage / (1024 * 1024),
@@ -276,7 +276,7 @@ class MemoryManager:
             'memory_before_mb': before_stats.current_usage / (1024 * 1024),
             'memory_after_mb': after_stats.current_usage / (1024 * 1024),
             'memory_freed_mb': freed_memory / (1024 * 1024),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
     
     def cleanup_memory(self) -> Dict[str, Any]:
@@ -405,7 +405,7 @@ class ResourceOptimizer:
             current_usage=cpu_percent,
             max_usage=100.0,
             usage_percentage=cpu_percent,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             metadata={
                 'cpu_count': psutil.cpu_count(),
                 'load_average': os.getloadavg() if hasattr(os, 'getloadavg') else None
@@ -420,7 +420,7 @@ class ResourceOptimizer:
             current_usage=disk_usage.used,
             max_usage=disk_usage.total,
             usage_percentage=disk_percent,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             metadata={
                 'free_space_gb': disk_usage.free / (1024**3),
                 'total_space_gb': disk_usage.total / (1024**3)
@@ -467,7 +467,7 @@ class ResourceOptimizer:
                 resource_type=ResourceType.MEMORY,
                 description=f"Performed memory cleanup: {cleanup_result['garbage_collection']['objects_collected']} objects collected",
                 impact=f"Freed {cleanup_result['garbage_collection']['memory_freed_mb']:.2f} MB",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 success=True,
                 metadata=cleanup_result
             )
@@ -480,7 +480,7 @@ class ResourceOptimizer:
                 resource_type=ResourceType.CPU,
                 description="CPU optimization not implemented",
                 impact="None",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 success=False
             )
             actions.append(action)
@@ -492,7 +492,7 @@ class ResourceOptimizer:
                 resource_type=ResourceType.DISK,
                 description="Disk cleanup not implemented",
                 impact="None",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 success=False
             )
             actions.append(action)
@@ -512,7 +512,7 @@ class ResourceOptimizer:
                         resource_type=ResourceType.MEMORY,  # Pools generally manage memory resources
                         description=f"Cleaned up {cleaned_count} idle resources from pool {name}",
                         impact=f"Reduced pool size by {cleaned_count} resources",
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(timezone.utc),
                         success=True,
                         metadata={'pool_name': name, 'cleaned_count': cleaned_count}
                     )
@@ -523,7 +523,7 @@ class ResourceOptimizer:
                     resource_type=ResourceType.MEMORY,
                     description=f"Failed to cleanup pool {name}: {str(e)}",
                     impact="None",
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     success=False,
                     metadata={'pool_name': name, 'error': str(e)}
                 )
