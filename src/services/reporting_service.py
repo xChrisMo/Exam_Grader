@@ -96,48 +96,143 @@ class ReportingService:
     
     def _collect_report_data(self, config: ReportConfig, user_id: str) -> Dict[str, Any]:
         """Collect all data needed for the report"""
-        
-        # Mock data collection - in real implementation, this would query the database
-        training_jobs = [
-            {
-                'id': '1',
-                'name': 'Sample Training Job',
-                'status': 'completed',
-                'progress': 100,
-                'created_at': datetime.now(timezone.utc).isoformat(),
-                'model_name': 'GPT-3.5'
+        try:
+            from src.database.models import LLMTrainingJob, LLMModelTest, LLMTrainingReport
+            
+            # Query real training jobs from database
+            training_jobs_query = LLMTrainingJob.query.filter_by(user_id=user_id)
+            
+            # Apply date range filter if specified
+            if hasattr(config, 'date_range') and config.date_range:
+                if config.date_range.get('start'):
+                    training_jobs_query = training_jobs_query.filter(
+                        LLMTrainingJob.created_at >= config.date_range['start']
+                    )
+                if config.date_range.get('end'):
+                    training_jobs_query = training_jobs_query.filter(
+                        LLMTrainingJob.created_at <= config.date_range['end']
+                    )
+            
+            training_jobs_db = training_jobs_query.order_by(LLMTrainingJob.created_at.desc()).all()
+            
+            # Convert to dict format
+            training_jobs = []
+            for job in training_jobs_db:
+                job_dict = {
+                    'id': job.id,
+                    'name': job.name,
+                    'status': job.status,
+                    'progress': job.progress or 0,
+                    'created_at': job.created_at.isoformat() if job.created_at else None,
+                    'completed_at': job.end_time.isoformat() if job.end_time else None,
+                    'model_id': job.model_id,
+                    'accuracy': job.accuracy or 0.0,
+                    'loss': job.loss or 0.0,
+                    'current_epoch': job.current_epoch or 0,
+                    'total_epochs': job.total_epochs or 0,
+                    'evaluation_results': job.evaluation_results or {},
+                    'training_metrics': job.training_metrics or {},
+                    'error_message': job.error_message
+                }
+                training_jobs.append(job_dict)
+            
+            # Query real model tests from database
+            model_tests_query = LLMModelTest.query.filter_by(user_id=user_id)
+            
+            # Apply date range filter for model tests
+            if hasattr(config, 'date_range') and config.date_range:
+                if config.date_range.get('start'):
+                    model_tests_query = model_tests_query.filter(
+                        LLMModelTest.created_at >= config.date_range['start']
+                    )
+                if config.date_range.get('end'):
+                    model_tests_query = model_tests_query.filter(
+                        LLMModelTest.created_at <= config.date_range['end']
+                    )
+            
+            model_tests_db = model_tests_query.order_by(LLMModelTest.created_at.desc()).all()
+            
+            # Convert model tests to dict format
+            model_tests = []
+            for test in model_tests_db:
+                test_dict = {
+                    'id': test.id,
+                    'name': test.name,
+                    'status': test.status,
+                    'created_at': test.created_at.isoformat() if test.created_at else None,
+                    'completed_at': test.completed_at.isoformat() if test.completed_at else None,
+                    'training_job_id': test.training_job_id,
+                    'accuracy_score': test.accuracy_score or 0.0,
+                    'average_confidence': test.average_confidence or 0.0,
+                    'processed_submissions': test.processed_submissions or 0,
+                    'total_submissions': test.total_submissions or 0,
+                    'results': test.results or {},
+                    'error_message': test.error_message
+                }
+                model_tests.append(test_dict)
+            
+            # Calculate real analytics
+            completed_jobs = [job for job in training_jobs if job['status'] == 'completed']
+            failed_jobs = [job for job in training_jobs if job['status'] == 'failed']
+            
+            analytics = {
+                'total_jobs': len(training_jobs),
+                'completed_jobs': len(completed_jobs),
+                'failed_jobs': len(failed_jobs),
+                'success_rate': len(completed_jobs) / len(training_jobs) if training_jobs else 0.0,
+                'average_accuracy': sum(job['accuracy'] for job in completed_jobs) / len(completed_jobs) if completed_jobs else 0.0,
+                'total_model_tests': len(model_tests),
+                'completed_tests': len([test for test in model_tests if test['status'] == 'completed']),
+                'average_test_accuracy': sum(test['accuracy_score'] for test in model_tests if test['accuracy_score']) / len(model_tests) if model_tests else 0.0,
+                'total_submissions_tested': sum(test['processed_submissions'] for test in model_tests),
+                'models_used': list(set(job['model_id'] for job in training_jobs if job['model_id'])),
+                'date_range': {
+                    'start': min(job['created_at'] for job in training_jobs if job['created_at']) if training_jobs else None,
+                    'end': max(job['created_at'] for job in training_jobs if job['created_at']) if training_jobs else None
+                }
             }
-        ]
-        
-        model_tests = [
-            {
-                'id': '1',
-                'name': 'Sample Model Test',
-                'status': 'completed',
-                'results': {'accuracy': 0.85},
-                'created_at': datetime.now(timezone.utc).isoformat()
+            
+            return {
+                'metadata': {
+                    'report_id': str(uuid.uuid4()),
+                    'title': config.title,
+                    'description': config.description,
+                    'generated_at': datetime.now(timezone.utc).isoformat(),
+                    'user_id': user_id,
+                    'report_type': config.report_type
+                },
+                'training_jobs': training_jobs,
+                'model_tests': model_tests,
+                'analytics': analytics,
+                'summary': self._generate_summary(training_jobs, model_tests, analytics)
             }
-        ]
-        
-        analytics = {
-            'total_jobs': len(training_jobs),
-            'success_rate': 0.85,
-            'average_accuracy': 0.82
-        }
-        
-        return {
-            'metadata': {
-                'report_id': str(uuid.uuid4()),
-                'title': config.title,
-                'description': config.description,
-                'generated_at': datetime.now(timezone.utc).isoformat(),
-                'user_id': user_id
-            },
-            'training_jobs': training_jobs,
-            'model_tests': model_tests,
-            'analytics': analytics,
-            'summary': self._generate_summary(training_jobs, model_tests, analytics)
-        }
+            
+        except Exception as e:
+            logger.error(f"Error collecting report data: {e}")
+            # Fallback to minimal data structure
+            return {
+                'metadata': {
+                    'report_id': str(uuid.uuid4()),
+                    'title': config.title,
+                    'description': config.description,
+                    'generated_at': datetime.now(timezone.utc).isoformat(),
+                    'user_id': user_id,
+                    'error': str(e)
+                },
+                'training_jobs': [],
+                'model_tests': [],
+                'analytics': {
+                    'total_jobs': 0,
+                    'success_rate': 0.0,
+                    'average_accuracy': 0.0,
+                    'error': str(e)
+                },
+                'summary': {
+                    'overview': {'total_training_jobs': 0, 'total_model_tests': 0},
+                    'key_insights': [f"Error collecting data: {str(e)[:100]}"],
+                    'recommendations': ["Please check system logs and try again"]
+                }
+            }
     
     def _generate_summary(self, training_jobs: List[Dict], model_tests: List[Dict], 
                          analytics: Dict) -> Dict[str, Any]:

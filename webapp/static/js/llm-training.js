@@ -14,6 +14,349 @@ function getCSRFToken() {
   return '';
 }
 
+// Progress bounds checking to prevent overflow bugs
+function updateProgressSafely(jobId, progress) {
+  // Ensure progress is always between 0 and 100
+  const safeProgress = Math.max(0, Math.min(100, parseFloat(progress) || 0));
+  
+  // Additional check for the 2200% bug and other overflow issues
+  if (safeProgress > 100 || isNaN(safeProgress) || !isFinite(safeProgress)) {
+    console.warn(`Progress overflow detected for job ${jobId}: ${progress}% -> capped at 100%`);
+    return 100;
+  }
+  
+  // Check for negative progress
+  if (safeProgress < 0) {
+    console.warn(`Negative progress detected for job ${jobId}: ${progress}% -> set to 0%`);
+    return 0;
+  }
+  
+  return safeProgress;
+}
+
+// Enhanced error handling for API calls
+function handleApiError(error, operation) {
+  console.error(`Error in ${operation}:`, error);
+  
+  // Log to UI
+  addLogEntry('error', `Error in ${operation}: ${error.message}`);
+  
+  // Check for specific error types
+  if (error.name === 'TypeError' && error.message.includes('fetch')) {
+    showError(`Network error during ${operation}. Please check your connection.`);
+  } else if (error.message.includes('timeout')) {
+    showError(`Operation timed out during ${operation}. Please try again.`);
+  } else if (error.message.includes('401') || error.message.includes('403')) {
+    showError(`Authentication error during ${operation}. Please refresh the page.`);
+  } else if (error.message.includes('500')) {
+    showError(`Server error during ${operation}. Please try again later.`);
+  } else {
+    showError(`Error during ${operation}: ${error.message}`);
+  }
+}
+
+// ===== LOGGING SYSTEM =====
+
+// Log storage and management
+let trainingLogs = [];
+let maxLogEntries = 1000;
+let logUpdateInterval = null;
+
+// Log levels with colors and icons
+const LOG_LEVELS = {
+  info: { color: 'text-blue-600', bgColor: 'bg-blue-50', icon: 'ℹ️' },
+  success: { color: 'text-green-600', bgColor: 'bg-green-50', icon: '✅' },
+  warning: { color: 'text-yellow-600', bgColor: 'bg-yellow-50', icon: '⚠️' },
+  error: { color: 'text-red-600', bgColor: 'bg-red-50', icon: '❌' },
+  debug: { color: 'text-gray-600', bgColor: 'bg-gray-50', icon: '🔍' },
+  progress: { color: 'text-purple-600', bgColor: 'bg-purple-50', icon: '📊' }
+};
+
+// Add log entry
+function addLogEntry(level, message, details = null) {
+  const timestamp = new Date().toLocaleTimeString();
+  const logEntry = {
+    id: Date.now() + Math.random(),
+    timestamp,
+    level,
+    message,
+    details,
+    fullTimestamp: new Date().toISOString()
+  };
+  
+  trainingLogs.unshift(logEntry);
+  
+  // Limit log entries
+  if (trainingLogs.length > maxLogEntries) {
+    trainingLogs = trainingLogs.slice(0, maxLogEntries);
+  }
+  
+  // Update UI if log panel is visible
+  updateLogDisplay();
+  
+  // Also log to console for debugging
+  console.log(`[${level.toUpperCase()}] ${message}`, details || '');
+}
+
+// Update log display
+function updateLogDisplay() {
+  const logContainer = document.getElementById('training-logs-container');
+  if (!logContainer) return;
+  
+  const filteredLogs = getFilteredLogs();
+  
+  // Update log count
+  const logCountElement = document.getElementById('log-count');
+  if (logCountElement) {
+    logCountElement.textContent = `${filteredLogs.length} entries`;
+  }
+  
+  // Update statistics
+  updateLogStatistics();
+  
+  if (filteredLogs.length === 0) {
+    logContainer.innerHTML = `
+      <div class="text-center text-gray-500 py-8">
+        <div class="text-4xl mb-2">📋</div>
+        <div>No logs match your current filter. Try adjusting the filters above.</div>
+      </div>
+    `;
+    return;
+  }
+  
+  logContainer.innerHTML = filteredLogs.map(log => {
+    const levelConfig = LOG_LEVELS[log.level] || LOG_LEVELS.info;
+    const detailsHtml = log.details ? 
+      `<div class="mt-1 text-xs text-gray-500 font-mono bg-white p-2 rounded border">${JSON.stringify(log.details, null, 2)}</div>` : '';
+    
+    return `
+      <div class="log-entry ${levelConfig.bgColor} border-l-4 border-${log.level === 'error' ? 'red' : log.level === 'success' ? 'green' : log.level === 'warning' ? 'yellow' : log.level === 'progress' ? 'purple' : 'blue'}-400 p-3 mb-2 rounded-r">
+        <div class="flex items-start">
+          <span class="mr-2 text-sm">${levelConfig.icon}</span>
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <span class="${levelConfig.color} font-medium text-sm">${log.message}</span>
+              <span class="text-xs text-gray-400">${log.timestamp}</span>
+            </div>
+            ${detailsHtml}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  // Auto-scroll to bottom if user hasn't scrolled up
+  const shouldAutoScroll = logContainer.scrollTop + logContainer.clientHeight >= logContainer.scrollHeight - 10;
+  if (shouldAutoScroll) {
+    logContainer.scrollTop = logContainer.scrollHeight;
+  }
+}
+
+// Update log statistics
+function updateLogStatistics() {
+  const stats = {
+    info: 0,
+    success: 0,
+    warning: 0,
+    error: 0,
+    debug: 0,
+    progress: 0
+  };
+  
+  trainingLogs.forEach(log => {
+    if (stats.hasOwnProperty(log.level)) {
+      stats[log.level]++;
+    }
+  });
+  
+  // Update UI counters
+  Object.keys(stats).forEach(level => {
+    const element = document.getElementById(`${level}-count`);
+    if (element) {
+      element.textContent = stats[level];
+    }
+  });
+}
+
+// Get filtered logs based on current filter settings
+function getFilteredLogs() {
+  const levelFilter = document.getElementById('log-level-filter')?.value || 'all';
+  const searchFilter = document.getElementById('log-search-filter')?.value.toLowerCase() || '';
+  
+  return trainingLogs.filter(log => {
+    const levelMatch = levelFilter === 'all' || log.level === levelFilter;
+    const searchMatch = !searchFilter || 
+      log.message.toLowerCase().includes(searchFilter) ||
+      (log.details && JSON.stringify(log.details).toLowerCase().includes(searchFilter));
+    
+    return levelMatch && searchMatch;
+  });
+}
+
+// Clear logs
+function clearLogs() {
+  trainingLogs = [];
+  updateLogDisplay();
+  addLogEntry('info', 'Logs cleared');
+}
+
+// Export logs
+function exportLogs() {
+  const logsData = {
+    exportedAt: new Date().toISOString(),
+    totalEntries: trainingLogs.length,
+    logs: trainingLogs
+  };
+  
+  const blob = new Blob([JSON.stringify(logsData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `training-logs-${new Date().toISOString().split('T')[0]}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  addLogEntry('success', 'Logs exported successfully');
+}
+
+// Toggle log panel visibility
+function toggleLogPanel() {
+  const logPanel = document.getElementById('training-log-panel');
+  const toggleButton = document.getElementById('toggle-log-panel-btn');
+  
+  if (logPanel && toggleButton) {
+    const isVisible = !logPanel.classList.contains('hidden');
+    
+    if (isVisible) {
+      logPanel.classList.add('hidden');
+      toggleButton.textContent = 'Show Logs';
+      toggleButton.classList.remove('bg-blue-600');
+      toggleButton.classList.add('bg-gray-600');
+    } else {
+      logPanel.classList.remove('hidden');
+      toggleButton.textContent = 'Hide Logs';
+      toggleButton.classList.remove('bg-gray-600');
+      toggleButton.classList.add('bg-blue-600');
+      updateLogDisplay();
+    }
+  }
+}
+
+// Initialize logging system
+function initializeLogging() {
+  addLogEntry('info', 'Training log system initialized');
+  
+  // Set up log level filter
+  const levelFilter = document.getElementById('log-level-filter');
+  if (levelFilter) {
+    levelFilter.addEventListener('change', updateLogDisplay);
+  }
+  
+  // Set up search filter
+  const searchFilter = document.getElementById('log-search-filter');
+  if (searchFilter) {
+    searchFilter.addEventListener('input', debounce(updateLogDisplay, 300));
+  }
+}
+
+// Debounce function for search
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+// Enhanced training job monitoring with logging
+function monitorTrainingJob(jobId, jobName) {
+  addLogEntry('info', `Starting monitoring for training job: ${jobName}`, { jobId });
+  
+  const monitorInterval = setInterval(async () => {
+    try {
+      const response = await fetch(`/llm-training/api/training-jobs/${jobId}/status`);
+      const data = await response.json();
+      
+      if (data.success) {
+        const job = data.job;
+        const progress = updateProgressSafely(jobId, job.progress);
+        
+        // Log status changes
+        const previousStatus = window.lastJobStatus?.[jobId];
+        if (previousStatus !== job.status) {
+          addLogEntry('progress', `Job ${jobName} status changed: ${previousStatus || 'unknown'} → ${job.status}`, {
+            jobId,
+            previousStatus,
+            newStatus: job.status,
+            progress: progress
+          });
+          
+          // Store current status
+          if (!window.lastJobStatus) window.lastJobStatus = {};
+          window.lastJobStatus[jobId] = job.status;
+        }
+        
+        // Log progress updates (only significant changes)
+        const previousProgress = window.lastJobProgress?.[jobId] || 0;
+        if (Math.abs(progress - previousProgress) >= 5 || job.status === 'completed') {
+          addLogEntry('progress', `Job ${jobName} progress: ${progress}%`, {
+            jobId,
+            progress,
+            status: job.status,
+            epoch: job.current_epoch,
+            totalEpochs: job.total_epochs
+          });
+          
+          if (!window.lastJobProgress) window.lastJobProgress = {};
+          window.lastJobProgress[jobId] = progress;
+        }
+        
+        // Log completion or failure
+        if (job.status === 'completed') {
+          addLogEntry('success', `Training job ${jobName} completed successfully!`, {
+            jobId,
+            finalAccuracy: job.accuracy,
+            finalLoss: job.loss,
+            totalTime: job.training_time
+          });
+          clearInterval(monitorInterval);
+        } else if (job.status === 'failed') {
+          addLogEntry('error', `Training job ${jobName} failed`, {
+            jobId,
+            error: job.error_message
+          });
+          clearInterval(monitorInterval);
+        }
+        
+      } else {
+        addLogEntry('warning', `Failed to get status for job ${jobName}: ${data.error}`);
+      }
+      
+    } catch (error) {
+      addLogEntry('error', `Error monitoring job ${jobName}`, { error: error.message });
+    }
+  }, 2000); // Check every 2 seconds
+  
+  // Store interval for cleanup
+  if (!window.monitoringIntervals) window.monitoringIntervals = {};
+  window.monitoringIntervals[jobId] = monitorInterval;
+}
+
+// Stop monitoring a job
+function stopMonitoringJob(jobId) {
+  if (window.monitoringIntervals && window.monitoringIntervals[jobId]) {
+    clearInterval(window.monitoringIntervals[jobId]);
+    delete window.monitoringIntervals[jobId];
+    addLogEntry('info', `Stopped monitoring job ${jobId}`);
+  }
+}
+
 // Global configuration object
 let llmConfig = null;
 
@@ -26,6 +369,10 @@ let buttonStates = {
 };
 
 document.addEventListener('DOMContentLoaded', function() {
+  // Initialize logging system first
+  initializeLogging();
+  addLogEntry('info', 'LLM Training page loaded');
+  
   // Set up event listeners first (these should work regardless of configuration)
   setupEventListeners();
   
@@ -34,13 +381,25 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Then load configuration and initialize page
   loadConfiguration().then(() => {
+    addLogEntry('success', 'Configuration loaded successfully');
     loadTrainingGuides();
     loadTrainingJobs();
     loadTestSubmissions();
     loadReports();
   }).catch(error => {
     console.error('Failed to load configuration:', error);
+    addLogEntry('error', 'Failed to load system configuration', { error: error.message });
     showError('Failed to load system configuration');
+    // Set default configuration to prevent further errors
+    window.llmConfig = {
+      file_formats: {
+        training_guides: ['.pdf', '.doc', '.docx', '.txt', '.md']
+      },
+      limits: {
+        max_file_size_mb: 50
+      }
+    };
+    addLogEntry('warning', 'Using default configuration as fallback');
     // Still load data even if configuration fails
     loadTrainingGuides();
     loadTrainingJobs();
@@ -331,6 +690,7 @@ function uploadTrainingGuide() {
   const fileElement = document.getElementById('training-guide-file');
 
   if (!nameElement || !descriptionElement || !fileElement) {
+    addLogEntry('error', 'Training guide form elements not found');
     showError('Form elements not found');
     return;
   }
@@ -339,14 +699,21 @@ function uploadTrainingGuide() {
   const description = descriptionElement.value.trim();
   const file = fileElement.files[0];
 
+  addLogEntry('info', `Starting training guide upload: ${name}`, { 
+    fileName: file?.name, 
+    fileSize: file?.size 
+  });
+
   // Validation
   if (!name) {
+    addLogEntry('warning', 'Training guide upload failed: No name provided');
     showError('Please provide a name for the training guide');
     nameElement.focus();
     return;
   }
 
   if (!file) {
+    addLogEntry('warning', 'Training guide upload failed: No file selected');
     showError('Please select a file to upload');
     fileElement.focus();
     return;
@@ -355,6 +722,7 @@ function uploadTrainingGuide() {
   // Validate file format
   if (!validateFileFormat(file, 'training_guide')) {
     const allowedFormats = llmConfig?.file_formats?.training_guides || ['.pdf', '.doc', '.docx', '.txt', '.md'];
+    addLogEntry('warning', `Training guide upload failed: Invalid file format (${file.name})`, { allowedFormats });
     showError(`Invalid file format. Allowed formats: ${allowedFormats.join(', ')}`);
     return;
   }
@@ -362,6 +730,7 @@ function uploadTrainingGuide() {
   // Validate file size
   if (!validateFileSize(file)) {
     const maxSize = llmConfig?.limits?.max_file_size_mb || 50;
+    addLogEntry('warning', `Training guide upload failed: File too large (${getFormattedFileSize(file.size)})`, { maxSize });
     showError(`File size too large. Maximum allowed size: ${maxSize}MB. Your file: ${getFormattedFileSize(file.size)}`);
     return;
   }
@@ -372,6 +741,7 @@ function uploadTrainingGuide() {
   formData.append('file', file);
   formData.append('csrf_token', getCSRFToken());
 
+  addLogEntry('info', 'Uploading training guide to server...');
   showLoading();
   
   fetch('/llm-training/api/training-guides/upload', {
@@ -387,15 +757,18 @@ function uploadTrainingGuide() {
   .then(data => {
     hideLoading();
     if (data.success) {
+      addLogEntry('success', `Training guide uploaded successfully: ${name}`, { guideId: data.guide?.id });
       hideUploadTrainingGuideModal();
       loadTrainingGuides();
       showSuccess('Training guide uploaded successfully');
     } else {
+      addLogEntry('error', `Training guide upload failed: ${data.error || 'Unknown error'}`);
       showError(data.error || 'Failed to upload training guide');
     }
   })
   .catch(error => {
     hideLoading();
+    addLogEntry('error', `Training guide upload error: ${error.message}`);
     console.error('Upload error:', error);
     showError('Error uploading training guide: ' + error.message);
   });
@@ -711,13 +1084,20 @@ function loadTrainingJobs() {
       buttonStates.isTrainingInProgress = false;
       
       if (data.jobs && data.jobs.length > 0) {
+        addLogEntry('info', `Loaded ${data.jobs.length} training jobs`);
+        
         // Check for completed training jobs and training in progress
         data.jobs.forEach(job => {
           if (job.status === 'completed') {
             buttonStates.hasCompletedTrainingJob = true;
           }
-          if (job.status === 'training') {
+          // Check for any active training status (preparing, training, evaluating)
+          if (job.status === 'preparing' || job.status === 'training' || job.status === 'evaluating') {
             buttonStates.isTrainingInProgress = true;
+            // Start monitoring active jobs
+            if (!window.monitoringIntervals || !window.monitoringIntervals[job.id]) {
+              monitorTrainingJob(job.id, job.name);
+            }
           }
         });
         
@@ -735,9 +1115,17 @@ function loadTrainingJobs() {
               statusColor = 'bg-yellow-500';
               statusText = 'Pending';
               break;
+            case 'preparing':
+              statusColor = 'bg-yellow-600';
+              statusText = 'Preparing';
+              break;
             case 'training':
               statusColor = 'bg-blue-500';
               statusText = 'Training';
+              break;
+            case 'evaluating':
+              statusColor = 'bg-purple-500';
+              statusText = 'Evaluating';
               break;
             case 'completed':
               statusColor = 'bg-green-500';
@@ -753,10 +1141,10 @@ function loadTrainingJobs() {
               break;
           }
           
-          // Progress bar for training jobs
+          // Progress bar for active training jobs
           let progressBar = '';
-          if (job.status === 'training' && job.progress) {
-            const progress = Math.round(job.progress * 100);
+          if ((job.status === 'preparing' || job.status === 'training' || job.status === 'evaluating') && job.progress !== undefined) {
+            const progress = Math.round(job.progress || 0);
             progressBar = `
               <div class="mt-2">
                 <div class="flex justify-between text-xs text-gray-600 mb-1">
@@ -785,20 +1173,7 @@ function loadTrainingJobs() {
                 </button>
               </div>
             `;
-          } else if (job.status === 'preparing') {
-            actionButtons = `
-              <div class="mt-2 flex space-x-2">
-                <button onclick="cancelTrainingJob('${job.id}')" 
-                        class="px-3 py-1 bg-orange-600 text-white text-xs rounded hover:bg-orange-700">
-                  Cancel
-                </button>
-                <button onclick="deleteTrainingJob('${job.id}')" 
-                        class="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700">
-                  Delete
-                </button>
-              </div>
-            `;
-          } else if (job.status === 'training') {
+          } else if (job.status === 'preparing' || job.status === 'training' || job.status === 'evaluating') {
             actionButtons = `
               <button onclick="cancelTrainingJob('${job.id}')" 
                       class="mt-2 px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700">
@@ -1112,45 +1487,7 @@ function showError(message) {
   alert('Error: ' + message);
 }
 
-// Training job control functions
-function startTrainingJob(jobId) {
-  if (!confirm('Are you sure you want to start this training job?')) {
-    return;
-  }
-
-  showLoading();
-  
-  fetch(`/llm-training/api/training-jobs/${jobId}/start`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': getCSRFToken()
-    },
-    body: JSON.stringify({
-      csrf_token: getCSRFToken()
-    })
-  })
-  .then(response => {
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return response.json();
-  })
-  .then(data => {
-    hideLoading();
-    if (data.success) {
-      showSuccess('Training job started successfully');
-      loadTrainingJobs(); // Refresh the list
-    } else {
-      showError(data.error || 'Failed to start training job');
-    }
-  })
-  .catch(error => {
-    hideLoading();
-    console.error('Start training error:', error);
-    showError('Error starting training job: ' + error.message);
-  });
-}
+// Training job control functions - DUPLICATE REMOVED (using enhanced version below)
 
 function cancelTrainingJob(jobId) {
   if (!confirm('Are you sure you want to cancel this training job?')) {
@@ -1517,10 +1854,20 @@ function hideLoading() {
 // Training job management functions with button state updates
 function startTrainingJob(jobId) {
   if (!jobId) {
+    addLogEntry('error', 'Start training failed: Invalid job ID');
     showError('Invalid job ID');
     return;
   }
   
+  // Get job name for better logging
+  const jobName = getJobNameById(jobId) || `Job ${jobId.substring(0, 8)}`;
+  
+  if (!confirm(`Are you sure you want to start training job "${jobName}"?`)) {
+    addLogEntry('info', `Training job start cancelled by user: ${jobName}`);
+    return;
+  }
+  
+  addLogEntry('info', `Starting training job: ${jobName}`, { jobId });
   showLoading();
   
   fetch(`/llm-training/api/training-jobs/${jobId}/start`, {
@@ -1533,20 +1880,48 @@ function startTrainingJob(jobId) {
       csrf_token: getCSRFToken()
     })
   })
-  .then(response => response.json())
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    return response.json();
+  })
   .then(data => {
     hideLoading();
     if (data.success) {
+      addLogEntry('success', `Training job started successfully: ${jobName}`, { jobId });
       showSuccess('Training job started successfully');
-      loadTrainingJobs(); // This will update button states
+      
+      // Start monitoring the job immediately
+      monitorTrainingJob(jobId, jobName);
+      
+      // Refresh the job list to update UI
+      loadTrainingJobs();
     } else {
+      addLogEntry('error', `Failed to start training job: ${data.error || 'Unknown error'}`, { jobId });
       showError(data.error || 'Failed to start training job');
     }
   })
   .catch(error => {
     hideLoading();
-    showError('Error starting training job: ' + error.message);
+    addLogEntry('error', `Error starting training job: ${error.message}`, { jobId, error: error.message });
+    handleApiError(error, 'starting training job');
   });
+}
+
+// Helper function to get job name by ID for better logging
+function getJobNameById(jobId) {
+  // Try to find the job name from the current jobs list
+  const jobElements = document.querySelectorAll('[data-job-id]');
+  for (const element of jobElements) {
+    if (element.getAttribute('data-job-id') === jobId) {
+      const nameElement = element.querySelector('.job-name');
+      if (nameElement) {
+        return nameElement.textContent.trim();
+      }
+    }
+  }
+  return null;
 }
 
 function cancelTrainingJob(jobId) {

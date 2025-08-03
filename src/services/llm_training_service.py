@@ -31,6 +31,41 @@ class LLMTrainingService:
         self._error_handler = LLMTrainingErrorHandler()
         self._validation_service = ValidationService()
     
+    def _llm_call_with_timeout(self, llm_service, system_prompt: str, user_prompt: str, 
+                              temperature: float = 0.7, timeout_seconds: int = 25) -> str:
+        """Make LLM call with cross-platform timeout protection"""
+        import threading
+        
+        response = None
+        exception_occurred = None
+        
+        def llm_call():
+            nonlocal response, exception_occurred
+            try:
+                response = llm_service.generate_response(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    temperature=temperature
+                )
+            except Exception as e:
+                exception_occurred = e
+        
+        # Start LLM call in separate thread
+        llm_thread = threading.Thread(target=llm_call, daemon=True)
+        llm_thread.start()
+        
+        # Wait for completion or timeout
+        llm_thread.join(timeout=timeout_seconds)
+        
+        if llm_thread.is_alive():
+            logger.warning(f"LLM call timed out after {timeout_seconds} seconds")
+            raise TimeoutError(f"LLM call timed out after {timeout_seconds} seconds")
+        
+        if exception_occurred:
+            raise exception_occurred
+        
+        return response
+    
     def start_training_async(self, job_id: str) -> None:
         """Start training job asynchronously"""
         try:
@@ -583,7 +618,7 @@ class LLMTrainingService:
                         raise e
             
             # Update status to evaluating
-            self._update_job_status(job_id, 'evaluating', progress=100)
+            self._update_job_status(job_id, 'evaluating', progress=99)
             
             # Real evaluation phase
             try:
@@ -895,8 +930,10 @@ class LLMTrainingService:
         """Generate comprehensive report with real LLM analysis"""
         try:
             from src.services.consolidated_llm_service import ConsolidatedLLMService
+            from src.services.consolidated_grading_service import ConsolidatedGradingService
             
             llm_service = ConsolidatedLLMService()
+            grading_service = ConsolidatedGradingService()
             
             with self.app.app_context():
                 from src.database.models import LLMTrainingReport
@@ -1622,48 +1659,84 @@ class LLMTrainingService:
             
             # Use LLM to extract structured Q&A pairs from the marking guide
             system_prompt = """You are an expert at extracting question-answer pairs from marking guides and educational content.
-            
-Extract all question-answer pairs from the provided content. For each question, include:
-1. The question text
-2. The expected answer or marking criteria
-3. The maximum score/marks for the question
-4. Any specific grading rubric or criteria
 
-Format your response as a JSON array of objects with these fields:
-- question: The question text
-- expected_answer: The expected answer or key points
-- max_score: Maximum points for this question
-- grading_criteria: Specific criteria for grading
+Extract all question-answer pairs from the provided content. IMPORTANT: You must respond with valid JSON only.
 
-Only extract clear question-answer pairs. If content doesn't contain clear Q&A structure, return an empty array."""
+Format your response as a JSON array of objects with these exact fields:
+[
+  {
+    "question": "The question text",
+    "expected_answer": "The expected answer or key points",
+    "max_score": 10.0,
+    "grading_criteria": "Specific criteria for grading"
+  }
+]
 
-            user_prompt = f"Extract question-answer pairs from this marking guide content:\n\n{content}"
+Rules:
+- Return ONLY valid JSON, no other text
+- If no clear questions found, return: []
+- Use double quotes for all strings
+- max_score must be a number
+- Keep responses concise but complete"""
+
+            user_prompt = f"Extract question-answer pairs from this marking guide content (respond with JSON only):\n\n{content[:2000]}"  # Limit content to prevent timeouts
             
             try:
-                response = llm_service.generate_response(
+                # Add cross-platform timeout protection for LLM calls
+                import threading
+                import time
+                
+                response = None
+                exception_occurred = None
+                
+                # Use the new timeout-protected method
+                response = self._llm_call_with_timeout(
+                    llm_service=llm_service,
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
-                    temperature=0.1  # Low temperature for consistent extraction
+                    temperature=0.1,
+                    timeout_seconds=25
                 )
                 
-                # Fallback if response is empty or invalid
-                if not response or len(response.strip()) < 20:
+                # Clean and validate response
+                if not response or len(response.strip()) < 5:
                     logger.warning(f"LLM service returned empty or short response, using fallback")
-                    response = '[]'  # Empty JSON array as fallback
+                    return self._fallback_qa_extraction(content)
+                
+                # Try to extract JSON from response (in case LLM added extra text)
+                response = response.strip()
+                
+                # Find JSON array in response
+                start_idx = response.find('[')
+                end_idx = response.rfind(']')
+                
+                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                    json_str = response[start_idx:end_idx + 1]
+                else:
+                    # If no array found, try to find object and wrap it
+                    start_idx = response.find('{')
+                    end_idx = response.rfind('}')
+                    if start_idx != -1 and end_idx != -1:
+                        json_str = '[' + response[start_idx:end_idx + 1] + ']'
+                    else:
+                        raise ValueError("No valid JSON structure found in response")
                     
-            except Exception as llm_error:
-                logger.error(f"LLM service error in data preparation: {llm_error}")
-                response = '[]'  # Empty JSON array as fallback
+            except (TimeoutError, Exception) as llm_error:
+                logger.error(f"LLM service error in data preparation (timeout or other): {llm_error}")
+                return self._fallback_qa_extraction(content)
             
             # Parse the JSON response
             import json
             try:
-                qa_pairs = json.loads(response)
+                qa_pairs = json.loads(json_str)
                 if not isinstance(qa_pairs, list):
-                    qa_pairs = []
-            except json.JSONDecodeError:
-                logger.warning("Failed to parse LLM response as JSON, using fallback extraction")
-                qa_pairs = self._fallback_qa_extraction(content)
+                    logger.warning("LLM response was not a JSON array, using fallback")
+                    return self._fallback_qa_extraction(content)
+                    
+            except json.JSONDecodeError as json_error:
+                logger.warning(f"Failed to parse LLM response as JSON: {json_error}, using fallback extraction")
+                logger.debug(f"Failed JSON response: {response[:200]}...")
+                return self._fallback_qa_extraction(content)
             
             # Validate and clean the extracted pairs
             validated_pairs = []
@@ -1688,41 +1761,126 @@ Only extract clear question-answer pairs. If content doesn't contain clear Q&A s
         import re
         
         qa_pairs = []
+        logger.info("Using fallback Q&A extraction method")
         
-        # Look for common question patterns
+        # Clean content first
+        content = content.strip()
+        if not content:
+            logger.warning("Empty content provided for Q&A extraction")
+            return self._create_generic_qa_pairs(content)
+        
+        # Look for common question patterns with improved regex
         question_patterns = [
-            r'(?:Question|Q)\s*(\d+)[:\.]?\s*(.+?)(?=(?:Question|Q)\s*\d+|Answer|A\s*\d+|$)',
-            r'(\d+)\.\s*(.+?)(?=\d+\.|$)',
-            r'([A-Z][^.!?]*\?)',  # Sentences ending with question marks
+            # Pattern 1: "Question 1:" or "Q1:" followed by text
+            r'(?:Question|Q)\s*(\d+)[:\.]?\s*(.+?)(?=(?:Question|Q)\s*\d+|Answer|A\s*\d+|\n\n|$)',
+            # Pattern 2: Numbered items "1." followed by text
+            r'^(\d+)\.\s*(.+?)(?=^\d+\.|$)',
+            # Pattern 3: Lines ending with question marks
+            r'^([^.!?]*\?)\s*$',
+            # Pattern 4: "Part A", "Section 1", etc.
+            r'(?:Part|Section)\s*([A-Z\d]+)[:\.]?\s*(.+?)(?=(?:Part|Section)\s*[A-Z\d]+|\n\n|$)',
         ]
         
-        for i, pattern in enumerate(question_patterns):
-            matches = re.findall(pattern, content, re.DOTALL | re.IGNORECASE)
-            if matches:
-                for j, match in enumerate(matches[:10]):  # Limit to 10 questions
-                    if isinstance(match, tuple):
-                        question_text = match[-1].strip()
-                    else:
-                        question_text = match.strip()
+        for pattern_idx, pattern in enumerate(question_patterns):
+            try:
+                flags = re.DOTALL | re.IGNORECASE
+                if pattern_idx == 1 or pattern_idx == 2:  # For numbered and question mark patterns
+                    flags |= re.MULTILINE
+                
+                matches = re.findall(pattern, content, flags)
+                
+                if matches:
+                    logger.info(f"Found {len(matches)} matches with pattern {pattern_idx + 1}")
                     
-                    if len(question_text) > 10:  # Only include substantial questions
-                        qa_pairs.append({
-                            'id': f"fallback_q_{i}_{j+1}",
-                            'question': question_text,
-                            'expected_answer': "Answer criteria to be determined during training",
-                            'max_score': 10.0,
-                            'grading_criteria': "Standard grading criteria"
-                        })
-                break
+                    for j, match in enumerate(matches[:8]):  # Limit to 8 questions to prevent overload
+                        if isinstance(match, tuple):
+                            if len(match) >= 2:
+                                question_num = match[0] if match[0] else str(j + 1)
+                                question_text = match[1].strip()
+                            else:
+                                question_num = str(j + 1)
+                                question_text = match[0].strip()
+                        else:
+                            question_num = str(j + 1)
+                            question_text = match.strip()
+                        
+                        # Clean and validate question text
+                        question_text = re.sub(r'\s+', ' ', question_text)  # Normalize whitespace
+                        question_text = question_text[:500]  # Limit length
+                        
+                        if len(question_text) > 15:  # Only include substantial questions
+                            # Estimate score based on question complexity
+                            estimated_score = min(20.0, max(5.0, len(question_text.split()) * 0.5))
+                            
+                            qa_pairs.append({
+                                'id': f"fallback_q_{pattern_idx}_{j+1}",
+                                'question': question_text,
+                                'expected_answer': f"Expected answer for question {question_num}. Refer to course materials and provide detailed explanation.",
+                                'max_score': estimated_score,
+                                'grading_criteria': f"Accuracy, completeness, and clarity of response to question {question_num}"
+                            })
+                    
+                    if qa_pairs:  # If we found questions with this pattern, stop trying other patterns
+                        break
+                        
+            except re.error as regex_error:
+                logger.warning(f"Regex error in pattern {pattern_idx + 1}: {regex_error}")
+                continue
+            except Exception as pattern_error:
+                logger.warning(f"Error processing pattern {pattern_idx + 1}: {pattern_error}")
+                continue
         
-        # If no patterns found, create a generic training sample
+        # If no patterns found, create generic training samples based on content
+        if not qa_pairs:
+            logger.info("No question patterns found, creating generic training samples")
+            qa_pairs = self._create_generic_qa_pairs(content)
+        
+        logger.info(f"Fallback extraction created {len(qa_pairs)} Q&A pairs")
+        return qa_pairs
+    
+    def _create_generic_qa_pairs(self, content: str) -> List[Dict[str, Any]]:
+        """Create generic Q&A pairs when no specific patterns are found"""
+        qa_pairs = []
+        
+        # Split content into chunks for multiple training samples
+        content_chunks = []
+        if len(content) > 1000:
+            # Split by paragraphs or sentences
+            paragraphs = content.split('\n\n')
+            current_chunk = ""
+            
+            for paragraph in paragraphs:
+                if len(current_chunk + paragraph) < 800:
+                    current_chunk += paragraph + "\n\n"
+                else:
+                    if current_chunk.strip():
+                        content_chunks.append(current_chunk.strip())
+                    current_chunk = paragraph + "\n\n"
+            
+            if current_chunk.strip():
+                content_chunks.append(current_chunk.strip())
+        else:
+            content_chunks = [content]
+        
+        # Create Q&A pairs from chunks
+        for i, chunk in enumerate(content_chunks[:5]):  # Limit to 5 chunks
+            if len(chunk.strip()) > 50:  # Only use substantial chunks
+                qa_pairs.append({
+                    'id': f"generic_q_{i+1}",
+                    'question': f"Based on the provided content, explain the key concepts and provide a comprehensive analysis of section {i+1}.",
+                    'expected_answer': chunk[:400] + "..." if len(chunk) > 400 else chunk,
+                    'max_score': min(25.0, max(10.0, len(chunk.split()) * 0.1)),
+                    'grading_criteria': f"Demonstrates understanding of key concepts, provides accurate information, and shows analytical thinking for section {i+1}"
+                })
+        
+        # Ensure we have at least one Q&A pair
         if not qa_pairs:
             qa_pairs.append({
-                'id': "generic_q_1",
-                'question': "Analyze the content and provide a comprehensive response",
-                'expected_answer': content[:500] + "..." if len(content) > 500 else content,
-                'max_score': 100.0,
-                'grading_criteria': "Comprehensive analysis and understanding"
+                'id': "minimal_q_1",
+                'question': "Provide a comprehensive response based on the training material.",
+                'expected_answer': "Comprehensive response demonstrating understanding of the material.",
+                'max_score': 15.0,
+                'grading_criteria': "Accuracy, completeness, and demonstration of understanding"
             })
         
         return qa_pairs
@@ -1737,10 +1895,12 @@ Only extract clear question-answer pairs. If content doesn't contain clear Q&A s
             grading_service = ConsolidatedGradingService()
             
             epoch_start_time = time.time()
+            epoch_timeout = 300  # 5 minutes per epoch maximum
             
-            # Sample a subset of training data for this epoch
+            # Sample a larger subset of training data for better training
             import random
-            epoch_samples = random.sample(training_data, min(len(training_data), 5))  # Limit to 5 samples per epoch
+            sample_size = min(len(training_data), max(10, len(training_data) // 3))  # At least 10 samples or 1/3 of data
+            epoch_samples = random.sample(training_data, sample_size)
             
             epoch_results = {
                 'epoch': epoch + 1,
@@ -1762,20 +1922,45 @@ Only extract clear question-answer pairs. If content doesn't contain clear Q&A s
                     test_prompt = f"Question: {sample['question']}\n\nProvide a comprehensive answer:"
                     
                     try:
-                        # Add timeout and error handling for LLM calls
-                        generated_response = llm_service.generate_response(
-                            system_prompt="You are an expert answering exam questions. Provide detailed, accurate responses.",
-                            user_prompt=test_prompt,
-                            temperature=0.3
-                        )
+                        # Add timeout and error handling for LLM calls with retry mechanism
+                        max_retries = 3
+                        retry_count = 0
+                        generated_response = None
                         
-                        # Fallback if response is empty or too short
+                        while retry_count < max_retries and not generated_response:
+                            try:
+                                # Check for timeout
+                                if time.time() - sample_start_time > 30:  # 30 second timeout per sample
+                                    raise TimeoutError("Sample processing timeout")
+                                
+                                generated_response = llm_service.generate_response(
+                                    system_prompt="You are an expert answering exam questions. Provide detailed, accurate responses.",
+                                    user_prompt=test_prompt,
+                                    temperature=0.3
+                                )
+                                
+                                # Validate response quality
+                                if generated_response and len(generated_response.strip()) >= 10:
+                                    break
+                                else:
+                                    generated_response = None
+                                    retry_count += 1
+                                    if retry_count < max_retries:
+                                        time.sleep(1)  # Brief delay before retry
+                                        
+                            except Exception as retry_error:
+                                retry_count += 1
+                                logger.warning(f"LLM service retry {retry_count} failed for sample {i}: {retry_error}")
+                                if retry_count < max_retries:
+                                    time.sleep(2 ** retry_count)  # Exponential backoff
+                        
+                        # Final fallback if all retries failed
                         if not generated_response or len(generated_response.strip()) < 10:
-                            generated_response = f"Sample response for: {sample['question'][:100]}..."
+                            generated_response = f"Training sample response for: {sample['question'][:100]}... [Generated after {retry_count} retries]"
                             
                     except Exception as llm_error:
-                        logger.warning(f"LLM service error for sample {i}: {llm_error}")
-                        generated_response = f"Error generating response for: {sample['question'][:100]}..."
+                        logger.error(f"Critical LLM service error for sample {i}: {llm_error}")
+                        generated_response = f"Error generating response for: {sample['question'][:100]}... [Error: {str(llm_error)[:50]}]"
                     
                     # Grade the generated response against the expected answer
                     grading_result = grading_service.grade_submission(
@@ -1800,10 +1985,18 @@ Only extract clear question-answer pairs. If content doesn't contain clear Q&A s
                     epoch_results['processing_times'].append(processing_time)
                     epoch_results['samples_processed'] += 1
                     
-                    # Update progress (only update every 10 samples to avoid excessive updates)
-                    if (i + 1) % 10 == 0 or i == len(epoch_samples) - 1:
-                        epoch_progress = (epoch + (i + 1) / len(epoch_samples)) / total_epochs
-                        sample_progress = min(epoch_progress * 100, 100.0)  # Cap at 100%
+                    # Update progress with strict bounds checking
+                    if (i + 1) % 5 == 0 or i == len(epoch_samples) - 1:  # Update more frequently for better UX
+                        # Calculate progress more carefully to prevent overflow
+                        epoch_completion = (i + 1) / len(epoch_samples)  # 0.0 to 1.0
+                        overall_epoch_progress = (epoch + epoch_completion) / total_epochs  # 0.0 to 1.0
+                        sample_progress = max(0.0, min(overall_epoch_progress * 100.0, 99.0))  # Cap at 99% during training
+                        
+                        # Additional safety check
+                        if sample_progress > 99.0:
+                            sample_progress = 99.0
+                            logger.warning(f"Progress capped at 99% for job {job_id} to prevent overflow")
+                        
                         self._update_job_status(job_id, 'training', progress=sample_progress)
                     
                 except Exception as sample_error:

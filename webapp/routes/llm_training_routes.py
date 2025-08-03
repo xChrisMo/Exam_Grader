@@ -929,35 +929,47 @@ def start_training_job(job_id):
         
         logger.info(f"Job found: {job.name}, current status: {job.status}")
         
-        # Validate job status
+        # Validate job status and handle stuck jobs
         valid_start_statuses = ['pending', 'failed', 'cancelled', 'created']
         
-        # Handle stuck jobs in preparing status
-        if job.status == 'preparing':
-            # Check if job has been stuck in preparing for more than 2 minutes (reduced from 5)
-            if job.updated_at:
-                time_since_update = datetime.now(timezone.utc) - job.updated_at.replace(tzinfo=timezone.utc)
-                if time_since_update.total_seconds() > 120:  # 2 minutes (reduced threshold)
-                    logger.warning(f"Job {job_id} stuck in preparing status for {time_since_update.total_seconds()} seconds, resetting to pending")
-                    job.status = 'pending'
-                    job.error_message = 'Job was stuck in preparing status and has been reset'
+        # Handle stuck jobs in various statuses
+        if job.status in ['preparing', 'training', 'evaluating']:
+            # Check if job has been stuck for more than 5 minutes
+            time_threshold = 300  # 5 minutes in seconds
+            current_time = datetime.now(timezone.utc)
+            
+            # Check against updated_at or created_at
+            last_update_time = job.updated_at or job.created_at
+            if last_update_time:
+                if last_update_time.tzinfo is None:
+                    last_update_time = last_update_time.replace(tzinfo=timezone.utc)
+                
+                time_since_update = current_time - last_update_time
+                
+                if time_since_update.total_seconds() > time_threshold:
+                    logger.warning(f"Job {job_id} stuck in {job.status} status for {time_since_update.total_seconds()} seconds, resetting to failed")
+                    job.status = 'failed'
+                    job.error_message = f'Job was stuck in {job.status} status for {time_since_update.total_seconds():.0f} seconds and has been reset. You can now restart it.'
+                    job.end_time = current_time
                     db.session.commit()
                 else:
-                    # Allow restart if job has been preparing for less than 2 minutes but user explicitly requests it
-                    logger.info(f"Job {job_id} is in preparing status for {time_since_update.total_seconds()} seconds, allowing restart")
-                    job.status = 'pending'
-                    job.error_message = 'Job restarted from preparing status by user request'
+                    # Job is still within reasonable time, but user wants to restart
+                    logger.info(f"Job {job_id} is in {job.status} status for {time_since_update.total_seconds()} seconds, allowing force restart")
+                    job.status = 'failed'
+                    job.error_message = f'Job was force-restarted from {job.status} status by user request'
+                    job.end_time = current_time
                     db.session.commit()
             else:
-                # No updated_at timestamp, assume it's stuck
-                logger.warning(f"Job {job_id} in preparing status with no timestamp, resetting to pending")
-                job.status = 'pending'
-                job.error_message = 'Job was stuck in preparing status and has been reset'
+                # No timestamp, assume it's stuck
+                logger.warning(f"Job {job_id} in {job.status} status with no timestamp, resetting to failed")
+                job.status = 'failed'
+                job.error_message = f'Job was stuck in {job.status} status and has been reset'
+                job.end_time = current_time
                 db.session.commit()
         elif job.status not in valid_start_statuses:
             return jsonify({
                 'success': False, 
-                'error': f'Job cannot be started from status "{job.status}". Valid statuses: {", ".join(valid_start_statuses)}'
+                'error': f'Job cannot be started from status "{job.status}". Valid statuses: {", ".join(valid_start_statuses)}. If the job is stuck, try refreshing the page.'
             }), 400
         
         # Pre-start validation
@@ -1100,11 +1112,29 @@ def delete_training_job(job_id):
         if not job:
             return jsonify({'success': False, 'error': 'Training job not found'}), 404
         
-        if job.status in ['training']:
-            return jsonify({
-                'success': False, 
-                'error': 'Cannot delete a running training job. Please cancel it first.'
-            }), 400
+        # Check if job is actually running or just stuck
+        if job.status in ['training', 'preparing', 'evaluating']:
+            # Check if job has been stuck for more than 5 minutes
+            time_threshold = 300  # 5 minutes in seconds
+            current_time = datetime.now(timezone.utc)
+            
+            last_update_time = job.updated_at or job.created_at
+            if last_update_time:
+                if last_update_time.tzinfo is None:
+                    last_update_time = last_update_time.replace(tzinfo=timezone.utc)
+                
+                time_since_update = current_time - last_update_time
+                
+                if time_since_update.total_seconds() > time_threshold:
+                    # Job is stuck, allow deletion
+                    logger.warning(f"Allowing deletion of stuck job {job_id} in {job.status} status for {time_since_update.total_seconds()} seconds")
+                else:
+                    # Job might still be running
+                    return jsonify({
+                        'success': False, 
+                        'error': f'Cannot delete a job in {job.status} status. Please wait for it to complete or try again in a few minutes if it appears stuck.'
+                    }), 400
+            # If no timestamp, assume it's stuck and allow deletion
         
         job_name = job.name
         
@@ -1122,6 +1152,60 @@ def delete_training_job(job_id):
     except Exception as e:
         logger.error(f"Error deleting training job {job_id}: {e}")
         db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@llm_training_bp.route('/api/training-jobs/<job_id>/status')
+@login_required
+def get_training_job_status(job_id):
+    """Get detailed status of a specific training job"""
+    try:
+        job = LLMTrainingJob.query.filter_by(
+            id=job_id, 
+            user_id=current_user.id
+        ).first()
+        
+        if not job:
+            return jsonify({'success': False, 'error': 'Training job not found'}), 404
+        
+        # Get detailed job information
+        job_data = {
+            'id': job.id,
+            'name': job.name,
+            'status': job.status,
+            'progress': job.progress or 0,
+            'current_epoch': job.current_epoch or 0,
+            'total_epochs': job.total_epochs or 0,
+            'accuracy': job.accuracy or 0.0,
+            'loss': job.loss or 0.0,
+            'validation_accuracy': job.validation_accuracy or 0.0,
+            'model_id': job.model_id,
+            'dataset_id': job.dataset_id,
+            'created_at': job.created_at.isoformat() if job.created_at else None,
+            'start_time': job.start_time.isoformat() if job.start_time else None,
+            'end_time': job.end_time.isoformat() if job.end_time else None,
+            'error_message': job.error_message,
+            'evaluation_results': job.evaluation_results or {},
+            'training_metrics': job.training_metrics or {},
+            'health_metrics': job.health_metrics or {}
+        }
+        
+        # Add runtime calculation if training is active
+        if job.start_time and job.status in ['preparing', 'training', 'evaluating']:
+            from datetime import datetime, timezone
+            current_time = datetime.now(timezone.utc)
+            start_time = job.start_time
+            if start_time.tzinfo is None:
+                start_time = start_time.replace(tzinfo=timezone.utc)
+            runtime_seconds = (current_time - start_time).total_seconds()
+            job_data['runtime_minutes'] = runtime_seconds / 60
+        
+        return jsonify({
+            'success': True,
+            'job': job_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting training job status {job_id}: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @llm_training_bp.route('/api/reports')

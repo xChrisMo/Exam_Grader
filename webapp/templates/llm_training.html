@@ -206,6 +206,88 @@
         <!-- Testing results will be loaded here -->
       </div>
     </div>
+
+    <!-- Training Logs Section -->
+    <div class="bg-white rounded-lg shadow p-6 mt-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-medium text-gray-900">Training Logs</h3>
+        <div class="flex items-center space-x-2">
+          <button id="toggle-log-panel-btn" onclick="toggleLogPanel()" class="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-blue-600 transition-colors">
+            Show Logs
+          </button>
+          <button onclick="clearLogs()" class="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors">
+            Clear
+          </button>
+          <button onclick="exportLogs()" class="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors">
+            Export
+          </button>
+        </div>
+      </div>
+      
+      <!-- Log Panel (Initially Hidden) -->
+      <div id="training-log-panel" class="hidden">
+        <!-- Log Controls -->
+        <div class="flex flex-wrap items-center gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
+          <div class="flex items-center space-x-2">
+            <label for="log-level-filter" class="text-sm font-medium text-gray-700">Level:</label>
+            <select id="log-level-filter" class="border border-gray-300 rounded px-2 py-1 text-sm">
+              <option value="all">All</option>
+              <option value="info">Info</option>
+              <option value="success">Success</option>
+              <option value="warning">Warning</option>
+              <option value="error">Error</option>
+              <option value="debug">Debug</option>
+              <option value="progress">Progress</option>
+            </select>
+          </div>
+          
+          <div class="flex items-center space-x-2">
+            <label for="log-search-filter" class="text-sm font-medium text-gray-700">Search:</label>
+            <input id="log-search-filter" type="text" placeholder="Filter logs..." class="border border-gray-300 rounded px-2 py-1 text-sm w-48">
+          </div>
+          
+          <div class="text-sm text-gray-500">
+            <span id="log-count">0 entries</span>
+          </div>
+        </div>
+        
+        <!-- Log Container -->
+        <div id="training-logs-container" class="max-h-96 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50">
+          <div class="text-center text-gray-500 py-8">
+            <div class="text-4xl mb-2">📋</div>
+            <div>No logs yet. Start a training job to see real-time progress.</div>
+          </div>
+        </div>
+        
+        <!-- Log Statistics -->
+        <div class="mt-4 grid grid-cols-2 md:grid-cols-6 gap-4 text-center">
+          <div class="bg-blue-50 p-2 rounded">
+            <div class="text-xs text-blue-600 font-medium">INFO</div>
+            <div id="info-count" class="text-lg font-bold text-blue-800">0</div>
+          </div>
+          <div class="bg-green-50 p-2 rounded">
+            <div class="text-xs text-green-600 font-medium">SUCCESS</div>
+            <div id="success-count" class="text-lg font-bold text-green-800">0</div>
+          </div>
+          <div class="bg-yellow-50 p-2 rounded">
+            <div class="text-xs text-yellow-600 font-medium">WARNING</div>
+            <div id="warning-count" class="text-lg font-bold text-yellow-800">0</div>
+          </div>
+          <div class="bg-red-50 p-2 rounded">
+            <div class="text-xs text-red-600 font-medium">ERROR</div>
+            <div id="error-count" class="text-lg font-bold text-red-800">0</div>
+          </div>
+          <div class="bg-gray-50 p-2 rounded">
+            <div class="text-xs text-gray-600 font-medium">DEBUG</div>
+            <div id="debug-count" class="text-lg font-bold text-gray-800">0</div>
+          </div>
+          <div class="bg-purple-50 p-2 rounded">
+            <div class="text-xs text-purple-600 font-medium">PROGRESS</div>
+            <div id="progress-count" class="text-lg font-bold text-purple-800">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
