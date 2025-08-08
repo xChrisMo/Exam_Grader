@@ -1,0 +1,339 @@
+{% extends "layout.html" %}
+
+{% block title %}Training Sessions{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* Custom styles for training sessions */
+  .session-card {
+    transition: all 0.2s ease;
+  }
+  
+  .session-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  }
+  
+  .status-indicator {
+    animation: pulse 2s infinite;
+  }
+  
+  .status-indicator.completed {
+    animation: none;
+  }
+  
+  .progress-ring {
+    transform: rotate(-90deg);
+  }
+  
+  .progress-ring-circle {
+    transition: stroke-dashoffset 0.35s;
+    transform-origin: 50% 50%;
+  }
+  
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 py-6">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    
+    <!-- Page Header -->
+    <div class="mb-8">
+      <div class="md:flex md:items-center md:justify-between">
+        <div class="flex-1 min-w-0">
+          <h1 class="text-3xl font-bold leading-7 text-gray-900 sm:text-4xl sm:truncate">
+            Training Sessions
+          </h1>
+          <p class="mt-2 text-sm text-gray-600">
+            Manage your LLM training sessions and view their progress
+          </p>
+        </div>
+        <div class="mt-4 flex md:mt-0 md:ml-4">
+          <a href="{{ url_for('training.dashboard') }}" 
+             class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            New Training Session
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Model Banner -->
+    {% if active_session %}
+    <div class="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div class="flex items-center">
+        <div class="flex-shrink-0">
+          <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+          </svg>
+        </div>
+        <div class="ml-3 flex-1">
+          <h3 class="text-sm font-medium text-blue-800">Active Training Model</h3>
+          <p class="mt-1 text-sm text-blue-700">
+            "{{ active_session.name }}" is currently active and being used in the main application
+          </p>
+        </div>
+        <div class="ml-3">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+            Active Model
+          </span>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Filter and Search -->
+    <div class="mb-6 bg-white shadow rounded-lg">
+      <div class="p-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label for="search-sessions" class="block text-sm font-medium text-gray-700">Search Sessions</label>
+            <input type="text" id="search-sessions" name="search-sessions" 
+                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                   placeholder="Search by name...">
+          </div>
+          <div>
+            <label for="filter-status" class="block text-sm font-medium text-gray-700">Status</label>
+            <select id="filter-status" name="filter-status" 
+                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+              <option value="">All Statuses</option>
+              <option value="created">Created</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+          <div>
+            <label for="sort-by" class="block text-sm font-medium text-gray-700">Sort By</label>
+            <select id="sort-by" name="sort-by" 
+                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+              <option value="created_at_desc">Newest First</option>
+              <option value="created_at_asc">Oldest First</option>
+              <option value="name_asc">Name A-Z</option>
+              <option value="name_desc">Name Z-A</option>
+            </select>
+          </div>
+          <div class="flex items-end">
+            <button type="button" id="apply-filters" 
+                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+              Apply Filters
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sessions Grid -->
+    <div id="sessions-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      
+      {% if sessions %}
+        {% for session in sessions %}
+        <div class="session-card bg-white overflow-hidden shadow rounded-lg" data-session-id="{{ session.id }}">
+          <div class="p-6">
+            <!-- Session Header -->
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex-1 min-w-0">
+                <h3 class="text-lg font-medium text-gray-900 truncate">{{ session.name }}</h3>
+                <p class="text-sm text-gray-500">{{ session.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+              </div>
+              <div class="flex-shrink-0 ml-4">
+                {% if session.status == 'completed' %}
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    <svg class="-ml-0.5 mr-1.5 h-2 w-2 text-green-400" fill="currentColor" viewBox="0 0 8 8">
+                      <circle cx="4" cy="4" r="3"/>
+                    </svg>
+                    Completed
+                  </span>
+                {% elif session.status == 'in_progress' %}
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <svg class="-ml-0.5 mr-1.5 h-2 w-2 text-blue-400 status-indicator" fill="currentColor" viewBox="0 0 8 8">
+                      <circle cx="4" cy="4" r="3"/>
+                    </svg>
+                    In Progress
+                  </span>
+                {% elif session.status == 'failed' %}
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                    <svg class="-ml-0.5 mr-1.5 h-2 w-2 text-red-400" fill="currentColor" viewBox="0 0 8 8">
+                      <circle cx="4" cy="4" r="3"/>
+                    </svg>
+                    Failed
+                  </span>
+                {% else %}
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                    <svg class="-ml-0.5 mr-1.5 h-2 w-2 text-gray-400" fill="currentColor" viewBox="0 0 8 8">
+                      <circle cx="4" cy="4" r="3"/>
+                    </svg>
+                    Created
+                  </span>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Progress Bar (for in-progress sessions) -->
+            {% if session.status == 'in_progress' %}
+            <div class="mb-4">
+              <div class="flex justify-between text-sm font-medium text-gray-900 mb-2">
+                <span>{{ session.current_step or 'Processing...' }}</span>
+                <span>{{ session.progress_percentage or 0 }}%</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                     style="width: {{ session.progress_percentage or 0 }}%"></div>
+              </div>
+            </div>
+            {% endif %}
+
+            <!-- Session Metrics -->
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <div class="text-center">
+                <div class="text-2xl font-bold text-gray-900">{{ session.total_guides or 0 }}</div>
+                <div class="text-xs text-gray-500">Guides</div>
+              </div>
+              <div class="text-center">
+                <div class="text-2xl font-bold text-gray-900">{{ session.total_questions or 0 }}</div>
+                <div class="text-xs text-gray-500">Questions</div>
+              </div>
+            </div>
+
+            <!-- Confidence Score -->
+            {% if session.average_confidence %}
+            <div class="mb-4">
+              <div class="flex justify-between text-sm font-medium text-gray-700 mb-1">
+                <span>Average Confidence</span>
+                <span>{{ "%.1f"|format(session.average_confidence * 100) }}%</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="h-2 rounded-full transition-all duration-300 
+                     {% if session.average_confidence >= 0.8 %}bg-green-500
+                     {% elif session.average_confidence >= 0.6 %}bg-yellow-500
+                     {% else %}bg-red-500{% endif %}" 
+                     style="width: {{ session.average_confidence * 100 }}%"></div>
+              </div>
+            </div>
+            {% endif %}
+
+            <!-- Action Buttons -->
+            <div class="flex space-x-2">
+              {% if session.status == 'completed' %}
+                <button type="button" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        onclick="viewReport('{{ session.id }}')">
+                  View Report
+                </button>
+                {% if not session.is_active %}
+                <button type="button" class="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        onclick="setActiveModel('{{ session.id }}')">
+                  Set Active
+                </button>
+                {% else %}
+                <button type="button" class="flex-1 bg-gray-400 text-white text-xs font-medium py-2 px-3 rounded-md cursor-not-allowed" disabled>
+                  Active Model
+                </button>
+                {% endif %}
+              {% elif session.status == 'in_progress' %}
+                <button type="button" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        onclick="viewProgress('{{ session.id }}')">
+                  View Progress
+                </button>
+                <button type="button" class="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                        onclick="stopTraining('{{ session.id }}')">
+                  Stop
+                </button>
+              {% elif session.status == 'failed' %}
+                <button type="button" class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white text-xs font-medium py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                        onclick="retryTraining('{{ session.id }}')">
+                  Retry
+                </button>
+                <button type="button" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                        onclick="viewLogs('{{ session.id }}')">
+                  View Logs
+                </button>
+              {% else %}
+                <button type="button" class="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        onclick="startTraining('{{ session.id }}')">
+                  Start Training
+                </button>
+                <button type="button" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                        onclick="editSession('{{ session.id }}')">
+                  Edit
+                </button>
+              {% endif %}
+            </div>
+
+            <!-- Delete Button -->
+            <div class="mt-3 pt-3 border-t border-gray-200">
+              <button type="button" class="w-full text-red-600 hover:text-red-800 text-xs font-medium py-1 focus:outline-none"
+                      onclick="deleteSession('{{ session.id }}', '{{ session.name }}')">
+                Delete Session
+              </button>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <!-- Empty State -->
+        <div class="col-span-full">
+          <div class="text-center py-12">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No training sessions</h3>
+            <p class="mt-1 text-sm text-gray-500">Get started by creating your first training session.</p>
+            <div class="mt-6">
+              <a href="{{ url_for('training.dashboard') }}" 
+                 class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                New Training Session
+              </a>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+  <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+    <div class="mt-3 text-center">
+      <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+        <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+        </svg>
+      </div>
+      <h3 class="text-lg font-medium text-gray-900 mt-2">Delete Training Session</h3>
+      <div class="mt-2 px-7 py-3">
+        <p class="text-sm text-gray-500">
+          Are you sure you want to delete "<span id="delete-session-name"></span>"? 
+          This action cannot be undone and will remove all associated data.
+        </p>
+      </div>
+      <div class="items-center px-4 py-3">
+        <button id="confirm-delete" type="button" 
+                class="px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md w-24 mr-2 hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300">
+          Delete
+        </button>
+        <button id="cancel-delete" type="button" 
+                class="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-24 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/training-sessions.js') }}?v={{ range(1000, 9999) | random }}"></script>
+{% endblock %}

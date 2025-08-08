@@ -7,16 +7,15 @@ persistent data storage replacing the session-based storage system.
 
 # Import core database components
 from .models import (
-    db,
-    User,
-    MarkingGuide,
-    Submission,
-    Mapping,
     GradingResult,
     GradingSession,
-    Session
+    Mapping,
+    MarkingGuide,
+    Session,
+    Submission,
+    User,
+    db,
 )
-
 from .utils import DatabaseUtils
 
 # Import migration manager

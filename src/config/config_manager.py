@@ -1,13 +1,14 @@
-from pathlib import Path
 import os
-
 from dataclasses import dataclass
-from dotenv import load_dotenv
+from pathlib import Path
 from typing import List
+
+from dotenv import load_dotenv
 
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
+
 
 @dataclass
 class Config:
@@ -38,7 +39,10 @@ class Config:
         """Validate configuration after initialization."""
         # API key is optional - app can run without OCR service
         if not self.handwriting_ocr_api_key:
-            logger.warning("HandwritingOCR API key not configured - OCR service will be disabled")
+            logger.warning(
+                "HandwritingOCR API key not configured - OCR service will be disabled"
+            )
+
 
 class ConfigManager:
     """Manages application configuration."""
@@ -102,7 +106,7 @@ class ConfigManager:
 
         self._initialized = True
         logger.debug("Configuration initialized successfully")
-        
+
     def reload(self):
         """Force reload of configuration from environment variables."""
         logger.info("Reloading configuration from environment variables")

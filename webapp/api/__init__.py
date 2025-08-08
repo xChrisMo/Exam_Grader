@@ -6,14 +6,12 @@ status reporting, and monitoring capabilities.
 """
 
 from flask import Blueprint
-from .unified_api import unified_api_bp
-from .status_api import status_api_bp
+
 from .error_handlers import APIErrorHandler
+from .status_api import status_api_bp
+from .unified_api import unified_api_bp
 
 # Create the main API blueprint that other modules can import
-api_bp = Blueprint('api', __name__, url_prefix='/llm-training/api')
+api_bp = Blueprint("api", __name__, url_prefix="/api")
 
-# Import documents routes after creating api_bp to avoid circular imports
-from . import documents
-
-__all__ = ['unified_api_bp', 'status_api_bp', 'api_bp', 'APIErrorHandler']
+__all__ = ["unified_api_bp", "status_api_bp", "api_bp", "APIErrorHandler"]

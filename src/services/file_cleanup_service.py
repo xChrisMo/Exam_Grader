@@ -3,16 +3,16 @@ File Cleanup Service for Exam Grader Application.
 
 Provides automated cleanup of temporary files, old uploads, and orphaned files.
 """
-from typing import Any, Dict
 
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any, Dict
 
-from src.database.models import MarkingGuide, Submission, db
 from utils.logger import logger
+
 
 @dataclass
 class CleanupStats:
@@ -34,6 +34,7 @@ class CleanupStats:
             "errors": self.errors,
             "duration_seconds": round(self.duration_seconds, 2),
         }
+
 
 class FileCleanupService:
     """
@@ -92,7 +93,7 @@ class FileCleanupService:
             self._stop_cleanup.set()
             self._cleanup_thread.join(timeout=30)
             logger.info("Stopped scheduled file cleanup")
-    
+
     def stop(self):
         """Stop the file cleanup service (alias for stop_scheduled_cleanup)."""
         self.stop_scheduled_cleanup()
@@ -151,11 +152,15 @@ class FileCleanupService:
         total_stats.duration_seconds = time.time() - start_time
 
         if total_stats.files_deleted > 0 or total_stats.errors > 0:
-            logger.info(f"Cleanup completed: {total_stats.files_deleted} files deleted, "
-                       f"{total_stats.bytes_freed_mb:.1f}MB freed"
-                       f"{', ' + str(total_stats.errors) + ' errors' if total_stats.errors > 0 else ''}")
+            logger.info(
+                f"Cleanup completed: {total_stats.files_deleted} files deleted, "
+                f"{total_stats.bytes_freed_mb:.1f}MB freed"
+                f"{', ' + str(total_stats.errors) + ' errors' if total_stats.errors > 0 else ''}"
+            )
         else:
-            logger.debug(f"Cleanup completed: no files to clean (scanned {total_stats.files_scanned} files)")
+            logger.debug(
+                f"Cleanup completed: no files to clean (scanned {total_stats.files_scanned} files)"
+            )
 
         return total_stats
 
@@ -221,7 +226,9 @@ class FileCleanupService:
             Cleanup statistics
         """
         stats = CleanupStats()
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=self.upload_file_max_age_days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(
+            days=self.upload_file_max_age_days
+        )
 
         logger.info(
             f"Cleaning up uploads older than {self.upload_file_max_age_days} days"

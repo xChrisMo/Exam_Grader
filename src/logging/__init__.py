@@ -7,44 +7,36 @@ like structured logging, log aggregation, and performance monitoring.
 
 try:
     from .comprehensive_logger import (
+        AuditLogger,
         ComprehensiveLogger,
-        LogLevel,
         LogContext,
+        LogLevel,
         PerformanceLogger,
         SecurityLogger,
-        AuditLogger,
         get_logger,
-        setup_logging
+        setup_logging,
     )
-
-    from .log_aggregator import (
-        LogAggregator,
-        LogMetrics,
-        LogAnalytics
-    )
-
-    from .structured_logger import (
-        StructuredLogger,
-        StructuredLogEntry,
-        StructuredFormatter,
-        StructuredLoggerManager,
-        get_structured_logger,
-        setup_structured_logging
-    )
-
-    from .flask_integration import (
-        FlaskLoggingIntegration,
-        setup_flask_logging,
-        log_route,
-        log_performance
-    )
-    
     from .config import (
         LoggingConfiguration,
-        setup_application_logging,
         get_application_logger,
         get_application_structured_logger,
-        get_logging_metrics
+        get_logging_metrics,
+        setup_application_logging,
+    )
+    from .flask_integration import (
+        FlaskLoggingIntegration,
+        log_performance,
+        log_route,
+        setup_flask_logging,
+    )
+    from .log_aggregator import LogAggregator, LogAnalytics, LogMetrics
+    from .structured_logger import (
+        StructuredFormatter,
+        StructuredLogEntry,
+        StructuredLogger,
+        StructuredLoggerManager,
+        get_structured_logger,
+        setup_structured_logging,
     )
 except ImportError as e:
     ComprehensiveLogger = None
@@ -73,42 +65,42 @@ except ImportError as e:
     get_application_logger = None
     get_application_structured_logger = None
     get_logging_metrics = None
-    
+
     import warnings
+
     warnings.warn(f"Some logging components unavailable: {e}", ImportWarning)
 
+
 def configure_logging(
-    app_name: str = 'exam_grader',
-    log_level: str = 'INFO',
-    log_dir: str = 'logs',
-    **kwargs
+    app_name: str = "exam_grader",
+    log_level: str = "INFO",
+    log_dir: str = "logs",
+    **kwargs,
 ):
     """Configure comprehensive logging system.
-    
+
     Args:
         app_name: Application name
         log_level: Logging level
         log_dir: Log directory
         **kwargs: Additional configuration options
-    
+
     Returns:
         LoggingConfiguration instance
     """
     if setup_application_logging:
         return setup_application_logging(
-            app_name=app_name,
-            log_level=log_level,
-            log_dir=log_dir,
-            **kwargs
+            app_name=app_name, log_level=log_level, log_dir=log_dir, **kwargs
         )
     return None
 
+
 def get_comprehensive_logger(name: str = None):
     """Get a comprehensive logger instance.
-    
+
     Args:
         name: Logger name
-    
+
     Returns:
         ComprehensiveLogger instance or None
     """
@@ -118,12 +110,13 @@ def get_comprehensive_logger(name: str = None):
         return get_logger(name)
     return None
 
+
 def get_json_logger(name: str = None):
     """Get a structured JSON logger instance.
-    
+
     Args:
         name: Logger name
-    
+
     Returns:
         StructuredLogger instance or None
     """
@@ -133,45 +126,41 @@ def get_json_logger(name: str = None):
         return get_structured_logger(name)
     return None
 
+
 __all__ = [
     # Core logging
-    'ComprehensiveLogger',
-    'LogLevel',
-    'LogContext',
-    'PerformanceLogger',
-    'SecurityLogger',
-    'AuditLogger',
-    'get_logger',
-    'setup_logging',
-    
+    "ComprehensiveLogger",
+    "LogLevel",
+    "LogContext",
+    "PerformanceLogger",
+    "SecurityLogger",
+    "AuditLogger",
+    "get_logger",
+    "setup_logging",
     # Log aggregation
-    'LogAggregator',
-    'LogMetrics',
-    'LogAnalytics',
-    
+    "LogAggregator",
+    "LogMetrics",
+    "LogAnalytics",
     # Structured logging
-    'StructuredLogger',
-    'StructuredLogEntry',
-    'StructuredFormatter',
-    'StructuredLoggerManager',
-    'get_structured_logger',
-    'setup_structured_logging',
-    
+    "StructuredLogger",
+    "StructuredLogEntry",
+    "StructuredFormatter",
+    "StructuredLoggerManager",
+    "get_structured_logger",
+    "setup_structured_logging",
     # Flask integration
-    'FlaskLoggingIntegration',
-    'setup_flask_logging',
-    'log_route',
-    'log_performance',
-    
+    "FlaskLoggingIntegration",
+    "setup_flask_logging",
+    "log_route",
+    "log_performance",
     # Configuration
-    'LoggingConfiguration',
-    'setup_application_logging',
-    'get_application_logger',
-    'get_application_structured_logger',
-    'get_logging_metrics',
-    
+    "LoggingConfiguration",
+    "setup_application_logging",
+    "get_application_logger",
+    "get_application_structured_logger",
+    "get_logging_metrics",
     # Convenience functions
-    'configure_logging',
-    'get_comprehensive_logger',
-    'get_json_logger'
+    "configure_logging",
+    "get_comprehensive_logger",
+    "get_json_logger",
 ]

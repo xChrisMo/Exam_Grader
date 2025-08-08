@@ -17,6 +17,7 @@ from utils.logger import logger
 
 try:
     import PyPDF2
+
     PDF_SUPPORT = True
 except ImportError:
     PDF_SUPPORT = False
@@ -24,6 +25,7 @@ except ImportError:
 
 try:
     from docx import Document
+
     DOCX_SUPPORT = True
 except ImportError:
     DOCX_SUPPORT = False
@@ -31,10 +33,12 @@ except ImportError:
 
 try:
     import pytesseract
+
     TESSERACT_SUPPORT = True
 except ImportError:
     TESSERACT_SUPPORT = False
     logger.info("pytesseract not available - fallback OCR will be limited")
+
 
 class OCRServiceError(Exception):
     """Exception raised for errors in the OCR service."""
@@ -60,6 +64,7 @@ class OCRServiceError(Exception):
             return f"[{self.error_code}] {self.message}"
         return self.message
 
+
 class ConsolidatedOCRService(BaseService):
     """Consolidated OCR service with unified functionality, caching, and performance optimization."""
 
@@ -73,14 +78,14 @@ class ConsolidatedOCRService(BaseService):
             **kwargs: Additional configuration options
         """
         super().__init__("consolidated_ocr_service", **kwargs)
-        
+
         # API configuration
         self.api_key = api_key or os.getenv("HANDWRITING_OCR_API_KEY")
         self.base_url = base_url or os.getenv(
             "HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3"
         )
         self.allow_no_key = allow_no_key
-        
+
         # Headers setup
         if self.api_key:
             self.headers = {
@@ -89,36 +94,40 @@ class ConsolidatedOCRService(BaseService):
             }
         else:
             self.headers = {"Accept": "application/json"}
-        
+
         # Cache configuration
         self.cache = {}
         self.cache_timestamps = {}
-        self.cache_ttl = kwargs.get('cache_ttl', 86400 * 7)  # 7 days
-        self.max_cache_size = kwargs.get('max_cache_size', 1000)
-        
+        self.cache_ttl = kwargs.get("cache_ttl", 86400 * 7)  # 7 days
+        self.max_cache_size = kwargs.get("max_cache_size", 1000)
+
         # Performance configuration
-        self.max_workers = min(kwargs.get('max_workers', 2), os.cpu_count() or 1)  # Reduced workers to avoid rate limits
-        self.request_timeout = kwargs.get('request_timeout', 30)
-        self.max_retries = kwargs.get('max_retries', 5)  # Reduced retries
-        self.retry_delay = kwargs.get('retry_delay', 5)  # Increased delay
-        self.max_wait_time = kwargs.get('max_wait_time', 120)  # Increased wait time
-        
+        self.max_workers = min(
+            kwargs.get("max_workers", 2), os.cpu_count() or 1
+        )  # Reduced workers to avoid rate limits
+        self.request_timeout = kwargs.get("request_timeout", 30)
+        self.max_retries = kwargs.get("max_retries", 5)  # Reduced retries
+        self.retry_delay = kwargs.get("retry_delay", 5)  # Increased delay
+        self.max_wait_time = kwargs.get("max_wait_time", 120)  # Increased wait time
+
         # Rate limiting configuration
-        self.rate_limit_delay = kwargs.get('rate_limit_delay', 2)  # Delay between requests
+        self.rate_limit_delay = kwargs.get(
+            "rate_limit_delay", 2
+        )  # Delay between requests
         self.last_request_time = 0
-        
+
         # Image processing configuration
-        self.max_image_size = kwargs.get('max_image_size', 2048)
-        self.image_quality = kwargs.get('image_quality', 95)
-        self.contrast_enhancement = kwargs.get('contrast_enhancement', 1.2)
-        self.sharpness_enhancement = kwargs.get('sharpness_enhancement', 1.1)
-        
+        self.max_image_size = kwargs.get("max_image_size", 2048)
+        self.image_quality = kwargs.get("image_quality", 95)
+        self.contrast_enhancement = kwargs.get("contrast_enhancement", 1.2)
+        self.sharpness_enhancement = kwargs.get("sharpness_enhancement", 1.1)
+
         # Initialize service
         self._initialized = self.initialize()
 
     def initialize(self) -> bool:
         """Initialize the OCR service.
-        
+
         Returns:
             bool: True if initialization successful, False otherwise
         """
@@ -127,12 +136,14 @@ class ConsolidatedOCRService(BaseService):
                 logger.error("HandwritingOCR API key not configured")
                 self.metrics.status = ServiceStatus.UNHEALTHY
                 return False
-            
+
             if not self.api_key:
-                logger.info("OCR service initialized without API key - service will be disabled")
+                logger.info(
+                    "OCR service initialized without API key - service will be disabled"
+                )
                 self.metrics.status = ServiceStatus.DEGRADED
                 return True
-            
+
             # Test API connectivity
             if self.is_available():
                 logger.info("Consolidated OCR service initialized successfully")
@@ -141,10 +152,12 @@ class ConsolidatedOCRService(BaseService):
                 self.update_custom_metric("max_workers", self.max_workers)
                 return True
             else:
-                logger.info("OCR service initialized with API key - connectivity will be tested on first use")
+                logger.info(
+                    "OCR service initialized with API key - connectivity will be tested on first use"
+                )
                 self.metrics.status = ServiceStatus.HEALTHY
                 return True
-                
+
         except Exception as e:
             logger.error(f"Failed to initialize OCR service: {str(e)}")
             self.metrics.status = ServiceStatus.UNHEALTHY
@@ -152,16 +165,16 @@ class ConsolidatedOCRService(BaseService):
 
     def health_check(self) -> bool:
         """Perform health check for the OCR service.
-        
+
         Returns:
             bool: True if service is healthy, False otherwise
         """
         try:
             if not self.api_key:
                 return self.allow_no_key
-            
+
             return self.is_available()
-            
+
         except Exception as e:
             logger.error(f"OCR service health check failed: {str(e)}")
             return False
@@ -171,7 +184,9 @@ class ConsolidatedOCRService(BaseService):
         try:
             # Clear cache
             cleared_count = self.clear_cache()
-            logger.info(f"OCR service cleanup completed. Cleared {cleared_count} cache entries.")
+            logger.info(
+                f"OCR service cleanup completed. Cleared {cleared_count} cache entries."
+            )
         except Exception as e:
             logger.error(f"Error during OCR service cleanup: {str(e)}")
 
@@ -186,7 +201,9 @@ class ConsolidatedOCRService(BaseService):
                 return False
 
             # The actual connectivity will be tested when making real requests
-            logger.debug("OCR service configuration validated - API key and URL present")
+            logger.debug(
+                "OCR service configuration validated - API key and URL present"
+            )
             return True
 
             # Optional: Test API connectivity (commented out to avoid startup delays)
@@ -241,7 +258,7 @@ class ConsolidatedOCRService(BaseService):
     def _get_file_hash(self, file_path: Union[str, Path]) -> str:
         """Generate hash for file content to use as cache key."""
         hasher = hashlib.sha256()
-        with open(file_path, 'rb') as f:
+        with open(file_path, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
                 hasher.update(chunk)
         return hasher.hexdigest()
@@ -253,8 +270,10 @@ class ConsolidatedOCRService(BaseService):
                 timestamp = self.cache_timestamps.get(file_hash, 0)
                 if time.time() - timestamp < self.cache_ttl:
                     logger.info(f"Cache hit for file hash: {file_hash[:8]}...")
-                    self.update_custom_metric("cache_hits", 
-                        self.metrics.custom_metrics.get("cache_hits", 0) + 1)
+                    self.update_custom_metric(
+                        "cache_hits",
+                        self.metrics.custom_metrics.get("cache_hits", 0) + 1,
+                    )
                     return self.cache[file_hash]
                 else:
                     # Remove expired entry
@@ -263,8 +282,9 @@ class ConsolidatedOCRService(BaseService):
         except Exception as e:
             logger.warning(f"Cache retrieval error: {e}")
 
-        self.update_custom_metric("cache_misses", 
-            self.metrics.custom_metrics.get("cache_misses", 0) + 1)
+        self.update_custom_metric(
+            "cache_misses", self.metrics.custom_metrics.get("cache_misses", 0) + 1
+        )
         return None
 
     def _cache_result(self, file_hash: str, result: str) -> None:
@@ -300,8 +320,8 @@ class ConsolidatedOCRService(BaseService):
         """Optimize image for better OCR accuracy and speed."""
         try:
             with Image.open(image_path) as img:
-                if img.mode != 'RGB':
-                    img = img.convert('RGB')
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
 
                 if max(img.size) > self.max_image_size:
                     ratio = self.max_image_size / max(img.size)
@@ -319,8 +339,10 @@ class ConsolidatedOCRService(BaseService):
                 img = img.filter(ImageFilter.MedianFilter(size=3))
 
                 # Save optimized image
-                optimized_path = str(image_path).replace('.', '_optimized.')
-                img.save(optimized_path, 'JPEG', quality=self.image_quality, optimize=True)
+                optimized_path = str(image_path).replace(".", "_optimized.")
+                img.save(
+                    optimized_path, "JPEG", quality=self.image_quality, optimize=True
+                )
 
                 logger.info(f"Image preprocessed and saved to: {optimized_path}")
                 return optimized_path
@@ -352,13 +374,13 @@ class ConsolidatedOCRService(BaseService):
                 if isinstance(file, (str, Path)):
                     file_path = Path(file)
                     self._validate_file(file_path)
-                    
+
                     # Check cache first
                     file_hash = self._get_file_hash(file_path)
                     cached_result = self._get_cached_result(file_hash)
                     if cached_result:
                         return cached_result
-                    
+
                     optimized_path = self._preprocess_image(file_path)
                     file_to_process = optimized_path
                 else:
@@ -384,11 +406,17 @@ class ConsolidatedOCRService(BaseService):
                     if file_hash:
                         self._cache_result(file_hash, text)
 
-                    logger.info(f"OCR completed successfully. Extracted {len(text)} characters.")
+                    logger.info(
+                        f"OCR completed successfully. Extracted {len(text)} characters."
+                    )
                     return text
 
                 finally:
-                    if optimized_path and optimized_path != str(file) and os.path.exists(optimized_path):
+                    if (
+                        optimized_path
+                        and optimized_path != str(file)
+                        and os.path.exists(optimized_path)
+                    ):
                         try:
                             os.remove(optimized_path)
                         except OSError:
@@ -436,14 +464,18 @@ class ConsolidatedOCRService(BaseService):
                         "Please try with a different image or contact support."
                     )
 
-                logger.info(f"OCR processing in progress (attempt {attempt+1}/{self.max_retries}) - Elapsed: {elapsed_time:.0f}s")
+                logger.info(
+                    f"OCR processing in progress (attempt {attempt+1}/{self.max_retries}) - Elapsed: {elapsed_time:.0f}s"
+                )
 
                 # Exponential backoff
-                actual_delay = min(self.retry_delay * (1.2 ** attempt), 10)
+                actual_delay = min(self.retry_delay * (1.2**attempt), 10)
                 time.sleep(actual_delay)
 
             except requests.exceptions.RequestException as e:
-                logger.warning(f"Network error checking status (attempt {attempt+1}): {str(e)}")
+                logger.warning(
+                    f"Network error checking status (attempt {attempt+1}): {str(e)}"
+                )
                 if attempt == self.max_retries - 1:
                     raise OCRServiceError(
                         f"Network error during OCR processing: {str(e)}. "
@@ -452,7 +484,9 @@ class ConsolidatedOCRService(BaseService):
                 time.sleep(self.retry_delay)
         else:
             elapsed_time = time.time() - start_time
-            logger.error(f"OCR processing timed out after {self.max_retries} attempts ({elapsed_time:.1f}s)")
+            logger.error(
+                f"OCR processing timed out after {self.max_retries} attempts ({elapsed_time:.1f}s)"
+            )
             raise OCRServiceError(
                 f"OCR processing timed out after {self.max_retries} attempts. "
                 "The service may be experiencing high load. Please try again later."
@@ -462,12 +496,12 @@ class ConsolidatedOCRService(BaseService):
         """Enforce rate limiting between API requests."""
         current_time = time.time()
         time_since_last_request = current_time - self.last_request_time
-        
+
         if time_since_last_request < self.rate_limit_delay:
             sleep_time = self.rate_limit_delay - time_since_last_request
             logger.debug(f"Rate limiting: sleeping for {sleep_time:.2f} seconds")
             time.sleep(sleep_time)
-        
+
         self.last_request_time = time.time()
 
     def _upload_document(self, file: Union[str, Path, BinaryIO]) -> str:
@@ -527,11 +561,9 @@ class ConsolidatedOCRService(BaseService):
         """Get document processing status."""
         # Enforce rate limiting
         self._enforce_rate_limit()
-        
+
         response = requests.get(
-            f"{self.base_url}/documents/{document_id}", 
-            headers=self.headers, 
-            timeout=10
+            f"{self.base_url}/documents/{document_id}", headers=self.headers, timeout=10
         )
 
         if response.status_code != 200:
@@ -546,7 +578,7 @@ class ConsolidatedOCRService(BaseService):
         """Get OCR results for a document."""
         # Enforce rate limiting
         self._enforce_rate_limit()
-        
+
         response = requests.get(
             f"{self.base_url}/documents/{document_id}.json",
             headers=self.headers,
@@ -561,24 +593,32 @@ class ConsolidatedOCRService(BaseService):
         try:
             result = response.json()
         except json.JSONDecodeError as e:
-            logger.error(f"JSON decoding error in OCR result: {e}. Raw response: {response.text}")
+            logger.error(
+                f"JSON decoding error in OCR result: {e}. Raw response: {response.text}"
+            )
             raise OCRServiceError("Invalid JSON response from OCR service") from e
 
         if "results" in result:
             text = ""
             for i, page in enumerate(result.get("results", [])):
                 if "transcript" in page:
-                    page_text = page.get("transcript", "") or ""  # Ensure it's never None
+                    page_text = (
+                        page.get("transcript", "") or ""
+                    )  # Ensure it's never None
                     if not page_text:
                         logger.warning(f"Page {i+1} has no transcript content.")
                     text += page_text + "\n"
                 else:
-                    logger.warning(f"Page {i+1} missing 'transcript' key in OCR result. Page content: {page}")
+                    logger.warning(
+                        f"Page {i+1} missing 'transcript' key in OCR result. Page content: {page}"
+                    )
             return text.strip()
         else:
             raise OCRServiceError("Unexpected response format from OCR service")
 
-    def extract_text_from_multiple_images_parallel(self, file_paths: List[Union[str, Path]]) -> List[Tuple[str, str, Optional[str]]]:
+    def extract_text_from_multiple_images_parallel(
+        self, file_paths: List[Union[str, Path]]
+    ) -> List[Tuple[str, str, Optional[str]]]:
         """Extract text from multiple images in parallel.
 
         Returns:
@@ -605,7 +645,9 @@ class ConsolidatedOCRService(BaseService):
 
         return results
 
-    def _extract_with_error_handling(self, file_path: Union[str, Path]) -> Tuple[str, Optional[str]]:
+    def _extract_with_error_handling(
+        self, file_path: Union[str, Path]
+    ) -> Tuple[str, Optional[str]]:
         """Extract text with error handling for parallel processing."""
         try:
             text = self.extract_text_from_image(file_path)
@@ -619,7 +661,9 @@ class ConsolidatedOCRService(BaseService):
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.extract_text_from_image, file_path)
 
-    async def extract_text_from_multiple_images_async(self, file_paths: List[Union[str, Path]]) -> List[Tuple[str, str, Optional[str]]]:
+    async def extract_text_from_multiple_images_async(
+        self, file_paths: List[Union[str, Path]]
+    ) -> List[Tuple[str, str, Optional[str]]]:
         """Extract text from multiple images asynchronously."""
         tasks = [self.extract_text_async(path) for path in file_paths]
         results = []
@@ -648,7 +692,7 @@ class ConsolidatedOCRService(BaseService):
                     expired_entries += 1
 
             # Calculate approximate memory usage
-            total_size = sum(len(text.encode('utf-8')) for text in self.cache.values())
+            total_size = sum(len(text.encode("utf-8")) for text in self.cache.values())
             memory_mb = total_size / (1024 * 1024)
 
             return {
@@ -660,7 +704,7 @@ class ConsolidatedOCRService(BaseService):
                 "max_cache_size": self.max_cache_size,
                 "cache_ttl_hours": self.cache_ttl / 3600,
                 "cache_hits": self.metrics.custom_metrics.get("cache_hits", 0),
-                "cache_misses": self.metrics.custom_metrics.get("cache_misses", 0)
+                "cache_misses": self.metrics.custom_metrics.get("cache_misses", 0),
             }
         except Exception as e:
             return {"cache_enabled": True, "error": str(e)}
@@ -680,64 +724,66 @@ class ConsolidatedOCRService(BaseService):
 
     def extract_text(self, file_path: Union[str, Path]) -> Dict[str, Any]:
         """Extract text from a file with fallback support for multiple formats.
-        
+
         Args:
             file_path: Path to the file
-            
+
         Returns:
             Dictionary with 'text' and 'confidence' keys
         """
         try:
             file_path = Path(file_path)
             ext = file_path.suffix.lower()
-            
+
             # Try format-specific extraction first
-            if ext == '.pdf':
+            if ext == ".pdf":
                 text = self._extract_text_from_pdf(file_path)
                 if text.strip():
-                    return {'text': text, 'confidence': 0.9}
-            elif ext in ['.docx', '.doc']:
+                    return {"text": text, "confidence": 0.9}
+            elif ext in [".docx", ".doc"]:
                 text = self._extract_text_from_docx(file_path)
                 if text.strip():
-                    return {'text': text, 'confidence': 0.95}
-            elif ext == '.txt':
+                    return {"text": text, "confidence": 0.95}
+            elif ext == ".txt":
                 text = self._extract_text_from_txt(file_path)
                 if text.strip():
-                    return {'text': text, 'confidence': 1.0}
-            
-            if ext in ['.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif']:
+                    return {"text": text, "confidence": 1.0}
+
+            if ext in [".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".gif"]:
                 text = self._extract_with_fallback_ocr(file_path)
-                return {'text': text, 'confidence': 0.8 if text.strip() else 0.0}
-            
+                return {"text": text, "confidence": 0.8 if text.strip() else 0.0}
+
             text = self._extract_with_fallback_ocr(file_path)
-            return {'text': text, 'confidence': 0.6 if text.strip() else 0.0}
-            
+            return {"text": text, "confidence": 0.6 if text.strip() else 0.0}
+
         except Exception as e:
             logger.error(f"Text extraction failed for {file_path}: {e}")
-            return {'text': '', 'confidence': 0.0}
+            return {"text": "", "confidence": 0.0}
 
     def _extract_text_from_pdf(self, file_path: Path) -> str:
         """Extract text from PDF file."""
         if not PDF_SUPPORT:
             logger.warning("PDF support not available, falling back to OCR")
             return ""
-        
+
         try:
             text = ""
-            with open(file_path, 'rb') as file:
+            with open(file_path, "rb") as file:
                 reader = PyPDF2.PdfReader(file)
                 for page in reader.pages:
                     page_text = page.extract_text()
                     if page_text:
                         text += page_text + "\n"
-            
+
             if text.strip():
-                logger.info(f"Successfully extracted text from PDF: {len(text)} characters")
+                logger.info(
+                    f"Successfully extracted text from PDF: {len(text)} characters"
+                )
                 return text.strip()
             else:
                 logger.info("PDF text extraction returned empty, may need OCR")
                 return ""
-                
+
         except Exception as e:
             logger.warning(f"PDF text extraction failed: {e}")
             return ""
@@ -747,16 +793,18 @@ class ConsolidatedOCRService(BaseService):
         if not DOCX_SUPPORT:
             logger.warning("DOCX support not available")
             return ""
-        
+
         try:
             doc = Document(file_path)
             text = ""
             for paragraph in doc.paragraphs:
                 text += paragraph.text + "\n"
-            
-            logger.info(f"Successfully extracted text from DOCX: {len(text)} characters")
+
+            logger.info(
+                f"Successfully extracted text from DOCX: {len(text)} characters"
+            )
             return text.strip()
-            
+
         except Exception as e:
             logger.warning(f"DOCX text extraction failed: {e}")
             return ""
@@ -764,26 +812,28 @@ class ConsolidatedOCRService(BaseService):
     def _extract_text_from_txt(self, file_path: Path) -> str:
         """Extract text from plain text file."""
         try:
-            with open(file_path, 'r', encoding='utf-8') as file:
+            with open(file_path, "r", encoding="utf-8") as file:
                 text = file.read()
-            
+
             logger.info(f"Successfully read text file: {len(text)} characters")
             return text
-            
+
         except UnicodeDecodeError:
             # Try different encodings
-            for encoding in ['latin-1', 'cp1252', 'iso-8859-1']:
+            for encoding in ["latin-1", "cp1252", "iso-8859-1"]:
                 try:
-                    with open(file_path, 'r', encoding=encoding) as file:
+                    with open(file_path, "r", encoding=encoding) as file:
                         text = file.read()
-                    logger.info(f"Successfully read text file with {encoding}: {len(text)} characters")
+                    logger.info(
+                        f"Successfully read text file with {encoding}: {len(text)} characters"
+                    )
                     return text
                 except UnicodeDecodeError:
                     continue
-            
+
             logger.error(f"Could not decode text file with any encoding")
             return ""
-            
+
         except Exception as e:
             logger.error(f"Text file reading failed: {e}")
             return ""
@@ -798,7 +848,7 @@ class ConsolidatedOCRService(BaseService):
                     return text
             except Exception as e:
                 logger.warning(f"Primary OCR failed: {e}")
-        
+
         # Try Tesseract as fallback
         if TESSERACT_SUPPORT:
             try:
@@ -808,7 +858,7 @@ class ConsolidatedOCRService(BaseService):
                     return text
             except Exception as e:
                 logger.warning(f"Tesseract OCR failed: {e}")
-        
+
         logger.warning("All OCR methods failed")
         return ""
 
@@ -816,10 +866,10 @@ class ConsolidatedOCRService(BaseService):
         """Extract text using Tesseract OCR as fallback."""
         if not TESSERACT_SUPPORT:
             return ""
-        
+
         try:
             optimized_path = self._preprocess_image(file_path)
-            
+
             try:
                 text = pytesseract.image_to_string(Image.open(optimized_path))
                 return text.strip()
@@ -830,36 +880,37 @@ class ConsolidatedOCRService(BaseService):
                         os.remove(optimized_path)
                     except OSError:
                         pass
-                        
+
         except Exception as e:
             logger.error(f"Tesseract OCR failed: {e}")
             return ""
 
     def get_supported_formats(self) -> List[str]:
         """Get list of supported file formats."""
-        formats = ['.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif', '.txt']
-        
+        formats = [".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".gif", ".txt"]
+
         if PDF_SUPPORT:
-            formats.append('.pdf')
+            formats.append(".pdf")
         if DOCX_SUPPORT:
-            formats.extend(['.docx', '.doc'])
-        
+            formats.extend([".docx", ".doc"])
+
         return sorted(formats)
 
     def get_service_capabilities(self) -> Dict[str, Any]:
         """Get detailed service capabilities."""
         return {
-            'primary_ocr_available': bool(self.api_key),
-            'tesseract_available': TESSERACT_SUPPORT,
-            'pdf_support': PDF_SUPPORT,
-            'docx_support': DOCX_SUPPORT,
-            'supported_formats': self.get_supported_formats(),
-            'cache_enabled': True,
-            'parallel_processing': True,
-            'async_support': True,
-            'max_file_size_mb': 20,
-            'max_workers': self.max_workers
+            "primary_ocr_available": bool(self.api_key),
+            "tesseract_available": TESSERACT_SUPPORT,
+            "pdf_support": PDF_SUPPORT,
+            "docx_support": DOCX_SUPPORT,
+            "supported_formats": self.get_supported_formats(),
+            "cache_enabled": True,
+            "parallel_processing": True,
+            "async_support": True,
+            "max_file_size_mb": 20,
+            "max_workers": self.max_workers,
         }
+
 
 # Backward compatibility aliases
 OCRService = ConsolidatedOCRService

@@ -5,29 +5,50 @@ Minimal startup script for the Flask Exam Grader application.
 """
 
 import os
-import sys
 import signal
+import sys
 import threading
 import time
 from pathlib import Path
-from dotenv import load_dotenv
 
-# Set up UTF-8 encoding for Windows compatibility
-os.environ['PYTHONIOENCODING'] = 'utf-8'
+from dotenv import load_dotenv
 
 # Add project root to Python path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+from src.constants import (
+    DEFAULT_DEBUG,
+    DEFAULT_FLASK_APP,
+    DEFAULT_FLASK_ENV,
+    DEFAULT_HOST,
+    DEFAULT_PORT,
+    DEFAULT_ENCODING,
+    ENV_DEBUG,
+    ENV_FLASK_APP,
+    ENV_FLASK_ENV,
+    ENV_HOST,
+    ENV_PORT,
+    ENV_PYTHONIOENCODING,
+    UI_DEBUG_OFF,
+    UI_DEBUG_ON,
+    UI_PRESS_CTRL_C,
+    UI_SHUTDOWN_MESSAGE,
+    UI_STARTUP_MESSAGE,
+)
+
+# Set up UTF-8 encoding for Windows compatibility
+os.environ[ENV_PYTHONIOENCODING] = DEFAULT_ENCODING
+
 # Load environment variables
 load_dotenv()
 
 # Set default environment variables
-os.environ.setdefault("FLASK_APP", "webapp.app")
-os.environ.setdefault("FLASK_ENV", "development")
-os.environ.setdefault("HOST", "127.0.0.1")
-os.environ.setdefault("PORT", "8501")
-os.environ.setdefault("DEBUG", "True")
+os.environ.setdefault(ENV_FLASK_APP, DEFAULT_FLASK_APP)
+os.environ.setdefault(ENV_FLASK_ENV, DEFAULT_FLASK_ENV)
+os.environ.setdefault(ENV_HOST, DEFAULT_HOST)
+os.environ.setdefault(ENV_PORT, DEFAULT_PORT)
+os.environ.setdefault(ENV_DEBUG, DEFAULT_DEBUG)
 
 def shutdown_handler(sig=None, frame=None):
     """Handle graceful shutdown of all services."""
@@ -100,10 +121,9 @@ def shutdown_handler(sig=None, frame=None):
 def main():
     """Main entry point."""
     try:
-        print("🚀 Starting Exam Grader...")
+        print(UI_STARTUP_MESSAGE)
         
         # Set up signal handlers for graceful shutdown
-        import signal
         signal.signal(signal.SIGINT, lambda sig, frame: shutdown_handler())
         signal.signal(signal.SIGTERM, lambda sig, frame: shutdown_handler())
         
@@ -111,13 +131,13 @@ def main():
         from webapp.app import app
         
         # Get configuration from environment
-        host = os.getenv("HOST", "127.0.0.1")
-        port = int(os.getenv("PORT", "8501"))
-        debug = os.getenv("DEBUG", "True").lower() == "true"
+        host = os.getenv(ENV_HOST, DEFAULT_HOST)
+        port = int(os.getenv(ENV_PORT, DEFAULT_PORT))
+        debug = os.getenv(ENV_DEBUG, DEFAULT_DEBUG).lower() == "true"
         
         print(f"📍 Server: http://{host}:{port}")
-        print(f"🔧 Debug mode: {'ON' if debug else 'OFF'}")
-        print("Press Ctrl+C to stop the server")
+        print(f"🔧 Debug mode: {UI_DEBUG_ON if debug else UI_DEBUG_OFF}")
+        print(UI_PRESS_CTRL_C)
         print("=" * 50)
         
         # Run the application

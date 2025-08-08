@@ -13,14 +13,11 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-try:
-    from src.logging import get_application_logger, setup_application_logging
-    from src.logging.comprehensive_logger import ComprehensiveLogger, LogLevel
-    COMPREHENSIVE_LOGGING_AVAILABLE = True
-except ImportError:
-    COMPREHENSIVE_LOGGING_AVAILABLE = False
-    ComprehensiveLogger = None
-    LogLevel = None
+# Disable comprehensive logging to avoid conflicts with standard logging module
+COMPREHENSIVE_LOGGING_AVAILABLE = False
+ComprehensiveLogger = None
+LogLevel = None
+
 
 def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
     """
@@ -51,9 +48,9 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
         log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 
         # Validate log level
-        valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         if log_level not in valid_levels:
-            log_level = 'INFO'  # Default to INFO for production
+            log_level = "INFO"  # Default to INFO for production
 
         logger.setLevel(getattr(logging, log_level, logging.INFO))
 
@@ -66,7 +63,9 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
         # Create console handler
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(console_formatter)
-        console_handler.setLevel(getattr(logging, log_level, logging.DEBUG)) # Ensure console handler respects debug level
+        console_handler.setLevel(
+            getattr(logging, log_level, logging.DEBUG)
+        )  # Ensure console handler respects debug level
         logger.addHandler(console_handler)
 
         # Create file handler
@@ -76,22 +75,27 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
             log_file = log_dir / "app.log"
 
         # Use a Windows-compatible approach to avoid file locking issues
-        if sys.platform.startswith('win'):
+        if sys.platform.startswith("win"):
             try:
                 # On Windows, use a custom rotating handler that handles file locking better
                 from logging.handlers import TimedRotatingFileHandler
+
                 file_handler = TimedRotatingFileHandler(
                     str(log_file),
-                    when='midnight',
+                    when="midnight",
                     interval=1,
                     backupCount=7,
                     delay=True,
-                    encoding='utf-8'
+                    encoding="utf-8",
                 )
             except Exception as e:
                 temp_logger = logging.getLogger("setup_fallback")
-                temp_logger.warning(f"Failed to create rotating file handler: {e}, using basic file handler")
-                file_handler = logging.FileHandler(str(log_file), mode='a', delay=True, encoding='utf-8')
+                temp_logger.warning(
+                    f"Failed to create rotating file handler: {e}, using basic file handler"
+                )
+                file_handler = logging.FileHandler(
+                    str(log_file), mode="a", delay=True, encoding="utf-8"
+                )
         else:
             # Unix systems can use the standard rotating handler
             file_handler = RotatingFileHandler(
@@ -99,16 +103,19 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
                 maxBytes=10 * 1024 * 1024,  # 10MB
                 backupCount=5,
                 delay=True,
-                encoding='utf-8'
+                encoding="utf-8",
             )
         file_handler.setFormatter(file_formatter)
-        file_handler.setLevel(getattr(logging, log_level, logging.DEBUG)) # Ensure file handler respects debug level
+        file_handler.setLevel(
+            getattr(logging, log_level, logging.DEBUG)
+        )  # Ensure file handler respects debug level
         logger.addHandler(file_handler)
 
         # Don't propagate to root logger
         logger.propagate = False
 
     return logger
+
 
 class Logger:
     """Enhanced logger with additional features."""
@@ -177,8 +184,9 @@ class Logger:
         self.log_metric("errors")
         self.logger.exception(message, *args, **kwargs)
 
-    def log_error_with_context(self, error: Exception, context: Dict[str, Any],
-                              user_id: Optional[str] = None) -> None:
+    def log_error_with_context(
+        self, error: Exception, context: Dict[str, Any], user_id: Optional[str] = None
+    ) -> None:
         """Log an error with additional context information.
 
         Args:
@@ -189,17 +197,17 @@ class Logger:
         self.log_metric("errors")
 
         error_info = {
-            'error_type': type(error).__name__,
-            'error_message': str(error),
-            'context': context,
-            'user_id': user_id,
-            'timestamp': datetime.now(timezone.utc).isoformat()
+            "error_type": type(error).__name__,
+            "error_message": str(error),
+            "context": context,
+            "user_id": user_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         self.logger.error(
             f"Error occurred: {error_info['error_type']} - {error_info['error_message']}",
-            extra={'error_context': error_info},
-            exc_info=True
+            extra={"error_context": error_info},
+            exc_info=True,
         )
 
     # Original enhanced logging methods
@@ -213,7 +221,9 @@ class Logger:
 
     def log_performance(self) -> None:
         """Log performance metrics."""
-        duration = (datetime.now(timezone.utc) - self.metrics["start_time"]).total_seconds()
+        duration = (
+            datetime.now(timezone.utc) - self.metrics["start_time"]
+        ).total_seconds()
         self.info("Performance Metrics:")
         self.info(f"  Duration: {duration:.2f} seconds")
         self.info(f"  API Calls: {self.metrics['api_calls']}")
@@ -338,6 +348,7 @@ class Logger:
         else:
             self.log_metric("errors")
             self.logger.error(f"OCR failed on {file_path}")
+
 
 # Create default logger instance
 logger = Logger()

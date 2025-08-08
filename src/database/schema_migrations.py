@@ -1,42 +1,47 @@
 """Database schema migration utilities."""
-from typing import Dict, List
 
 import logging
 from datetime import datetime, timezone
+from typing import Dict, List
 
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
+
 class SchemaMigration:
     """Represents a single database schema migration."""
-    
-    def __init__(self, version: str, description: str, up_sql: str, down_sql: str = None):
+
+    def __init__(
+        self, version: str, description: str, up_sql: str, down_sql: str = None
+    ):
         self.version = version
         self.description = description
         self.up_sql = up_sql
         self.down_sql = down_sql
-    
+
     def __str__(self):
         return f"Migration {self.version}: {self.description}"
 
+
 class MigrationManager:
     """Enhanced migration manager with schema versioning."""
-    
+
     def __init__(self, database_url: str):
         self.database_url = database_url
         self.engine = create_engine(database_url)
         self.migrations = self._load_migrations()
-    
+
     def _load_migrations(self):
         """Load all available migrations."""
         migrations = []
-        
+
         # Migration 001: Add performance indexes
-        migrations.append(SchemaMigration(
-            version="001",
-            description="Add performance indexes to existing tables",
-            up_sql="""
+        migrations.append(
+            SchemaMigration(
+                version="001",
+                description="Add performance indexes to existing tables",
+                up_sql="""
             CREATE INDEX IF NOT EXISTS idx_user_active_login ON users(is_active, last_login);
             CREATE INDEX IF NOT EXISTS idx_user_created_active ON users(created_at, is_active);
             CREATE INDEX IF NOT EXISTS idx_guide_user_active ON marking_guides(user_id, is_active);
@@ -49,7 +54,7 @@ class MigrationManager:
             CREATE INDEX IF NOT EXISTS idx_session_expires ON sessions(expires_at);
             CREATE INDEX IF NOT EXISTS idx_session_ip ON sessions(ip_address);
             """,
-            down_sql="""
+                down_sql="""
             DROP INDEX IF EXISTS idx_user_active_login;
             DROP INDEX IF EXISTS idx_user_created_active;
             DROP INDEX IF EXISTS idx_guide_user_active;
@@ -61,14 +66,16 @@ class MigrationManager:
             DROP INDEX IF EXISTS idx_grading_progress_id;
             DROP INDEX IF EXISTS idx_session_expires;
             DROP INDEX IF EXISTS idx_session_ip;
-            """
-        ))
-        
+            """,
+            )
+        )
+
         # Migration 002: Add foreign key constraints and validation
-        migrations.append(SchemaMigration(
-            version="002",
-            description="Add foreign key constraints and data validation",
-            up_sql="""
+        migrations.append(
+            SchemaMigration(
+                version="002",
+                description="Add foreign key constraints and data validation",
+                up_sql="""
             -- Add new columns for enhanced security and validation
             ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at DATETIME DEFAULT CURRENT_TIMESTAMP;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE NOT NULL;
@@ -78,18 +85,20 @@ class MigrationManager:
             -- Note: SQLite doesn't support adding check constraints to existing tables
             -- These would need to be applied during table recreation
             """,
-            down_sql="""
+                down_sql="""
             ALTER TABLE users DROP COLUMN IF EXISTS password_changed_at;
             ALTER TABLE users DROP COLUMN IF EXISTS email_verified;
             ALTER TABLE users DROP COLUMN IF EXISTS two_factor_enabled;
-            """
-        ))
-        
+            """,
+            )
+        )
+
         # Migration 003: Optimize timestamp indexes
-        migrations.append(SchemaMigration(
-            version="003",
-            description="Add timestamp indexes for better query performance",
-            up_sql="""
+        migrations.append(
+            SchemaMigration(
+                version="003",
+                description="Add timestamp indexes for better query performance",
+                up_sql="""
             CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
             CREATE INDEX IF NOT EXISTS idx_users_updated_at ON users(updated_at);
             CREATE INDEX IF NOT EXISTS idx_marking_guides_created_at ON marking_guides(created_at);
@@ -101,7 +110,7 @@ class MigrationManager:
             CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at);
             CREATE INDEX IF NOT EXISTS idx_grading_sessions_created_at ON grading_sessions(created_at);
             """,
-            down_sql="""
+                down_sql="""
             DROP INDEX IF EXISTS idx_users_created_at;
             DROP INDEX IF EXISTS idx_users_updated_at;
             DROP INDEX IF EXISTS idx_marking_guides_created_at;
@@ -112,13 +121,15 @@ class MigrationManager:
             DROP INDEX IF EXISTS idx_grading_results_created_at;
             DROP INDEX IF EXISTS idx_sessions_created_at;
             DROP INDEX IF EXISTS idx_grading_sessions_created_at;
-            """
-        ))
-        
-        migrations.append(SchemaMigration(
-            version="004",
-            description="Add advanced composite indexes for complex query optimization",
-            up_sql="""
+            """,
+            )
+        )
+
+        migrations.append(
+            SchemaMigration(
+                version="004",
+                description="Add advanced composite indexes for complex query optimization",
+                up_sql="""
             -- Advanced user indexes
             CREATE INDEX IF NOT EXISTS idx_user_email_verified_active ON users(email_verified, is_active);
             CREATE INDEX IF NOT EXISTS idx_user_locked_until_active ON users(locked_until, is_active);
@@ -153,7 +164,7 @@ class MigrationManager:
             CREATE INDEX IF NOT EXISTS idx_grading_session_user_guide ON grading_sessions(user_id, marking_guide_id);
             CREATE INDEX IF NOT EXISTS idx_grading_session_questions_mapped ON grading_sessions(total_questions_mapped, total_questions_graded);
             """,
-            down_sql="""
+                down_sql="""
             DROP INDEX IF EXISTS idx_user_email_verified_active;
             DROP INDEX IF EXISTS idx_user_locked_until_active;
             DROP INDEX IF EXISTS idx_user_password_changed;
@@ -174,14 +185,16 @@ class MigrationManager:
             DROP INDEX IF EXISTS idx_grading_session_progress_status;
             DROP INDEX IF EXISTS idx_grading_session_user_guide;
             DROP INDEX IF EXISTS idx_grading_session_questions_mapped;
-            """
-        ))
-        
+            """,
+            )
+        )
+
         # Migration 005: Add data validation triggers and constraints
-        migrations.append(SchemaMigration(
-            version="005",
-            description="Add data validation triggers and enhanced constraints",
-            up_sql="""
+        migrations.append(
+            SchemaMigration(
+                version="005",
+                description="Add data validation triggers and enhanced constraints",
+                up_sql="""
             -- Create validation triggers for SQLite
             CREATE TRIGGER IF NOT EXISTS validate_user_email_format
             BEFORE INSERT ON users
@@ -247,7 +260,7 @@ class MigrationManager:
                 SELECT RAISE(ABORT, 'Invalid grading session step');
             END;
             """,
-            down_sql="""
+                down_sql="""
             DROP TRIGGER IF EXISTS validate_user_email_format;
             DROP TRIGGER IF EXISTS validate_user_email_format_update;
             DROP TRIGGER IF EXISTS validate_submission_status;
@@ -256,14 +269,16 @@ class MigrationManager:
             DROP TRIGGER IF EXISTS validate_grading_session_status_update;
             DROP TRIGGER IF EXISTS validate_grading_session_step;
             DROP TRIGGER IF EXISTS validate_grading_session_step_update;
-            """
-        ))
-        
+            """,
+            )
+        )
+
         # Migration 006: Add performance monitoring views
-        migrations.append(SchemaMigration(
-            version="006",
-            description="Add performance monitoring views and statistics",
-            up_sql="""
+        migrations.append(
+            SchemaMigration(
+                version="006",
+                description="Add performance monitoring views and statistics",
+                up_sql="""
             -- Create view for user activity statistics
             CREATE VIEW IF NOT EXISTS user_activity_stats AS
             SELECT 
@@ -327,166 +342,189 @@ class MigrationManager:
             LEFT JOIN marking_guides mg ON gs.marking_guide_id = mg.id
             LEFT JOIN submissions s ON gs.submission_id = s.id;
             """,
-            down_sql="""
+                down_sql="""
             DROP VIEW IF EXISTS user_activity_stats;
              DROP VIEW IF EXISTS submission_processing_stats;
              DROP VIEW IF EXISTS grading_session_performance;
-             """
-         ))
-        
+             """,
+            )
+        )
+
         return migrations
-    
+
     def _ensure_migration_table(self):
         """Ensure the migration tracking table exists."""
         try:
             with self.engine.connect() as conn:
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     CREATE TABLE IF NOT EXISTS schema_migrations (
                         version VARCHAR(10) PRIMARY KEY,
                         description TEXT NOT NULL,
                         applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                     )
-                """))
+                """
+                    )
+                )
                 conn.commit()
         except SQLAlchemyError as e:
             logger.error(f"Failed to create migration table: {e}")
             raise
-    
+
     def get_applied_migrations(self) -> List[str]:
         """Get list of applied migration versions."""
         try:
             self._ensure_migration_table()
             with self.engine.connect() as conn:
-                result = conn.execute(text("SELECT version FROM schema_migrations ORDER BY version"))
+                result = conn.execute(
+                    text("SELECT version FROM schema_migrations ORDER BY version")
+                )
                 return [row[0] for row in result]
         except SQLAlchemyError as e:
             logger.error(f"Failed to get applied migrations: {e}")
             return []
-    
+
     def apply_migration(self, migration: SchemaMigration) -> bool:
         """Apply a single migration."""
         try:
-            logger.info(f"Applying migration {migration.version}: {migration.description}")
-            
+            logger.info(
+                f"Applying migration {migration.version}: {migration.description}"
+            )
+
             with self.engine.connect() as conn:
                 with conn.begin():
                     # Execute migration SQL
-                    for statement in migration.up_sql.split(';'):
+                    for statement in migration.up_sql.split(";"):
                         statement = statement.strip()
                         if statement:
                             conn.execute(text(statement))
-                    
+
                     # Record migration as applied
-                    conn.execute(text("""
+                    conn.execute(
+                        text(
+                            """
                         INSERT INTO schema_migrations (version, description, applied_at)
                         VALUES (:version, :description, :applied_at)
-                    """), {
-                        'version': migration.version,
-                        'description': migration.description,
-                        'applied_at': datetime.now(timezone.utc)
-                    })
-            
+                    """
+                        ),
+                        {
+                            "version": migration.version,
+                            "description": migration.description,
+                            "applied_at": datetime.now(timezone.utc),
+                        },
+                    )
+
             logger.info(f"Successfully applied migration {migration.version}")
             return True
-            
+
         except SQLAlchemyError as e:
             logger.error(f"Failed to apply migration {migration.version}: {e}")
             return False
-    
+
     def rollback_migration(self, migration: SchemaMigration) -> bool:
         """Rollback a single migration."""
         if not migration.down_sql:
             logger.warning(f"No rollback SQL defined for migration {migration.version}")
             return False
-            
+
         try:
-            logger.info(f"Rolling back migration {migration.version}: {migration.description}")
-            
+            logger.info(
+                f"Rolling back migration {migration.version}: {migration.description}"
+            )
+
             with self.engine.connect() as conn:
                 with conn.begin():
                     # Execute rollback SQL
-                    for statement in migration.down_sql.split(';'):
+                    for statement in migration.down_sql.split(";"):
                         statement = statement.strip()
                         if statement:
                             conn.execute(text(statement))
-                    
+
                     # Remove migration record
-                    conn.execute(text("""
+                    conn.execute(
+                        text(
+                            """
                         DELETE FROM schema_migrations WHERE version = :version
-                    """), {'version': migration.version})
-            
+                    """
+                        ),
+                        {"version": migration.version},
+                    )
+
             logger.info(f"Successfully rolled back migration {migration.version}")
             return True
-            
+
         except SQLAlchemyError as e:
             logger.error(f"Failed to rollback migration {migration.version}: {e}")
             return False
-    
+
     def migrate_up(self, target_version: str = None) -> bool:
         """Apply all pending migrations up to target version."""
         try:
             applied_migrations = set(self.get_applied_migrations())
             pending_migrations = [
-                m for m in self.migrations 
-                if m.version not in applied_migrations and 
-                (target_version is None or m.version <= target_version)
+                m
+                for m in self.migrations
+                if m.version not in applied_migrations
+                and (target_version is None or m.version <= target_version)
             ]
-            
+
             if not pending_migrations:
                 logger.info("No pending migrations to apply")
                 return True
-            
+
             logger.info(f"Applying {len(pending_migrations)} pending migrations")
-            
+
             for migration in pending_migrations:
                 if not self.apply_migration(migration):
                     logger.error(f"Migration failed at version {migration.version}")
                     return False
-            
+
             logger.info("All migrations applied successfully")
             return True
-            
+
         except Exception as e:
             logger.error(f"Migration process failed: {e}")
             return False
-    
+
     def migrate_down(self, target_version: str) -> bool:
         """Rollback migrations down to target version."""
         try:
             applied_migrations = self.get_applied_migrations()
             migrations_to_rollback = [
-                m for m in reversed(self.migrations)
+                m
+                for m in reversed(self.migrations)
                 if m.version in applied_migrations and m.version > target_version
             ]
-            
+
             if not migrations_to_rollback:
                 logger.info("No migrations to rollback")
                 return True
-            
+
             logger.info(f"Rolling back {len(migrations_to_rollback)} migrations")
-            
+
             for migration in migrations_to_rollback:
                 if not self.rollback_migration(migration):
                     logger.error(f"Rollback failed at version {migration.version}")
                     return False
-            
+
             logger.info("All rollbacks completed successfully")
             return True
-            
+
         except Exception as e:
             logger.error(f"Rollback process failed: {e}")
             return False
-    
+
     def get_migration_status(self) -> Dict[str, Dict]:
         """Get status of all migrations."""
         applied_migrations = set(self.get_applied_migrations())
         status = {}
-        
+
         for migration in self.migrations:
             status[migration.version] = {
-                'description': migration.description,
-                'applied': migration.version in applied_migrations,
-                'has_rollback': migration.down_sql is not None
+                "description": migration.description,
+                "applied": migration.version in applied_migrations,
+                "has_rollback": migration.down_sql is not None,
             }
-        
+
         return status

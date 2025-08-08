@@ -17,11 +17,17 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 # Add project root to Python path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from dotenv import load_dotenv
+from src.constants import (
+    CLI_YES_RESPONSES,
+    DEFAULT_DATABASE_URL,
+    ENV_DATABASE_URL,
+)
 
 # Load environment variables
 load_dotenv("instance/.env", override=True)
@@ -33,7 +39,7 @@ def reset_database(confirm: bool = False):
         print("⚠️  WARNING: This will completely delete the existing database!")
         print("   All users, submissions, and grading data will be lost.")
         response = input("   Are you sure you want to continue? (yes/no): ")
-        if response.lower() not in ['yes', 'y']:
+        if response.lower() not in CLI_YES_RESPONSES:
             print("Database reset cancelled.")
             return False
     
@@ -41,7 +47,7 @@ def reset_database(confirm: bool = False):
         print("🔄 Starting database reset...")
         
         # Get database URL from config
-        database_url = os.getenv("DATABASE_URL", "sqlite:///exam_grader.db")
+        database_url = os.getenv(ENV_DATABASE_URL, DEFAULT_DATABASE_URL)
         
         # Handle SQLite database file
         if database_url.startswith('sqlite:///'):
@@ -161,7 +167,7 @@ def check_database_status():
     try:
         print("🔍 Checking database status...")
         
-        database_url = os.getenv("DATABASE_URL", "sqlite:///exam_grader.db")
+        database_url = os.getenv(ENV_DATABASE_URL, DEFAULT_DATABASE_URL)
         print(f"Database URL: {database_url}")
         
         if database_url.startswith('sqlite:///'):

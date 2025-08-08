@@ -134,7 +134,7 @@ class SystemHealthCollector(DataCollector):
             resources = resource_optimizer.get_system_resources()
             
             # Get service health status
-            from src.services.health_monitor import health_monitor
+            from src.services.monitoring.monitoring_service import health_monitor
             health_status = health_monitor.get_overall_health()
             
             # Get cache statistics
@@ -169,7 +169,7 @@ class PerformanceCollector(DataCollector):
         """Collect performance data"""
         try:
             # Get performance metrics
-            from src.services.performance_monitor import performance_monitor
+            from src.services.monitoring.monitoring_service import performance_monitor
             summary = performance_monitor.get_performance_summary()
             
             # Get recent operation stats
@@ -211,7 +211,7 @@ class ErrorTrackingCollector(DataCollector):
             log_metrics = enhanced_logging_service.get_metrics()
             
             # Get recent alerts
-            from src.services.performance_monitor import performance_monitor
+            from src.services.monitoring.monitoring_service import performance_monitor
             recent_alerts = performance_monitor.get_alerts(limit=50)
             
             return {

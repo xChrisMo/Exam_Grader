@@ -1,12 +1,13 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict
 
 from flask.sessions import SessionInterface, SessionMixin
-from typing import Any, Dict
 from werkzeug.datastructures import CallbackDict
 
 from src.database.models import Session as SessionModel, db
 from src.security.session_manager import SecureSessionManager
 from utils.logger import logger
+
 
 class SecureFlaskSession(CallbackDict, SessionMixin):
     def __init__(self, initial=None, sid=None, new=False):
@@ -23,15 +24,18 @@ class SecureFlaskSession(CallbackDict, SessionMixin):
         super().__delitem__(key)
         self.modified = True
 
+
 class SecureSessionInterface(SessionInterface):
     def __init__(self, session_manager: SecureSessionManager, app_secret_key: str):
         self.session_manager = session_manager
         self.app_secret_key = app_secret_key
 
     def open_session(self, app, request):
-        self.session_cookie_name = app.config.get('SESSION_COOKIE_NAME', 'session')
+        self.session_cookie_name = app.config.get("SESSION_COOKIE_NAME", "session")
         sid = request.cookies.get(self.session_cookie_name)
-        logger.debug(f"Attempting to open session. Cookie name: {self.session_cookie_name}, SID from cookie: {sid}")
+        logger.debug(
+            f"Attempting to open session. Cookie name: {self.session_cookie_name}, SID from cookie: {sid}"
+        )
         if not sid:
             logger.debug("No session ID found in cookie. Creating new session.")
             # No session ID in cookie, create a new session
@@ -40,7 +44,9 @@ class SecureSessionInterface(SessionInterface):
         session_data = self.session_manager.get_session(sid)
         if session_data is None:
             # Session not found or invalid, create a new one
-            logger.info(f"Session {sid} not found or invalid in DB. Creating new session.")
+            logger.info(
+                f"Session {sid} not found or invalid in DB. Creating new session."
+            )
             return SecureFlaskSession(new=True)
 
         # Session found, decrypt and load data
@@ -50,7 +56,7 @@ class SecureSessionInterface(SessionInterface):
     def save_session(self, app, session: SecureFlaskSession, response):
         domain = self.get_cookie_domain(app)
         # Ensure domain is None to avoid CSRF token issues with certain browsers
-        if domain == '':  # Flask returns empty string when no domain is set
+        if domain == "":  # Flask returns empty string when no domain is set
             domain = None
         path = self.get_cookie_path(app)
         httponly = self.get_cookie_httponly(app)
@@ -61,7 +67,9 @@ class SecureSessionInterface(SessionInterface):
             # If session is empty, delete the cookie and invalidate the DB session
             if session.sid:
                 self.session_manager.invalidate_session(session.sid)
-                logger.info(f"Invalidated session {session.sid} in DB due to empty session.")
+                logger.info(
+                    f"Invalidated session {session.sid} in DB due to empty session."
+                )
             response.delete_cookie(self.session_cookie_name, domain=domain, path=path)
             return
 
@@ -71,6 +79,7 @@ class SecureSessionInterface(SessionInterface):
                 # Create a new session in the database
                 try:
                     from flask_login import current_user
+
                     user_id = current_user.id if current_user.is_authenticated else None
                 except:
                     user_id = None
@@ -79,18 +88,22 @@ class SecureSessionInterface(SessionInterface):
                 sid = self.session_manager.create_session(
                     user_id,
                     dict(session),
-                    remember_me=session.get('remember_me', False)
+                    remember_me=session.get("remember_me", False),
                 )
                 session.sid = sid
 
-                logger.info(f"New session created and saved to DB: {sid} (user_id: {user_id})")
+                logger.info(
+                    f"New session created and saved to DB: {sid} (user_id: {user_id})"
+                )
             else:
                 # Update existing session in the database
                 self.session_manager.update_session(session.sid, dict(session))
                 logger.debug(f"Session {session.sid} updated in DB.")
 
             # Set the session cookie
-            expires = datetime.now(timezone.utc) + timedelta(seconds=self.session_manager.session_timeout)
+            expires = datetime.now(timezone.utc) + timedelta(
+                seconds=self.session_manager.session_timeout
+            )
             response.set_cookie(
                 self.session_cookie_name,
                 session.sid,
@@ -101,11 +114,14 @@ class SecureSessionInterface(SessionInterface):
                 secure=secure,
                 samesite=samesite,
             )
-            logger.debug(f"Setting session cookie. Name: {self.session_cookie_name}, SID: {session.sid}, Expires: {expires}")
+            logger.debug(
+                f"Setting session cookie. Name: {self.session_cookie_name}, SID: {session.sid}, Expires: {expires}"
+            )
         elif session.sid and not session.modified:
             # Session not modified, but update last_accessed in DB to keep it alive
             self.session_manager.update_session_last_accessed(session.sid)
             logger.debug(f"Session {session.sid} last_accessed updated in DB.")
+
 
 # Add update_session and update_session_last_accessed to SecureSessionManager
 def _update_session(self, sid: str, session_data: Dict[str, Any]):
@@ -115,7 +131,9 @@ def _update_session(self, sid: str, session_data: Dict[str, Any]):
             encrypted_data = self.encryption.encrypt_data(session_data)
             session_record.data = encrypted_data
             session_record.last_accessed = datetime.now(timezone.utc)
-            session_record.expires_at = datetime.now(timezone.utc) + timedelta(seconds=self.session_timeout)
+            session_record.expires_at = datetime.now(timezone.utc) + timedelta(
+                seconds=self.session_timeout
+            )
             db.session.commit()
             logger.debug(f"Session {sid} data updated in DB.")
         else:
@@ -124,19 +142,25 @@ def _update_session(self, sid: str, session_data: Dict[str, Any]):
         logger.error(f"Failed to update session {sid}: {str(e)}")
         db.session.rollback()
 
+
 def _update_session_last_accessed(self, sid: str):
     try:
         session_record = SessionModel.query.filter_by(id=sid).first()
         if session_record:
             session_record.last_accessed = datetime.now(timezone.utc)
-            session_record.expires_at = datetime.now(timezone.utc) + timedelta(seconds=self.session_timeout)
+            session_record.expires_at = datetime.now(timezone.utc) + timedelta(
+                seconds=self.session_timeout
+            )
             db.session.commit()
             logger.debug(f"Session {sid} last_accessed updated in DB.")
         else:
-            logger.warning(f"Attempted to update last_accessed for non-existent session: {sid}")
+            logger.warning(
+                f"Attempted to update last_accessed for non-existent session: {sid}"
+            )
     except Exception as e:
         logger.error(f"Failed to update session last_accessed {sid}: {str(e)}")
         db.session.rollback()
+
 
 SecureSessionManager.update_session = _update_session
 SecureSessionManager.update_session_last_accessed = _update_session_last_accessed

@@ -1,0 +1,31 @@
+MARKING GUIDE - MATHEMATICS EXAM
+
+Question 1: What is the capital of France? (10 points)
+Expected Answer: Paris
+Grading Criteria: 
+- Full credit (10 points): Correct answer "Paris"
+- No credit (0 points): Any other answer
+
+Question 2: Calculate 15 + 27 (5 points)
+Expected Answer: 42
+Grading Criteria:
+- Full credit (5 points): Correct answer "42"
+- Partial credit (3 points): Shows correct working but minor calculation error
+- No credit (0 points): Incorrect method or answer
+
+Question 3: Explain photosynthesis (15 points)
+Expected Answer: Photosynthesis is the process by which plants convert sunlight, carbon dioxide, and water into glucose and oxygen using chlorophyll.
+Grading Criteria:
+- Full credit (15 points): Mentions sunlight, CO2, water, glucose, oxygen, and chlorophyll
+- Good (12 points): Mentions most key components but missing 1-2 elements
+- Satisfactory (8 points): Basic understanding but missing several key components
+- Poor (4 points): Shows some understanding but major gaps
+- No credit (0 points): Incorrect or no answer
+
+Question 4: What is 2 × 3? (2 points)
+Expected Answer: 6
+Grading Criteria:
+- Full credit (2 points): Correct answer "6"
+- No credit (0 points): Any other answer
+
+Total Points: 32

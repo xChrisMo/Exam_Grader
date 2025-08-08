@@ -12,24 +12,25 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.config.unified_config import UnifiedConfig
 from src.config.config_utils import ConfigurationUtils
+from src.config.unified_config import UnifiedConfig
+
 
 def main():
     """Demonstrate the unified configuration system."""
     print("🔧 Exam Grader - Unified Configuration System Demo")
     print("=" * 60)
-    
+
     # Initialize configuration
     print("\n1. Initializing Configuration...")
     config = UnifiedConfig()
     print(f"   ✓ Environment: {config.environment}")
     print(f"   ✓ Configuration loaded successfully")
-    
+
     # Show configuration summary
     print("\n2. Configuration Summary:")
     summary = config.get_configuration_summary()
-    
+
     print(f"   Server: {summary['server']['host']}:{summary['server']['port']}")
     print(f"   Debug: {summary['server']['debug']}")
     print(f"   Database: {summary['database']['type']}")
@@ -39,7 +40,7 @@ def main():
     print(f"   LLM configured: {summary['api']['llm_configured']}")
     print(f"   CSRF enabled: {summary['security']['csrf_enabled']}")
     print(f"   Log level: {summary['logging']['level']}")
-    
+
     # Validate configuration
     print("\n3. Configuration Validation:")
     try:
@@ -47,27 +48,27 @@ def main():
         print(f"   ✓ Configuration is {'valid' if is_valid else 'invalid'}")
     except Exception as e:
         print(f"   ✗ Configuration validation failed: {e}")
-    
+
     # Health check
     print("\n4. Configuration Health Check:")
     health = ConfigurationUtils.check_configuration_health(config)
     print(f"   Overall status: {health['overall_status'].upper()}")
-    
-    if health['issues']:
+
+    if health["issues"]:
         print("   Issues:")
-        for issue in health['issues']:
+        for issue in health["issues"]:
             print(f"     ✗ {issue}")
-    
-    if health['warnings']:
+
+    if health["warnings"]:
         print("   Warnings:")
-        for warning in health['warnings']:
+        for warning in health["warnings"]:
             print(f"     ⚠ {warning}")
-    
-    if health['info']:
+
+    if health["info"]:
         print("   Info:")
-        for info in health['info'][:3]:  # Show first 3 info items
+        for info in health["info"][:3]:  # Show first 3 info items
             print(f"     ℹ {info}")
-    
+
     # Environment information
     print("\n5. Environment Information:")
     env_info = ConfigurationUtils.get_environment_info()
@@ -75,25 +76,30 @@ def main():
     print(f"   Platform: {env_info['platform']}")
     print(f"   Flask environment: {env_info['flask_env']}")
     print(f"   Working directory: {env_info['cwd']}")
-    
+
     # Flask configuration
     print("\n6. Flask Configuration Sample:")
     flask_config = config.get_flask_config()
-    important_keys = ['SECRET_KEY', 'DEBUG', 'SQLALCHEMY_DATABASE_URI', 'MAX_CONTENT_LENGTH']
-    
+    important_keys = [
+        "SECRET_KEY",
+        "DEBUG",
+        "SQLALCHEMY_DATABASE_URI",
+        "MAX_CONTENT_LENGTH",
+    ]
+
     for key in important_keys:
         if key in flask_config:
             value = flask_config[key]
             # Mask sensitive values
-            if key == 'SECRET_KEY' and value:
+            if key == "SECRET_KEY" and value:
                 value = f"{value[:8]}...{value[-8:]}" if len(value) > 16 else "***"
             print(f"   {key}: {value}")
-    
+
     # Configuration template
     print("\n7. Environment Template Generation:")
     try:
         template = config.export_environment_template(include_values=False)
-        lines = template.split('\n')
+        lines = template.split("\n")
         print(f"   ✓ Generated template with {len(lines)} lines")
         print("   Sample lines:")
         for line in lines[:5]:  # Show first 5 lines
@@ -102,7 +108,7 @@ def main():
         print("     ...")
     except Exception as e:
         print(f"   ✗ Template generation failed: {e}")
-    
+
     print("\n" + "=" * 60)
     print("✅ Configuration system demonstration completed!")
     print("\nThe unified configuration system provides:")
@@ -112,6 +118,7 @@ def main():
     print("  • Health checking and monitoring")
     print("  • Flask integration")
     print("  • Configuration utilities")
+
 
 if __name__ == "__main__":
     main()

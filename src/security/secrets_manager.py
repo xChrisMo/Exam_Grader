@@ -23,6 +23,7 @@ except ImportError:
 
     logger = logging.getLogger(__name__)
 
+
 class SecretsEncryption:
     """Handles encryption and decryption of secrets."""
 
@@ -70,6 +71,7 @@ class SecretsEncryption:
     def get_salt(self) -> bytes:
         """Get the salt used for key derivation."""
         return self.salt
+
 
 class SecretsManager:
     """
@@ -372,8 +374,10 @@ class SecretsManager:
 
         return validation_results
 
+
 # Global secrets manager instance
 secrets_manager = SecretsManager()
+
 
 # Initialize with common API keys
 def initialize_secrets():

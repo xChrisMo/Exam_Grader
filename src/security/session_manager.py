@@ -5,22 +5,23 @@ This module provides secure session management with encryption, proper
 session invalidation, and security features to replace Flask's default
 session handling.
 """
-from typing import Any, Dict, Optional
 
 import base64
 import json
 import secrets
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
 
 # Import Flask request with fallback
 try:
-    from flask import request, has_request_context
+    from flask import has_request_context, request
 except ImportError:
     request = None
     has_request_context = lambda: False
 
 # Import logger with fallback
 import logging
+
 logger = logging.getLogger(__name__)
 
 # Import database models with fallback
@@ -40,6 +41,7 @@ except ImportError:
     Fernet = None
     hashes = None
     PBKDF2HMAC = None
+
 
 class SessionEncryption:
     """Handles session data encryption and decryption."""
@@ -81,6 +83,7 @@ class SessionEncryption:
             # Return None instead of empty dict to ensure consistent behavior with get_session
             return None
 
+
 class SecureSessionManager:
     """
     Secure session manager with database storage and encryption.
@@ -106,7 +109,12 @@ class SecureSessionManager:
         self.encryption = SessionEncryption(secret_key)
         self._current_session = None
 
-    def create_session(self, user_id: str, session_data: Dict[str, Any] = None, remember_me: bool = False) -> str:
+    def create_session(
+        self,
+        user_id: str,
+        session_data: Dict[str, Any] = None,
+        remember_me: bool = False,
+    ) -> str:
         """
         Create a new secure session.
 
@@ -145,7 +153,8 @@ class SecureSessionManager:
                 id=session_id,
                 user_id=user_id,
                 data=encrypted_data,
-                expires_at=datetime.now(timezone.utc) + timedelta(seconds=self.session_timeout if not remember_me else 86400),
+                expires_at=datetime.now(timezone.utc)
+                + timedelta(seconds=self.session_timeout if not remember_me else 86400),
                 ip_address=ip_address,
                 user_agent=user_agent,
                 is_active=True,
@@ -177,8 +186,7 @@ class SecureSessionManager:
                 return None
 
             session = SessionModel.query.filter_by(
-                id=session_id,
-                is_active=True
+                id=session_id, is_active=True
             ).first()
 
             if not session:
@@ -198,11 +206,11 @@ class SecureSessionManager:
             try:
                 session_data = self.encryption.decrypt_data(session.data)
                 self._current_session = session
-                
+
                 # Update last accessed time
                 session.last_accessed = datetime.now(timezone.utc)
                 db.session.commit()
-                
+
                 return session_data
             except Exception as e:
                 logger.error(f"Failed to decrypt session data: {str(e)}")
@@ -394,7 +402,9 @@ class SecureSessionManager:
         """Get client user agent."""
         try:
             if request and has_request_context():
-                return request.headers.get("User-Agent", "unknown")[:500]  # Limit length
+                return request.headers.get("User-Agent", "unknown")[
+                    :500
+                ]  # Limit length
         except Exception as e:
             logger.warning(f"Error getting user agent: {str(e)}")
         return "unknown"

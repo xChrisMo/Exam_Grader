@@ -4,16 +4,14 @@ Database models for the Exam Grader application.
 This module defines SQLAlchemy models for persistent data storage,
 replacing the session-based storage system.
 """
-from typing import Any, Dict
-
 import uuid
-from datetime import datetime, timezone, timedelta
 
 # Fix datetime import for models
-from datetime import datetime, timezone as datetime_class
+from datetime import datetime, timedelta, timezone, timezone as datetime_class
+from typing import Any, Dict
 
-from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
+from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -293,6 +291,17 @@ class GradingResult(db.Model, TimestampMixin):
     grading_session_id = Column(String(36), ForeignKey("grading_sessions.id"), nullable=True, index=True)
     grading_method = Column(String(50), default="llm")  # llm, similarity, manual
     confidence = Column(Float)
+    
+    # Add total_score as an alias property for backward compatibility
+    @property
+    def total_score(self):
+        """Alias for score field to maintain compatibility."""
+        return self.score
+    
+    @total_score.setter
+    def total_score(self, value):
+        """Setter for total_score alias."""
+        self.score = value
 
     # Relationship to GradingSession
     grading_session = relationship("GradingSession", backref="grading_results")
@@ -421,376 +430,13 @@ class GradingSession(db.Model, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-class LLMDocument(db.Model, TimestampMixin):
-    """LLM training document model"""
-    
-    __tablename__ = "llm_documents"
-    
-    id = get_uuid_column()
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    original_name = Column(String(255), nullable=False)
-    stored_name = Column(String(255), nullable=False)
-    file_type = Column(String(10), nullable=False)
-    mime_type = Column(String(100), nullable=False)
-    file_size = Column(Integer, nullable=False)
-    file_path = Column(String(500), nullable=False)
-    text_content = Column(Text)
-    content_hash = Column(String(64), nullable=True, index=True)  # SHA-256 hash of content for deduplication
-    word_count = Column(Integer, default=0)
-    character_count = Column(Integer, default=0)
-    extracted_text = Column(Boolean, default=False)
-    type = Column(String(50), default='document', nullable=False)  # document, training_guide, test_submission
-    
-    # Enhanced validation and processing fields
-    validation_status = Column(String(50), default='pending')  # pending, valid, invalid, error
-    validation_errors = Column(JSON)
-    processing_retries = Column(Integer, default=0)
-    content_quality_score = Column(Float)
-    extraction_method = Column(String(50))  # auto, manual, fallback
-    processing_duration_ms = Column(Integer)
-    
-    # Relationships
-    user = relationship("User", backref="llm_documents")
-    dataset_documents = relationship("LLMDatasetDocument", back_populates="document", cascade="all, delete-orphan")
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "name": self.name,
-            "originalName": self.original_name,
-            "storedName": self.stored_name,
-            "type": self.file_type.upper(),
-            "mimeType": self.mime_type,
-            "size": self.file_size,
-            "datasets": [dd.dataset_id for dd in self.dataset_documents],
-            "metadata": {
-                "uploadDate": self.created_at.isoformat(),
-                "wordCount": self.word_count,
-                "characterCount": self.character_count,
-                "extractedText": self.extracted_text
-            }
-        }
 
-class LLMDataset(db.Model, TimestampMixin):
-    """LLM training dataset model"""
-    
-    __tablename__ = "llm_datasets"
-    
-    id = get_uuid_column()
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    document_count = Column(Integer, default=0)
-    total_words = Column(Integer, default=0)
-    total_size = Column(Integer, default=0)
-    
-    # Relationships
-    user = relationship("User", backref="llm_datasets")
-    dataset_documents = relationship("LLMDatasetDocument", back_populates="dataset", cascade="all, delete-orphan")
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "name": self.name,
-            "description": self.description,
-            "documents": [dd.document_id for dd in self.dataset_documents],
-            "documentCount": self.document_count,
-            "metadata": {
-                "createdDate": self.created_at.isoformat(),
-                "totalWords": self.total_words,
-                "totalSize": self.total_size
-            }
-        }
 
-class LLMDatasetDocument(db.Model):
-    """Association table for datasets and documents"""
-    
-    __tablename__ = "llm_dataset_documents"
-    
-    dataset_id = Column(String(36), ForeignKey("llm_datasets.id"), primary_key=True)
-    document_id = Column(String(36), ForeignKey("llm_documents.id"), primary_key=True)
-    
-    # Relationships
-    dataset = relationship("LLMDataset", back_populates="dataset_documents")
-    document = relationship("LLMDocument", back_populates="dataset_documents")
 
-class LLMTrainingJob(db.Model, TimestampMixin):
-    """LLM training job model"""
-    
-    __tablename__ = "llm_training_jobs"
-    
-    id = get_uuid_column()
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    model_id = Column(String(100), nullable=False)
-    dataset_id = Column(String(36), ForeignKey("llm_datasets.id"), nullable=False, index=True)
-    status = Column(String(50), default="pending", nullable=False)  # pending, preparing, training, evaluating, completed, failed, cancelled
-    progress = Column(Float, default=0.0)
-    current_epoch = Column(Integer, default=0)
-    total_epochs = Column(Integer, default=10)
-    accuracy = Column(Float)
-    validation_accuracy = Column(Float)
-    loss = Column(Float)
-    validation_loss = Column(Float)
-    start_time = Column(DateTime)
-    end_time = Column(DateTime)
-    error_message = Column(Text)
-    
-    # Training configuration
-    config_epochs = Column(Integer, default=10)
-    config_batch_size = Column(Integer, default=8)
-    config_learning_rate = Column(Float, default=0.0001)
-    config_max_tokens = Column(Integer, default=512)
-    config_temperature = Column(Float)
-    config_custom_parameters = Column(JSON)
-    
-    # Results and metrics
-    training_metrics = Column(JSON)
-    evaluation_results = Column(JSON)
-    model_output_path = Column(String(500))
-    
-    # Enhanced validation and monitoring fields
-    validation_results = Column(JSON)
-    health_metrics = Column(JSON)
-    resume_count = Column(Integer, default=0)
-    quality_score = Column(Float)
-    
-    # Relationships
-    user = relationship("User", backref="llm_training_jobs")
-    dataset = relationship("LLMDataset", backref="training_jobs")
-    model_tests = relationship("LLMModelTest", back_populates="training_job", cascade="all, delete-orphan")
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "name": self.name,
-            "model_id": self.model_id,
-            "dataset_id": self.dataset_id,
-            "status": self.status,
-            "progress": self.progress,
-            "current_epoch": self.current_epoch,
-            "total_epochs": self.total_epochs,
-            "accuracy": self.accuracy,
-            "validation_accuracy": self.validation_accuracy,
-            "loss": self.loss,
-            "validation_loss": self.validation_loss,
-            "start_time": self.start_time.isoformat() if self.start_time else None,
-            "end_time": self.end_time.isoformat() if self.end_time else None,
-            "error_message": self.error_message,
-            "config": {
-                "epochs": self.config_epochs,
-                "batch_size": self.config_batch_size,
-                "learning_rate": self.config_learning_rate,
-                "max_tokens": self.config_max_tokens,
-                "temperature": self.config_temperature,
-                "custom_parameters": self.config_custom_parameters
-            },
-            "training_metrics": self.training_metrics,
-            "evaluation_results": self.evaluation_results,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
-        }
 
-class LLMTrainingReport(db.Model, TimestampMixin):
-    """LLM training report model"""
-    
-    __tablename__ = "llm_training_reports"
-    
-    id = get_uuid_column()
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    job_ids = Column(JSON, nullable=False)  # List of training job IDs
-    report_type = Column(String(50), default="training_summary")
-    format = Column(String(20), default="html")  # html, pdf, json
-    status = Column(String(50), default="generating")  # generating, completed, failed
-    file_path = Column(String(500))
-    file_size = Column(Integer)
-    
-    # Report configuration
-    include_metrics = Column(Boolean, default=True)
-    include_logs = Column(Boolean, default=False)
-    include_charts = Column(Boolean, default=True)
-    chart_format = Column(String(10), default="png")
-    
-    # Report data
-    report_data = Column(JSON)
-    generation_error = Column(Text)
-    
-    # Relationships
-    user = relationship("User", backref="llm_training_reports")
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "name": self.name,
-            "description": self.description,
-            "job_ids": self.job_ids,
-            "report_type": self.report_type,
-            "format": self.format,
-            "status": self.status,
-            "file_path": self.file_path,
-            "file_size": self.file_size,
-            "config": {
-                "include_metrics": self.include_metrics,
-                "include_logs": self.include_logs,
-                "include_charts": self.include_charts,
-                "chart_format": self.chart_format
-            },
-            "report_data": self.report_data,
-            "generation_error": self.generation_error,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
-        }
 
-class LLMModelTest(db.Model, TimestampMixin):
-    """LLM model testing session model"""
-    
-    __tablename__ = "llm_model_tests"
-    
-    id = get_uuid_column()
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    training_job_id = Column(String(36), ForeignKey("llm_training_jobs.id"), nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    status = Column(String(50), default='pending')  # pending, running, completed, failed, cancelled
-    progress = Column(Float, default=0.0)
-    
-    # Test configuration
-    config = Column(JSON)  # Test configuration parameters
-    grading_criteria = Column(JSON)  # Grading criteria and thresholds
-    confidence_threshold = Column(Float, default=0.8)
-    comparison_mode = Column(String(50), default='strict')  # strict, lenient, custom
-    feedback_level = Column(String(50), default='detailed')  # basic, detailed, comprehensive
-    
-    # Test results and metrics
-    results = Column(JSON)  # Overall test results and summary
-    performance_metrics = Column(JSON)  # Detailed performance metrics
-    accuracy_score = Column(Float)
-    average_confidence = Column(Float)
-    total_submissions = Column(Integer, default=0)
-    processed_submissions = Column(Integer, default=0)
-    
-    # Timing information
-    started_at = Column(DateTime)
-    completed_at = Column(DateTime)
-    processing_duration_ms = Column(Integer)
-    
-    # Error handling
-    error_message = Column(Text)
-    error_details = Column(JSON)
-    
-    # Relationships
-    user = relationship("User", backref="llm_model_tests")
-    training_job = relationship("LLMTrainingJob", back_populates="model_tests")
-    test_submissions = relationship("LLMTestSubmission", back_populates="test", cascade="all, delete-orphan")
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "training_job_id": self.training_job_id,
-            "name": self.name,
-            "description": self.description,
-            "status": self.status,
-            "progress": self.progress,
-            "config": self.config,
-            "grading_criteria": self.grading_criteria,
-            "confidence_threshold": self.confidence_threshold,
-            "comparison_mode": self.comparison_mode,
-            "feedback_level": self.feedback_level,
-            "results": self.results,
-            "performance_metrics": self.performance_metrics,
-            "accuracy_score": self.accuracy_score,
-            "average_confidence": self.average_confidence,
-            "total_submissions": self.total_submissions,
-            "processed_submissions": self.processed_submissions,
-            "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
-            "processing_duration_ms": self.processing_duration_ms,
-            "error_message": self.error_message,
-            "error_details": self.error_details,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
-        }
 
-class LLMTestSubmission(db.Model, TimestampMixin):
-    """Individual test submission for model testing"""
-    
-    __tablename__ = "llm_test_submissions"
-    
-    id = get_uuid_column()
-    test_id = Column(String(36), ForeignKey("llm_model_tests.id"), nullable=False, index=True)
-    original_name = Column(String(255), nullable=False)
-    stored_name = Column(String(255), nullable=False)
-    file_path = Column(String(500), nullable=False)
-    file_size = Column(Integer, nullable=False)
-    file_type = Column(String(50), nullable=False)
-    
-    # Content and processing
-    text_content = Column(Text)
-    word_count = Column(Integer, default=0)
-    processing_status = Column(String(50), default='pending')  # pending, processing, completed, failed
-    processing_error = Column(Text)
-    processing_duration_ms = Column(Integer)
-    
-    # Expected vs actual results
-    expected_grade = Column(Float)
-    expected_feedback = Column(Text)
-    model_grade = Column(Float)
-    model_feedback = Column(Text)
-    confidence_score = Column(Float)
-    
-    # Analysis and comparison
-    grade_difference = Column(Float)  # Difference between expected and model grade
-    grade_accuracy = Column(Boolean)  # Whether grade is within acceptable range
-    feedback_similarity = Column(Float)  # Similarity score between expected and model feedback
-    
-    # Detailed results
-    detailed_results = Column(JSON)  # Detailed grading breakdown
-    comparison_analysis = Column(JSON)  # Detailed comparison analysis
-    
-    # Relationships
-    test = relationship("LLMModelTest", back_populates="test_submissions")
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "id": self.id,
-            "test_id": self.test_id,
-            "original_name": self.original_name,
-            "stored_name": self.stored_name,
-            "file_path": self.file_path,
-            "file_size": self.file_size,
-            "file_type": self.file_type,
-            "text_content": self.text_content,
-            "word_count": self.word_count,
-            "processing_status": self.processing_status,
-            "processing_error": self.processing_error,
-            "processing_duration_ms": self.processing_duration_ms,
-            "expected_grade": self.expected_grade,
-            "expected_feedback": self.expected_feedback,
-            "model_grade": self.model_grade,
-            "model_feedback": self.model_feedback,
-            "confidence_score": self.confidence_score,
-            "grade_difference": self.grade_difference,
-            "grade_accuracy": self.grade_accuracy,
-            "feedback_similarity": self.feedback_similarity,
-            "detailed_results": self.detailed_results,
-            "comparison_analysis": self.comparison_analysis,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
-        }
+
 
 class ProcessingMetrics(db.Model, TimestampMixin):
     """Performance metrics for monitoring service operations."""
@@ -1068,155 +714,22 @@ class SystemAlert(db.Model, TimestampMixin):
     def __repr__(self):
         return f'<SystemAlert {self.id}: {self.title}>'
 
-class UserSettings(db.Model, TimestampMixin):
-    """User settings model for storing user preferences and configuration."""
-    
-    __tablename__ = 'user_settings'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False, unique=True)
-    
-    # File processing settings
-    max_file_size = db.Column(db.Integer, default=100)  # MB
-    allowed_formats = db.Column(db.Text, default='.pdf,.jpg,.jpeg,.png,.docx,.doc,.txt')  # Comma-separated
-    
-    # API configuration (encrypted)
-    llm_api_key_encrypted = db.Column(db.Text)
-    llm_model = db.Column(db.String(100), default='deepseek-chat')
-    ocr_api_key_encrypted = db.Column(db.Text)
-    ocr_api_url = db.Column(db.String(500))
-    
-    # UI preferences
-    theme = db.Column(db.String(20), default='light')
-    language = db.Column(db.String(10), default='en')
-    notification_level = db.Column(db.String(20), default='info')
-    
-    # Additional preferences
-    auto_save = db.Column(db.Boolean, default=True)
-    show_tooltips = db.Column(db.Boolean, default=True)
-    results_per_page = db.Column(db.Integer, default=10)
-    
-    # Relationships
-    user = db.relationship('User', foreign_keys=[user_id])
-    
-    def __repr__(self):
-        return f'<UserSettings {self.user_id}>'
-    
-    @property
-    def allowed_formats_list(self):
-        """Get allowed formats as a list."""
-        if not self.allowed_formats:
-            return []
-        return [fmt.strip() for fmt in self.allowed_formats.split(',') if fmt.strip()]
-    
-    @allowed_formats_list.setter
-    def allowed_formats_list(self, formats):
-        """Set allowed formats from a list."""
-        if isinstance(formats, list):
-            self.allowed_formats = ','.join(formats)
-        else:
-            self.allowed_formats = str(formats)
-    
-    def get_decrypted_llm_api_key(self):
-        """Get decrypted LLM API key."""
-        if not self.llm_api_key_encrypted:
-            return ''
-        try:
-            from src.utils.encryption import decrypt_data
-            return decrypt_data(self.llm_api_key_encrypted)
-        except Exception:
-            return ''
-    
-    def set_llm_api_key(self, api_key):
-        """Set encrypted LLM API key."""
-        if not api_key:
-            self.llm_api_key_encrypted = None
-            return
-        try:
-            from src.utils.encryption import encrypt_data
-            self.llm_api_key_encrypted = encrypt_data(api_key)
-        except Exception:
-            self.llm_api_key_encrypted = api_key
-    
-    def get_decrypted_ocr_api_key(self):
-        """Get decrypted OCR API key."""
-        if not self.ocr_api_key_encrypted:
-            return ''
-        try:
-            from src.utils.encryption import decrypt_data
-            return decrypt_data(self.ocr_api_key_encrypted)
-        except Exception:
-            return ''
-    
-    def set_ocr_api_key(self, api_key):
-        """Set encrypted OCR API key."""
-        if not api_key:
-            self.ocr_api_key_encrypted = None
-            return
-        try:
-            from src.utils.encryption import encrypt_data
-            self.ocr_api_key_encrypted = encrypt_data(api_key)
-        except Exception:
-            self.ocr_api_key_encrypted = api_key
-    
-    def to_dict(self):
-        """Convert settings to dictionary."""
-        return {
-            'max_file_size': self.max_file_size,
-            'allowed_formats': self.allowed_formats_list,
-            'llm_api_key': self.get_decrypted_llm_api_key(),
-            'llm_model': self.llm_model,
-            'ocr_api_key': self.get_decrypted_ocr_api_key(),
-            'ocr_api_url': self.ocr_api_url,
-            'theme': self.theme,
-            'language': self.language,
-            'notification_level': self.notification_level,
-            'auto_save': self.auto_save,
-            'show_tooltips': self.show_tooltips,
-            'results_per_page': self.results_per_page
-        }
-    
-    @classmethod
-    def get_or_create_for_user(cls, user_id):
-        """Get or create settings for a user."""
-        settings = cls.query.filter_by(user_id=user_id).first()
-        if not settings:
-            settings = cls(user_id=user_id)
-            db.session.add(settings)
-            db.session.commit()
-        return settings
-    
-    @classmethod
-    def get_default_settings(cls):
-        """Get default settings dictionary."""
-        return {
-            'max_file_size': 100,
-            'allowed_formats': ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc', '.txt'],
-            'llm_api_key': '',
-            'llm_model': 'deepseek-chat',
-            'ocr_api_key': '',
-            'ocr_api_url': '',
-            'theme': 'light',
-            'language': 'en',
-            'notification_level': 'info',
-            'auto_save': True,
-            'show_tooltips': True,
-            'results_per_page': 10
-        }
+# Training models are defined later in the file
 
 
 class SystemAlertsV2(db.Model, TimestampMixin):
     """Model for system alerts and notifications (v2)."""
     
-    __tablename__ = "system_alerts"
+    __tablename__ = "system_alerts_v2"
     __table_args__ = (
-        Index('idx_alert_level_status', 'alert_level', 'status'),
-        Index('idx_alert_service', 'service_name'),
-        Index('idx_alert_created', 'created_at'),
-        Index('idx_alert_resolved', 'resolved_at'),
+        Index('idx_alert_v2_level_status', 'alert_level', 'status'),
+        Index('idx_alert_v2_service', 'service_name'),
+        Index('idx_alert_v2_created', 'created_at'),
+        Index('idx_alert_v2_resolved', 'resolved_at'),
     )
     
     id = get_uuid_column()
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     alert_type = Column(String(50), nullable=False)  # performance, error, health, resource, security
     alert_level = Column(String(20), nullable=False)  # info, warning, error, critical
     service_name = Column(String(100), nullable=False)
@@ -1251,7 +764,7 @@ class SystemAlertsV2(db.Model, TimestampMixin):
     notifications_sent = Column(JSON)  # Track sent notifications
     notification_channels = Column(JSON)  # Channels to notify
     
-    # Relationships
+    # Relationships (with explicit foreign_keys to avoid conflicts)
     acknowledger = relationship("User", foreign_keys=[acknowledged_by], backref="acknowledged_alerts_v2")
     resolver = relationship("User", foreign_keys=[resolved_by], backref="resolved_alerts_v2")
     
@@ -1283,3 +796,382 @@ class SystemAlertsV2(db.Model, TimestampMixin):
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
+
+
+# Training-related models for LLM Training Page feature
+
+class TrainingSession(db.Model, TimestampMixin):
+    """Training session model for managing AI model training"""
+    
+    __tablename__ = "training_sessions"
+    __table_args__ = (
+        Index('idx_training_session_user_status', 'user_id', 'status'),
+        Index('idx_training_session_created', 'created_at'),
+        Index('idx_training_session_active', 'is_active'),
+    )
+    
+    id = get_uuid_column()
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    status = Column(String(50), default="created", nullable=False)  # created, processing, completed, failed
+    
+    # Training configuration
+    max_questions_to_answer = Column(Integer, nullable=True)
+    use_in_main_app = Column(Boolean, default=False, nullable=False)
+    confidence_threshold = Column(Float, default=0.6, nullable=False)
+    
+    # Training metrics
+    total_guides = Column(Integer, default=0)
+    total_questions = Column(Integer, default=0)
+    average_confidence = Column(Float, nullable=True)
+    training_duration_seconds = Column(Integer, nullable=True)
+    
+    # Status tracking
+    current_step = Column(String(100), nullable=True)
+    progress_percentage = Column(Float, default=0.0)
+    error_message = Column(Text, nullable=True)
+    
+    # Model metadata
+    model_data = Column(JSON, nullable=True)
+    is_active = Column(Boolean, default=False, nullable=False)
+    
+    # Relationships
+    user = relationship("User", backref="training_sessions")
+    training_guides = relationship("TrainingGuide", back_populates="session", cascade="all, delete-orphan")
+    training_results = relationship("TrainingResult", back_populates="session", cascade="all, delete-orphan")
+    test_submissions = relationship("TestSubmission", back_populates="session", cascade="all, delete-orphan")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "name": self.name,
+            "description": self.description,
+            "status": self.status,
+            "max_questions_to_answer": self.max_questions_to_answer,
+            "use_in_main_app": self.use_in_main_app,
+            "confidence_threshold": self.confidence_threshold,
+            "total_guides": self.total_guides,
+            "total_questions": self.total_questions,
+            "average_confidence": self.average_confidence,
+            "training_duration_seconds": self.training_duration_seconds,
+            "current_step": self.current_step,
+            "progress_percentage": self.progress_percentage,
+            "error_message": self.error_message,
+            "model_data": self.model_data,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class TrainingGuide(db.Model, TimestampMixin):
+    """Training guide model for storing uploaded marking guides"""
+    
+    __tablename__ = "training_guides"
+    __table_args__ = (
+        Index('idx_training_guide_session', 'session_id'),
+        Index('idx_training_guide_status', 'processing_status'),
+        Index('idx_training_guide_hash', 'content_hash'),
+    )
+    
+    id = get_uuid_column()
+    session_id = Column(String(36), ForeignKey("training_sessions.id"), nullable=False, index=True)
+    filename = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=False)
+    file_type = Column(String(50), nullable=False)
+    
+    # Guide classification
+    guide_type = Column(String(50), nullable=False)  # questions_only, questions_answers, answers_only
+    content_text = Column(Text)
+    content_hash = Column(String(64), index=True)
+    
+    # Processing results
+    processing_status = Column(String(50), default="pending", nullable=False)
+    processing_error = Column(Text, nullable=True)
+    confidence_score = Column(Float, nullable=True)
+    
+    # Extracted metadata
+    question_count = Column(Integer, default=0)
+    total_marks = Column(Float, default=0.0)
+    format_confidence = Column(Float, nullable=True)
+    
+    # Relationships
+    session = relationship("TrainingSession", back_populates="training_guides")
+    training_questions = relationship("TrainingQuestion", back_populates="guide", cascade="all, delete-orphan")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "filename": self.filename,
+            "file_path": self.file_path,
+            "file_size": self.file_size,
+            "file_type": self.file_type,
+            "guide_type": self.guide_type,
+            "content_text": self.content_text,
+            "content_hash": self.content_hash,
+            "processing_status": self.processing_status,
+            "processing_error": self.processing_error,
+            "confidence_score": self.confidence_score,
+            "question_count": self.question_count,
+            "total_marks": self.total_marks,
+            "format_confidence": self.format_confidence,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class TrainingQuestion(db.Model, TimestampMixin):
+    """Training question model for storing extracted questions and criteria"""
+    
+    __tablename__ = "training_questions"
+    __table_args__ = (
+        Index('idx_training_question_guide', 'guide_id'),
+        Index('idx_training_question_confidence', 'extraction_confidence'),
+        Index('idx_training_question_review', 'manual_review_required'),
+    )
+    
+    id = get_uuid_column()
+    guide_id = Column(String(36), ForeignKey("training_guides.id"), nullable=False, index=True)
+    question_number = Column(String(50), nullable=False)
+    question_text = Column(Text, nullable=False)
+    expected_answer = Column(Text)
+    point_value = Column(Float, nullable=False)
+    
+    # Rubric details
+    rubric_details = Column(JSON)
+    visual_elements = Column(JSON)
+    context = Column(Text)
+    
+    # Confidence and quality metrics
+    extraction_confidence = Column(Float, nullable=True)
+    manual_review_required = Column(Boolean, default=False)
+    
+    # Relationships
+    guide = relationship("TrainingGuide", back_populates="training_questions")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "guide_id": self.guide_id,
+            "question_number": self.question_number,
+            "question_text": self.question_text,
+            "expected_answer": self.expected_answer,
+            "point_value": self.point_value,
+            "rubric_details": self.rubric_details,
+            "visual_elements": self.visual_elements,
+            "context": self.context,
+            "extraction_confidence": self.extraction_confidence,
+            "manual_review_required": self.manual_review_required,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class TrainingResult(db.Model, TimestampMixin):
+    """Training result model for storing training outcomes"""
+    
+    __tablename__ = "training_results"
+    __table_args__ = (
+        Index('idx_training_result_session', 'session_id'),
+        Index('idx_training_result_confidence', 'average_confidence_score'),
+    )
+    
+    id = get_uuid_column()
+    session_id = Column(String(36), ForeignKey("training_sessions.id"), nullable=False, index=True)
+    
+    # Training metrics
+    total_processing_time = Column(Float, nullable=False)
+    questions_processed = Column(Integer, nullable=False)
+    questions_with_high_confidence = Column(Integer, default=0)
+    questions_requiring_review = Column(Integer, default=0)
+    
+    # Model performance
+    average_confidence_score = Column(Float, nullable=True)
+    predicted_accuracy = Column(Float, nullable=True)
+    
+    # Training data
+    training_metadata = Column(JSON)
+    model_parameters = Column(JSON)
+    
+    # Relationships
+    session = relationship("TrainingSession", back_populates="training_results")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "total_processing_time": self.total_processing_time,
+            "questions_processed": self.questions_processed,
+            "questions_with_high_confidence": self.questions_with_high_confidence,
+            "questions_requiring_review": self.questions_requiring_review,
+            "average_confidence_score": self.average_confidence_score,
+            "predicted_accuracy": self.predicted_accuracy,
+            "training_metadata": self.training_metadata,
+            "model_parameters": self.model_parameters,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class TestSubmission(db.Model, TimestampMixin):
+    """Test submission model for model validation"""
+    
+    __tablename__ = "test_submissions"
+    __table_args__ = (
+        Index('idx_test_submission_session', 'session_id'),
+        Index('idx_test_submission_status', 'processing_status'),
+    )
+    
+    id = get_uuid_column()
+    session_id = Column(String(36), ForeignKey("training_sessions.id"), nullable=False, index=True)
+    filename = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    
+    # OCR and processing results
+    extracted_text = Column(Text)
+    ocr_confidence = Column(Float, nullable=True)
+    
+    # Grading results
+    predicted_score = Column(Float, nullable=True)
+    confidence_score = Column(Float, nullable=True)
+    matched_questions = Column(JSON)
+    misalignments = Column(JSON)
+    
+    # Test metadata
+    processing_status = Column(String(50), default="pending")
+    processing_error = Column(Text, nullable=True)
+    
+    # Relationships
+    session = relationship("TrainingSession", back_populates="test_submissions")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "filename": self.filename,
+            "file_path": self.file_path,
+            "extracted_text": self.extracted_text,
+            "ocr_confidence": self.ocr_confidence,
+            "predicted_score": self.predicted_score,
+            "confidence_score": self.confidence_score,
+            "matched_questions": self.matched_questions,
+            "misalignments": self.misalignments,
+            "processing_status": self.processing_status,
+            "processing_error": self.processing_error,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class UserSettings(db.Model, TimestampMixin):
+    """User settings model for storing user preferences and configuration."""
+    
+    __tablename__ = 'user_settings'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False, unique=True)
+    
+    # File processing settings
+    max_file_size = db.Column(db.Integer, default=100)  # MB
+    allowed_formats = db.Column(db.Text, default='.pdf,.jpg,.jpeg,.png,.docx,.doc,.txt')  # Comma-separated
+    
+    # API configuration (encrypted)
+    llm_api_key_encrypted = db.Column(db.Text)
+    llm_model = db.Column(db.String(100), default='deepseek-chat')
+    ocr_api_key_encrypted = db.Column(db.Text)
+    ocr_api_url = db.Column(db.String(500))
+    
+    # UI preferences
+    theme = db.Column(db.String(20), default='light')
+    language = db.Column(db.String(10), default='en')
+    
+    # Notification settings
+    email_notifications = db.Column(db.Boolean, default=True)
+    processing_notifications = db.Column(db.Boolean, default=True)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "max_file_size": self.max_file_size,
+            "allowed_formats": self.allowed_formats,
+            "llm_model": self.llm_model,
+            "ocr_api_url": self.ocr_api_url,
+            "theme": self.theme,
+            "language": self.language,
+            "email_notifications": self.email_notifications,
+            "processing_notifications": self.processing_notifications,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+    
+    @classmethod
+    def get_default_settings(cls) -> Dict[str, Any]:
+        """Get default settings dictionary."""
+        return {
+            "max_file_size": 100,  # MB
+            "allowed_formats": ".pdf,.jpg,.jpeg,.png,.docx,.doc,.txt",
+            "llm_model": "deepseek-chat",
+            "ocr_api_url": "",
+            "theme": "light",
+            "language": "en",
+            "email_notifications": True,
+            "processing_notifications": True,
+            "llm_api_key": "",
+            "ocr_api_key": ""
+        }
+    
+    @classmethod
+    def get_or_create_for_user(cls, user_id: str) -> 'UserSettings':
+        """Get or create user settings for a specific user."""
+        settings = cls.query.filter_by(user_id=user_id).first()
+        if not settings:
+            settings = cls(user_id=user_id)
+            db.session.add(settings)
+            db.session.commit()
+        return settings
+    
+    @property
+    def allowed_formats_list(self) -> list:
+        """Get allowed formats as a list."""
+        if not self.allowed_formats:
+            return []
+        return [fmt.strip() for fmt in self.allowed_formats.split(',') if fmt.strip()]
+    
+    @allowed_formats_list.setter
+    def allowed_formats_list(self, formats: list):
+        """Set allowed formats from a list."""
+        if isinstance(formats, list):
+            self.allowed_formats = ','.join(formats)
+        else:
+            self.allowed_formats = str(formats)
+    
+    def set_llm_api_key(self, api_key: str):
+        """Set LLM API key (encrypted storage)."""
+        # For now, just store as plain text - in production, this should be encrypted
+        self.llm_api_key_encrypted = api_key
+    
+    def get_llm_api_key(self) -> str:
+        """Get LLM API key (decrypted)."""
+        # For now, just return as plain text - in production, this should be decrypted
+        return self.llm_api_key_encrypted or ""
+    
+    def set_ocr_api_key(self, api_key: str):
+        """Set OCR API key (encrypted storage)."""
+        # For now, just store as plain text - in production, this should be encrypted
+        self.ocr_api_key_encrypted = api_key
+    
+    def get_ocr_api_key(self) -> str:
+        """Get OCR API key (decrypted)."""
+        # For now, just return as plain text - in production, this should be decrypted
+        return self.ocr_api_key_encrypted or ""

@@ -2,7 +2,7 @@
  * Frontend Error Handling Framework
  * 
  * Provides comprehensive error handling with categorization, retry mechanisms,
- * and user-friendly error messaging for the LLM training system.
+ * and user-friendly error messaging for the application.
  */
 
 class ErrorHandler {

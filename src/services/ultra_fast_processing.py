@@ -496,7 +496,7 @@ Grade fairly and provide accurate scores based on answer quality. Use the full r
             grades.append({
                 'question_id': mapping.get('question_id', f"Q{i+1}"),
                 'score': score,
-                'feedback': f'Fallback grading based on content analysis'
+                'feedback': f'LLM unavailable - scored using content analysis'
             })
         
         return self._ultra_calculate_results(grades)

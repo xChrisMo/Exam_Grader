@@ -29,7 +29,7 @@ The Exam Grader application uses a unified configuration system that consolidate
 ### Required Variables
 
 ```bash
-SECRET_KEY=your_secret_key_here_at_least_32_characters
+SECRET_KEY=<generate_secure_random_key_at_least_32_characters>
 DATABASE_URL=sqlite:///exam_grader.db
 ```
 

@@ -885,6 +885,15 @@ function closeDeleteModal() {
     window.currentDeleteGuideName = null;
 }
 
+// Open guide details page
+function openGuideDetailsPage(guideId) {
+    if (guideId && guideId !== 'session_guide' && guideId !== '' && guideId !== 'None') {
+        window.location.href = `/guide/${guideId}`;
+    } else {
+        showToast('Cannot view details for this guide', 'error');
+    }
+}
+
 // Close modals when clicking outside
 document.addEventListener('click', function(event) {
     const viewModal = document.getElementById('view-guide-modal');

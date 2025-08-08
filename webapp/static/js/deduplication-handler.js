@@ -199,8 +199,8 @@ class DeduplicationHandler {
         console.log('Viewing existing document:', document);
         
         // Example navigation (adjust based on your routes)
-        if (window.location.pathname.includes('llm-training')) {
-            // Stay on LLM training page and highlight the existing document
+        if (window.location.pathname.includes('guides')) {
+            // Stay on guides page and highlight the existing document
             this.highlightExistingDocument(document.id);
         } else {
             // Navigate to appropriate list page
@@ -227,9 +227,7 @@ class DeduplicationHandler {
      * Get appropriate document list URL
      */
     getDocumentListUrl() {
-        if (window.location.pathname.includes('llm-training')) {
-            return '/llm-training/';
-        } else if (window.location.pathname.includes('guide')) {
+        if (window.location.pathname.includes('guide')) {
             return '/guides/';
         } else if (window.location.pathname.includes('submission')) {
             return '/submissions/';

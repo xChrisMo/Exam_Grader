@@ -126,7 +126,7 @@ DEEPSEEK_API_KEY=your_deepseek_api_key
 DATABASE_URL=sqlite:///exam_grader.db
 
 # Security
-SECRET_KEY=your_secret_key_here
+SECRET_KEY=<generate_secure_random_key>
 CSRF_ENABLED=True
 
 # File Processing
