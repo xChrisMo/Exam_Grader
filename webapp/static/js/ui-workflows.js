@@ -388,7 +388,6 @@ class UIWorkflows {
     startWorkflow(workflowId, options = {}) {
         const workflow = this.workflows.get(workflowId);
         if (!workflow) {
-            console.error(`Workflow '${workflowId}' not found`);
             return false;
         }
         
@@ -786,7 +785,7 @@ class UIWorkflows {
         try {
             localStorage.setItem(`workflow_draft_${this.activeWorkflow.id}`, JSON.stringify(draft));
         } catch (error) {
-            console.warn('Failed to save workflow draft:', error);
+            // Failed to save workflow draft
         }
     }
     
@@ -795,7 +794,6 @@ class UIWorkflows {
             const draftData = localStorage.getItem(`workflow_draft_${workflowId}`);
             return draftData ? JSON.parse(draftData) : null;
         } catch (error) {
-            console.warn('Failed to load workflow draft:', error);
             return null;
         }
     }
@@ -804,7 +802,7 @@ class UIWorkflows {
         try {
             localStorage.removeItem(`workflow_draft_${workflowId}`);
         } catch (error) {
-            console.warn('Failed to clear workflow draft:', error);
+            // Failed to clear workflow draft
         }
     }
     

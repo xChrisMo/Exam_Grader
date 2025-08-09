@@ -728,9 +728,7 @@
             ExamGrader.utils.hideButtonLoading(processUnifiedAIBtn);
           }
           processUnifiedAIBtn.disabled = false;
-          console.log('Cleared lingering loading state from AI Processing button');
         } catch (error) {
-          console.error('Error clearing button loading state:', error);
           processUnifiedAIBtn.disabled = false;
         }
       }
@@ -747,11 +745,6 @@
           return;
         }
         const token = await ExamGrader.csrf.refreshToken();
-        if (token) {
-          console.log('Dashboard page CSRF token refresh successful');
-        } else {
-          console.warn('Dashboard page CSRF token refresh failed');
-        }
       } catch (error) {
         console.error('Error refreshing CSRF token on dashboard:', error);
       }
@@ -775,8 +768,6 @@
         this.disabled = true;
 
         try {
-          console.log("Starting unified AI processing...");
-
           // Get CSRF token from meta tag
           const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
           
@@ -791,8 +782,6 @@
             credentials: 'same-origin'
           });
 
-          console.log("Response status:", response.status);
-
           if (!response.ok) {
             const errorText = await response.text();
             console.error("Response error text:", errorText);
@@ -800,7 +789,6 @@
           }
 
           const data = await response.json();
-          console.log("Processing result:", data);
 
           if (data.success) {
             // Check if we have a progress_id

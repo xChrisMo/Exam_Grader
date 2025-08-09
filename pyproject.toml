@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "exam-grader"
-version = "1.0.0"
+version = "2.1.1"
 description = "AI-powered educational assessment platform with OCR and automated grading"
 readme = "README.md"
 license = {text = "MIT"}

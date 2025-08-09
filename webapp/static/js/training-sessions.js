@@ -89,7 +89,6 @@ class TrainingSessionsManager {
                 this.showError('Failed to load training sessions');
             }
         } catch (error) {
-            console.error('Error loading sessions:', error);
             this.showError('Failed to load training sessions');
         }
     }
@@ -338,7 +337,6 @@ class TrainingSessionsManager {
                 this.showError('Failed to load report');
             }
         } catch (error) {
-            console.error('Error viewing report:', error);
             this.showError('Failed to load report');
         }
     }
@@ -361,7 +359,6 @@ class TrainingSessionsManager {
                 this.showError(errorData.error || 'Failed to set active model');
             }
         } catch (error) {
-            console.error('Error setting active model:', error);
             this.showError('Failed to set active model');
         }
     }
@@ -393,7 +390,6 @@ class TrainingSessionsManager {
                 this.showError(errorData.error || 'Failed to stop training');
             }
         } catch (error) {
-            console.error('Error stopping training:', error);
             this.showError('Failed to stop training');
         }
     }
@@ -416,7 +412,6 @@ class TrainingSessionsManager {
                 this.showError(errorData.error || 'Failed to retry training');
             }
         } catch (error) {
-            console.error('Error retrying training:', error);
             this.showError('Failed to retry training');
         }
     }
@@ -445,7 +440,6 @@ class TrainingSessionsManager {
                 this.showError(errorData.error || 'Failed to start training');
             }
         } catch (error) {
-            console.error('Error starting training:', error);
             this.showError('Failed to start training');
         }
     }
@@ -488,7 +482,6 @@ class TrainingSessionsManager {
                 this.showError(errorData.error || 'Failed to delete session');
             }
         } catch (error) {
-            console.error('Error deleting session:', error);
             this.showError('Failed to delete session');
         }
         
@@ -530,7 +523,7 @@ class TrainingSessionsManager {
                     this.updateSessionCard(session.id, progress);
                 }
             } catch (error) {
-                console.error(`Error updating progress for session ${session.id}:`, error);
+                // Error updating progress for session
             }
         }
     }

@@ -73,7 +73,7 @@
                     <div class="grid grid-cols-2 gap-4 text-center">
                         <div>
                             <div class="text-xs text-gray-500 mb-1">Result ID</div>
-                            <div class="font-semibold text-gray-900">{{ result.id[:8] }}...</div>
+                            <div class="font-semibold text-gray-900">{{ result.id[:8] }}…</div>
                         </div>
                         <div>
                             <div class="text-xs text-gray-500 mb-1">Created</div>
@@ -171,62 +171,251 @@
         </div>
     </div>
 
-    <!-- Question-by-Question Breakdown -->
+    <!-- Question-by-Question Breakdown with Mapped Data and LLM Feedback -->
     {% if result.grading_results %}
     <div class="bg-white shadow rounded-lg mb-8">
         <div class="px-4 py-5 sm:p-6">
             <div class="flex items-center justify-between mb-6">
-                <h3 class="text-lg leading-6 font-medium text-gray-900">Question-by-Question Analysis</h3>
+                <h3 class="text-lg leading-6 font-medium text-gray-900">Mapped Answers with AI Feedback</h3>
                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-info-100 text-info-800">
-                    {{ result.grading_results|length }} Questions Graded
+                    {% set total_questions = 0 %}
+                    {% for grading_result in result.grading_results %}
+                        {% if grading_result.detailed_feedback and grading_result.detailed_feedback.detailed_grades %}
+                            {% set total_questions = total_questions + grading_result.detailed_feedback.detailed_grades|length %}
+                        {% else %}
+                            {% set total_questions = total_questions + 1 %}
+                        {% endif %}
+                    {% endfor %}
+                    {{ total_questions }} Questions Analyzed
                 </span>
             </div>
             
             <div class="space-y-6">
                 {% for grading_result in result.grading_results %}
-                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
-                    <div class="flex items-start justify-between mb-3">
-                        <div class="flex-1">
-                            <h4 class="text-sm font-semibold text-gray-900 mb-1">
-                                {% if grading_result.mapping and grading_result.mapping.guide_question_text %}
-                                    Question: {{ grading_result.mapping.guide_question_text[:100] }}{% if grading_result.mapping.guide_question_text|length > 100 %}...{% endif %}
-                                {% else %}
-                                    Question {{ loop.index }}
+                    <!-- Check if this grading result has detailed_grades in detailed_feedback -->
+                    {% if grading_result.detailed_feedback and grading_result.detailed_feedback.detailed_grades %}
+                        <!-- Display individual questions from detailed_grades -->
+                        {% for question_grade in grading_result.detailed_feedback.detailed_grades %}
+                        <!-- Find mapping for this question using namespace -->
+                        {% set ns = namespace(current_mapping=None) %}
+                        {% if submission and submission.mappings %}
+                            {% for mapping in submission.mappings %}
+                                {% if mapping.guide_question_id == question_grade.question_id %}
+                                    {% set ns.current_mapping = mapping %}
                                 {% endif %}
-                            </h4>
-                            <p class="text-xs text-gray-500">
-                                Question ID: {{ grading_result.mapping.guide_question_id if grading_result.mapping else 'N/A' }}
-                            </p>
-                        </div>
-                        <div class="flex items-center space-x-3">
-                            <div class="text-right">
-                                <div class="text-lg font-bold text-gray-900">
-                                    {{ "%.1f"|format(grading_result.score) }}/{{ "%.1f"|format(grading_result.max_score) }}
-                                </div>
-                                <div class="text-sm text-gray-500">
-                                    {{ "%.1f"|format(grading_result.percentage) }}%
+                            {% endfor %}
+                        {% endif %}
+                        {% set current_mapping = ns.current_mapping %}
+                        
+
+                        
+                        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
+                            <!-- Main Question Text (Prominent Display) -->
+                            {% if current_mapping and current_mapping.guide_question_text %}
+                            <div class="mb-4 p-3 bg-indigo-50 border-l-4 border-indigo-400 rounded-r-md">
+                                <label class="block text-xs font-medium text-indigo-600 mb-2">Question {{ question_grade.question_id }} from Marking Guide</label>
+                                <p class="text-sm font-medium text-gray-900">{{ current_mapping.guide_question_text }}</p>
+                            </div>
+                            {% else %}
+                            <div class="mb-4 p-3 bg-red-50 border-l-4 border-red-400 rounded-r-md">
+                                <label class="block text-xs font-medium text-red-600 mb-2">Debug: Question {{ question_grade.question_id }}</label>
+                                <div class="text-xs text-red-700">
+                                    {% if current_mapping %}
+                                        <p>✅ Mapping found: {{ current_mapping.id }}</p>
+                                        <p>Guide Question ID: "{{ current_mapping.guide_question_id }}"</p>
+                                        <p>Guide Question Text: "{{ current_mapping.guide_question_text or 'NULL' }}"</p>
+                                        <p>Guide Answer: "{{ current_mapping.guide_answer or 'NULL' }}"</p>
+                                        <p>Submission Answer: "{{ current_mapping.submission_answer or 'NULL' }}"</p>
+                                    {% else %}
+                                        <p>❌ No mapping found for question {{ question_grade.question_id }}</p>
+                                        {% if submission and submission.mappings %}
+                                            <p>Available mappings ({{ submission.mappings|length }}):</p>
+                                            {% for mapping in submission.mappings[:5] %}
+                                                <p>- ID: {{ mapping.guide_question_id }}, Text: {{ mapping.guide_question_text[:50] if mapping.guide_question_text else 'NULL' }}…</p>
+                                            {% endfor %}
+                                        {% else %}
+                                            <p>No submission.mappings available</p>
+                                        {% endif %}
+                                    {% endif %}
                                 </div>
                             </div>
-                            <div class="w-12 h-12 rounded-full flex items-center justify-center
-                                {% if grading_result.percentage >= 80 %}bg-green-100 text-green-600
-                                {% elif grading_result.percentage >= 60 %}bg-yellow-100 text-yellow-600
-                                {% else %}bg-red-100 text-red-600{% endif %}">
-                                {% if grading_result.percentage >= 80 %}
-                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                    </svg>
-                                {% elif grading_result.percentage >= 60 %}
-                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                                    </svg>
-                                {% else %}
-                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-                                    </svg>
+                            {% endif %}
+                            
+                            <div class="flex items-start justify-between mb-3">
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-semibold text-gray-900 mb-1">
+                                        Question {{ question_grade.question_id }} - Grading Result
+                                    </h4>
+                                    <p class="text-xs text-gray-500">
+                                        Question ID: {{ question_grade.question_id }}
+                                        {% if current_mapping and current_mapping.match_score %}
+                                            | Mapping Confidence: {{ "%.1f"|format(current_mapping.match_score * 100) }}%
+                                        {% endif %}
+                                    </p>
+                                </div>
+                                <div class="flex items-center space-x-3">
+                                    <div class="text-right">
+                                        <div class="text-lg font-bold text-gray-900">
+                                            {{ "%.1f"|format(question_grade.score) }}/{{ "%.1f"|format(question_grade.max_score) }}
+                                        </div>
+                                        <div class="text-sm text-gray-500">
+                                            {% set q_percentage = (question_grade.score / question_grade.max_score * 100) if question_grade.max_score > 0 else 0 %}
+                                            {{ "%.1f"|format(q_percentage) }}%
+                                        </div>
+                                    </div>
+                                    <div class="w-12 h-12 rounded-full flex items-center justify-center
+                                        {% set q_percentage = (question_grade.score / question_grade.max_score * 100) if question_grade.max_score > 0 else 0 %}
+                                        {% if q_percentage >= 80 %}bg-green-100 text-green-600
+                                        {% elif q_percentage >= 60 %}bg-yellow-100 text-yellow-600
+                                        {% else %}bg-red-100 text-red-600{% endif %}">
+                                        {% if q_percentage >= 80 %}
+                                            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                            </svg>
+                                        {% elif q_percentage >= 60 %}
+                                            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                            </svg>
+                                        {% else %}
+                                            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                            </svg>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+
+                            
+                            <!-- Expected Answer from Marking Guide -->
+                            {% if current_mapping and current_mapping.guide_answer %}
+                            <div class="mb-3">
+                                <label class="block text-xs font-medium text-gray-500 mb-1">Expected Answer</label>
+                                <div class="bg-green-50 border-l-4 border-green-400 p-3 rounded-r-md">
+                                    <p class="text-sm text-gray-700">{{ current_mapping.guide_answer }}</p>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- Student Answer -->
+                            {% if current_mapping and current_mapping.submission_answer %}
+                            <div class="mb-3">
+                                <label class="block text-xs font-medium text-gray-500 mb-1">Student Answer</label>
+                                <div class="bg-blue-50 border-l-4 border-blue-400 p-3 rounded-r-md">
+                                    <p class="text-sm text-gray-700">{{ current_mapping.submission_answer }}</p>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- AI Feedback for this question -->
+                            {% if question_grade.feedback %}
+                            <div class="mb-3">
+                                <label class="block text-xs font-medium text-gray-500 mb-1">AI Feedback</label>
+                                <div class="bg-gray-50 border-l-4 border-gray-400 p-3 rounded-r-md">
+                                    <p class="text-sm text-gray-700">{{ question_grade.feedback }}</p>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+
+                            
+                            <!-- Mapping Quality Indicator -->
+                            {% if current_mapping and current_mapping.match_score %}
+                            <div class="mb-3">
+                                <label class="block text-xs font-medium text-gray-500 mb-1">Answer Mapping Quality</label>
+                                <div class="flex items-center space-x-2">
+                                    <div class="flex-1 bg-gray-200 rounded-full h-2">
+                                        {% set match_percentage = current_mapping.match_score * 100 %}
+                                        <div class="h-2 rounded-full {% if match_percentage >= 80 %}bg-green-500{% elif match_percentage >= 60 %}bg-yellow-500{% else %}bg-red-500{% endif %}" 
+                                             style="width: {{ match_percentage }}%"></div>
+                                    </div>
+                                    <span class="text-xs font-medium text-gray-700">{{ "%.1f"|format(match_percentage) }}%</span>
+                                </div>
+                                {% if current_mapping.match_reason %}
+                                <p class="text-xs text-gray-600 mt-1">{{ current_mapping.match_reason }}</p>
                                 {% endif %}
                             </div>
+                            {% endif %}
+                            
+                            <!-- Question Metadata -->
+                            <div class="border-t border-gray-200 pt-3 mt-3">
+                                <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs text-gray-500">
+                                    <div>
+                                        <span class="font-medium">Question:</span> {{ question_grade.question_id }}
+                                    </div>
+                                    <div>
+                                        <span class="font-medium">Score:</span> {{ question_grade.score }}/{{ question_grade.max_score }}
+                                    </div>
+                                    <div>
+                                        <span class="font-medium">Method:</span> {{ grading_result.detailed_feedback.summary.processing_method|title if grading_result.detailed_feedback.summary else 'LLM' }}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                        {% endfor %}
+                        
+                        <!-- Overall Summary -->
+                        {% if grading_result.detailed_feedback.summary %}
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <h4 class="text-sm font-semibold text-blue-900 mb-2">Processing Summary</h4>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm text-blue-800">
+                                <div>
+                                    <span class="font-medium">Total Questions:</span> {{ grading_result.detailed_feedback.summary.total_questions }}
+                                </div>
+                                <div>
+                                    <span class="font-medium">Average Score:</span> {{ "%.1f"|format(grading_result.detailed_feedback.summary.average_score) }}
+                                </div>
+                                <div>
+                                    <span class="font-medium">Processing Method:</span> {{ grading_result.detailed_feedback.summary.processing_method|title }}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        <!-- Fallback: Display traditional grading result format -->
+                        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
+                            <div class="flex items-start justify-between mb-3">
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-semibold text-gray-900 mb-1">
+                                        {% if grading_result.mapping and grading_result.mapping.guide_question_text %}
+                                            Question: {{ grading_result.mapping.guide_question_text[:100] }}{% if grading_result.mapping.guide_question_text|length > 100 %}…{% endif %}
+                                        {% else %}
+                                            Question {{ loop.index }}
+                                        {% endif %}
+                                    </h4>
+                                    <p class="text-xs text-gray-500">
+                                        Question ID: {{ grading_result.mapping.guide_question_id if grading_result.mapping else 'N/A' }}
+                                    </p>
+                                </div>
+                                <div class="flex items-center space-x-3">
+                                    <div class="text-right">
+                                        <div class="text-lg font-bold text-gray-900">
+                                            {{ "%.1f"|format(grading_result.score) }}/{{ "%.1f"|format(grading_result.max_score) }}
+                                        </div>
+                                        <div class="text-sm text-gray-500">
+                                            {{ "%.1f"|format(grading_result.percentage) }}%
+                                        </div>
+                                    </div>
+                                    <div class="w-12 h-12 rounded-full flex items-center justify-center
+                                        {% if grading_result.percentage >= 80 %}bg-green-100 text-green-600
+                                        {% elif grading_result.percentage >= 60 %}bg-yellow-100 text-yellow-600
+                                        {% else %}bg-red-100 text-red-600{% endif %}">
+                                        {% if grading_result.percentage >= 80 %}
+                                            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                            </svg>
+                                        {% elif grading_result.percentage >= 60 %}
+                                            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                            </svg>
+                                        {% else %}
+                                            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                            </svg>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
                     
                     <!-- Expected Answer -->
                     {% if grading_result.mapping and grading_result.mapping.guide_answer %}
@@ -258,17 +447,42 @@
                     </div>
                     {% endif %}
                     
-                    <!-- Detailed Feedback -->
+                    <!-- Detailed LLM Analysis -->
                     {% if grading_result.detailed_feedback %}
                     <div class="mb-3">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Detailed Analysis</label>
-                        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-r-md">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Detailed LLM Analysis</label>
+                        <div class="bg-purple-50 border-l-4 border-purple-400 p-3 rounded-r-md">
                             {% if grading_result.detailed_feedback is string %}
                                 <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ grading_result.detailed_feedback }}</p>
                             {% else %}
-                                <pre class="text-xs text-gray-600 whitespace-pre-wrap">{{ grading_result.detailed_feedback|tojson(indent=2) }}</pre>
+                                <div class="text-sm text-gray-700">
+                                    {% for key, value in grading_result.detailed_feedback.items() %}
+                                        <div class="mb-2">
+                                            <span class="font-medium text-purple-700">{{ key|title }}:</span>
+                                            <span class="ml-2">{{ value }}</span>
+                                        </div>
+                                    {% endfor %}
+                                </div>
                             {% endif %}
                         </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Mapping Quality Indicator -->
+                    {% if grading_result.mapping and grading_result.mapping.match_score %}
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Answer Mapping Quality</label>
+                        <div class="flex items-center space-x-2">
+                            <div class="flex-1 bg-gray-200 rounded-full h-2">
+                                {% set match_percentage = grading_result.mapping.match_score * 100 %}
+                                <div class="h-2 rounded-full {% if match_percentage >= 80 %}bg-green-500{% elif match_percentage >= 60 %}bg-yellow-500{% else %}bg-red-500{% endif %}" 
+                                     style="width: {{ match_percentage }}%"></div>
+                            </div>
+                            <span class="text-xs font-medium text-gray-700">{{ "%.1f"|format(match_percentage) }}%</span>
+                        </div>
+                        {% if grading_result.mapping.match_reason %}
+                        <p class="text-xs text-gray-600 mt-1">{{ grading_result.mapping.match_reason }}</p>
+                        {% endif %}
                     </div>
                     {% endif %}
                     
@@ -276,24 +490,25 @@
                     <div class="border-t border-gray-200 pt-3 mt-3">
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-500">
                             <div>
-                                <span class="font-medium">Method:</span> {{ grading_result.grading_method|title or 'LLM' }}
+                                <span class="font-medium">Grading Method:</span> {{ grading_result.grading_method|title or 'LLM' }}
                             </div>
                             {% if grading_result.confidence %}
                             <div>
-                                <span class="font-medium">Confidence:</span> {{ "%.1f"|format(grading_result.confidence * 100) }}%
+                                <span class="font-medium">AI Confidence:</span> {{ "%.1f"|format(grading_result.confidence * 100) }}%
                             </div>
                             {% endif %}
-                            {% if grading_result.mapping and grading_result.mapping.match_score %}
+                            {% if grading_result.mapping and grading_result.mapping.mapping_method %}
                             <div>
-                                <span class="font-medium">Match Score:</span> {{ "%.1f"|format(grading_result.mapping.match_score * 100) }}%
+                                <span class="font-medium">Mapping Method:</span> {{ grading_result.mapping.mapping_method|title }}
                             </div>
                             {% endif %}
                             <div>
-                                <span class="font-medium">Graded:</span> {{ grading_result.created_at.strftime('%Y-%m-%d %H:%M') if grading_result.created_at else 'N/A' }}
+                                <span class="font-medium">Processed:</span> {{ grading_result.created_at.strftime('%Y-%m-%d %H:%M') if grading_result.created_at else 'N/A' }}
                             </div>
                         </div>
                     </div>
-                </div>
+                        </div>
+                    {% endif %}
                 {% endfor %}
             </div>
         </div>
@@ -563,7 +778,6 @@ if (typeof ExamGrader === 'undefined') {
     window.ExamGrader = {
         notificationManager: {
             notify: function (message, type) {
-                console.log('Notification (' + type + '): ' + message);
                 alert(type.toUpperCase() + ': ' + message);
             }
         }
@@ -716,7 +930,6 @@ function regenerateResult() {
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Result detail page initialized');
     
     // Add keyboard shortcuts
     document.addEventListener('keydown', function(event) {

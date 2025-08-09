@@ -23,8 +23,44 @@ from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
 from src.database.models import MarkingGuide, Submission, db
+from src.services.app_config_service import app_config, get_template_context
 from src.services.core_service import core_service
 from utils.logger import logger
+
+
+def get_actual_service_status():
+    """Check actual service status by testing API connections."""
+    status = {
+        "ocr_status": False,
+        "llm_status": False,
+        "ai_status": False,  # Alias for llm_status
+    }
+    
+    try:
+        # Check OCR service
+        try:
+            from src.services.consolidated_ocr_service import ConsolidatedOCRService
+            ocr_service = ConsolidatedOCRService()
+            status["ocr_status"] = ocr_service.is_available()
+        except Exception as e:
+            logger.debug(f"OCR service check failed: {e}")
+            status["ocr_status"] = False
+            
+        # Check LLM service
+        try:
+            from src.services.consolidated_llm_service import ConsolidatedLLMService
+            llm_service = ConsolidatedLLMService()
+            status["llm_status"] = llm_service.is_available()
+            status["ai_status"] = status["llm_status"]  # Alias
+        except Exception as e:
+            logger.debug(f"LLM service check failed: {e}")
+            status["llm_status"] = False
+            status["ai_status"] = False
+            
+    except Exception as e:
+        logger.error(f"Error checking service status: {e}")
+        
+    return status
 
 main_bp = Blueprint("main", __name__)
 
@@ -37,21 +73,10 @@ def index():
     """Landing page."""
     if current_user.is_authenticated:
         return redirect(url_for("main.dashboard"))
+    template_context = get_template_context()
     return render_template(
         "landing.html",
-        allowed_types=[
-            ".pdf",
-            ".docx",
-            ".doc",
-            ".txt",
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".bmp",
-            ".tiff",
-            ".gif",
-        ],
-        max_file_size=100 * 1024 * 1024,
+        **template_context,
     )
 
 
@@ -93,6 +118,7 @@ def dashboard():
             ).count(),
         }
 
+        template_context = get_template_context()
         return render_template(
             "dashboard.html",
             recent_guides=recent_guides,
@@ -104,24 +130,13 @@ def dashboard():
             last_score=None,
             submissions=recent_submissions,
             recent_activity=[],
-            allowed_types=[
-                ".pdf",
-                ".docx",
-                ".doc",
-                ".txt",
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".bmp",
-                ".tiff",
-                ".gif",
-            ],
-            max_file_size=100 * 1024 * 1024,
+            **template_context,
         )
 
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
         flash("Error loading dashboard", "error")
+        template_context = get_template_context()
         return render_template(
             "dashboard.html",
             recent_guides=[],
@@ -133,19 +148,7 @@ def dashboard():
             last_score=None,
             submissions=[],
             recent_activity=[],
-            allowed_types=[
-                ".pdf",
-                ".docx",
-                ".doc",
-                ".txt",
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".bmp",
-                ".tiff",
-                ".gif",
-            ],
-            max_file_size=100 * 1024 * 1024,
+            **template_context,
         )
 
 
@@ -182,46 +185,24 @@ def guides():
 
         logger.info(f"Passing {len(saved_guides_list)} guides to template")
 
+        template_context = get_template_context()
         return render_template(
             "marking_guides.html",
             guides=guides,
             saved_guides=saved_guides_list,
             current_guide=current_guide,
-            allowed_types=[
-                ".pdf",
-                ".docx",
-                ".doc",
-                ".txt",
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".bmp",
-                ".tiff",
-                ".gif",
-            ],
-            max_file_size=100 * 1024 * 1024,
+            **template_context,
         )
 
     except Exception as e:
         logger.error(f"Guides page error: {e}", exc_info=True)
         flash("Error loading guides", "error")
+        template_context = get_template_context()
         return render_template(
             "marking_guides.html",
             guides=None,
             saved_guides=[],
-            allowed_types=[
-                ".pdf",
-                ".docx",
-                ".doc",
-                ".txt",
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".bmp",
-                ".tiff",
-                ".gif",
-            ],
-            max_file_size=100 * 1024 * 1024,
+            **template_context,
         )
 
 
@@ -235,43 +216,21 @@ def submissions():
             page=page, per_page=10, error_out=False
         )
 
+        template_context = get_template_context()
         return render_template(
             "submissions.html",
             submissions=submissions,
-            allowed_types=[
-                ".pdf",
-                ".docx",
-                ".doc",
-                ".txt",
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".bmp",
-                ".tiff",
-                ".gif",
-            ],
-            max_file_size=100 * 1024 * 1024,
+            **template_context,
         )
 
     except Exception as e:
         logger.error(f"Submissions page error: {e}")
         flash("Error loading submissions", "error")
+        template_context = get_template_context()
         return render_template(
             "submissions.html",
             submissions=None,
-            allowed_types=[
-                ".pdf",
-                ".docx",
-                ".doc",
-                ".txt",
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".bmp",
-                ".tiff",
-                ".gif",
-            ],
-            max_file_size=100 * 1024 * 1024,
+            **template_context,
         )
 
 
@@ -473,21 +432,10 @@ def upload_guide():
             flash("Error uploading guide. Please try again.", "error")
             return redirect(request.url)
 
+    template_context = get_template_context()
     return render_template(
         "upload_guide.html",
-        allowed_types=[
-            ".pdf",
-            ".docx",
-            ".doc",
-            ".txt",
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".bmp",
-            ".tiff",
-            ".gif",
-        ],
-        max_file_size=100 * 1024 * 1024,
+        **template_context,
     )
 
 
@@ -780,23 +728,12 @@ def upload_submission():
 
         guide_id = session.get("active_guide_id")
 
+    template_context = get_template_context()
     return render_template(
         "upload_submission.html",
         guides=guides,
         guide_id=guide_id,
-        allowed_types=[
-            ".pdf",
-            ".docx",
-            ".doc",
-            ".txt",
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".bmp",
-            ".tiff",
-            ".gif",
-        ],
-        max_file_size=100 * 1024 * 1024,
+        **template_context,
     )
 
 
@@ -902,6 +839,7 @@ def results():
                 "lowest_score": 0,
             }
 
+        template_context = get_template_context()
         return render_template(
             "results.html",
             results=results,
@@ -910,24 +848,13 @@ def results():
             has_results=has_results,
             batch_summary=batch_summary,
             successful_grades=len(results_list),
-            allowed_types=[
-                ".pdf",
-                ".docx",
-                ".doc",
-                ".txt",
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".bmp",
-                ".tiff",
-                ".gif",
-            ],
-            max_file_size=100 * 1024 * 1024,
+            **template_context,
         )
 
     except Exception as e:
         logger.error(f"Results page error: {e}")
         flash("Error loading results", "error")
+        template_context = get_template_context()
         return render_template(
             "results.html",
             results=None,
@@ -941,19 +868,7 @@ def results():
                 "lowest_score": 0,
             },
             successful_grades=0,
-            allowed_types=[
-                ".pdf",
-                ".docx",
-                ".doc",
-                ".txt",
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".bmp",
-                ".tiff",
-                ".gif",
-            ],
-            max_file_size=100 * 1024 * 1024,
+            **template_context,
         )
 
 
@@ -1070,8 +985,8 @@ def api_submission_details(submission_id):
                     submission.updated_at.isoformat() if submission.updated_at else None
                 ),
                 "extracted_text": (
-                    submission.content_text[:500] + "..."
-                    if submission.content_text and len(submission.content_text) > 500
+                    submission.content_text[:app_config.get_text_preview_length()] + "..."
+                    if submission.content_text and len(submission.content_text) > app_config.get_text_preview_length()
                     else submission.content_text
                 ),
             },
@@ -1207,24 +1122,13 @@ def view_submission_content(submission_id):
             submission_id=submission_id
         ).all()
 
+        template_context = get_template_context()
         return render_template(
             "view_submission.html",
             submission=submission,
             grading_results=grading_results,
             page_title="View Submission",
-            allowed_types=[
-                ".pdf",
-                ".docx",
-                ".doc",
-                ".txt",
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".bmp",
-                ".tiff",
-                ".gif",
-            ],
-            max_file_size=100 * 1024 * 1024,
+            **template_context,
         )
 
     except Exception as e:
@@ -2401,41 +2305,14 @@ def settings():
         user_settings = UserSettings.get_or_create_for_user(current_user.id)
         settings_data = user_settings.to_dict()
 
-        # Available options
-        themes = [
-            {"value": "light", "label": "Light"},
-            {"value": "dark", "label": "Dark"},
-            {"value": "auto", "label": "Auto"},
-        ]
-
-        languages = [
-            {"value": "en", "label": "English"},
-            {"value": "es", "label": "Spanish"},
-            {"value": "fr", "label": "French"},
-            {"value": "de", "label": "German"},
-        ]
-
-        notification_levels = [
-            {"value": "error", "label": "Errors Only"},
-            {"value": "warning", "label": "Warnings and Errors"},
-            {"value": "info", "label": "All Notifications"},
-        ]
-
-        available_formats = [
-            ".pdf",
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".docx",
-            ".doc",
-            ".txt",
-            ".bmp",
-            ".tiff",
-            ".gif",
-        ]
+        # Get configuration from service
+        themes = app_config.get_available_themes()
+        languages = app_config.get_available_languages()
+        notification_levels = app_config.get_notification_levels()
+        available_formats = app_config.get_allowed_file_types()
 
         # Check service status
-        service_status = check_service_status()
+        service_status = get_actual_service_status()
 
         return render_template(
             "settings.html",
@@ -2451,38 +2328,11 @@ def settings():
     except Exception as e:
         logger.error(f"Settings page error: {e}")
         flash("Error loading settings", "error")
-    # Initialize default options
-    themes = [
-        {"value": "light", "label": "Light"},
-        {"value": "dark", "label": "Dark"},
-        {"value": "auto", "label": "Auto"},
-    ]
-
-    languages = [
-        {"value": "en", "label": "English"},
-        {"value": "es", "label": "Spanish"},
-        {"value": "fr", "label": "French"},
-        {"value": "de", "label": "German"},
-    ]
-
-    notification_levels = [
-        {"value": "error", "label": "Errors Only"},
-        {"value": "warning", "label": "Warnings and Errors"},
-        {"value": "info", "label": "All Notifications"},
-    ]
-
-    available_formats = [
-        ".pdf",
-        ".jpg",
-        ".jpeg",
-        ".png",
-        ".docx",
-        ".doc",
-        ".txt",
-        ".bmp",
-        ".tiff",
-        ".gif",
-    ]
+    # Get configuration from service (fallback case)
+    themes = app_config.get_available_themes()
+    languages = app_config.get_available_languages()
+    notification_levels = app_config.get_notification_levels()
+    available_formats = app_config.get_allowed_file_types()
 
     return render_template(
         "settings.html",
@@ -2491,7 +2341,7 @@ def settings():
         languages=languages,
         notification_levels=notification_levels,
         available_formats=available_formats,
-        service_status={},
+        service_status=get_actual_service_status(),
         csrf_token=generate_csrf_token(),
     )
 

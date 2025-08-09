@@ -274,10 +274,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     const value = parseInt(this.value);
                     if (value && value > 0) {
                         guide.max_questions_to_answer = value;
-                        console.log(`Max questions to answer set to: ${value}`);
                     } else {
                         guide.max_questions_to_answer = null;
-                        console.log('Max questions to answer set to: All questions');
                     }
                 });
             }
@@ -530,7 +528,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 requestData.max_questions_to_answer = maxQuestionsToAnswer;
             }
             
-            console.log('Starting enhanced processing with data:', requestData);
+
             
             const response = await fetch('/api/enhanced-processing/start', {
                 method: 'POST',

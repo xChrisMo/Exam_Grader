@@ -237,7 +237,7 @@ class SecurityUtils:
                             "example",
                             "placeholder",
                             "change_me",
-                            "xxx",
+                            "default",
                             "set_via_environment",
                             "replace_with",
                         ]

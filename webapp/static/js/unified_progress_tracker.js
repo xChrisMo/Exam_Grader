@@ -31,8 +31,6 @@ class UnifiedProgressTracker {
 
         // Start polling for progress updates
         this.checkProgress();
-
-        console.log(`Started tracking progress: ${progressId}`);
     }
 
     /**
@@ -51,7 +49,6 @@ class UnifiedProgressTracker {
             this.intervalId = null;
         }
         this.isTracking = false;
-        console.log('Stopped tracking progress');
     }
 
     /**
@@ -129,7 +126,6 @@ class UnifiedProgressTracker {
                 throw new Error(data.error || 'Unknown error');
             }
         } catch (error) {
-            console.error('Error checking progress:', error);
             this.retryCount++;
             
             if (this.retryCount >= this.maxRetries) {

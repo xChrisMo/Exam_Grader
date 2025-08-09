@@ -180,7 +180,7 @@
             {% if session.status == 'in_progress' %}
             <div class="mb-4">
               <div class="flex justify-between text-sm font-medium text-gray-900 mb-2">
-                <span>{{ session.current_step or 'Processing...' }}</span>
+                <span>{{ session.current_step or 'Starting training...' }}</span>
                 <span>{{ session.progress_percentage or 0 }}%</span>
               </div>
               <div class="w-full bg-gray-200 rounded-full h-2">

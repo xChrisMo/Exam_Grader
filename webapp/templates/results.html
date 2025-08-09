@@ -154,7 +154,7 @@
                                     </div>
                                     <div class="ml-4">
                                         <div class="text-sm font-medium text-gray-900">{{ result.filename }}</div>
-                                        <div class="text-sm text-gray-500">ID: {{ result.submission_id[:8] }}...</div>
+                                        <div class="text-sm text-gray-500">ID: {{ result.submission_id[:8] }}…</div>
                                     </div>
                                 </div>
                             </td>
@@ -269,7 +269,6 @@ if (typeof ExamGrader === 'undefined') {
     window.ExamGrader = {
         notificationManager: {
             notify: function (message, type) {
-                console.log('Notification (' + type + '): ' + message);
                 alert(type.toUpperCase() + ': ' + message);
             }
         }
@@ -278,7 +277,6 @@ if (typeof ExamGrader === 'undefined') {
 
 // Safe viewDetails function
 window.viewDetails = function(submissionId) {
-    console.log('viewDetails called for:', submissionId);
     
     try {
         // Get results data safely
@@ -385,7 +383,6 @@ window.closeDetailsModal = function() {
 
 // Delete result function
 window.deleteResult = function(resultId) {
-    console.log('deleteResult called for result:', resultId);
     
     if (!resultId) {
         ExamGrader.notificationManager.notify('Invalid result ID', 'error');
@@ -431,7 +428,6 @@ window.deleteResult = function(resultId) {
 
 // Export results function
 window.exportResults = function() {
-    console.log('exportResults called');
     
     const exportBtn = document.querySelector('button[onclick="exportResults()"]');
     let originalText = '';
@@ -507,16 +503,12 @@ window.exportResults = function() {
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, initializing results page');
-    
     // Close modal on escape key
     document.addEventListener('keydown', function(event) {
         if (event.key === 'Escape') {
             closeDetailsModal();
         }
     });
-    
-    console.log('Results page JavaScript fully loaded and initialized');
 });
 </script>
 {% endblock %}

@@ -1,6 +1,6 @@
 # Exam Grader - AI-Powered Assessment Platform
 
-[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.1.1-blue.svg)](VERSION)
 [![Python](https://img.shields.io/badge/python-3.8+-green.svg)](https://python.org)
 [![Flask](https://img.shields.io/badge/flask-3.0+-red.svg)](https://flask.palletsprojects.com)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)

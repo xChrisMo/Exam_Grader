@@ -219,7 +219,7 @@
               </button>
               
               <!-- Dropdown Menu -->
-              <div class="absolute left-0 mt-1 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 opacity-0 invisible transition-all duration-200 z-50" id="training-dropdown-menu">
+              <div class="absolute left-0 mt-1 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 opacity-0 invisible pointer-events-none transition-all duration-200 z-50" id="training-dropdown-menu">
                 <div class="py-1">
                   <a href="{{ url_for('training.dashboard') }}" 
                      class="{% if request.endpoint == 'training.dashboard' %}bg-primary-50 text-primary-700{% else %}text-gray-700 hover:bg-gray-100{% endif %} block px-4 py-2 text-sm">
@@ -513,15 +513,15 @@
         let isDropdownOpen = false;
 
         function openTrainingDropdown() {
-          trainingDropdownMenu.classList.remove('opacity-0', 'invisible');
-          trainingDropdownMenu.classList.add('opacity-100', 'visible');
+          trainingDropdownMenu.classList.remove('opacity-0', 'invisible', 'pointer-events-none');
+          trainingDropdownMenu.classList.add('opacity-100', 'visible', 'pointer-events-auto');
           trainingDropdownArrow.classList.add('rotate-180');
           isDropdownOpen = true;
         }
 
         function closeTrainingDropdown() {
-          trainingDropdownMenu.classList.add('opacity-0', 'invisible');
-          trainingDropdownMenu.classList.remove('opacity-100', 'visible');
+          trainingDropdownMenu.classList.add('opacity-0', 'invisible', 'pointer-events-none');
+          trainingDropdownMenu.classList.remove('opacity-100', 'visible', 'pointer-events-auto');
           trainingDropdownArrow.classList.remove('rotate-180');
           isDropdownOpen = false;
         }
@@ -621,7 +621,6 @@
         ExamGrader.config.allowedFileTypes = [".pdf", ".docx", ".doc", ".txt", ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".gif"];
         {% endif %}
         
-        console.log('ExamGrader config initialized:', ExamGrader.config);
       } else {
         // Retry after a short delay if ExamGrader is not ready
         setTimeout(initializeExamGraderConfig, 100);

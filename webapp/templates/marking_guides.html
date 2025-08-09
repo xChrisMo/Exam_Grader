@@ -792,10 +792,7 @@ async function executeDelete() {
                          document.querySelector('input[name=csrf_token]')?.value ||
                          '{{ csrf_token }}';
 
-        console.log('Delete request details:', {
-            guide_id: guideId,
-            csrf_token: csrfToken ? csrfToken.substring(0, 10) + '...' : 'none'
-        });
+
 
         const headers = {
             'Content-Type': 'application/json',
@@ -814,10 +811,7 @@ async function executeDelete() {
             })
         });
 
-        console.log('Delete response status:', response.status);
-
         const result = await response.json();
-        console.log('Delete response data:', result);
 
         if (result.success) {
             // Remove guide card from UI with animation
@@ -840,7 +834,6 @@ async function executeDelete() {
                 const currentGuideSection = document.querySelector('.current-guide-section');
                 if (currentGuideSection) {
                     currentGuideSection.style.display = 'none';
-                    console.log('Hidden current guide section - active guide was deleted');
                 }
 
                 // Show a notification that the active guide was cleared

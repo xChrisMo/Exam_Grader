@@ -36,7 +36,7 @@
                 </div>
                 
                 <!-- Progress Title -->
-                <h3 id="unified-progress-text" class="text-xl font-semibold text-gray-900 mb-2">Initializing AI Processing...</h3>
+                <h3 id="unified-progress-text" class="text-xl font-semibold text-gray-900 mb-2">Preparing AI Processing...</h3>
                 
                 <!-- Progress Bar -->
                 <div class="max-w-2xl mx-auto mb-4">
@@ -60,7 +60,7 @@
                 
                 <!-- Progress Details -->
                 <div class="space-y-2 text-sm text-gray-600">
-                    <p id="unified-progress-details">Preparing for processing...</p>
+                    <p id="unified-progress-details">Starting processing pipeline...</p>
                     <p id="unified-submission-counter" class="text-xs text-gray-500"></p>
                     <p id="unified-progress-eta" class="text-xs text-blue-600 font-medium"></p>
                 </div>
@@ -306,7 +306,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Processing error:', data);
         },
         onStageChange: function(newStage, oldStage) {
-            console.log(`Stage changed from ${oldStage} to ${newStage}`);
             updateStageConnections(newStage);
         }
     });

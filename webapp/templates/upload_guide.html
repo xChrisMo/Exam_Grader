@@ -113,7 +113,7 @@
                 <!-- Upload Progress -->
                 <div id="upload-progress" class="mb-6 hidden">
                     <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm font-medium text-gray-700">Uploading...</span>
+                        <span class="text-sm font-medium text-gray-700" id="upload-status">Preparing upload...</span>
                         <span id="progress-text" class="text-sm text-gray-500">0%</span>
                     </div>
                     <div class="w-full bg-gray-200 rounded-full h-2">
@@ -180,9 +180,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set max file size (100MB default)
     const maxFileSize = 100 * 1024 * 1024;
 
-    // Debug logging
-    console.log('Upload form initialized');
-    console.log('File input element:', fileInput);
+    // Upload form initialized
 
     // Enhanced file validation
     function validateFile(file) {
@@ -249,17 +247,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // File selection handler with enhanced validation
     if (fileInput) {
         fileInput.addEventListener('change', function(e) {
-            console.log('File selection triggered');
             const file = e.target.files[0];
-            console.log('Selected file:', file);
             
             if (file) {
-                console.log('File details:', {
-                    name: file.name,
-                    size: file.size,
-                    type: file.type
-                });
-                
                 if (validateFile(file)) {
                     displaySelectedFile(file);
                     updateDropZoneState('selected');
@@ -269,13 +259,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     updateDropZoneState('error');
                 }
             } else {
-                console.log('No file selected');
                 updateDropZoneState('default');
             }
         });
-        console.log('File input change listener added');
-    } else {
-        console.error('File input element not found');
     }
 
     // Drag and drop handlers
@@ -305,9 +291,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 displaySelectedFile(file);
             }
         });
-        console.log('Drag and drop listeners added');
-    } else {
-        console.error('Drop zone element not found');
     }
 
     function displaySelectedFile(file) {

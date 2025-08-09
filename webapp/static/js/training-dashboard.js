@@ -395,7 +395,6 @@ class TrainingDashboard {
                     }
                 }
             } catch (error) {
-                console.error('Error checking progress:', error);
                 setTimeout(checkProgress, 5000); // Retry after longer delay
             }
         };

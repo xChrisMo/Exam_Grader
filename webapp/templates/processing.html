@@ -109,8 +109,6 @@
             return;
         }
         
-        console.log('Starting progress tracking for ID:', progressId);
-        
         // Start polling for progress updates
         startProgressPolling(progressId);
         
@@ -123,7 +121,6 @@
         }
         
         function startProgressPolling(progressId) {
-            console.log('Starting progress polling for ID:', progressId);
             
             // Clear any existing interval
             if (window.progressPollingInterval) {
@@ -171,7 +168,6 @@
                             stopProgressPolling();
                             showError('Connection error: Unable to check progress. Please check your internet connection and try again.');
                         } else {
-                            console.log(`Retrying progress check (attempt ${window.progressErrorCount}/5)`);
                             // Exponential backoff: increase interval on errors
                             pollInterval = Math.min(pollInterval * 1.5, 10000); // Max 10 seconds
                             window.progressPollingInterval = setTimeout(poll, pollInterval);
@@ -187,7 +183,6 @@
             if (window.progressPollingInterval) {
                 clearTimeout(window.progressPollingInterval);
                 window.progressPollingInterval = null;
-                console.log('Progress polling stopped');
             }
         }
         

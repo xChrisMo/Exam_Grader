@@ -320,6 +320,10 @@ def view_result(result_id):
             result = grading_results[0]
             submission = db.session.get(Submission, result.submission_id)
             guide = db.session.get(MarkingGuide, result.marking_guide_id)
+            
+            # Load mappings for the submission to display mapped questions and answers
+            if submission:
+                submission.mappings = Mapping.query.filter_by(submission_id=submission.id).all()
 
             # Calculate session-level totals
             total_score = sum(gr.score for gr in grading_results if gr.score)
@@ -364,6 +368,10 @@ def view_result(result_id):
             # Get related records
             submission = db.session.get(Submission, result.submission_id)
             guide = db.session.get(MarkingGuide, result.marking_guide_id)
+            
+            # Load mappings for the submission to display mapped questions and answers
+            if submission:
+                submission.mappings = Mapping.query.filter_by(submission_id=submission.id).all()
 
             # For single results, check if it's part of a grading session
             if result.grading_session_id:
@@ -641,6 +649,8 @@ def api_cleanup_progress():
 def export_result(result_id):
     """Export processing result."""
     try:
+        from src.database.models import Mapping
+        
         result = GradingResult.query.filter_by(
             id=result_id, user_id=current_user.id
         ).first()
@@ -651,6 +661,10 @@ def export_result(result_id):
         # Get related records
         submission = db.session.get(Submission, result.submission_id)
         guide = db.session.get(MarkingGuide, result.marking_guide_id)
+        
+        # Load mappings for the submission to display mapped questions and answers
+        if submission:
+            submission.mappings = Mapping.query.filter_by(submission_id=submission.id).all()
 
         # Prepare export data
         export_data = {

@@ -33,7 +33,7 @@ const SettingsManager = {
             document.documentElement.classList.remove('dark');
         }
         
-        console.log(`Theme applied: ${theme}`);
+        // Theme applied
     },
     
     // Apply language based on saved setting
@@ -49,14 +49,13 @@ const SettingsManager = {
         // Apply translations to all elements with data-i18n attribute
         this.translatePage();
         
-        console.log(`Language applied: ${language}`);
+        // Language applied
     },
     
     // Translate the page based on current language
     translatePage: function() {
         // Skip if translations are not available
         if (typeof ExamGrader === 'undefined' || !ExamGrader.translations || !ExamGrader.translations[this.currentLanguage]) {
-            console.warn('Translations not available for', this.currentLanguage);
             return;
         }
         
@@ -201,7 +200,6 @@ const SettingsManager = {
             }
             
         } catch (error) {
-            console.error('Error saving settings:', error);
             this.showNotification('Network error saving settings', 'error');
             return false;
         } finally {
@@ -226,12 +224,10 @@ const SettingsManager = {
                 this.populateForm(result.settings);
                 return result.settings;
             } else {
-                console.error('Error loading settings:', result.error);
                 return null;
             }
             
         } catch (error) {
-            console.error('Error loading settings:', error);
             return null;
         }
     },
@@ -483,7 +479,6 @@ const SettingsManager = {
     
     // Initialize settings
     init: async function() {
-        console.log('Initializing Enhanced Settings Manager');
         
         // Get current language first
         const storedLanguage = localStorage.getItem('language');
@@ -508,7 +503,7 @@ const SettingsManager = {
             setInterval(() => this.updateServiceStatus(), 30000); // Every 30 seconds
         }
         
-        console.log('Enhanced Settings Manager initialized');
+        // Enhanced Settings Manager initialized
     }
 };
 

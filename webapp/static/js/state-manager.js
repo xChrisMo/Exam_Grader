@@ -120,7 +120,7 @@ class StateManager {
                 this.state = this.deepMerge(this.state, parsed);
             }
         } catch (error) {
-            console.warn('Failed to load persisted state:', error);
+            // Failed to load persisted state
         }
     }
 
@@ -148,7 +148,7 @@ class StateManager {
                         const newState = JSON.parse(e.newValue);
                         this.replaceState(newState, 'STORAGE_SYNC');
                     } catch (error) {
-                        console.warn('Failed to sync state from storage:', error);
+                        // Failed to sync state from storage
                     }
                 }
             });
@@ -463,7 +463,7 @@ class StateManager {
 
             localStorage.setItem(this.options.persistenceKey, JSON.stringify(persistableState));
         } catch (error) {
-            console.warn('Failed to persist state:', error);
+            // Failed to persist state
         }
     }
 

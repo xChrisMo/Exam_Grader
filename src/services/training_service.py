@@ -661,33 +661,44 @@ class TrainingService(BaseService):
             db.session.commit()
             
             # Process the guide using the guide processor
-            processing_result = self.guide_processor.process_guide(
+            file_info = {
+                'filename': guide.filename,
+                'file_path': guide.file_path,
+                'file_type': guide.guide_type
+            }
+            
+            options = {
+                'confidence_threshold': session.confidence_threshold,
+                'max_questions': session.max_questions_to_answer
+            }
+            
+            processing_result = self.guide_processor.process_guide_directly(
                 file_path=guide.file_path,
-                guide_type=guide.guide_type,
-                confidence_threshold=session.confidence_threshold
+                file_info=file_info,
+                options=options
             )
             
             if processing_result.success:
-                # Extract questions from the processing result
-                questions_data = processing_result.questions or []
+                # Extract criteria from the processing result
+                criteria_data = processing_result.data.get('extracted_criteria', []) if processing_result.data else []
                 
-                # Create training questions
-                for i, question_data in enumerate(questions_data):
+                # Create training questions from criteria
+                for i, criterion_data in enumerate(criteria_data):
                     training_question = TrainingQuestion(
                         guide_id=guide.id,
                         question_number=i + 1,
-                        question_text=question_data.get('question_text', ''),
-                        expected_answer=question_data.get('expected_answer', ''),
-                        marks_allocated=question_data.get('marks_allocated', 0),
-                        extraction_confidence=question_data.get('confidence', 0.0),
-                        manual_review_required=question_data.get('confidence', 0.0) < session.confidence_threshold,
-                        question_metadata=question_data.get('metadata', {})
+                        question_text=criterion_data.get('question_text', ''),
+                        expected_answer=criterion_data.get('expected_answer', ''),
+                        point_value=criterion_data.get('marks_allocated', 0),
+                        extraction_confidence=criterion_data.get('confidence_score', 0.0),
+                        manual_review_required=criterion_data.get('confidence_score', 0.0) < session.confidence_threshold,
+                        rubric_details=criterion_data
                     )
                     db.session.add(training_question)
                 
                 guide.processing_status = "completed"
-                guide.question_count = len(questions_data)
-                guide.processing_metadata = processing_result.metadata
+                guide.question_count = len(criteria_data)
+                guide.processing_metadata = processing_result.data
                 
             else:
                 guide.processing_status = "failed"

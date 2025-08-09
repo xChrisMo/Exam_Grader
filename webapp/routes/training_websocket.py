@@ -83,8 +83,14 @@ def handle_join_training_session(data):
             emit('error', {'message': 'Session ID required'})
             return
         
-        # TODO: Verify user has access to this training session
-        # For now, assume user has access if authenticated
+        # Verify user has access to this training session
+        from src.database.models import TrainingSession
+        
+        session = db.session.query(TrainingSession).filter_by(id=session_id).first()
+        if not session or session.user_id != current_user.id:
+            logger.warning(f"User {current_user.id} attempted to access unauthorized session {session_id}")
+            emit('error', {'message': 'Access denied to this training session'})
+            return
         
         room_name = f"training_session_{training_session_id}"
         join_room(room_name)
@@ -144,30 +150,34 @@ def handle_progress_update_request(data):
             emit('error', {'message': 'Session ID required'})
             return
         
-        # TODO: Get actual progress from TrainingService
-        # For now, send mock progress data
-        progress_data = {
-            'session_id': training_session_id,
-            'percentage': 45,
-            'current_step': 'Processing files...',
-            'status': 'in_progress',
-            'files_processed': 2,
-            'total_files': 5,
-            'questions_generated': 12,
-            'avg_confidence': 0.78,
-            'errors': {
-                'total': 1,
-                'processing': 1,
-                'llm': 0,
-                'validation': 0
-            },
-            'confidence': {
-                'high': 8,
-                'medium': 3,
-                'low': 1
-            },
-            'timestamp': datetime.now().isoformat()
-        }
+        # Get actual progress from TrainingService
+        from webapp.routes.training_routes import get_training_service
+        
+        try:
+            training_service = get_training_service()
+            progress_info = training_service.get_training_progress(training_session_id)
+            
+            progress_data = {
+                'session_id': training_session_id,
+                'percentage': progress_info.progress_percentage,
+                'current_step': progress_info.current_step,
+                'status': progress_info.status,
+                'guides_processed': progress_info.guides_processed,
+                'questions_extracted': progress_info.questions_extracted,
+                'avg_confidence': progress_info.average_confidence,
+                'error_message': progress_info.error_message,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.error(f"Error getting progress from TrainingService: {e}")
+            progress_data = {
+                'session_id': training_session_id,
+                'percentage': 0,
+                'current_step': 'Error retrieving progress',
+                'status': 'error',
+                'error_message': 'Failed to get progress information',
+                'timestamp': datetime.now().isoformat()
+            }
         
         emit('progress_update', {
             'type': 'progress_update',

@@ -89,16 +89,29 @@ def _init_extensions(app: Flask) -> None:
         from flask_login import current_user
         from flask_wtf.csrf import generate_csrf
 
-        # Provide default service status to prevent template errors
-        service_status = {
-            "ocr_status": True,  # Default to online
-            "llm_status": True,  # Default to online
-        }
-        # Provide default storage stats to prevent template errors
-        storage_stats = {
-            "total_size_mb": 0,  # Default storage usage
-            "max_size_mb": 1000,  # Default max storage
-        }
+        # Get actual service status
+        try:
+            from webapp.routes.main_routes import get_actual_service_status
+            service_status = get_actual_service_status()
+        except Exception as e:
+            logger.debug(f"Could not get service status: {e}")
+            # Fallback to offline status if check fails
+            service_status = {
+                "ocr_status": False,
+                "llm_status": False,
+                "ai_status": False,
+            }
+        # Get actual storage stats
+        try:
+            from src.services.storage_service import get_storage_stats
+            storage_stats = get_storage_stats()
+        except Exception as e:
+            logger.debug(f"Could not get storage stats: {e}")
+            # Fallback to basic stats if service fails
+            storage_stats = {
+                "total_size_mb": 0,
+                "max_size_mb": 1000,
+            }
         # Get user settings for theme
         settings = {"theme": "light", "language": "en"}  # Default settings
         if current_user.is_authenticated:

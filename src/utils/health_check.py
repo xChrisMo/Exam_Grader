@@ -8,6 +8,7 @@ database, external APIs, file system, and internal services.
 import os
 import time
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
@@ -367,12 +368,20 @@ class HealthChecker:
 
     def _get_cached_results(self) -> Dict[str, Any]:
         """Get cached health check results."""
-        # Implement caching logic here
-        return {"status": "unknown", "message": "No cached results available"}
+        current_time = time.time()
+        
+        # Check if cached results are still valid
+        if (hasattr(self, '_cached_results') and 
+            hasattr(self, '_cache_timestamp') and
+            (current_time - self._cache_timestamp) < self.cache_duration):
+            return self._cached_results
+        
+        return None
 
     def _cache_results(self, results: Dict[str, Any]):
         """Cache health check results."""
-        # Implement caching logic here
+        self._cached_results = results
+        self._cache_timestamp = time.time()
 
 
 # Global health checker instance
