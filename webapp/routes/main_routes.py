@@ -2693,3 +2693,20 @@ def guide_detail(guide_id):
         logger.error(f"Error loading guide details for {guide_id}: {e}")
         flash("Error loading guide details", "error")
         return redirect(url_for("main.guides"))
+
+@main_bp.route('/.well-known/appspecific/com.chrome.devtools.json')
+def chrome_devtools():
+    """Handle Chrome DevTools requests to prevent 404 errors"""
+    return jsonify({"error": "Not available"}), 404
+
+
+@main_bp.route('/favicon.ico')
+def favicon():
+    """Serve favicon"""
+    from flask import send_from_directory
+    import os
+    return send_from_directory(
+        os.path.join(current_app.root_path, 'static'),
+        'favicon.ico',
+        mimetype='image/vnd.microsoft.icon'
+    )

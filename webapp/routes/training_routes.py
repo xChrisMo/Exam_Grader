@@ -31,6 +31,26 @@ def get_training_service():
         training_service = TrainingService()
     return training_service
 
+
+def validate_session_access(session_id: str) -> tuple:
+    """
+    Validate that the current user has access to the training session.
+    
+    Args:
+        session_id: The training session ID to validate
+        
+    Returns:
+        Tuple of (session_object, error_response) where error_response is None if valid
+    """
+    session = db.session.query(TrainingSession).filter_by(id=session_id).first()
+    if not session:
+        return None, (jsonify({'error': 'Training session not found'}), 404)
+    
+    if session.user_id != current_user.id:
+        return None, (jsonify({'error': 'Access denied to this session'}), 403)
+    
+    return session, None
+
 # Allowed file extensions for training guides
 ALLOWED_EXTENSIONS = {
     'pdf', 'docx', 'doc', 'jpg', 'jpeg', 'png', 'tiff', 'bmp', 'gif'
@@ -734,8 +754,9 @@ def manage_session_config(session_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         if request.method == 'GET':
             # Get session configuration from database
@@ -831,8 +852,9 @@ def upload_test_submission(session_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         if 'file' not in request.files:
             return jsonify({'error': 'No file provided'}), 400
@@ -901,8 +923,9 @@ def run_model_test(session_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         data = request.get_json() or {}
         test_submission_ids = data.get('test_submission_ids', [])
@@ -975,8 +998,9 @@ def get_test_progress(session_id, test_run_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         # Get actual test progress from database
         test_submission = db.session.query(TestSubmission).filter_by(id=test_run_id).first()
@@ -1018,8 +1042,9 @@ def get_test_results(session_id, test_run_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         # Get actual test results from database
         test_submission = db.session.query(TestSubmission).filter_by(id=test_run_id).first()
@@ -1100,8 +1125,9 @@ def get_test_report(session_id, test_run_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         # Generate detailed test report
         test_submission = db.session.query(TestSubmission).filter_by(id=test_run_id).first()
@@ -1181,8 +1207,9 @@ def list_test_submissions(session_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         # Get actual test submissions from database
         # Get all test submissions for this session
@@ -1391,6 +1418,39 @@ def get_session(session_id):
         return jsonify({'error': 'Failed to get session details'}), 500
 
 
+@training_bp.route('/session/<session_id>/results')
+@login_required
+def get_session_results(session_id):
+    """
+    Get training results for a session
+    
+    This endpoint returns the training results and analytics for a session.
+    """
+    try:
+        logger.info(f"Getting results for session: {session_id}")
+        
+        # Validate session belongs to user
+        session = db.session.query(TrainingSession).filter_by(id=session_id).first()
+        if not session:
+            return jsonify({'error': 'Training session not found'}), 404
+        
+        if session.user_id != current_user.id:
+            return jsonify({'error': 'Access denied to this session'}), 403
+        
+        # Get results using training service
+        training_service = get_training_service()
+        results = training_service.get_training_results(session_id)
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting session results: {e}")
+        return jsonify({'error': 'Failed to get session results'}), 500
+
+
 @training_bp.route('/session/<session_id>/report')
 @login_required
 def get_report(session_id):
@@ -1474,7 +1534,11 @@ def download_report(session_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
+        session = db.session.query(TrainingSession).filter_by(id=session_id).first()
+        if not session:
+            return jsonify({'error': 'Training session not found'}), 404
+        
+        if session.user_id != current_user.id:
             return jsonify({'error': 'Access denied to this session'}), 403
         
         logger.info(f"Downloading report for session: {session_id}")
@@ -1541,8 +1605,9 @@ def get_markdown_report(session_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         logger.info(f"Generating markdown report for session: {session_id}")
         
@@ -1619,8 +1684,9 @@ def get_report_chart(session_id, chart_type):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         valid_chart_types = ['confidence', 'question_types', 'processing_time', 'accuracy', 'errors']
         if chart_type not in valid_chart_types:
@@ -1723,8 +1789,9 @@ def export_report(session_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         data = request.get_json() or {}
         export_format = data.get('format', 'pdf').lower()
@@ -1806,8 +1873,9 @@ def download_exported_report(session_id, export_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         logger.info(f"Downloading exported report: {export_id}")
         
@@ -1860,8 +1928,9 @@ def share_report(session_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         data = request.get_json() or {}
         share_config = {
@@ -2392,8 +2461,9 @@ def get_session_confidence(session_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         # Get confidence metrics using confidence monitor
         metrics = confidence_monitor.analyze_session_confidence(session_id)
@@ -2429,8 +2499,9 @@ def get_flagged_items(session_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         # Get threshold from query parameters
         threshold = float(request.args.get('threshold', 0.6))
@@ -2583,8 +2654,9 @@ def get_quality_report(session_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         # Get confidence metrics
         metrics = confidence_monitor.analyze_session_confidence(session_id)
@@ -2876,8 +2948,9 @@ def recover_training_session(session_id):
     """
     try:
         # Validate session belongs to user
-        if not session_id.startswith(f"session_{current_user.id}_"):
-            return jsonify({'error': 'Access denied to this session'}), 403
+        session, error_response = validate_session_access(session_id)
+        if error_response:
+            return error_response
         
         from src.services.error_recovery import error_recovery_service
         

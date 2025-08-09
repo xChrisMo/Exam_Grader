@@ -74,62 +74,92 @@ class DirectLLMGuideProcessor(BaseService):
     
     def _create_guide_analysis_prompt(self) -> str:
         """Create the system prompt for guide analysis."""
-        return """You are an expert educational assessment analyzer. Your task is to analyze marking guides and extract structured grading criteria.
+        return """You are an expert educational assessment analyzer specializing in comprehensive marking guide analysis. Your task is to extract ALL grading criteria from marking guides with maximum completeness.
 
-When analyzing a marking guide, you should:
+CRITICAL INSTRUCTIONS:
+1. **EXTRACT EVERY QUESTION**: Do not skip any questions, sub-questions, or parts
+2. **SCAN THOROUGHLY**: Look through the entire document from beginning to end
+3. **INCLUDE ALL SECTIONS**: Process headers, footers, sidebars, and appendices
+4. **CAPTURE VARIATIONS**: Include multiple choice, short answer, essay, calculation, and diagram questions
+5. **PRESERVE STRUCTURE**: Maintain question numbering and section organization
 
-1. **Identify the document structure**: Look for questions, sections, rubrics, and point allocations
-2. **Extract grading criteria**: Find specific requirements, expected answers, and scoring rubrics
-3. **Preserve visual context**: Note any diagrams, tables, or visual elements that are part of the criteria
-4. **Understand point allocation**: Identify how points are distributed across different criteria
-5. **Maintain relationships**: Keep track of which criteria belong to which questions or sections
+DOCUMENT ANALYSIS APPROACH:
+- Start from the first page and work systematically through each page
+- Look for question indicators: numbers (1, 2, 3), letters (a, b, c), bullets, or section headers
+- Identify point allocations: [5 marks], (10 points), /15, etc.
+- Extract expected answers, model solutions, or marking schemes
+- Note any rubrics, criteria, or grading guidelines
+- Include bonus questions, optional sections, or alternative questions
 
-Focus on extracting actionable grading criteria that can be used to evaluate student submissions. Pay special attention to:
-- Specific answer requirements
-- Partial credit guidelines
-- Common mistakes to watch for
-- Visual elements that students need to include
-- Formatting or presentation requirements
+QUALITY REQUIREMENTS:
+- Extract minimum 80% of visible questions in the document
+- Provide specific, actionable grading criteria for each question
+- Include point values even if estimated
+- Capture partial credit guidelines where available
+- Note any special instructions or formatting requirements
 
-Respond with structured data that clearly organizes all grading criteria."""
+You must be thorough and comprehensive. Missing questions is a critical failure."""
     
     def _create_criteria_extraction_prompt(self) -> str:
         """Create the user prompt for criteria extraction."""
-        return """Please analyze this marking guide and extract all grading criteria in the following JSON format:
+        return """COMPREHENSIVE MARKING GUIDE ANALYSIS - EXTRACT ALL QUESTIONS AND CRITERIA
 
+MANDATORY REQUIREMENTS:
+1. Read through the ENTIRE document from start to finish
+2. Extract EVERY question, sub-question, and part (1, 1a, 1b, 2, 2a, etc.)
+3. Include ALL point allocations, even if they're just [1 mark] or (2 points)
+4. Capture both questions AND their expected answers/marking schemes
+5. Do NOT skip any sections, pages, or appendices
+
+SEARCH PATTERNS TO LOOK FOR:
+- Question numbers: 1, 2, 3, 4... or 1., 2., 3., 4...
+- Sub-questions: a), b), c) or (i), (ii), (iii)
+- Point indicators: [5 marks], (10 points), /15, "5 pts", "worth 3 marks"
+- Section headers: "Part A", "Section 1", "Question Set B"
+- Answer keys: "Answer:", "Solution:", "Expected response:"
+- Rubrics: "Full marks for...", "Partial credit if...", "Deduct points for..."
+
+OUTPUT FORMAT (JSON):
 {
     "guide_metadata": {
-        "title": "Guide title or subject",
-        "total_points": "Total possible points",
-        "sections": "Number of main sections",
-        "question_count": "Number of questions"
+        "title": "Document title or subject name",
+        "total_points": "Sum of all point values found",
+        "sections": "Number of main sections identified",
+        "question_count": "Total number of questions/sub-questions found"
     },
     "grading_criteria": [
         {
-            "id": "unique_identifier",
-            "question_text": "The question or prompt text",
-            "expected_answer": "What the student should provide",
-            "point_value": "Points allocated to this criterion",
+            "id": "q1", 
+            "question_text": "Complete question text exactly as written",
+            "expected_answer": "Model answer or key points to look for",
+            "point_value": 5,
             "rubric_details": {
-                "full_credit": "Requirements for full points",
-                "partial_credit": "Requirements for partial points",
-                "no_credit": "What results in no points"
+                "full_credit": "What earns full marks",
+                "partial_credit": "What earns partial marks", 
+                "no_credit": "What earns zero marks"
             },
-            "visual_elements": ["List of any visual components required"],
-            "context": "Additional context or notes"
+            "visual_elements": ["Describe any diagrams, tables, charts, or images"],
+            "context": "Question type, difficulty level, or special notes"
         }
     ],
     "special_instructions": [
-        "Any special grading instructions or notes"
+        "Any overall grading guidelines, time limits, or special rules"
     ],
     "confidence_indicators": {
-        "structure_clarity": "How clear the guide structure is (0-1)",
-        "criteria_completeness": "How complete the extracted criteria are (0-1)",
-        "visual_element_handling": "How well visual elements were processed (0-1)"
+        "structure_clarity": 0.9,
+        "criteria_completeness": 0.85,
+        "visual_element_handling": 0.7
     }
 }
 
-Extract ALL grading criteria, even if they seem minor. Include partial credit guidelines and any special instructions. If there are visual elements (diagrams, tables, etc.), describe them in the visual_elements field."""
+CRITICAL SUCCESS CRITERIA:
+- Extract minimum 90% of all visible questions
+- Include accurate point values for each question
+- Provide specific, actionable grading criteria
+- Maintain original question numbering and structure
+- Include even small 1-2 point questions
+
+FAILURE IS NOT ACCEPTABLE - This marking guide analysis is critical for student assessment accuracy."""
     
     async def initialize(self) -> bool:
         """Initialize the service."""
@@ -521,22 +551,44 @@ Extract ALL grading criteria, even if they seem minor. Include partial credit gu
         import re
         
         try:
-            # Try to find JSON block in response
+            logger.debug(f"Attempting to extract JSON from response (first 500 chars): {response[:500]}")
+            
+            # Strategy 1: Try to find JSON block in response
             json_match = re.search(r'\{.*\}', response, re.DOTALL)
             if json_match:
                 json_str = json_match.group()
-                return json.loads(json_str)
+                logger.debug(f"Found JSON block: {json_str[:200]}...")
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse JSON block: {e}")
             
-            # Try to find JSON between code blocks
+            # Strategy 2: Try to find JSON between code blocks
             code_block_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL)
             if code_block_match:
                 json_str = code_block_match.group(1)
-                return json.loads(json_str)
+                logger.debug(f"Found JSON in code block: {json_str[:200]}...")
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse JSON from code block: {e}")
             
-            return None
+            # Strategy 3: Create fallback structure if no JSON found
+            logger.warning(f"No valid JSON found in LLM response. Creating fallback structure.")
+            logger.debug(f"Full response content: {response}")
+            
+            # Return a basic structure to prevent complete failure
+            return {
+                "grading_criteria": [],
+                "metadata": {
+                    "extraction_method": "fallback",
+                    "original_response": response[:1000]  # Store first 1000 chars for debugging
+                }
+            }
             
         except Exception as e:
-            logger.warning(f"JSON extraction failed: {e}")
+            logger.error(f"JSON extraction failed with error: {e}")
+            logger.debug(f"Failed response content: {response[:1000]}")
             return None
     
     def _extract_grading_criteria(self, response_data: Dict[str, Any]) -> List[GradingCriterion]:

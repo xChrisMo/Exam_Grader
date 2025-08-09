@@ -1,6 +1,6 @@
 {
   "name": "exam-grader",
-  "version": "1.0.0",
+  "version": "2.1.2",
   "description": "AI-powered educational assessment platform",
   "main": "index.js",
   "scripts": {
@@ -18,8 +18,8 @@
   "author": "Exam Grader Team",
   "license": "MIT",
   "devDependencies": {
-    "tailwindcss": "^3.4.0",
-    "@tailwindcss/forms": "^0.5.7",
-    "@tailwindcss/typography": "^0.5.10"
+    "tailwindcss": "^3.4.14",
+    "@tailwindcss/forms": "^0.5.9",
+    "@tailwindcss/typography": "^0.5.15"
   }
 }

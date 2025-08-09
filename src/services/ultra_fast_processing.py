@@ -455,7 +455,7 @@ Grade fairly and provide accurate scores based on answer quality. Use the full r
                 'question_id': mapping.get('question_id', f"Q{i+1}"),
                 'score': round(final_score, 2),
                 'max_score': float(actual_max_score),
-                'feedback': grades[i].get('feedback', 'Fast graded') if i < len(grades) else 'Default graded'
+                'feedback': grades[i].get('feedback', 'Graded automatically') if i < len(grades) else 'Graded automatically'
             })
         
         return result

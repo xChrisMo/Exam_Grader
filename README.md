@@ -1,6 +1,6 @@
 # Exam Grader - AI-Powered Assessment Platform
 
-[![Version](https://img.shields.io/badge/version-2.1.1-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.1.2-blue.svg)](VERSION)
 [![Python](https://img.shields.io/badge/python-3.8+-green.svg)](https://python.org)
 [![Flask](https://img.shields.io/badge/flask-3.0+-red.svg)](https://flask.palletsprojects.com)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
@@ -224,26 +224,30 @@ exam-grader/
 
 ```bash
 # Run all tests
-python -m pytest tests/
-
-# Run specific test file
-python -m pytest tests/test_services.py
+python -m pytest
 
 # Run with coverage
-python -m pytest --cov=src tests/
+python -m pytest --cov=src --cov=webapp --cov=utils
+
+# Run specific test categories
+python -m pytest -m unit
+python -m pytest -m integration
+python -m pytest -m "not slow"
 ```
 
-### Development Server
+### Development Commands
 
 ```bash
-# Run the application (simple)
-python start.py
+# Start development server
+python run_app.py
+python webapp/app.py
 
-# Run with advanced options
-python run_app.py --debug --port 8080
+# Start with specific configuration
+HOST=127.0.0.1 PORT=8501 DEBUG=True python run_app.py
 
-# Check system requirements
-python run_app.py --check
+# Build CSS (Tailwind)
+npm run build-css        # Development with watch
+npm run build-css-prod   # Production minified
 ```
 
 ### Database Management

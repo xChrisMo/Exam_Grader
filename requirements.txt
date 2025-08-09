@@ -7,20 +7,20 @@
 # ===== CORE RUNTIME DEPENDENCIES =====
 
 # HTTP and API Communication
-requests>=2.31.0                    # HTTP library for API calls
-openai>=1.12.0                     # OpenAI API client for LLM services
+requests>=2.32.3                    # HTTP library for API calls (security updates)
+openai>=1.54.0                     # OpenAI API client for LLM services (latest stable)
 
 # Configuration and Environment
 python-dotenv>=1.0.1               # Environment variable management
 
 # Data Validation and Processing
-validators>=0.22.0                 # Input validation utilities
+validators>=0.24.0                 # Input validation utilities (updated)
 MarkupSafe>=3.0.2                 # Safe string handling
 
 # Document Processing (Core)
-PyMuPDF>=1.24.0                   # PDF processing (fitz module)
-python-docx>=1.1.0                # Word document processing
-Pillow>=10.2.0                    # Image processing
+PyMuPDF>=1.24.11                  # PDF processing (fitz module) - security updates
+python-docx>=1.1.2                # Word document processing (updated)
+Pillow>=10.4.0                    # Image processing (security updates)
 
 # Document Processing (Optional)
 pdfplumber>=0.10.0                # Alternative PDF processing
@@ -29,39 +29,39 @@ docx2txt>=0.8                     # Simple Word document text extraction
 # ===== WEB FRAMEWORK =====
 
 # Flask Core
-Flask>=3.0.2                      # Web framework
-Werkzeug>=3.0.1                   # WSGI utilities
-Jinja2>=3.1.3                     # Template engine
+Flask>=3.0.3                      # Web framework (latest stable)
+Werkzeug>=3.0.4                   # WSGI utilities (security updates)
+Jinja2>=3.1.4                     # Template engine (security updates)
 
 # Flask Extensions (Essential)
 Flask-WTF>=1.2.1                  # CSRF protection and forms
 Flask-Login>=0.6.3                # User session management
-Flask-CORS>=4.0.0                 # Cross-origin resource sharing
-Flask-Caching>=2.1.0              # Application-level caching
-Flask-Limiter>=3.5.0              # API rate limiting
-Flask-Babel>=3.1.0                # Internationalization support
+Flask-CORS>=5.0.0                 # Cross-origin resource sharing (updated)
+Flask-Caching>=2.3.0              # Application-level caching (updated)
+Flask-Limiter>=3.8.0              # API rate limiting (updated)
+Flask-Babel>=4.0.0                # Internationalization support (updated)
 
 # Forms and Validation
-WTForms>=3.1.0                    # Form handling and validation
+WTForms>=3.1.2                    # Form handling and validation (updated)
 
 # ===== DATABASE =====
 
 # SQLAlchemy Core
-SQLAlchemy>=2.0.25                # Database toolkit
+SQLAlchemy>=2.0.36                # Database toolkit (latest stable)
 Flask-SQLAlchemy>=3.1.1           # Flask-SQLAlchemy integration
-Flask-Migrate>=4.0.5              # Database migrations
+Flask-Migrate>=4.0.7              # Database migrations (updated)
 
 # ===== SECURITY =====
 
 # Cryptography and Security
-cryptography>=42.0.0              # Encryption and secure storage
-tenacity>=8.2.3                   # Retry logic with exponential backoff
+cryptography>=43.0.3              # Encryption and secure storage (security updates)
+tenacity>=9.0.0                   # Retry logic with exponential backoff (updated)
 
 # ===== REAL-TIME COMMUNICATION =====
 
 # WebSocket Support
-Flask-SocketIO>=5.3.6             # WebSocket support for real-time updates
-python-socketio>=5.9.0            # Socket.IO Python client
+Flask-SocketIO>=5.4.1             # WebSocket support for real-time updates (updated)
+python-socketio>=5.11.4           # Socket.IO Python client (updated)
 
 # ===== FILE HANDLING =====
 
@@ -72,104 +72,104 @@ python-magic-bin>=0.4.14; sys_platform == 'win32'  # Windows magic bindings
 # ===== PRODUCTION SERVER =====
 
 # WSGI Server
-gunicorn>=21.2.0                  # Production WSGI server
+gunicorn>=23.0.0                  # Production WSGI server (major update)
 
 # ===== DATA PROCESSING AND ANALYTICS =====
 
 # Data Analysis (for Excel export and advanced analytics)
-numpy>=1.26.4                     # Numerical computing
-pandas>=2.2.0                     # Data manipulation and analysis
-matplotlib>=3.8.0                 # Plotting and visualization
-seaborn>=0.13.0                   # Statistical data visualization
-openpyxl>=3.1.2                   # Excel file support
+numpy>=2.1.3                      # Numerical computing (major update)
+pandas>=2.2.3                     # Data manipulation and analysis (updated)
+matplotlib>=3.9.2                 # Plotting and visualization (updated)
+seaborn>=0.13.2                   # Statistical data visualization (updated)
+openpyxl>=3.1.5                   # Excel file support (updated)
 
 # ===== BACKGROUND TASKS =====
 
 # Background Task Processing
-celery>=5.3.4                     # Distributed task queue
-redis>=5.0.0                      # Redis client for Celery broker
+celery>=5.4.0                     # Distributed task queue (updated)
+redis>=5.2.0                      # Redis client for Celery broker (updated)
 
 # ===== PDF GENERATION =====
 
 # PDF Generation and Reports
-reportlab>=4.0.7                  # PDF generation library
-weasyprint>=60.2                  # HTML to PDF conversion
+reportlab>=4.2.5                  # PDF generation library (updated)
+weasyprint>=62.3                  # HTML to PDF conversion (updated)
 
 # ===== SYSTEM MONITORING =====
 
 # System Monitoring
-psutil>=5.9.0                     # System and process monitoring
+psutil>=6.1.0                     # System and process monitoring (updated)
 
 # ===== ASYNC OPERATIONS =====
 
 # Asynchronous File Operations
-aiofiles>=23.2.1                  # Async file I/O
-aiocache>=0.12.2                  # Async caching
+aiofiles>=24.1.0                  # Async file I/O (updated)
+aiocache>=0.12.3                  # Async caching (updated)
 
 # ===== INTERNATIONALIZATION =====
 
 # Multi-language Support
-Babel>=2.14.0                     # Localization utilities
+Babel>=2.16.0                     # Localization utilities (updated)
 
 # ===== DEVELOPMENT AND TESTING =====
 
 # Core Testing
-pytest>=8.0.0                     # Testing framework
-pytest-cov>=4.1.0                 # Coverage reporting
-pytest-mock>=3.12.0               # Mocking utilities
-pytest-asyncio>=0.23.0            # Async testing support
+pytest>=8.3.3                     # Testing framework (updated)
+pytest-cov>=6.0.0                 # Coverage reporting (updated)
+pytest-mock>=3.14.0               # Mocking utilities (updated)
+pytest-asyncio>=0.24.0            # Async testing support (updated)
 
 # Test Data and Fixtures
 factory-boy>=3.3.0                # Test data generation
-faker>=22.0.0                     # Fake data generation
+faker>=30.8.2                     # Fake data generation (updated)
 
 # Code Quality Tools
-black>=24.2.0                     # Code formatter
+black>=24.10.0                    # Code formatter (updated)
 isort>=5.13.2                     # Import sorting
-flake8>=7.0.0                     # Code linting
-pylint>=3.0.0                     # Advanced code analysis
-bandit>=1.7.5                     # Security linting
-mypy>=1.8.0                       # Static type checking
+flake8>=7.1.1                     # Code linting (updated)
+pylint>=3.3.1                     # Advanced code analysis (updated)
+bandit>=1.8.0                     # Security linting (updated)
+mypy>=1.13.0                      # Static type checking (updated)
 
 # Type Stubs for Third-party Libraries
-types-requests>=2.31.0            # Type stubs for requests
-types-python-dateutil>=2.8.19     # Type stubs for dateutil
+types-requests>=2.32.0            # Type stubs for requests (updated)
+types-python-dateutil>=2.9.0      # Type stubs for dateutil (updated)
 types-PyYAML>=6.0.12              # Type stubs for PyYAML
 types-Pillow>=10.2.0              # Type stubs for Pillow
 types-cryptography>=3.3.23        # Type stubs for cryptography
 
 # Documentation Generation
-sphinx>=7.2.0                     # Documentation generator
-sphinx-rtd-theme>=2.0.0           # Read the Docs theme
-sphinx-autodoc-typehints>=1.25.0  # Type hints in docs
+sphinx>=8.1.3                     # Documentation generator (updated)
+sphinx-rtd-theme>=3.0.2           # Read the Docs theme (updated)
+sphinx-autodoc-typehints>=2.4.4   # Type hints in docs (updated)
 
 # HTTP Testing
-httpx>=0.26.0                     # Modern HTTP client for testing
-responses>=0.24.0                 # Mock HTTP responses
+httpx>=0.28.1                     # Modern HTTP client for testing (updated)
+responses>=0.25.3                 # Mock HTTP responses (updated)
 
 # ===== FALLBACK OCR ENGINES =====
 # ⚠️ WARNING: OCR engines require 2-3GB of disk space
 # Install selectively based on your needs
 
 # EasyOCR - General purpose OCR with good balance of speed and accuracy
-easyocr>=1.7.0
+easyocr>=1.7.1                    # Updated
 
 # PaddleOCR - High accuracy OCR from Baidu, excellent for production use
-paddlepaddle>=2.5.0
-paddleocr>=2.7.0
+paddlepaddle>=2.6.2               # Updated
+paddleocr>=2.8.1                  # Updated
 
 # TrOCR - Microsoft's transformer-based OCR, excellent for handwritten text
-transformers>=4.21.0
-torch>=1.12.0
-torchvision>=0.13.0
+transformers>=4.46.3              # Updated (major version)
+torch>=2.5.1                      # Updated (major version)
+torchvision>=0.20.1               # Updated (major version)
 
 # Tesseract - Classic OCR engine, good for printed text
-pytesseract>=0.3.10
+pytesseract>=0.3.13               # Updated
 
 # Supporting Libraries for OCR
-opencv-python>=4.5.0              # Computer vision library
-sentencepiece>=0.1.97             # Text tokenization
-tokenizers>=0.13.0                # Fast tokenizers
+opencv-python>=4.10.0             # Computer vision library (updated)
+sentencepiece>=0.2.0              # Text tokenization (updated)
+tokenizers>=0.20.3                # Fast tokenizers (updated)
 
 # =============================================================================
 # INSTALLATION INSTRUCTIONS

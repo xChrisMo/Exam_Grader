@@ -284,12 +284,23 @@ window.viewDetails = function(submissionId) {
         let results = [];
         
         if (resultsScript) {
-            results = JSON.parse(resultsScript.textContent);
+            try {
+                results = JSON.parse(resultsScript.textContent);
+            } catch (parseError) {
+                console.error('Failed to parse results data:', parseError);
+                ExamGrader.notificationManager.notify('Invalid results data format', 'error');
+                return;
+            }
+        } else {
+            console.error('Results data script element not found');
+            ExamGrader.notificationManager.notify('Results data not available', 'error');
+            return;
         }
         
         const result = results.find(function(r) { return r.submission_id === submissionId; });
         
         if (!result) {
+            console.error('Result not found for submission ID:', submissionId);
             ExamGrader.notificationManager.notify('Result details not found', 'error');
             return;
         }

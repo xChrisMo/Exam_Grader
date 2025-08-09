@@ -176,7 +176,7 @@
     <div class="bg-white shadow rounded-lg mb-8">
         <div class="px-4 py-5 sm:p-6">
             <div class="flex items-center justify-between mb-6">
-                <h3 class="text-lg leading-6 font-medium text-gray-900">Mapped Answers with AI Feedback</h3>
+                <h3 class="text-lg leading-6 font-medium text-gray-900">Mapped Answers with Expected Answers</h3>
                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-info-100 text-info-800">
                     {% set total_questions = 0 %}
                     {% for grading_result in result.grading_results %}
@@ -307,10 +307,10 @@
                             </div>
                             {% endif %}
                             
-                            <!-- AI Feedback for this question -->
-                            {% if question_grade.feedback %}
+                            <!-- Grading Comments -->
+                            {% if question_grade.feedback and question_grade.feedback != 'Graded automatically' %}
                             <div class="mb-3">
-                                <label class="block text-xs font-medium text-gray-500 mb-1">AI Feedback</label>
+                                <label class="block text-xs font-medium text-gray-500 mb-1">Grading Comments</label>
                                 <div class="bg-gray-50 border-l-4 border-gray-400 p-3 rounded-r-md">
                                     <p class="text-sm text-gray-700">{{ question_grade.feedback }}</p>
                                 </div>
@@ -440,7 +440,7 @@
                     <!-- Feedback -->
                     {% if grading_result.feedback %}
                     <div class="mb-3">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">AI Feedback</label>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Grading Comments</label>
                         <div class="bg-gray-50 border-l-4 border-gray-400 p-3 rounded-r-md">
                             <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ grading_result.feedback }}</p>
                         </div>
@@ -450,7 +450,7 @@
                     <!-- Detailed LLM Analysis -->
                     {% if grading_result.detailed_feedback %}
                     <div class="mb-3">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Detailed LLM Analysis</label>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Detailed Analysis</label>
                         <div class="bg-purple-50 border-l-4 border-purple-400 p-3 rounded-r-md">
                             {% if grading_result.detailed_feedback is string %}
                                 <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ grading_result.detailed_feedback }}</p>

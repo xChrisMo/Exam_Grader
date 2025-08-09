@@ -684,14 +684,27 @@ class TrainingService(BaseService):
                 
                 # Create training questions from criteria
                 for i, criterion_data in enumerate(criteria_data):
+                    # Extract point value with multiple fallbacks
+                    point_value = 0
+                    for key in ['point_value', 'marks_allocated', 'points', 'marks', 'score']:
+                        if key in criterion_data:
+                            try:
+                                point_value = int(criterion_data[key])
+                                break
+                            except (ValueError, TypeError):
+                                continue
+                    
+                    # Calculate confidence score based on data completeness
+                    confidence_score = self._calculate_extraction_confidence(criterion_data)
+                    
                     training_question = TrainingQuestion(
                         guide_id=guide.id,
                         question_number=i + 1,
                         question_text=criterion_data.get('question_text', ''),
                         expected_answer=criterion_data.get('expected_answer', ''),
-                        point_value=criterion_data.get('marks_allocated', 0),
-                        extraction_confidence=criterion_data.get('confidence_score', 0.0),
-                        manual_review_required=criterion_data.get('confidence_score', 0.0) < session.confidence_threshold,
+                        point_value=point_value,
+                        extraction_confidence=confidence_score,
+                        manual_review_required=confidence_score < session.confidence_threshold,
                         rubric_details=criterion_data
                     )
                     db.session.add(training_question)
@@ -712,6 +725,50 @@ class TrainingService(BaseService):
             guide.processing_error = str(e)
             db.session.commit()
             raise
+    
+    def _calculate_extraction_confidence(self, criterion_data: Dict[str, Any]) -> float:
+        """
+        Calculate confidence score based on data completeness and quality
+        
+        Args:
+            criterion_data: Extracted criterion data
+            
+        Returns:
+            Confidence score between 0.0 and 1.0
+        """
+        try:
+            confidence = 0.0
+            
+            # Check for required fields (40% of confidence)
+            required_fields = ['question_text', 'expected_answer']
+            for field in required_fields:
+                if field in criterion_data and criterion_data[field].strip():
+                    confidence += 0.2
+            
+            # Check for point value (20% of confidence)
+            point_fields = ['point_value', 'marks_allocated', 'points', 'marks', 'score']
+            if any(field in criterion_data and criterion_data[field] for field in point_fields):
+                confidence += 0.2
+            
+            # Check for rubric details (20% of confidence)
+            if 'rubric_details' in criterion_data and criterion_data['rubric_details']:
+                confidence += 0.2
+            
+            # Check for content quality (20% of confidence)
+            question_text = criterion_data.get('question_text', '')
+            expected_answer = criterion_data.get('expected_answer', '')
+            
+            # Quality indicators
+            if len(question_text) > 10:  # Reasonable question length
+                confidence += 0.1
+            if len(expected_answer) > 5:  # Reasonable answer length
+                confidence += 0.1
+            
+            return min(confidence, 1.0)  # Cap at 1.0
+            
+        except Exception as e:
+            logger.warning(f"Failed to calculate extraction confidence: {e}")
+            return 0.5  # Default moderate confidence
     
     def _create_training_results(self, session: TrainingSession) -> None:
         """
@@ -734,16 +791,17 @@ class TrainingService(BaseService):
                         confidence_scores.append(question.extraction_confidence)
                         if question.extraction_confidence >= session.confidence_threshold:
                             questions_with_high_confidence += 1
-                    if question.manual_review_required:
-                        questions_requiring_review += 1
+                        else:
+                            questions_requiring_review += 1
             
             # Calculate average confidence
-            average_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.0
+            avg_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.0
             
             # Calculate processing time
-            processing_time = 0
-            if session.created_at and session.updated_at:
+            if session.updated_at and session.created_at:
                 processing_time = int((session.updated_at - session.created_at).total_seconds())
+            else:
+                processing_time = 0
             
             # Create training result record
             training_result = TrainingResult(
@@ -752,22 +810,25 @@ class TrainingService(BaseService):
                 questions_processed=total_questions,
                 questions_with_high_confidence=questions_with_high_confidence,
                 questions_requiring_review=questions_requiring_review,
-                average_confidence_score=average_confidence,
-                predicted_accuracy=min(0.95, average_confidence + 0.1),  # Conservative estimate
+                average_confidence_score=avg_confidence,
+                predicted_accuracy=avg_confidence,  # Simple prediction based on confidence
                 training_metadata={
                     'guides_processed': len(session.training_guides),
-                    'processing_timestamp': datetime.now(timezone.utc).isoformat(),
-                    'confidence_distribution': {
-                        'high': questions_with_high_confidence,
-                        'low': total_questions - questions_with_high_confidence,
-                        'review_required': questions_requiring_review
-                    }
-                },
-                model_parameters={
-                    'confidence_threshold': session.confidence_threshold,
-                    'max_questions_to_answer': session.max_questions_to_answer
+                    'processing_method': 'direct_llm',
+                    'confidence_threshold': session.confidence_threshold
                 }
             )
+            
+            # Update session with calculated values
+            session.average_confidence = avg_confidence
+            session.training_duration_seconds = processing_time
+            
+            db.session.add(training_result)
+            db.session.commit()
+            
+        except Exception as e:
+            logger.error(f"Failed to create training results for session {session.id}: {e}")
+            raise
             
             # Update session with calculated metrics
             session.average_confidence = average_confidence

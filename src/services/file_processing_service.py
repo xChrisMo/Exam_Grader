@@ -1221,11 +1221,22 @@ class FileProcessingService:
             logger.info(f"Available optional dependencies: {', '.join(available_deps)}")
 
         if missing_deps:
-            logger.warning(f"Missing optional dependencies: {', '.join(missing_deps)}")
-            logger.info(
-                "Some file processing features may use fallback methods. "
-                "Install missing dependencies for optimal performance."
-            )
+            # Filter out platform-incompatible dependencies for cleaner logging
+            platform_incompatible = ['antiword ([WinError 2] The system cannot find the file specified)']
+            critical_missing = [dep for dep in missing_deps if dep not in platform_incompatible]
+            
+            if critical_missing:
+                logger.warning(f"Missing optional dependencies: {', '.join(critical_missing)}")
+                logger.info(
+                    "Some file processing features may use fallback methods. "
+                    "Install missing dependencies for optimal performance."
+                )
+            elif missing_deps:
+                logger.debug(f"Platform-incompatible dependencies (expected): {', '.join(missing_deps)}")
+                logger.info(
+                    "Some file processing features may use fallback methods. "
+                    "Install missing dependencies for optimal performance."
+                )
 
     def get_dependency_status(self) -> Dict[str, Any]:
         """Get current dependency status information"""
