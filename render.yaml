@@ -2,6 +2,8 @@ services:
   - type: web
     name: exam-grader
     env: python
+    region: oregon
+    plan: free
     buildCommand: |
       pip install --upgrade pip
       pip install -r requirements.txt
@@ -18,7 +20,7 @@ services:
       - key: FLASK_ENV
         value: production
       - key: DATABASE_URL
-        generateValue: true
+        value: sqlite:///exam_grader.db
       - key: SECRET_KEY
         generateValue: true
       - key: HANDWRITING_OCR_API_KEY

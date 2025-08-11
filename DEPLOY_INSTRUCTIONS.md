@@ -29,6 +29,12 @@ All temporary scripts and documentation have been removed:
 - ✅ **Accurate scoring** - Students graded against actual question values
 - ✅ **Better debugging** - Warnings when marks are missing
 
+### Deployment Issues (Fixed)
+- ✅ **Requirements.txt optimized** - Removed problematic packages causing build failures
+- ✅ **Python compatibility** - Only compatible packages for Python 3.8-3.11
+- ✅ **Minimal dependencies** - Essential packages only for faster builds
+- ✅ **Cross-platform support** - Works on Linux, Windows, macOS
+
 ### Production Ready
 - ✅ **Security enhanced** - CSRF protection, secure sessions
 - ✅ **Performance optimized** - Ultra-fast processing, proper caching
@@ -119,18 +125,39 @@ Render will automatically redeploy when you push to the main branch.
 ## 🆘 Troubleshooting
 
 ### Build Fails
-- Check `requirements.txt` is complete
-- Verify Python version compatibility
+
+**Error: `python-magic-bin==0.4.14` not found**
+- ✅ **Fixed**: Updated requirements.txt with compatible packages only
+- If you see this error, make sure you're using the latest requirements.txt
+
+**Error: `exam_grader from git+https://github.com/...`**
+- ✅ **Fixed**: Removed self-referential GitHub dependency
+- The app code is deployed directly, no need to install from GitHub
+
+**Python version compatibility issues**
+- Use Python 3.8-3.11 (recommended: 3.11)
+- Avoid packages that require specific Python versions
 
 ### App Won't Start
 - Check environment variables in Render dashboard
 - Verify API keys are valid
 - Check build logs for errors
+- Test locally first: `python test_deployment.py`
 
 ### Max Score Issues
 - Ensure marking guides have explicit marks: "(10 marks)", "[5 points]", etc.
 - Check logs for warnings about missing marks
 - Reprocess guides if needed
+
+### Common Deployment Errors
+
+**Build timeout or memory issues**
+- The optimized requirements.txt should fix this
+- If still having issues, try deploying with fewer optional packages
+
+**Import errors in production**
+- Run `python test_deployment.py` locally to verify all imports work
+- Check that all required packages are in requirements.txt
 
 ## 🎉 Success!
 
