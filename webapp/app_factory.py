@@ -10,7 +10,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from flask import Flask
-from flask_babel import Babel
+# from flask_babel import Babel  # Optional - not required for core functionality
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
 
@@ -44,6 +44,14 @@ def create_app(config_name: str = "development") -> Flask:
     config = UnifiedConfig()
     app.config.update(config.get_flask_config())
     
+    # Set extended timeouts for AI processing
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+    app.config['PERMANENT_SESSION_LIFETIME'] = 7200  # 2 hours
+    
+    # Configure request timeout for long-running AI operations
+    import socket
+    socket.setdefaulttimeout(600)  # 10 minutes for socket operations
+    
     # Override for testing environment
     if config_name == "testing":
         app.config['TESTING'] = True
@@ -67,6 +75,9 @@ def create_app(config_name: str = "development") -> Flask:
 
     # Initialize monitoring services
     _init_monitoring_services(app)
+    
+    # Initialize timeout middleware for AI operations
+    _init_timeout_middleware(app)
 
     logger.info(f"Flask application created successfully (config: {config_name})")
 
@@ -82,6 +93,20 @@ def _init_extensions(app: Flask) -> None:
 
     # CSRF Protection
     CSRFProtect(app)
+
+    # Simple internationalization fallback
+    @app.template_global()
+    def _(text):
+        """Simple internationalization fallback - returns English text."""
+        translations = {
+            'enter_your_username': 'Enter your username',
+            'enter_your_password': 'Enter your password',
+            'choose_username': 'Choose a username',
+            'enter_email': 'Enter your email',
+            'create_strong_password': 'Create a strong password',
+            'confirm_your_password': 'Confirm your password'
+        }
+        return translations.get(text, text)
 
     # Make CSRF token and user context available to all templates
     @app.context_processor
@@ -154,8 +179,8 @@ def _init_extensions(app: Flask) -> None:
         
         return count
 
-    # Internationalization
-    Babel(app)
+    # Internationalization (optional - disabled for now)
+    # Babel(app)
 
     # Login Manager
     login_manager = LoginManager()
@@ -338,6 +363,16 @@ def create_database_tables(app: Flask) -> None:
         except Exception as e:
             logger.error(f"Failed to create database tables: {e}")
             raise
+
+
+def _init_timeout_middleware(app: Flask) -> None:
+    """Initialize timeout middleware for AI operations."""
+    try:
+        from src.middleware.timeout_middleware import timeout_middleware
+        timeout_middleware.init_app(app)
+        logger.info("Timeout middleware initialized for AI operations")
+    except Exception as e:
+        logger.error(f"Failed to initialize timeout middleware: {e}")
 
 
 def cleanup_services() -> None:
