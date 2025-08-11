@@ -1,0 +1,482 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<!-- Hidden CSRF Token -->
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Manage Submissions</h1>
+                <p class="mt-2 text-sm text-gray-600">
+                    Assign submissions to marking guides or manage unassigned submissions.
+                </p>
+            </div>
+            <div class="flex space-x-3">
+                <a href="{{ url_for('main.upload_submission') }}"
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Upload Submissions
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Actions -->
+    <div id="bulk-actions" class="mb-6 bg-white shadow rounded-lg p-4 hidden">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <span class="text-sm font-medium text-gray-700">
+                    <span id="selected-count">0</span> submission(s) selected
+                </span>
+                <select id="guide-select"
+                    class="block px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
+                    <option value="">Select a guide to assign...</option>
+                </select>
+            </div>
+            <div class="flex space-x-2">
+                <button id="assign-btn"
+                    class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                    disabled>
+                    Assign to Guide
+                </button>
+                <button id="unassign-btn"
+                    class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    Unassign
+                </button>
+                <button id="clear-selection-btn" class="text-sm text-gray-500 hover:text-gray-700">
+                    Clear Selection
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Submissions by Guide -->
+    <div id="submissions-container" class="space-y-6">
+        <!-- Loading state -->
+        <div id="loading" class="text-center py-12">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p class="mt-2 text-sm text-gray-500">Loading submissions...</p>
+        </div>
+    </div>
+</div>{%
+endblock %}
+
+{% block extra_js %}
+<script>
+    // Basic page load test
+    console.log('Manage submissions page script loaded');
+
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log('DOM content loaded - starting manage submissions initialization');
+        let allSubmissions = [];
+        let selectedSubmissions = [];
+        let guides = [];
+
+        // Initialize page
+        loadGuides();
+        loadSubmissions();
+
+        // Event listeners
+        document.getElementById('assign-btn').addEventListener('click', assignSubmissions);
+        document.getElementById('unassign-btn').addEventListener('click', unassignSubmissions);
+        document.getElementById('clear-selection-btn').addEventListener('click', clearSelection);
+        document.getElementById('guide-select').addEventListener('change', updateAssignButton);
+
+        async function loadGuides() {
+            try {
+                console.log('Loading guides...');
+                const response = await fetch('/refactored/api/marking-guides');
+                console.log('Guides response:', response.status, response.statusText);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                console.log('Guides data:', data);
+
+                if (data.success) {
+                    guides = data.guides || [];
+                    populateGuideSelect();
+                    console.log(`Loaded ${guides.length} guides`);
+                } else {
+                    throw new Error(data.error || 'Failed to load guides');
+                }
+            } catch (error) {
+                console.error('Error loading guides:', error);
+                showError('Failed to load marking guides: ' + error.message);
+            }
+        }
+
+        function populateGuideSelect() {
+            const select = document.getElementById('guide-select');
+            const optionsHtml = guides.map(guide =>
+                `<option value="${guide.id}">${guide.title} (${guide.questions_count || 0} questions)</option>`
+            ).join('');
+
+            select.innerHTML = `<option value="">Select a guide to assign...</option>${optionsHtml}`;
+        }
+
+        async function loadSubmissions() {
+            try {
+                console.log('Loading submissions...');
+                const response = await fetch('/processing/api/submissions?grouped=true');
+                console.log('Submissions response:', response.status, response.statusText);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                console.log('Submissions data:', data);
+
+                if (data.success) {
+                    console.log('Submissions by guide:', data.submissions_by_guide);
+                    displaySubmissionsByGuide(data.submissions_by_guide || {});
+                } else {
+                    throw new Error(data.error || 'Failed to load submissions');
+                }
+            } catch (error) {
+                console.error('Error loading submissions:', error);
+                showError('Error loading submissions: ' + error.message);
+            } finally {
+                const loadingElement = document.getElementById('loading');
+                if (loadingElement) {
+                    loadingElement.classList.add('hidden');
+                }
+            }
+        }
+
+        function displaySubmissionsByGuide(submissionsByGuide) {
+            const container = document.getElementById('submissions-container');
+
+            if (Object.keys(submissionsByGuide).length === 0) {
+                container.innerHTML = `
+                <div class="text-center py-12">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">No submissions found</h3>
+                    <p class="mt-1 text-sm text-gray-500">Upload some submissions to get started.</p>
+                </div>
+            `;
+                return;
+            }
+
+            let html = '';
+
+            // Sort guides: unassigned first, then by guide title
+            const sortedKeys = Object.keys(submissionsByGuide).sort((a, b) => {
+                if (a === 'unassigned') return -1;
+                if (b === 'unassigned') return 1;
+                const guideA = submissionsByGuide[a].guide?.title || '';
+                const guideB = submissionsByGuide[b].guide?.title || '';
+                return guideA.localeCompare(guideB);
+            });
+
+            sortedKeys.forEach(guideKey => {
+                const guideData = submissionsByGuide[guideKey];
+                const isUnassigned = guideKey === 'unassigned';
+                const guideTitle = isUnassigned ? 'Unassigned Submissions' : guideData.guide.title;
+                const guideColor = isUnassigned ? 'bg-yellow-50 border-yellow-200' : 'bg-white';
+
+                html += `
+                <div class="bg-white shadow rounded-lg ${guideColor}">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                ${isUnassigned ?
+                        '<svg class="w-5 h-5 text-yellow-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>' :
+                        '<svg class="w-5 h-5 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>'
+                    }
+                                <h3 class="text-lg font-medium text-gray-900">${guideTitle}</h3>
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                <span class="text-sm text-gray-500">${guideData.count} submission(s)</span>
+                                <div class="flex space-x-2">
+                                    <button onclick="selectAllInGuide('${guideKey}')" class="text-sm text-blue-600 hover:text-blue-800">Select All</button>
+                                    <button onclick="clearAllInGuide('${guideKey}')" class="text-sm text-gray-600 hover:text-gray-800">Clear All</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            ${guideData.submissions.map(submission => createSubmissionCard(submission, guideKey)).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            });
+
+            container.innerHTML = html;
+
+            // Add event listeners to checkboxes
+            document.querySelectorAll('.submission-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', handleSubmissionSelection);
+            });
+        }
+
+        function createSubmissionCard(submission, guideKey) {
+            const statusColor = getStatusColor(submission.processing_status);
+            const fileSize = submission.file_size ? (submission.file_size / 1024 / 1024).toFixed(1) : '0';
+
+            return `
+            <div class="border border-gray-200 rounded-md p-3 hover:bg-gray-50">
+                <label class="flex items-start space-x-3 cursor-pointer">
+                    <input type="checkbox" 
+                           value="${submission.id}" 
+                           data-guide="${guideKey}"
+                           class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded submission-checkbox">
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-gray-900 truncate">
+                            ${submission.filename}
+                        </div>
+                        ${submission.student_name ? `
+                        <div class="text-xs text-gray-500">
+                            ${submission.student_name}
+                        </div>
+                        ` : ''}
+                        <div class="text-xs text-gray-400">
+                            ${submission.file_type ? submission.file_type.toUpperCase() : 'FILE'} • ${fileSize}MB
+                        </div>
+                        <div class="text-xs mt-1">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}">
+                                ${submission.processing_status ? submission.processing_status.charAt(0).toUpperCase() + submission.processing_status.slice(1) : 'Ready'}
+                            </span>
+                        </div>
+                    </div>
+                </label>
+            </div>
+        `;
+        }
+
+        function getStatusColor(status) {
+            switch (status) {
+                case 'completed':
+                    return 'bg-green-100 text-green-800';
+                case 'processing':
+                    return 'bg-yellow-100 text-yellow-800';
+                case 'failed':
+                    return 'bg-red-100 text-red-800';
+                default:
+                    return 'bg-gray-100 text-gray-800';
+            }
+        }
+
+        function handleSubmissionSelection(event) {
+            const submissionId = event.target.value;
+            const isChecked = event.target.checked;
+
+            if (isChecked) {
+                if (!selectedSubmissions.includes(submissionId)) {
+                    selectedSubmissions.push(submissionId);
+                }
+            } else {
+                const index = selectedSubmissions.indexOf(submissionId);
+                if (index > -1) {
+                    selectedSubmissions.splice(index, 1);
+                }
+            }
+
+            updateBulkActions();
+        }
+
+        function updateBulkActions() {
+            const bulkActions = document.getElementById('bulk-actions');
+            const selectedCount = document.getElementById('selected-count');
+
+            selectedCount.textContent = selectedSubmissions.length;
+
+            if (selectedSubmissions.length > 0) {
+                bulkActions.classList.remove('hidden');
+            } else {
+                bulkActions.classList.add('hidden');
+            }
+
+            updateAssignButton();
+        }
+
+        function updateAssignButton() {
+            const assignBtn = document.getElementById('assign-btn');
+            const guideSelect = document.getElementById('guide-select');
+
+            assignBtn.disabled = selectedSubmissions.length === 0 || !guideSelect.value;
+        }
+
+        window.selectAllInGuide = function (guideKey) {
+            const checkboxes = document.querySelectorAll(`input[data-guide="${guideKey}"]`);
+            checkboxes.forEach(checkbox => {
+                if (!checkbox.checked) {
+                    checkbox.checked = true;
+                    const submissionId = checkbox.value;
+                    if (!selectedSubmissions.includes(submissionId)) {
+                        selectedSubmissions.push(submissionId);
+                    }
+                }
+            });
+            updateBulkActions();
+        };
+
+        window.clearAllInGuide = function (guideKey) {
+            const checkboxes = document.querySelectorAll(`input[data-guide="${guideKey}"]`);
+            checkboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    checkbox.checked = false;
+                    const submissionId = checkbox.value;
+                    const index = selectedSubmissions.indexOf(submissionId);
+                    if (index > -1) {
+                        selectedSubmissions.splice(index, 1);
+                    }
+                }
+            });
+            updateBulkActions();
+        };
+
+        function clearSelection() {
+            selectedSubmissions = [];
+            document.querySelectorAll('.submission-checkbox').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            updateBulkActions();
+        }
+
+        async function assignSubmissions() {
+            const guideSelect = document.getElementById('guide-select');
+            const guideId = guideSelect.value;
+
+            if (!guideId || selectedSubmissions.length === 0) {
+                return;
+            }
+
+            const assignBtn = document.getElementById('assign-btn');
+            const originalText = assignBtn.textContent;
+            assignBtn.textContent = 'Assigning...';
+            assignBtn.disabled = true;
+
+            try {
+                // Get CSRF token
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+
+                const response = await fetch('/processing/api/submissions/assign', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                    body: JSON.stringify({
+                        guide_id: guideId,
+                        submission_ids: selectedSubmissions
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showSuccess(data.message);
+                    clearSelection();
+                    loadSubmissions(); // Reload to show updated assignments
+                } else {
+                    showError(data.error || 'Failed to assign submissions');
+                }
+            } catch (error) {
+                console.error('Error assigning submissions:', error);
+                showError('Error assigning submissions');
+            } finally {
+                assignBtn.textContent = originalText;
+                assignBtn.disabled = false;
+            }
+        }
+
+        async function unassignSubmissions() {
+            if (selectedSubmissions.length === 0) {
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to unassign ${selectedSubmissions.length} submission(s) from their guides?`)) {
+                return;
+            }
+
+            const unassignBtn = document.getElementById('unassign-btn');
+            const originalText = unassignBtn.textContent;
+            unassignBtn.textContent = 'Unassigning...';
+            unassignBtn.disabled = true;
+
+            try {
+                // Get CSRF token
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+
+                const response = await fetch('/processing/api/submissions/unassign', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                    body: JSON.stringify({
+                        submission_ids: selectedSubmissions
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showSuccess(data.message);
+                    clearSelection();
+                    loadSubmissions(); // Reload to show updated assignments
+                } else {
+                    showError(data.error || 'Failed to unassign submissions');
+                }
+            } catch (error) {
+                console.error('Error unassigning submissions:', error);
+                showError('Error unassigning submissions');
+            } finally {
+                unassignBtn.textContent = originalText;
+                unassignBtn.disabled = false;
+            }
+        }
+
+        function showSuccess(message) {
+            // Create and show success notification
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded z-50';
+            notification.innerHTML = `
+            <div class="flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                ${message}
+            </div>
+        `;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        function showError(message) {
+            // Create and show error notification
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded z-50';
+            notification.innerHTML = `
+            <div class="flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                ${message}
+            </div>
+        `;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+    });
+</script>
+{% endblock %}

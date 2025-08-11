@@ -1,9 +1,9 @@
 {% extends "layout.html" %}
 
 {% block content %}
+<!-- Hidden CSRF Token -->
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <!-- Hidden CSRF Token -->
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
     
     <!-- Page Header -->
     <div class="mb-8">
@@ -53,7 +53,15 @@
     <form id="enhanced-processing-form" class="space-y-8">
         <!-- Select Marking Guide Section -->
         <div class="bg-white shadow rounded-lg p-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">Select Marking Guide</h2>
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">
+                <span class="inline-flex items-center">
+                    <svg class="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Step 1: Select Marking Guide
+                </span>
+            </h2>
+            <p class="text-sm text-gray-600 mb-4">Choose the marking guide that will be used to grade the selected submissions.</p>
             <div class="mb-4">
                 <select id="marking-guide-select" name="marking_guide_id" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                     <option value="">Loading marking guides...</option>
@@ -66,7 +74,17 @@
 
         <!-- Select Submissions Section -->
         <div class="bg-white shadow rounded-lg p-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">Select Submissions</h2>
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">
+                <span class="inline-flex items-center">
+                    <svg class="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Step 2: Select Submissions
+                </span>
+            </h2>
+            <p class="text-sm text-gray-600 mb-4">Choose the submissions that will be graded using the selected marking guide.</p>
+            
+            <!-- Dynamic Submission Loading Based on Selected Guide -->
             <div id="submissions-loading" class="text-gray-500 mb-4">Please select a marking guide first</div>
             <div id="submissions-container" class="hidden">
                 <div class="mb-4">
@@ -78,8 +96,8 @@
                         </div>
                     </div>
                 </div>
-                <div id="submissions-list" class="space-y-2 max-h-64 overflow-y-auto">
-                    <!-- Submissions will be loaded here -->
+                <div id="submissions-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <!-- Submissions will be loaded here dynamically -->
                 </div>
                 <div id="selected-count" class="mt-4 text-sm text-gray-600">
                     0 submissions selected
@@ -293,35 +311,45 @@ document.addEventListener('DOMContentLoaded', function() {
         const loadingDiv = document.getElementById('submissions-loading');
         
         if (loadingDiv) {
-            loadingDiv.textContent = 'Loading submissions...';
+            loadingDiv.textContent = 'Loading submissions for selected guide...';
             loadingDiv.classList.remove('hidden');
         }
         
         selectedSubmissions = [];
         
         try {
-            const response = await fetch('/refactored/api/submissions');
+            // Load submissions specifically for the selected guide
+            const response = await fetch(`/processing/api/submissions?guide_id=${guideId}`);
             const data = await response.json();
             
             if (data.success) {
-                const allSubmissions = data.submissions || [];
+                const guideSubmissions = data.submissions || [];
+                const guideInfo = data.guide || {};
                 
-                if (allSubmissions.length > 0) {
-                    displaySubmissions(allSubmissions);
+                if (guideSubmissions.length > 0) {
+                    displaySubmissions(guideSubmissions);
                     if (loadingDiv) {
                         loadingDiv.innerHTML = `
-                            <div class="text-blue-600 text-sm mb-2">
-                                <p><strong>Showing all your submissions (${allSubmissions.length} found)</strong></p>
-                                <p>These submissions will be processed using the selected marking guide.</p>
+                            <div class="text-green-600 text-sm mb-2">
+                                <p><strong>Found ${guideSubmissions.length} submission(s) for "${guideInfo.title || 'Selected Guide'}"</strong></p>
+                                <p>These submissions are linked to the selected marking guide and ready for processing.</p>
                             </div>
                         `;
                     }
                 } else {
+                    // No submissions found for this guide, show helpful message and option to see all submissions
                     if (loadingDiv) {
                         loadingDiv.innerHTML = `
-                            <div class="text-yellow-600 text-sm">
-                                <p>No submissions found in your account.</p>
-                                <p>Please upload some submissions first.</p>
+                            <div class="text-yellow-600 text-sm mb-4">
+                                <p><strong>No submissions found for "${guideInfo.title || 'Selected Guide'}"</strong></p>
+                                <p>This marking guide doesn't have any submissions linked to it yet.</p>
+                            </div>
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <h4 class="text-sm font-medium text-blue-800 mb-2">What you can do:</h4>
+                                <ul class="text-sm text-blue-700 space-y-1">
+                                    <li>• Upload new submissions and link them to this guide</li>
+                                    <li>• Or <button onclick="loadAllSubmissions()" class="underline hover:text-blue-900">view all your submissions</button> to process with this guide</li>
+                                </ul>
                             </div>
                         `;
                     }
@@ -341,6 +369,61 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
+    
+    // Function to load all submissions when no submissions are found for the selected guide
+    window.loadAllSubmissions = async function() {
+        const loadingDiv = document.getElementById('submissions-loading');
+        
+        if (loadingDiv) {
+            loadingDiv.textContent = 'Loading all your submissions...';
+            loadingDiv.classList.remove('hidden');
+        }
+        
+        selectedSubmissions = [];
+        
+        try {
+            // Load all submissions for the user
+            const response = await fetch('/processing/api/submissions/all');
+            const data = await response.json();
+            
+            if (data.success) {
+                const allSubmissions = data.submissions || [];
+                
+                if (allSubmissions.length > 0) {
+                    displaySubmissions(allSubmissions);
+                    if (loadingDiv) {
+                        loadingDiv.innerHTML = `
+                            <div class="text-blue-600 text-sm mb-2">
+                                <p><strong>Showing all your submissions (${allSubmissions.length} found)</strong></p>
+                                <p>These submissions will be processed using the selected marking guide, regardless of their original guide assignment.</p>
+                            </div>
+                        `;
+                    }
+                } else {
+                    if (loadingDiv) {
+                        loadingDiv.innerHTML = `
+                            <div class="text-yellow-600 text-sm">
+                                <p>No submissions found in your account.</p>
+                                <p>Please upload some submissions first.</p>
+                            </div>
+                        `;
+                    }
+                }
+            } else {
+                throw new Error(data.error || 'Failed to load all submissions');
+            }
+        } catch (error) {
+            console.error('Error loading all submissions:', error);
+            if (loadingDiv) {
+                loadingDiv.innerHTML = `
+                    <div class="text-red-600 text-sm">
+                        <p>Error loading submissions: ${error.message}</p>
+                        <p>Please try again or check the console for more details.</p>
+                    </div>
+                `;
+            }
+        }
+    };
     
     function hideSubmissions() {
         const container = document.getElementById('submissions-container');
@@ -385,19 +468,40 @@ document.addEventListener('DOMContentLoaded', function() {
         container.classList.remove('hidden');
         container.style.display = 'block';
         
-        const submissionsHtml = submissions.map(submission => `
-            <div class="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer submission-item" 
-                 data-submission-id="${submission.id}">
-                <input type="checkbox" class="submission-checkbox mr-3" data-submission-id="${submission.id}">
-                <div class="flex-1">
-                    <div class="font-medium text-gray-900">${submission.filename}</div>
-                    <div class="text-sm text-gray-500">
-                        Status: ${submission.processing_status || 'Ready'} | 
-                        Uploaded: ${new Date(submission.created_at).toLocaleDateString()}
-                    </div>
+        // Create card-based layout for submissions
+        const submissionsHtml = submissions.map(submission => {
+            const statusColor = getStatusColor(submission.processing_status);
+            const fileSize = submission.file_size ? (submission.file_size / 1024 / 1024).toFixed(1) : '0';
+            
+            return `
+                <div class="border border-gray-200 rounded-md p-3 hover:bg-gray-50">
+                    <label class="flex items-start space-x-3 cursor-pointer">
+                        <input type="checkbox" 
+                               name="submission_ids" 
+                               value="${submission.id}" 
+                               class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded submission-checkbox">
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium text-gray-900 truncate">
+                                ${submission.filename}
+                            </div>
+                            ${submission.student_name ? `
+                            <div class="text-xs text-gray-500">
+                                ${submission.student_name}
+                            </div>
+                            ` : ''}
+                            <div class="text-xs text-gray-400">
+                                ${submission.file_type ? submission.file_type.toUpperCase() : 'FILE'} • ${fileSize}MB
+                            </div>
+                            <div class="text-xs">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}">
+                                    ${submission.processing_status ? submission.processing_status.charAt(0).toUpperCase() + submission.processing_status.slice(1) : 'Ready'}
+                                </span>
+                            </div>
+                        </div>
+                    </label>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
         
         submissionsList.innerHTML = submissionsHtml;
         
@@ -406,22 +510,34 @@ document.addEventListener('DOMContentLoaded', function() {
         updateSelectedCount();
     }
     
+    function getStatusColor(status) {
+        switch(status) {
+            case 'completed':
+                return 'bg-green-100 text-green-800';
+            case 'processing':
+                return 'bg-yellow-100 text-yellow-800';
+            case 'failed':
+                return 'bg-red-100 text-red-800';
+            default:
+                return 'bg-gray-100 text-gray-800';
+        }
+    }
+    
     function setupSubmissionEventListeners() {
-        // Checkbox event listeners
+        // Checkbox event listeners for the new card-based layout
         document.querySelectorAll('.submission-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', function() {
-                toggleSubmissionSelection(this.dataset.submissionId);
-            });
-        });
-        
-        // Item click event listeners
-        document.querySelectorAll('.submission-item').forEach(item => {
-            item.addEventListener('click', function(e) {
-                if (e.target.type !== 'checkbox') {
-                    const checkbox = this.querySelector('.submission-checkbox');
-                    checkbox.checked = !checkbox.checked;
-                    toggleSubmissionSelection(checkbox.dataset.submissionId);
+                const submissionId = this.value;
+                const index = selectedSubmissions.indexOf(submissionId);
+                
+                if (this.checked && index === -1) {
+                    selectedSubmissions.push(submissionId);
+                } else if (!this.checked && index > -1) {
+                    selectedSubmissions.splice(index, 1);
                 }
+                
+                updateSelectedCount();
+                updateProcessingButton();
             });
         });
         
@@ -430,9 +546,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const clearAllBtn = document.getElementById('clear-all-btn');
         
         if (selectAllBtn) {
+            selectAllBtn.removeEventListener('click', selectAllSubmissions); // Remove existing listener
             selectAllBtn.addEventListener('click', selectAllSubmissions);
         }
         if (clearAllBtn) {
+            clearAllBtn.removeEventListener('click', clearAllSubmissions); // Remove existing listener
             clearAllBtn.addEventListener('click', clearAllSubmissions);
         }
     }
@@ -456,7 +574,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function selectAllSubmissions() {
         selectedSubmissions = [];
         document.querySelectorAll('.submission-checkbox').forEach(checkbox => {
-            const submissionId = checkbox.dataset.submissionId;
+            const submissionId = checkbox.value; // Use value instead of dataset.submissionId
             selectedSubmissions.push(submissionId);
             checkbox.checked = true;
         });
@@ -480,6 +598,55 @@ document.addEventListener('DOMContentLoaded', function() {
             selectedCount.textContent = `${count} submission${count !== 1 ? 's' : ''} selected`;
         }
     }
+    
+    // Functions for guide-specific selection
+    window.selectAllInGuide = function(guideKey) {
+        const checkboxes = document.querySelectorAll(`input[data-guide="${guideKey}"]`);
+        checkboxes.forEach(checkbox => {
+            if (!checkbox.checked) {
+                checkbox.checked = true;
+                const submissionId = checkbox.value;
+                if (!selectedSubmissions.includes(submissionId)) {
+                    selectedSubmissions.push(submissionId);
+                }
+            }
+        });
+        updateSelectedCount();
+        updateProcessingButton();
+    };
+    
+    window.clearAllInGuide = function(guideKey) {
+        const checkboxes = document.querySelectorAll(`input[data-guide="${guideKey}"]`);
+        checkboxes.forEach(checkbox => {
+            if (checkbox.checked) {
+                checkbox.checked = false;
+                const submissionId = checkbox.value;
+                const index = selectedSubmissions.indexOf(submissionId);
+                if (index > -1) {
+                    selectedSubmissions.splice(index, 1);
+                }
+            }
+        });
+        updateSelectedCount();
+        updateProcessingButton();
+    };
+    
+    // Enhanced event listeners for grouped submissions
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('submission-checkbox')) {
+            const submissionId = e.target.value;
+            const index = selectedSubmissions.indexOf(submissionId);
+            
+            if (e.target.checked && index === -1) {
+                selectedSubmissions.push(submissionId);
+            } else if (!e.target.checked && index > -1) {
+                selectedSubmissions.splice(index, 1);
+            }
+            
+            updateSelectedCount();
+            updateProcessingButton();
+        }
+    });
     
     function updateProcessingButton() {
         const hasGuide = selectedGuide !== null;

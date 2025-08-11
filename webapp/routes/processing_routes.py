@@ -10,6 +10,8 @@ import time
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from flask_wtf.csrf import validate_csrf
+from werkzeug.exceptions import BadRequest
 
 from src.database.models import GradingResult, MarkingGuide, Submission, db
 from src.services.core_service import ProcessingRequest, core_service
@@ -76,23 +78,52 @@ def unified_processing():
             max_file_size=100 * 1024 * 1024,
         )
     else:
-        # No progress_id - show enhanced processing interface
+        # No progress_id - show enhanced processing interface with submissions grouped by guide
         guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
         
-        # Filter submissions by selected guide if provided
+        # Group submissions by marking guide
+        submissions_by_guide = {}
+        
+        for guide in guides:
+            guide_submissions = Submission.query.filter_by(
+                user_id=current_user.id,
+                marking_guide_id=guide.id
+            ).order_by(Submission.created_at.desc()).all()
+            
+            if guide_submissions:  # Only include guides that have submissions
+                submissions_by_guide[guide.id] = {
+                    'guide': guide,
+                    'submissions': guide_submissions,
+                    'count': len(guide_submissions)
+                }
+        
+        # Also get submissions without a guide
+        unassigned_submissions = Submission.query.filter_by(
+            user_id=current_user.id,
+            marking_guide_id=None
+        ).order_by(Submission.created_at.desc()).all()
+        
+        if unassigned_submissions:
+            submissions_by_guide['unassigned'] = {
+                'guide': None,
+                'submissions': unassigned_submissions,
+                'count': len(unassigned_submissions)
+            }
+        
+        # For backward compatibility, also provide the old format
         if selected_guide_id:
             submissions = Submission.query.filter_by(
                 user_id=current_user.id,
                 marking_guide_id=selected_guide_id
             ).all()
         else:
-            # Load all submissions but indicate they should be filtered by guide selection
             submissions = []
 
         return render_template(
             "enhanced_processing.html",
             guides=guides,
             submissions=submissions,
+            submissions_by_guide=submissions_by_guide,
             selected_guide_id=selected_guide_id,
             allowed_types=[
                 ".pdf",
@@ -679,70 +710,163 @@ def api_cleanup_progress():
 @processing_bp.route("/api/submissions", methods=["GET"])
 @login_required
 def api_get_submissions():
-    """Get submissions filtered by guide ID."""
+    """Get submissions filtered by guide ID or grouped by guide."""
     try:
         guide_id = request.args.get("guide_id")
+        grouped = request.args.get("grouped", "false").lower() == "true"
         
-        if not guide_id:
+        if grouped:
+            # Return submissions grouped by marking guide
+            guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
+            submissions_by_guide = {}
+            
+            for guide in guides:
+                guide_submissions = Submission.query.filter_by(
+                    user_id=current_user.id,
+                    marking_guide_id=guide.id
+                ).order_by(Submission.created_at.desc()).all()
+                
+                if guide_submissions:  # Only include guides that have submissions
+                    submissions_list = []
+                    for submission in guide_submissions:
+                        submissions_list.append({
+                            "id": submission.id,
+                            "filename": submission.filename,
+                            "student_name": submission.student_name or "",
+                            "student_id": submission.student_id or "",
+                            "processing_status": submission.processing_status,
+                            "file_size": submission.file_size,
+                            "file_type": submission.file_type,
+                            "marking_guide_id": submission.marking_guide_id,
+                            "ocr_confidence": submission.ocr_confidence,
+                            "created_at": (
+                                submission.created_at.isoformat()
+                                if submission.created_at
+                                else None
+                            ),
+                            "updated_at": (
+                                submission.updated_at.isoformat()
+                                if submission.updated_at
+                                else None
+                            ),
+                        })
+                    
+                    submissions_by_guide[guide.id] = {
+                        "guide": {
+                            "id": guide.id,
+                            "title": guide.title,
+                            "description": guide.description
+                        },
+                        "submissions": submissions_list,
+                        "count": len(submissions_list)
+                    }
+            
+            # Also get submissions without a guide
+            unassigned_submissions = Submission.query.filter_by(
+                user_id=current_user.id,
+                marking_guide_id=None
+            ).order_by(Submission.created_at.desc()).all()
+            
+            if unassigned_submissions:
+                submissions_list = []
+                for submission in unassigned_submissions:
+                    submissions_list.append({
+                        "id": submission.id,
+                        "filename": submission.filename,
+                        "student_name": submission.student_name or "",
+                        "student_id": submission.student_id or "",
+                        "processing_status": submission.processing_status,
+                        "file_size": submission.file_size,
+                        "file_type": submission.file_type,
+                        "marking_guide_id": submission.marking_guide_id,
+                        "ocr_confidence": submission.ocr_confidence,
+                        "created_at": (
+                            submission.created_at.isoformat()
+                            if submission.created_at
+                            else None
+                        ),
+                        "updated_at": (
+                            submission.updated_at.isoformat()
+                            if submission.updated_at
+                            else None
+                        ),
+                    })
+                
+                submissions_by_guide["unassigned"] = {
+                    "guide": None,
+                    "submissions": submissions_list,
+                    "count": len(submissions_list)
+                }
+            
             return jsonify({
-                "success": False, 
-                "error": "guide_id parameter is required"
-            }), 400
-        
-        # Verify guide ownership
-        guide = MarkingGuide.query.filter_by(
-            id=guide_id, user_id=current_user.id
-        ).first()
-        
-        if not guide:
-            return jsonify({
-                "success": False, 
-                "error": "Guide not found or access denied"
-            }), 404
-        
-        # Get submissions linked to this guide
-        submissions = Submission.query.filter_by(
-            user_id=current_user.id,
-            marking_guide_id=guide_id
-        ).order_by(Submission.created_at.desc()).all()
-        
-        submissions_list = []
-        for submission in submissions:
-            submissions_list.append({
-                "id": submission.id,
-                "filename": submission.filename,
-                "student_name": submission.student_name or "",
-                "student_id": submission.student_id or "",
-                "processing_status": submission.processing_status,
-                "file_size": submission.file_size,
-                "file_type": submission.file_type,
-                "marking_guide_id": submission.marking_guide_id,
-                "ocr_confidence": submission.ocr_confidence,
-                "created_at": (
-                    submission.created_at.isoformat()
-                    if submission.created_at
-                    else None
-                ),
-                "updated_at": (
-                    submission.updated_at.isoformat()
-                    if submission.updated_at
-                    else None
-                ),
+                "success": True,
+                "grouped": True,
+                "submissions_by_guide": submissions_by_guide,
+                "total_guides": len(submissions_by_guide)
             })
         
-        return jsonify({
-            "success": True,
-            "guide": {
-                "id": guide.id,
-                "title": guide.title,
-                "description": guide.description
-            },
-            "submissions": submissions_list,
-            "total_count": len(submissions_list)
-        })
+        elif guide_id:
+            # Return submissions for a specific guide
+            # Verify guide ownership
+            guide = MarkingGuide.query.filter_by(
+                id=guide_id, user_id=current_user.id
+            ).first()
+            
+            if not guide:
+                return jsonify({
+                    "success": False, 
+                    "error": "Guide not found or access denied"
+                }), 404
+            
+            # Get submissions linked to this guide
+            submissions = Submission.query.filter_by(
+                user_id=current_user.id,
+                marking_guide_id=guide_id
+            ).order_by(Submission.created_at.desc()).all()
+            
+            submissions_list = []
+            for submission in submissions:
+                submissions_list.append({
+                    "id": submission.id,
+                    "filename": submission.filename,
+                    "student_name": submission.student_name or "",
+                    "student_id": submission.student_id or "",
+                    "processing_status": submission.processing_status,
+                    "file_size": submission.file_size,
+                    "file_type": submission.file_type,
+                    "marking_guide_id": submission.marking_guide_id,
+                    "ocr_confidence": submission.ocr_confidence,
+                    "created_at": (
+                        submission.created_at.isoformat()
+                        if submission.created_at
+                        else None
+                    ),
+                    "updated_at": (
+                        submission.updated_at.isoformat()
+                        if submission.updated_at
+                        else None
+                    ),
+                })
+            
+            return jsonify({
+                "success": True,
+                "guide": {
+                    "id": guide.id,
+                    "title": guide.title,
+                    "description": guide.description
+                },
+                "submissions": submissions_list,
+                "total_count": len(submissions_list)
+            })
+        
+        else:
+            return jsonify({
+                "success": False, 
+                "error": "Either guide_id parameter or grouped=true is required"
+            }), 400
         
     except Exception as e:
-        logger.error(f"Failed to get submissions for guide: {e}")
+        logger.error(f"Failed to get submissions: {e}")
         return jsonify({
             "success": False, 
             "error": "Failed to retrieve submissions"
@@ -804,6 +928,144 @@ def api_get_all_submissions():
         return jsonify({
             "success": False, 
             "error": "Failed to retrieve submissions"
+        }), 500
+
+
+@processing_bp.route("/api/submissions/assign", methods=["POST"])
+@login_required
+def api_assign_submissions_to_guide():
+    """Assign submissions to a marking guide."""
+    try:
+        # Validate CSRF token
+        try:
+            validate_csrf(request.headers.get('X-CSRFToken'))
+        except BadRequest:
+            return jsonify({
+                "success": False,
+                "error": "CSRF token missing or invalid"
+            }), 400
+        
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                "success": False,
+                "error": "No data provided"
+            }), 400
+        
+        guide_id = data.get("guide_id")
+        submission_ids = data.get("submission_ids", [])
+        
+        if not guide_id:
+            return jsonify({
+                "success": False,
+                "error": "guide_id is required"
+            }), 400
+        
+        if not submission_ids or not isinstance(submission_ids, list):
+            return jsonify({
+                "success": False,
+                "error": "submission_ids must be a non-empty list"
+            }), 400
+        
+        # Verify guide ownership
+        guide = MarkingGuide.query.filter_by(
+            id=guide_id, user_id=current_user.id
+        ).first()
+        
+        if not guide:
+            return jsonify({
+                "success": False,
+                "error": "Guide not found or access denied"
+            }), 404
+        
+        # Update submissions
+        updated_count = 0
+        for submission_id in submission_ids:
+            submission = Submission.query.filter_by(
+                id=submission_id, user_id=current_user.id
+            ).first()
+            
+            if submission:
+                submission.marking_guide_id = guide_id
+                updated_count += 1
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": f"Successfully assigned {updated_count} submission(s) to guide '{guide.title}'",
+            "updated_count": updated_count,
+            "guide": {
+                "id": guide.id,
+                "title": guide.title
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to assign submissions to guide: {e}")
+        db.session.rollback()
+        return jsonify({
+            "success": False,
+            "error": "Failed to assign submissions"
+        }), 500
+
+
+@processing_bp.route("/api/submissions/unassign", methods=["POST"])
+@login_required
+def api_unassign_submissions_from_guide():
+    """Unassign submissions from their marking guide."""
+    try:
+        # Validate CSRF token
+        try:
+            validate_csrf(request.headers.get('X-CSRFToken'))
+        except BadRequest:
+            return jsonify({
+                "success": False,
+                "error": "CSRF token missing or invalid"
+            }), 400
+        
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                "success": False,
+                "error": "No data provided"
+            }), 400
+        
+        submission_ids = data.get("submission_ids", [])
+        
+        if not submission_ids or not isinstance(submission_ids, list):
+            return jsonify({
+                "success": False,
+                "error": "submission_ids must be a non-empty list"
+            }), 400
+        
+        # Update submissions
+        updated_count = 0
+        for submission_id in submission_ids:
+            submission = Submission.query.filter_by(
+                id=submission_id, user_id=current_user.id
+            ).first()
+            
+            if submission:
+                submission.marking_guide_id = None
+                updated_count += 1
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": f"Successfully unassigned {updated_count} submission(s) from their guides",
+            "updated_count": updated_count
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to unassign submissions: {e}")
+        db.session.rollback()
+        return jsonify({
+            "success": False,
+            "error": "Failed to unassign submissions"
         }), 500
 
 

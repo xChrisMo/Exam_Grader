@@ -233,17 +233,92 @@ def guides():
 @main_bp.route("/submissions")
 @login_required
 def submissions():
-    """Submissions management."""
+    """Submissions management with grouping by marking guide."""
     try:
+        from src.database.models import Submission, MarkingGuide
+        
+        # Check if grouped view is requested (default to true)
+        grouped = request.args.get("grouped", "true").lower() == "true"
         page = request.args.get("page", 1, type=int)
-        submissions = Submission.query.filter_by(user_id=current_user.id).paginate(
-            page=page, per_page=10, error_out=False
+        
+        # Get all submissions for the user
+        all_submissions = (
+            Submission.query
+            .filter_by(user_id=current_user.id)
+            .outerjoin(MarkingGuide)
+            .order_by(Submission.created_at.desc())
+            .all()
         )
+        
+        # Group submissions by marking guide
+        submissions_by_guide = {}
+        submissions_list = []
+        
+        for submission in all_submissions:
+            # Add to regular list
+            submissions_list.append(submission)
+            
+            # Group by marking guide
+            guide = submission.marking_guide
+            guide_key = guide.id if guide else "no_guide"
+            guide_title = guide.title if guide else "No Marking Guide"
+            
+            if guide_key not in submissions_by_guide:
+                submissions_by_guide[guide_key] = {
+                    "guide_id": guide.id if guide else None,
+                    "guide_title": guide_title,
+                    "submissions": [],
+                    "total_submissions": 0,
+                    "processed_count": 0,
+                    "pending_count": 0,
+                }
+            
+            submissions_by_guide[guide_key]["submissions"].append(submission)
+            submissions_by_guide[guide_key]["total_submissions"] += 1
+            
+            # Count processed vs pending
+            if submission.processed or submission.processing_status == "completed":
+                submissions_by_guide[guide_key]["processed_count"] += 1
+            else:
+                submissions_by_guide[guide_key]["pending_count"] += 1
+        
+        # Handle pagination for non-grouped view
+        if grouped:
+            submissions = None
+        else:
+            per_page = 10
+            total = len(all_submissions)
+            start = (page - 1) * per_page
+            end = start + per_page
+            paginated_submissions = all_submissions[start:end]
+            
+            # Create a simple pagination-like object
+            class SimplePagination:
+                def __init__(self, items, page, per_page, total):
+                    self.items = items
+                    self.page = page
+                    self.per_page = per_page
+                    self.total = total
+                    self.pages = (total + per_page - 1) // per_page
+                    self.has_prev = page > 1
+                    self.has_next = page < self.pages
+                    self.prev_num = page - 1 if self.has_prev else None
+                    self.next_num = page + 1 if self.has_next else None
+            
+            submissions = SimplePagination(
+                items=paginated_submissions,
+                page=page,
+                per_page=per_page,
+                total=total
+            )
 
         template_context = get_template_context()
         return render_template(
             "submissions.html",
             submissions=submissions,
+            submissions_list=submissions_list,
+            submissions_by_guide=submissions_by_guide,
+            grouped=grouped,
             **template_context,
         )
 
@@ -254,8 +329,28 @@ def submissions():
         return render_template(
             "submissions.html",
             submissions=None,
+            submissions_list=[],
+            submissions_by_guide={},
+            grouped=False,
             **template_context,
         )
+
+
+@main_bp.route("/submissions/manage")
+@login_required
+def manage_submissions():
+    """Manage submission assignments to guides."""
+    try:
+        template_context = get_template_context()
+        return render_template(
+            "manage_submissions.html",
+            **template_context,
+        )
+
+    except Exception as e:
+        logger.error(f"Manage submissions page error: {e}")
+        flash("Error loading manage submissions page", "error")
+        return redirect(url_for("main.submissions"))
 
 
 @main_bp.route("/upload-guide", methods=["GET", "POST"])
@@ -790,20 +885,20 @@ def upload():
 @main_bp.route("/results")
 @login_required
 def results():
-    """Results page."""
+    """Results page with grouping by marking guide."""
     try:
         from src.database.models import GradingResult
 
         page = request.args.get("page", 1, type=int)
-        results = (
+        grouped = request.args.get("grouped", "true").lower() == "true"
+        
+        # Get all results for the user
+        all_results = (
             GradingResult.query.join(Submission)
             .filter(Submission.user_id == current_user.id)
-            .paginate(page=page, per_page=10, error_out=False)
+            .order_by(GradingResult.created_at.desc())
+            .all()
         )
-
-        # Calculate batch summary
-        results_list = results.items if results else []
-        has_results = len(results_list) > 0
 
         # Helper function to calculate letter grade
         def calculate_letter_grade(percentage):
@@ -820,9 +915,13 @@ def results():
 
         # Enhanced result list with submission data
         results_list_dict = []
-        for result in results_list:
+        results_by_guide = {}
+        
+        for result in all_results:
             result_dict = result.to_dict()
             submission = result.submission
+            guide = result.marking_guide if result.marking_guide_id else None
+            
             if submission:
                 result_dict.update(
                     {
@@ -834,23 +933,92 @@ def results():
                             if result.percentage
                             else "N/A"
                         ),
+                        "guide_title": guide.title if guide else "No Guide",
+                        "guide_id": guide.id if guide else None,
                     }
                 )
+            
             results_list_dict.append(result_dict)
+            
+            # Group by marking guide
+            guide_key = guide.id if guide else "no_guide"
+            guide_title = guide.title if guide else "No Guide"
+            
+            if guide_key not in results_by_guide:
+                results_by_guide[guide_key] = {
+                    "guide_id": guide.id if guide else None,
+                    "guide_title": guide_title,
+                    "results": [],
+                    "total_submissions": 0,
+                    "average_score": 0,
+                    "highest_score": 0,
+                    "lowest_score": 100,
+                }
+            
+            results_by_guide[guide_key]["results"].append(result_dict)
+            results_by_guide[guide_key]["total_submissions"] += 1
 
+        # Calculate statistics for each guide group
+        for guide_key, guide_data in results_by_guide.items():
+            scores = [r["score"] for r in guide_data["results"] if r.get("score") is not None]
+            if scores:
+                guide_data["average_score"] = round(sum(scores) / len(scores), 1)
+                guide_data["highest_score"] = max(scores)
+                guide_data["lowest_score"] = min(scores)
+            else:
+                guide_data["average_score"] = 0
+                guide_data["highest_score"] = 0
+                guide_data["lowest_score"] = 0
+
+        # Paginate results
+        if grouped:
+            # For grouped view, we'll show all results but grouped
+            results = None
+            results_list = all_results
+        else:
+            # For regular view, paginate normally
+            per_page = 10
+            total = len(all_results)
+            start = (page - 1) * per_page
+            end = start + per_page
+            results_list = all_results[start:end]
+            
+            # Create a simple pagination-like object
+            class SimplePagination:
+                def __init__(self, page, per_page, total, items):
+                    self.page = page
+                    self.per_page = per_page
+                    self.total = total
+                    self.items = items
+                    self.pages = (total + per_page - 1) // per_page
+                    self.has_prev = page > 1
+                    self.has_next = page < self.pages
+                    self.prev_num = page - 1 if self.has_prev else None
+                    self.next_num = page + 1 if self.has_next else None
+            
+            results = SimplePagination(
+                page=page,
+                per_page=per_page,
+                total=total,
+                items=results_list
+            )
+
+        has_results = len(all_results) > 0
+
+        # Calculate overall batch summary
         batch_summary = None
         if has_results:
-            scores = [r.score for r in results_list if r.score is not None]
+            scores = [r.score for r in all_results if r.score is not None]
             if scores:
                 batch_summary = {
-                    "total_submissions": len(results_list),
+                    "total_submissions": len(all_results),
                     "average_score": round(sum(scores) / len(scores), 1),
                     "highest_score": max(scores),
                     "lowest_score": min(scores),
                 }
             else:
                 batch_summary = {
-                    "total_submissions": len(results_list),
+                    "total_submissions": len(all_results),
                     "average_score": 0,
                     "highest_score": 0,
                     "lowest_score": 0,
@@ -869,9 +1037,11 @@ def results():
             results=results,
             results_list=results_list,
             results_list_dict=results_list_dict,
+            results_by_guide=results_by_guide,
+            grouped=grouped,
             has_results=has_results,
             batch_summary=batch_summary,
-            successful_grades=len(results_list),
+            successful_grades=len(all_results),
             **template_context,
         )
 

@@ -34,9 +34,10 @@ class UltraFastMapper:
                 questions_data = self._get_questions_from_database(guide_id)
                 logger.info(f"Retrieved {len(questions_data) if questions_data else 0} questions from database for guide {guide_id}")
                 
-            # Aggressive preprocessing - keep only essentials
-            guide_clean = self._ultra_preprocess(guide_content, 800)
-            submission_clean = self._ultra_preprocess(submission_content, 1000)
+            # Balanced preprocessing - preserve more content for large submissions
+            # Increase limits significantly to handle large content better
+            guide_clean = self._ultra_preprocess(guide_content, 3000)  # Increased from 800
+            submission_clean = self._ultra_preprocess(submission_content, 8000)  # Increased from 1000
             
             # Check cache first with consistent key
             cache_key = self._create_consistent_mapping_cache_key(guide_clean, submission_clean, max_questions, questions_data)
@@ -99,23 +100,61 @@ Find up to {max_questions} questions and their corresponding answers."""
             return self._instant_fallback_mapping_with_questions(guide_content, submission_content, max_questions, questions_data)
     
     def _ultra_preprocess(self, content: str, max_chars: int) -> str:
-        """Balanced preprocessing for speed and accuracy."""
+        """Intelligent preprocessing that preserves content structure while optimizing for LLM processing."""
         if not content:
             return ""
         
         # Remove extra whitespace but preserve structure
         content = ' '.join(content.split())
         
-        if len(content) > max_chars * 3:  # Much more generous limit
-            # Try to truncate at sentence boundaries
-            sentences = content.split('.')
-            truncated = ""
-            for sentence in sentences:
-                if len(truncated + sentence) < max_chars * 2:
-                    truncated += sentence + "."
+        # For large content, use intelligent truncation that preserves question structure
+        if len(content) > max_chars * 4:  # Even more generous limit
+            # Try to preserve question structure by looking for question patterns
+            question_patterns = [
+                r'\b(?:Question|Q\.?)\s*\d+',
+                r'\b\d+\.\s*',
+                r'\b[a-z]\)\s*',
+                r'\n\n',  # Paragraph breaks
+            ]
+            
+            # Find potential question boundaries
+            import re
+            boundaries = []
+            for pattern in question_patterns:
+                for match in re.finditer(pattern, content, re.IGNORECASE):
+                    boundaries.append(match.start())
+            
+            boundaries = sorted(set(boundaries))
+            
+            if boundaries:
+                # Try to truncate at a question boundary that keeps us under the limit
+                target_length = max_chars * 3  # Allow more content
+                best_boundary = 0
+                
+                for boundary in boundaries:
+                    if boundary <= target_length:
+                        best_boundary = boundary
+                    else:
+                        break
+                
+                if best_boundary > max_chars:  # Only truncate if we found a good boundary
+                    content = content[:best_boundary] + "..."
+                    logger.info(f"Intelligently truncated content at question boundary: {len(content)} chars")
                 else:
-                    break
-            content = truncated if truncated else content[:max_chars * 2]
+                    # Fallback to sentence boundary truncation
+                    sentences = content.split('.')
+                    truncated = ""
+                    for sentence in sentences:
+                        if len(truncated + sentence) < max_chars * 3:
+                            truncated += sentence + "."
+                        else:
+                            break
+                    content = truncated if truncated else content[:max_chars * 3]
+                    logger.info(f"Truncated content at sentence boundary: {len(content)} chars")
+            else:
+                # No clear structure found, use generous character limit
+                content = content[:max_chars * 3]
+                logger.info(f"Truncated content at character limit: {len(content)} chars")
         
         return content
     

@@ -59,8 +59,10 @@
                 </div>
                 <div>
                     <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
-                    <textarea id="description" name="description" rows="3"
-                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">{{ guide.description or '' }}</textarea>
+                    <textarea id="description" name="description" rows="6"
+                        placeholder="Enter a detailed description of this marking guide..."
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 resize-y min-h-[120px]">{{ guide.description or '' }}</textarea>
+                    <p class="mt-1 text-sm text-gray-500">Provide a comprehensive description to help identify and understand this marking guide.</p>
                 </div>
             </div>
         </div>
@@ -92,26 +94,41 @@
                                     </svg>
                                 </button>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div class="md:col-span-2">
+                            <div class="space-y-6">
+                                <!-- Question Text - Full Width -->
+                                <div>
                                     <label class="block text-sm font-medium text-gray-700">Question Text</label>
-                                    <textarea name="question_{{ loop.index0 }}_text" rows="3" required
-                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">{{ question.text or '' }}</textarea>
+                                    <textarea name="question_{{ loop.index0 }}_text" rows="8" required
+                                        placeholder="Enter the complete question text that students will see. Include all parts, sub-questions, and any specific instructions..."
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 resize-y min-h-[160px] max-w-none">{{ question.text or '' }}</textarea>
+                                    <p class="mt-1 text-sm text-gray-500">Provide the complete question text exactly as students will see it. Include any diagrams, formulas, or special formatting instructions.</p>
                                 </div>
+                                
+                                <!-- Marks -->
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Marks</label>
+                                        <input type="number" name="question_{{ loop.index0 }}_marks" value="{{ question.marks or 0 }}" min="0" step="0.5" required
+                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                                    </div>
+                                </div>
+                                
+                                <!-- Criteria - Full Width -->
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700">Marks</label>
-                                    <input type="number" name="question_{{ loop.index0 }}_marks" value="{{ question.marks or 0 }}" min="0" step="0.5" required
-                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                                    <label class="block text-sm font-medium text-gray-700">Marking Criteria</label>
+                                    <textarea name="question_{{ loop.index0 }}_criteria" rows="5"
+                                        placeholder="Enter detailed marking criteria, rubric details, and grading guidelines. Include point allocations, key concepts to look for, and assessment standards..."
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 resize-y min-h-[100px] max-w-none">{{ question.criteria or '' }}</textarea>
+                                    <p class="mt-1 text-sm text-gray-500">Provide comprehensive marking criteria including point breakdowns, key concepts, and assessment guidelines to ensure consistent grading.</p>
                                 </div>
+                                
+                                <!-- Expected Answer - Full Width -->
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700">Criteria</label>
-                                    <textarea name="question_{{ loop.index0 }}_criteria" rows="2"
-                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">{{ question.criteria or '' }}</textarea>
-                                </div>
-                                <div class="md:col-span-2">
                                     <label class="block text-sm font-medium text-gray-700">Expected Answer</label>
-                                    <textarea name="question_{{ loop.index0 }}_answer" rows="3"
-                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">{{ question.answer or '' }}</textarea>
+                                    <textarea name="question_{{ loop.index0 }}_answer" rows="6"
+                                        placeholder="Enter the model answer or key points students should include..."
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 resize-y min-h-[120px]">{{ question.answer or '' }}</textarea>
+                                    <p class="mt-1 text-sm text-gray-500">Provide a comprehensive model answer to guide the AI grading process.</p>
                                 </div>
                             </div>
                         </div>
@@ -194,26 +211,41 @@
                         </svg>
                     </button>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="md:col-span-2">
+                <div class="space-y-6">
+                    <!-- Question Text - Full Width -->
+                    <div>
                         <label class="block text-sm font-medium text-gray-700">Question Text</label>
-                        <textarea name="question_${questionCount}_text" rows="3" required
-                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"></textarea>
+                        <textarea name="question_${questionCount}_text" rows="8" required
+                            placeholder="Enter the complete question text that students will see. Include all parts, sub-questions, and any specific instructions..."
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 resize-y min-h-[160px] max-w-none"></textarea>
+                        <p class="mt-1 text-sm text-gray-500">Provide the complete question text exactly as students will see it. Include any diagrams, formulas, or special formatting instructions.</p>
                     </div>
+                    
+                    <!-- Marks -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Marks</label>
+                            <input type="number" name="question_${questionCount}_marks" value="0" min="0" step="0.5" required
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                        </div>
+                    </div>
+                    
+                    <!-- Criteria - Full Width -->
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Marks</label>
-                        <input type="number" name="question_${questionCount}_marks" value="0" min="0" step="0.5" required
-                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                        <label class="block text-sm font-medium text-gray-700">Marking Criteria</label>
+                        <textarea name="question_${questionCount}_criteria" rows="5"
+                            placeholder="Enter detailed marking criteria, rubric details, and grading guidelines. Include point allocations, key concepts to look for, and assessment standards..."
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 resize-y min-h-[100px] max-w-none"></textarea>
+                        <p class="mt-1 text-sm text-gray-500">Provide comprehensive marking criteria including point breakdowns, key concepts, and assessment guidelines to ensure consistent grading.</p>
                     </div>
+                    
+                    <!-- Expected Answer - Full Width -->
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Criteria</label>
-                        <textarea name="question_${questionCount}_criteria" rows="2"
-                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"></textarea>
-                    </div>
-                    <div class="md:col-span-2">
                         <label class="block text-sm font-medium text-gray-700">Expected Answer</label>
-                        <textarea name="question_${questionCount}_answer" rows="3"
-                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"></textarea>
+                        <textarea name="question_${questionCount}_answer" rows="6"
+                            placeholder="Enter the model answer or key points students should include..."
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 resize-y min-h-[120px]"></textarea>
+                        <p class="mt-1 text-sm text-gray-500">Provide a comprehensive model answer to guide the AI grading process.</p>
                     </div>
                 </div>
             </div>

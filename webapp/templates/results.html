@@ -12,6 +12,16 @@
                 </p>
             </div>
             <div class="flex space-x-3">
+                {% if grouped %}
+                <a href="{{ url_for('main.results') }}"
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                    List View
+                </a>
+                {% else %}
                 <a href="{{ url_for('main.results', grouped='true') }}"
                     class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                     <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -20,6 +30,7 @@
                     </svg>
                     Grouped View
                 </a>
+                {% endif %}
                 <button onclick="exportResults()"
                     class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                     <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,7 +114,115 @@
             </div>
         </div>
     </div> 
-   <!-- Individual Results Table -->
+
+    {% if grouped %}
+    <!-- Grouped Results by Marking Guide -->
+    {% for guide_key, guide_data in results_by_guide.items() %}
+    <div class="bg-white shadow rounded-lg mb-6">
+        <div class="px-4 py-5 sm:p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">{{ guide_data.guide_title }}</h3>
+                    <p class="mt-1 text-sm text-gray-500">{{ guide_data.total_submissions }} submission(s)</p>
+                </div>
+                <div class="flex space-x-4 text-sm">
+                    <div class="text-center">
+                        <div class="text-lg font-semibold text-blue-600">{{ guide_data.average_score }}%</div>
+                        <div class="text-gray-500">Average</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-semibold text-green-600">{{ guide_data.highest_score }}%</div>
+                        <div class="text-gray-500">Highest</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-semibold text-red-600">{{ guide_data.lowest_score }}%</div>
+                        <div class="text-gray-500">Lowest</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                <table class="min-w-full divide-y divide-gray-300">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Submission
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Score
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Grade
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Graded At
+                            </th>
+                            <th scope="col" class="relative px-6 py-3">
+                                <span class="sr-only">Actions</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for result in guide_data.results %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10">
+                                        <div class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
+                                            <svg class="h-5 w-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">{{ result.filename }}</div>
+                                        <div class="text-sm text-gray-500">
+                                            {% if result.student_name %}{{ result.student_name }} • {% endif %}ID: {{ result.submission_id[:8] }}…
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900">{{ result.score }}%</div>
+                                <div class="w-16 bg-gray-200 rounded-full h-2 mt-1">
+                                    <div class="h-2 rounded-full {% if result.score >= 80 %}bg-success-500{% elif result.score >= 60 %}bg-warning-500{% else %}bg-danger-500{% endif %}"
+                                        style="width: {{ result.score }}%"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if result.score >= 90 %}bg-success-100 text-success-800{% elif result.score >= 80 %}bg-success-100 text-success-800{% elif result.score >= 70 %}bg-warning-100 text-warning-800{% elif result.score >= 60 %}bg-warning-100 text-warning-800{% else %}bg-danger-100 text-danger-800{% endif %}">
+                                    {{ result.letter_grade }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ result.graded_at[:10] if result.graded_at else 'Unknown' }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <a href="{{ url_for('processing.view_result', result_id=result.id) }}"
+                                    class="text-primary-600 hover:text-primary-900 mr-3">
+                                    View Details
+                                </a>
+                                <a href="{{ url_for('main.view_submission_content', submission_id=result.submission_id) }}"
+                                    class="text-info-600 hover:text-info-900 mr-3">
+                                    View Content
+                                </a>
+                                <button type="button" onclick="deleteResult('{{ result.id }}')"
+                                    class="text-red-600 hover:text-red-900"
+                                    title="Delete this result">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <!-- Individual Results Table -->
     <div class="bg-white shadow rounded-lg mb-8">
         <div class="px-4 py-5 sm:p-6">
             <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">Individual Submission Results</h3>
@@ -199,6 +318,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     {% else %}
     <!-- No Results State -->

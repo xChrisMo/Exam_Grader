@@ -675,7 +675,8 @@ class CoreService(BaseService):
                 processor = get_ultra_fast_processor()
 
                 questions_data = guide.questions if guide.questions else None
-                max_questions = min(10, len(questions_data) if questions_data else 5)
+                # Remove artificial question limit - process all questions in the guide
+                max_questions = len(questions_data) if questions_data else 10
 
                 mappings = processor.mapper.ultra_fast_map(
                     guide_content,
@@ -694,9 +695,11 @@ class CoreService(BaseService):
             # Fallback to original mapping service
             if hasattr(self, "_mapping_service") and self._mapping_service:
                 try:
+                    # Use the same max_questions as ultra-fast processing
+                    max_questions_fallback = len(guide.questions) if guide.questions else 10
                     mapping_result, error = (
                         self._mapping_service.map_submission_to_guide(
-                            guide_content, submission_text, 5  # Limit to 5 for speed
+                            guide_content, submission_text, max_questions_fallback
                         )
                     )
 
