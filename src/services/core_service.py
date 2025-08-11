@@ -486,6 +486,24 @@ class CoreService(BaseService):
             ProcessingResponse with results or error information
         """
         start_time = time.time()
+        
+        # Create a unique lock key for this submission-guide pair
+        lock_key = f"{request.submission_id}_{request.guide_id}"
+        
+        # Check if this submission is already being processed
+        if hasattr(self, '_processing_locks') and lock_key in self._processing_locks:
+            logger.warning(f"Submission {request.submission_id} is already being processed, skipping duplicate request")
+            return ProcessingResponse(
+                success=False, 
+                error="Submission is already being processed"
+            )
+        
+        # Initialize processing locks if not exists
+        if not hasattr(self, '_processing_locks'):
+            self._processing_locks = set()
+        
+        # Add lock for this submission
+        self._processing_locks.add(lock_key)
 
         try:
             # Validate request
@@ -602,6 +620,11 @@ class CoreService(BaseService):
             return ProcessingResponse(
                 success=False, error=str(e), processing_time=time.time() - start_time
             )
+        finally:
+            # Always remove the lock when processing is complete
+            if hasattr(self, '_processing_locks') and lock_key in self._processing_locks:
+                self._processing_locks.remove(lock_key)
+                logger.debug(f"Removed processing lock for {lock_key}")
 
     async def _extract_text(self, submission: Submission) -> Optional[str]:
         """Extract text from submission using OCR if needed."""
@@ -855,24 +878,33 @@ class CoreService(BaseService):
             from src.database.models import Mapping
             
             # Check for existing results and remove them to prevent duplicates
-            existing_results = GradingResult.query.filter_by(
-                submission_id=request.submission_id,
-                marking_guide_id=request.guide_id
-            ).all()
-            
-            if existing_results:
-                logger.info(f"Removing {len(existing_results)} existing results for submission {request.submission_id} to prevent duplicates")
-                for existing_result in existing_results:
-                    db.session.delete(existing_result)
-                
-                # Also remove existing mappings for this submission
-                existing_mappings = Mapping.query.filter_by(
-                    submission_id=request.submission_id
+            # Use a more robust approach with explicit transaction control
+            try:
+                existing_results = GradingResult.query.filter_by(
+                    submission_id=request.submission_id,
+                    marking_guide_id=request.guide_id
                 ).all()
-                for existing_mapping in existing_mappings:
-                    db.session.delete(existing_mapping)
                 
-                db.session.flush()  # Flush to ensure deletions are processed
+                if existing_results:
+                    logger.info(f"Removing {len(existing_results)} existing results for submission {request.submission_id} to prevent duplicates")
+                    for existing_result in existing_results:
+                        db.session.delete(existing_result)
+                    
+                    # Also remove existing mappings for this submission
+                    existing_mappings = Mapping.query.filter_by(
+                        submission_id=request.submission_id
+                    ).all()
+                    for existing_mapping in existing_mappings:
+                        db.session.delete(existing_mapping)
+                    
+                    # Commit the deletions immediately
+                    db.session.commit()
+                    logger.info(f"Successfully removed existing results and mappings")
+                    
+            except Exception as delete_error:
+                logger.error(f"Error removing existing results: {delete_error}")
+                db.session.rollback()
+                # Continue with processing even if deletion fails
 
             # Save mappings and create individual grading results
             import uuid
@@ -891,8 +923,8 @@ class CoreService(BaseService):
                 # Get max score from mapping data
                 mapping_max_score = mapping_data.get("max_score")
                 if mapping_max_score is None:
-                    logger.warning(f"No max_score found for mapping {i}, using 0")
-                    mapping_max_score = 0.0
+                    logger.info(f"No max_score found for mapping {i}, using default of 10 points")
+                    mapping_max_score = 10.0  # Use reasonable default instead of 0
                 
                 # Get individual score from detailed grades
                 individual_score = 0.0
@@ -916,32 +948,22 @@ class CoreService(BaseService):
                 )
                 db.session.add(mapping_record)
                 
-                # Create individual grading result for this mapping
-                individual_percentage = (individual_score / mapping_max_score * 100) if mapping_max_score > 0 else 0
-                
-                individual_result = GradingResult(
-                    id=f"result_{int(time.time())}_{i}_{request.submission_id}",
-                    submission_id=request.submission_id,
-                    marking_guide_id=request.guide_id,
-                    mapping_id=unique_id,  # Link to the mapping
-                    score=float(individual_score),
-                    max_score=float(mapping_max_score),
-                    percentage=individual_percentage,
-                    feedback=detailed_grades[i].get("feedback", "") if i < len(detailed_grades) else "",
-                    detailed_feedback=detailed_grades[i] if i < len(detailed_grades) else {},
-                    grading_method="llm",
-                )
-                db.session.add(individual_result)
+                # Don't create individual results - only create mappings
+                # Individual results will be created as one summary result below
                 
                 # Add to totals
                 total_score += individual_score
                 total_max_score += mapping_max_score
 
-            # Create overall summary result (optional, for backward compatibility)
+            # Create ONE summary result instead of multiple individual results
             overall_percentage = (total_score / total_max_score * 100) if total_max_score > 0 else 0
             
+            # Generate unique ID to prevent duplicates
+            import uuid
+            unique_result_id = f"result_{uuid.uuid4().hex[:12]}_{request.submission_id}"
+            
             summary_result = GradingResult(
-                id=f"result_{int(time.time())}_{request.submission_id}",
+                id=unique_result_id,
                 submission_id=request.submission_id,
                 marking_guide_id=request.guide_id,
                 mapping_id=None,  # This is a summary, not linked to specific mapping

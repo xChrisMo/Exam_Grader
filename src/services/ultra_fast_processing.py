@@ -91,7 +91,7 @@ Find up to {max_questions} questions and their corresponding answers."""
                 # Execute with timeout
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(make_llm_call)
-                    response = future.result(timeout=30)  # 30 second timeout
+                    response = future.result(timeout=120)  # 2 minute timeout for mapping
                     
             except concurrent.futures.TimeoutError:
                 logger.error("LLM mapping call timed out after 30 seconds")
@@ -232,7 +232,7 @@ Find up to {max_questions} questions and their corresponding answers."""
             # If no max_score found, this indicates missing question data
             if max_score is None:
                 logger.warning(f"No max_score found for question {len(result)+1}, guide processing may be incomplete")
-                max_score = 0.0  # Use 0 to indicate missing score
+                max_score = 10.0  # Use reasonable default to prevent 0% scores
                 
             result.append({
                 'question_id': f"Q{len(result)+1}",
