@@ -114,10 +114,15 @@
                 <div class="text-gray-600">Ready to begin processing...</div>
             </div>
             
-            <!-- Start Processing Button -->
-            <button id="start-processing" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                Start Enhanced Processing
-            </button>
+            <!-- Processing Control Buttons -->
+            <div class="flex space-x-3">
+                <button id="start-processing" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    Start Enhanced Processing
+                </button>
+                <button id="cancel-processing" class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out hidden" onclick="cancelProcessing()">
+                    Cancel Processing
+                </button>
+            </div>
         </div>
     </div>
 
@@ -148,7 +153,17 @@ document.addEventListener('DOMContentLoaded', function() {
     let selectedSubmissions = [];
     let progressPollingInterval = null;
     let progressRetryCount = 0;
+    let currentTaskId = null;
     const MAX_PROGRESS_RETRIES = 5;
+    
+    // Function to clear progress polling
+    function clearProgressPolling() {
+        if (progressPollingInterval) {
+            clearInterval(progressPollingInterval);
+            progressPollingInterval = null;
+        }
+        progressRetryCount = 0;
+    }
     
     const startButton = document.getElementById('start-processing');
     const statusDiv = document.getElementById('processing-status');
@@ -727,7 +742,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function monitorProgress(taskId) {
+        // Set current task ID for cancellation
+        currentTaskId = taskId;
         progressRetryCount = 0;
+        
+        // Show cancel button when processing starts
+        const cancelButton = document.getElementById('cancel-processing');
+        if (cancelButton) {
+            cancelButton.classList.remove('hidden');
+        }
         
         function checkProgress() {
             fetch(`/api/enhanced-processing/progress/${taskId}`)
@@ -791,7 +814,58 @@ document.addEventListener('DOMContentLoaded', function() {
         startButton.disabled = false;
         startButton.textContent = 'Start Enhanced Processing';
         updateProcessingButton();
+        
+        // Hide cancel button
+        const cancelButton = document.getElementById('cancel-processing');
+        if (cancelButton) {
+            cancelButton.classList.add('hidden');
+        }
     }
+    
+    // Global function to cancel processing
+    window.cancelProcessing = async function() {
+        if (!currentTaskId) {
+            console.error('No active task to cancel');
+            return;
+        }
+        
+        if (!confirm('Are you sure you want to cancel the current processing? This action cannot be undone.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/enhanced-processing/cancel/${currentTaskId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Clear progress polling
+                clearProgressPolling();
+                
+                // Update UI
+                if (statusDiv) {
+                    statusDiv.innerHTML = '<div class="text-red-600">Processing was cancelled by user</div>';
+                }
+                
+                // Reset buttons
+                resetProcessingButton();
+                
+                console.log('Processing cancelled successfully');
+            } else {
+                console.error('Failed to cancel processing:', data.error);
+                alert('Failed to cancel processing: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error cancelling processing:', error);
+            alert('Error cancelling processing: ' + error.message);
+        }
+    };
     
     function updateProgressDisplay(data) {
         const progressContainer = document.getElementById('progress-container');

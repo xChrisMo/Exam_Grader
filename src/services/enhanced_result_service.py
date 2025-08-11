@@ -147,10 +147,13 @@ class EnhancedResultService:
                 enhanced_grade["score"] = 0.0
                 
             try:
-                max_score = grade.get("max_score", 10)
-                enhanced_grade["max_score"] = float(max_score) if max_score is not None else 10.0
+                max_score = grade.get("max_score")
+                if max_score is None:
+                    logger.warning("No max_score found in enhanced result processing, guide may not be properly processed")
+                    max_score = 0.0  # Use 0 to indicate missing score
+                enhanced_grade["max_score"] = float(max_score)
             except (TypeError, ValueError):
-                enhanced_grade["max_score"] = 10.0
+                enhanced_grade["max_score"] = 0.0  # Use 0 to indicate missing score
                 
             enhanced_grade["feedback"] = grade.get("feedback", "No feedback provided")
 
@@ -219,10 +222,13 @@ class EnhancedResultService:
                 scores.append(0.0)
                 
             try:
-                max_score = grade.get("max_score", 10)
-                max_scores.append(float(max_score) if max_score is not None else 10.0)
+                max_score = grade.get("max_score")
+                if max_score is None:
+                    logger.warning("No max_score found in grade analytics, guide may not be properly processed")
+                    max_score = 0.0
+                max_scores.append(float(max_score))
             except (TypeError, ValueError):
-                max_scores.append(10.0)
+                max_scores.append(0.0)  # Use 0 to indicate missing score
         
         percentages = [
             (score / max_score * 100) if max_score > 0 else 0

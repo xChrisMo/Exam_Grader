@@ -76,13 +76,29 @@ Find up to {max_questions} questions and their corresponding answers."""
             
             start_time = time.time()
             
-            # Use minimal LLM call
-            response = self.llm_service.generate_response(
-                system_prompt="Map exam questions to answers. JSON only. Be consistent and deterministic.",
-                user_prompt=prompt,
-                temperature=0.0,  # Deterministic for speed
-                use_cache=True    # Enable caching for consistency
-            )
+            # Use minimal LLM call with timeout protection
+            try:
+                import concurrent.futures
+                
+                def make_llm_call():
+                    return self.llm_service.generate_response(
+                        system_prompt="Map exam questions to answers. JSON only. Be consistent and deterministic.",
+                        user_prompt=prompt,
+                        temperature=0.0,  # Deterministic for speed
+                        use_cache=True    # Enable caching for consistency
+                    )
+                
+                # Execute with timeout
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(make_llm_call)
+                    response = future.result(timeout=30)  # 30 second timeout
+                    
+            except concurrent.futures.TimeoutError:
+                logger.error("LLM mapping call timed out after 30 seconds")
+                return self._instant_fallback_mapping_with_questions(guide_content, submission_content, max_questions, questions_data)
+            except Exception as llm_error:
+                logger.error(f"LLM mapping call failed: {llm_error}")
+                return self._instant_fallback_mapping_with_questions(guide_content, submission_content, max_questions, questions_data)
             
             processing_time = time.time() - start_time
             logger.info(f"Ultra-fast mapping completed in {processing_time:.2f}s")
@@ -179,31 +195,50 @@ Find up to {max_questions} questions and their corresponding answers."""
         result = []
         for i, mapping in enumerate(mappings[:max_questions]):
             if isinstance(mapping, dict):
-                # Get max score from questions_data if available
-                max_score = 10.0  # Default
+                # Get max score from questions_data - NO DEFAULT, extract from guide
+                max_score = None
                 if questions_data and i < len(questions_data):
-                    max_score = questions_data[i].get('max_score', 10.0)
+                    max_score = questions_data[i].get('max_score') or questions_data[i].get('marks')
+                
+                # If no max_score found, try to extract from question text as emergency fallback
+                if max_score is None or max_score == 0:
+                    question_text = mapping.get('q', '') or (questions_data[i].get('text', '') if questions_data and i < len(questions_data) else '')
+                    extracted_marks = self._extract_marks_from_text(question_text)
+                    if extracted_marks:
+                        max_score = extracted_marks
+                        logger.info(f"Emergency extraction: found {max_score} marks for question {i+1}")
+                
+                # Final fallback - if still no score found
+                if max_score is None or max_score == 0:
+                    logger.warning(f"No max_score found for question {i+1}, guide may not be properly processed")
+                    # Use a reasonable default temporarily until guides are reprocessed
+                    max_score = 10.0  # Temporary fallback to prevent 0% scores
                 
                 result.append({
                     'question_id': mapping.get('id', f"Q{i+1}"),
                     'question_text': str(mapping.get('q', ''))[:200],
                     'student_answer': str(mapping.get('a', ''))[:300],
-                    'max_score': max_score,
+                    'max_score': float(max_score),
                     'confidence': 0.8
                 })
         
         # Fill to required count
         while len(result) < max_questions:
-            # Get max score from questions_data if available
-            max_score = 10.0  # Default
+            # Get max score from questions_data - NO DEFAULT
+            max_score = None
             if questions_data and len(result) < len(questions_data):
-                max_score = questions_data[len(result)].get('max_score', 10.0)
+                max_score = questions_data[len(result)].get('max_score') or questions_data[len(result)].get('marks')
+            
+            # If no max_score found, this indicates missing question data
+            if max_score is None:
+                logger.warning(f"No max_score found for question {len(result)+1}, guide processing may be incomplete")
+                max_score = 0.0  # Use 0 to indicate missing score
                 
             result.append({
                 'question_id': f"Q{len(result)+1}",
                 'question_text': f"Question {len(result)+1}",
                 'student_answer': "Answer not clearly identified",
-                'max_score': max_score,
+                'max_score': float(max_score),
                 'confidence': 0.3
             })
         
@@ -332,13 +367,27 @@ Find up to {max_questions} questions and their corresponding answers."""
             
             # Convert database questions to format needed for mapping
             questions_data = []
+            questions_with_missing_marks = 0
+            
             for i, question in enumerate(guide.questions):
+                marks = question.get('marks')
+                
+                # If marks is 0 or None, try to extract from question text as fallback
+                if not marks or marks == 0:
+                    marks = self._extract_marks_from_text(question.get('text', ''))
+                    if not marks:
+                        questions_with_missing_marks += 1
+                        logger.warning(f"No marks found for question {i+1} in guide {guide_id}")
+                
                 questions_data.append({
                     'question_id': question.get('number', f"Q{i+1}"),
                     'text': question.get('text', ''),
                     'criteria': question.get('criteria', ''),
-                    'max_score': float(question.get('marks', 10))
+                    'max_score': float(marks) if marks else 0.0  # Use actual marks or 0
                 })
+            
+            if questions_with_missing_marks > 0:
+                logger.warning(f"Guide {guide_id} has {questions_with_missing_marks} questions with missing marks. Consider reprocessing the guide.")
             
             logger.info(f"Retrieved {len(questions_data)} questions from database")
             return questions_data
@@ -346,6 +395,41 @@ Find up to {max_questions} questions and their corresponding answers."""
         except Exception as e:
             logger.error(f"Error retrieving questions from database: {e}")
             return []
+    
+    def _extract_marks_from_text(self, text: str) -> Optional[float]:
+        """Extract marks from question text as fallback when database marks are missing."""
+        if not text:
+            return None
+        
+        import re
+        
+        # Common patterns for marks in question text
+        patterns = [
+            r'\((\d+(?:\.\d+)?)\s*marks?\)',  # (5 marks), (10.5 marks)
+            r'\[(\d+(?:\.\d+)?)\s*marks?\]',  # [5 marks], [10.5 marks]
+            r'\((\d+(?:\.\d+)?)\s*points?\)', # (5 points), (10.5 points)
+            r'\[(\d+(?:\.\d+)?)\s*points?\]', # [5 points], [10.5 points]
+            r'\((\d+(?:\.\d+)?)\s*pts?\)',    # (5 pts), (10.5 pts)
+            r'\[(\d+(?:\.\d+)?)\s*pts?\]',    # [5 pts], [10.5 pts)
+            r'worth\s+(\d+(?:\.\d+)?)\s*marks?', # worth 5 marks
+            r'worth\s+(\d+(?:\.\d+)?)\s*points?', # worth 5 points
+            r'total:?\s*(\d+(?:\.\d+)?)\s*marks?', # Total: 5 marks
+            r'total:?\s*(\d+(?:\.\d+)?)\s*points?', # Total: 5 points
+            r'(\d+(?:\.\d+)?)\s*marks?\s*total', # 5 marks total
+            r'(\d+(?:\.\d+)?)\s*points?\s*total', # 5 points total
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                try:
+                    marks = float(match.group(1))
+                    logger.info(f"Extracted {marks} marks from text: '{text[:50]}...'")
+                    return marks
+                except ValueError:
+                    continue
+        
+        return None
 
 class UltraFastGrader:
     """Ultra-fast grading with aggressive optimizations."""
@@ -388,12 +472,29 @@ Grade fairly and provide accurate scores based on answer quality. Use the full r
             
             start_time = time.time()
             
-            response = self.llm_service.generate_response(
-                system_prompt="Grade quickly. JSON only. Be consistent and deterministic in your scoring.",
-                user_prompt=prompt,
-                temperature=0.0,  # Deterministic responses
-                use_cache=True    # Enable caching for consistency
-            )
+            # Add timeout protection for grading LLM call
+            try:
+                import concurrent.futures
+                
+                def make_grading_call():
+                    return self.llm_service.generate_response(
+                        system_prompt="Grade quickly. JSON only. Be consistent and deterministic in your scoring.",
+                        user_prompt=prompt,
+                        temperature=0.0,  # Deterministic responses
+                        use_cache=True    # Enable caching for consistency
+                    )
+                
+                # Execute with timeout
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(make_grading_call)
+                    response = future.result(timeout=30)  # 30 second timeout
+                    
+            except concurrent.futures.TimeoutError:
+                logger.error("LLM grading call timed out after 30 seconds")
+                return self._instant_fallback_grading(mappings)
+            except Exception as llm_error:
+                logger.error(f"LLM grading call failed: {llm_error}")
+                return self._instant_fallback_grading(mappings)
             
             processing_time = time.time() - start_time
             logger.info(f"Ultra-fast grading completed in {processing_time:.2f}s")
@@ -458,7 +559,7 @@ Grade fairly and provide accurate scores based on answer quality. Use the full r
             max_scores = re.findall(r'"max_score":\s*([\d.]+)', response)
             grades = []
             for i, score in enumerate(scores):
-                max_score = max_scores[i] if i < len(max_scores) else '10'
+                max_score = max_scores[i] if i < len(max_scores) else '0'  # Use 0 instead of defaulting to 10
                 grades.append({
                     'id': f'Q{i+1}', 
                     'score': float(score),
@@ -511,7 +612,8 @@ Grade fairly and provide accurate scores based on answer quality. Use the full r
         
         return {
             'total_score': round(total_score, 2),
-            'max_score': round(max_possible, 2),
+            'max_score': round(max_possible, 2),  # Keep for backward compatibility
+            'max_possible_score': round(max_possible, 2),  # Add this for grading service
             'percentage': round(percentage, 1),
             'detailed_grades': grades,
             'summary': {

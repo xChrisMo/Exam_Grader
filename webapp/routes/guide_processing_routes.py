@@ -317,21 +317,28 @@ REQUIRED JSON FORMAT:
   }
 ]
 
-EXTRACTION RULES:
+MARK EXTRACTION RULES (MOST IMPORTANT):
+- ALWAYS look for explicit mark values in the text: (5 marks), [10 points], "worth 15 marks", etc.
+- Search for patterns like: "5 marks", "10 points", "15pts", "(20)", "[25 marks]", "Total: 30 marks"
+- If marks are specified for sub-parts (e.g., "a) 3 marks, b) 7 marks"), extract those exact values
+- If a question says "Total: 20 marks" with sub-parts, try to find individual sub-part marks
+- NEVER guess or estimate marks - only use explicitly stated values
+- If no marks are found, set "marks": 0 (do not default to any other number)
+
+QUESTION EXTRACTION RULES:
 - Look for numbered questions, topics, or assessment criteria
 - Extract ANY text that represents something to be graded or assessed
-- If you see marks/points mentioned, use those numbers
-- If no marks specified, estimate 1-10 points based on complexity
 - Include sub-questions as separate entries (1a, 1b, etc.)
 - If the content has headings or sections, treat each as a potential question
 - Even if formatting is messy, extract the core content
-- If you find ANYTHING that could be assessed, include it
+- Preserve question numbering exactly as it appears
 
 FALLBACK STRATEGY:
 - If no clear questions exist, break content into logical assessment units
 - Create reasonable question text from headings, topics, or key concepts
 - Always return at least one item if there's any substantial content
-- Never return an empty array unless the content is truly empty"""
+- Never return an empty array unless the content is truly empty
+- For fallback questions with no explicit marks, use "marks": 0"""
 
         user_prompt = f"""Extract from this marking guide content:
 
@@ -438,21 +445,28 @@ Return ONLY the JSON array - no other text."""
                                         if point.get("description"):
                                             criteria_parts.append(f"{sub_number}: {point['description']}")
                         
+                        # Don't default to 5 marks per subquestion - extract from guide or use 0
+                        if total_marks == 0:
+                            logger.warning(f"No marks found for grouped question {question_number}, guide may need better mark extraction")
+                        
                         validated_question = {
                             "number": str(question_number),
                             "text": "\n".join(combined_text_parts),
                             "criteria": "\n".join(criteria_parts) if criteria_parts else "Multi-part question",
-                            "marks": total_marks if total_marks > 0 else len(subquestions) * 5,
+                            "marks": total_marks,  # Use actual extracted marks, don't default
                             "type": "grouped",
                             "sub_parts": sub_parts
                         }
                     else:
                         # Individual question
+                        if total_marks == 0:
+                            logger.warning(f"No marks found for individual question {question_number}, guide may need better mark extraction")
+                        
                         validated_question = {
                             "number": str(question_number),
                             "text": str(question.get("text", "")),
                             "criteria": "\n".join(criteria_parts) if criteria_parts else "Individual question",
-                            "marks": total_marks if total_marks > 0 else 5,
+                            "marks": total_marks,  # Use actual extracted marks, don't default
                             "type": "individual"
                         }
                     

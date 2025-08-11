@@ -874,37 +874,39 @@ class CoreService(BaseService):
                 
                 db.session.flush()  # Flush to ensure deletions are processed
 
-            # Create grading result record
-            total_score = grading_result.get("total_score", 0)
-            max_score = grading_result.get("max_score", 100)
-            percentage = (total_score / max_score * 100) if max_score > 0 else 0
-
-            result = GradingResult(
-                id=f"result_{int(time.time())}_{request.submission_id}",
-                submission_id=request.submission_id,
-                marking_guide_id=request.guide_id,
-                score=total_score,
-                max_score=max_score,
-                percentage=percentage,
-                feedback=grading_result.get("feedback", ""),
-                detailed_feedback=grading_result,
-                grading_method="llm",
-            )
-
-            # Save mappings with unique IDs
+            # Save mappings and create individual grading results
             import uuid
+            
+            # Get detailed grades from grading result
+            detailed_grades = grading_result.get("detailed_grades", [])
+            
+            # Calculate totals from individual mappings
+            total_score = 0.0
+            total_max_score = 0.0
 
             for i, mapping_data in enumerate(mappings):
                 # Generate truly unique ID
                 unique_id = f"mapping_{uuid.uuid4().hex[:8]}_{int(time.time())}_{i}"
-
+                
+                # Get max score from mapping data
+                mapping_max_score = mapping_data.get("max_score")
+                if mapping_max_score is None:
+                    logger.warning(f"No max_score found for mapping {i}, using 0")
+                    mapping_max_score = 0.0
+                
+                # Get individual score from detailed grades
+                individual_score = 0.0
+                if i < len(detailed_grades):
+                    individual_score = detailed_grades[i].get("score", 0.0)
+                
+                # Create mapping record
                 mapping_record = Mapping(
                     id=unique_id,
                     submission_id=request.submission_id,
                     guide_question_id=mapping_data.get("question_id", f"Q{i+1}"),
                     guide_question_text=mapping_data.get("question_text", ""),
                     guide_answer=mapping_data.get("guide_answer", ""),
-                    max_score=mapping_data.get("max_score", 10.0),
+                    max_score=float(mapping_max_score),
                     submission_answer=mapping_data.get(
                         "student_answer", mapping_data.get("answer_text", "")
                     ),
@@ -913,11 +915,47 @@ class CoreService(BaseService):
                     mapping_method="llm",
                 )
                 db.session.add(mapping_record)
+                
+                # Create individual grading result for this mapping
+                individual_percentage = (individual_score / mapping_max_score * 100) if mapping_max_score > 0 else 0
+                
+                individual_result = GradingResult(
+                    id=f"result_{int(time.time())}_{i}_{request.submission_id}",
+                    submission_id=request.submission_id,
+                    marking_guide_id=request.guide_id,
+                    mapping_id=unique_id,  # Link to the mapping
+                    score=float(individual_score),
+                    max_score=float(mapping_max_score),
+                    percentage=individual_percentage,
+                    feedback=detailed_grades[i].get("feedback", "") if i < len(detailed_grades) else "",
+                    detailed_feedback=detailed_grades[i] if i < len(detailed_grades) else {},
+                    grading_method="llm",
+                )
+                db.session.add(individual_result)
+                
+                # Add to totals
+                total_score += individual_score
+                total_max_score += mapping_max_score
 
-            db.session.add(result)
+            # Create overall summary result (optional, for backward compatibility)
+            overall_percentage = (total_score / total_max_score * 100) if total_max_score > 0 else 0
+            
+            summary_result = GradingResult(
+                id=f"result_{int(time.time())}_{request.submission_id}",
+                submission_id=request.submission_id,
+                marking_guide_id=request.guide_id,
+                mapping_id=None,  # This is a summary, not linked to specific mapping
+                score=total_score,
+                max_score=total_max_score,
+                percentage=overall_percentage,
+                feedback=grading_result.get("feedback", ""),
+                detailed_feedback=grading_result,
+                grading_method="llm",
+            )
+            db.session.add(summary_result)
             db.session.commit()
 
-            return result.id
+            return summary_result.id
 
         except Exception as e:
             logger.error(f"Failed to save results: {e}")

@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: exam-grader
+    env: python
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: python run_app.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+      - key: DEBUG
+        value: false
+      - key: FLASK_ENV
+        value: production
+      - key: DATABASE_URL
+        generateValue: true
+      - key: SECRET_KEY
+        generateValue: true
+      - key: HANDWRITING_OCR_API_KEY
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+    disk:
+      name: exam-grader-disk
+      mountPath: /opt/render/project/src/instance
+      sizeGB: 1

@@ -1,14 +1,3 @@
-# Environment variables and secrets
-.env
-.env.*
-.env.local
-.env.production
-.env.development
-config.env
-config.env.*
-!config.env.example
-!.env.example
-
 # Python
 __pycache__/
 *.py[cod]
@@ -27,107 +16,164 @@ parts/
 sdist/
 var/
 wheels/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Virtual Environment
-venv/
-env/
-ENV/
-.venv/
+# PyInstaller
+*.manifest
+*.spec
 
-# IDE
-.idea/
-.vscode/
-.kiro/
-*.swp
-*.swo
-*.swn
-*.bak
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
 
-# Project specific
-temp/
-output/
-logs/
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
 *.log
-!.gitkeep
-secrets.enc
-migration_backup/
-*.backup
-*.backup2
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
 
-# Database files (should not be in repository)
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pyb/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# pdm
+.pdm.toml
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.env.local
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Application specific
+logs/
+cache/
+temp/
+uploads/
+output/
+instance/
+secrets.enc
+
+# Database
 *.db
 *.sqlite
 *.sqlite3
-instance/*.db
-instance/*.sqlite
-instance/*.sqlite3
 
-# Sensitive files
-secrets.enc
-instance/secrets.enc
-*.key
-*.pem
+# Node modules (if any)
+node_modules/
 
-# Test coverage and cache
-.coverage
-htmlcov/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# Documentation
-docs/_build/
-docs/_static/
-docs/_templates/
-
-# OS
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
-Desktop.ini
 
 # Temporary files
 *.tmp
 *.temp
-~*
-*~ 
+*~
 
-# Debug and cleanup files
-*debug*.py
-*temp*.py
-*test*.db
-*.db.backup
-CTRL_C_FIX_SUMMARY.md
-ERROR_FIXES_SUMMARY.md
-quick_start.py
-simple_start.py
-# File protection system
-file_backups/
-*.backup_*
-.file_protection/
-.version_lock.json
-
-# IDE auto-restore prevention
-.vscode/settings.json
-.idea/workspace.xml
+# IDE files
 *.swp
 *.swo
 *~
 
-# Temporary files that might trigger restores
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Python cache that might cause issues
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-
-# Smart Protection System (non-intrusive)
-.file_protection_state
-emergency_backups/
+# Backup files
+*.bak
+*.backup

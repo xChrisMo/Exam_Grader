@@ -135,6 +135,12 @@ def main():
         port = int(os.getenv(ENV_PORT, DEFAULT_PORT))
         debug = os.getenv(ENV_DEBUG, DEFAULT_DEBUG).lower() == "true"
         
+        # For production deployment (Render, Heroku, etc.)
+        if os.getenv('RENDER') or os.getenv('DYNO'):
+            host = '0.0.0.0'
+            port = int(os.getenv('PORT', port))
+            debug = False
+        
         print(f"📍 Server: http://{host}:{port}")
         print(f"🔧 Debug mode: {UI_DEBUG_ON if debug else UI_DEBUG_OFF}")
         print(UI_PRESS_CTRL_C)

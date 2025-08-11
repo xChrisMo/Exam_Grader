@@ -91,6 +91,30 @@ def register_template_filters(state):
 # In-memory progress store (in production, use Redis or database)
 progress_store = {}
 
+def cleanup_old_progress_entries():
+    """Clean up old progress entries to prevent memory leaks."""
+    import time
+    current_time = time.time()
+    expired_keys = []
+    
+    for task_id, progress_data in progress_store.items():
+        # Remove entries older than 1 hour
+        if current_time - progress_data.get("created_at", 0) > 3600:
+            expired_keys.append(task_id)
+    
+    for key in expired_keys:
+        del progress_store[key]
+        logger.info(f"Cleaned up expired progress entry: {key}")
+
+def mark_progress_as_failed(task_id, error_message):
+    """Mark a progress entry as failed."""
+    if task_id in progress_store:
+        progress_store[task_id].update({
+            "status": "failed",
+            "progress": 100,
+            "message": f"Processing failed: {error_message}",
+        })
+
 
 @main_bp.route("/")
 def index():
@@ -1830,13 +1854,42 @@ def api_enhanced_processing_start():
                                 },
                             )
 
-                            # Process submission with LLM
+                            # Process submission with LLM and timeout protection
                             logger.info(
                                 f"Processing submission {submission.id} with guide {guide_id}"
                             )
-                            result = asyncio.run(
-                                core_service.process_submission(processing_request)
-                            )
+                            
+                            try:
+                                # Add timeout to the entire processing operation
+                                result = asyncio.wait_for(
+                                    core_service.process_submission(processing_request),
+                                    timeout=120  # 2 minute timeout per submission
+                                )
+                                result = asyncio.run(result)
+                            except asyncio.TimeoutError:
+                                logger.error(f"Processing timed out for submission {submission.id}")
+                                failed_count += 1
+                                processing_results.append(
+                                    {
+                                        "submission_id": submission.id,
+                                        "filename": submission.filename,
+                                        "success": False,
+                                        "error": "Processing timed out after 2 minutes",
+                                    }
+                                )
+                                continue
+                            except Exception as process_error:
+                                logger.error(f"Processing failed for submission {submission.id}: {process_error}")
+                                failed_count += 1
+                                processing_results.append(
+                                    {
+                                        "submission_id": submission.id,
+                                        "filename": submission.filename,
+                                        "success": False,
+                                        "error": f"Processing failed: {str(process_error)}",
+                                    }
+                                )
+                                continue
 
                             if result.success:
                                 successful_count += 1
@@ -1937,15 +1990,54 @@ def api_enhanced_processing_start():
         return jsonify({"success": False, "error": "Failed to start processing"}), 500
 
 
+@main_bp.route("/api/enhanced-processing/cancel/<task_id>", methods=["POST"])
+@login_required
+def api_enhanced_processing_cancel(task_id):
+    """API endpoint to cancel a stuck processing task."""
+    try:
+        if task_id not in progress_store:
+            return jsonify({"success": False, "error": "Task not found"}), 404
+        
+        # Mark the task as cancelled
+        progress_store[task_id].update({
+            "status": "cancelled",
+            "progress": 100,
+            "message": "Processing was cancelled by user",
+        })
+        
+        logger.info(f"Processing task {task_id} was cancelled by user")
+        
+        return jsonify({
+            "success": True,
+            "message": "Processing task cancelled successfully"
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to cancel processing task: {e}")
+        return jsonify({"success": False, "error": "Failed to cancel task"}), 500
+
+
 @main_bp.route("/api/enhanced-processing/progress/<task_id>", methods=["GET"])
 @login_required
 def api_enhanced_processing_progress(task_id):
     """API endpoint to get enhanced processing progress."""
     try:
+        # Clean up old progress entries periodically
+        cleanup_old_progress_entries()
+        
         if task_id not in progress_store:
             return jsonify({"success": False, "error": "Task not found"}), 404
 
         progress_data = progress_store[task_id]
+        
+        # Check if task has been stuck for too long (more than 10 minutes)
+        import time
+        current_time = time.time()
+        task_age = current_time - progress_data.get("created_at", current_time)
+        
+        if task_age > 600 and progress_data["status"] == "processing":  # 10 minutes
+            logger.warning(f"Task {task_id} appears to be stuck, marking as failed")
+            mark_progress_as_failed(task_id, "Processing timed out - task was stuck for more than 10 minutes")
 
         # Clean up completed tasks after some time (optional)
         if progress_data["status"] in ["completed", "failed"]:

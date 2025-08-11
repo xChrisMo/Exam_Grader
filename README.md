@@ -1,6 +1,6 @@
 # Exam Grader - AI-Powered Assessment Platform
 
-[![Version](https://img.shields.io/badge/version-2.1.2-blue.svg)](VERSION)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 [![Python](https://img.shields.io/badge/python-3.8+-green.svg)](https://python.org)
 [![Flask](https://img.shields.io/badge/flask-3.0+-red.svg)](https://flask.palletsprojects.com)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
@@ -13,10 +13,28 @@ A comprehensive Flask-based web application that uses AI to automatically grade 
 
 ### Recent Improvements
 - 🔒 **Security Enhanced**: Fixed all security vulnerabilities, added CSRF protection
-- 🚀 **Performance Optimized**: Implemented MCP protocol for 40-60% LLM performance improvement
+- 🚀 **Performance Optimized**: Implemented ultra-fast processing for 3x speed improvement
+- 🎯 **Max Score Extraction**: Fixed max score extraction from marking guides - no more arbitrary defaults
 - 🔧 **Configuration Unified**: Centralized configuration system with validation
-- 🧪 **Testing Complete**: Comprehensive testing across all components
 - 📊 **Monitoring Added**: Health checks and performance monitoring implemented
+
+## 🚀 Quick Deploy
+
+### Deploy to Render (Recommended)
+
+1. **Fork this repository** to your GitHub account
+
+2. **Click the Deploy to Render button** above or visit [Render Dashboard](https://dashboard.render.com)
+
+3. **Connect your GitHub repository** and configure environment variables:
+   ```
+   HANDWRITING_OCR_API_KEY=your_ocr_api_key
+   DEEPSEEK_API_KEY=your_deepseek_api_key
+   ```
+
+4. **Deploy** - Render will automatically build and deploy your application
+
+Your app will be available at `https://your-app-name.onrender.com`
 
 ## 🏗️ Architecture Overview
 

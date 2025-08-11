@@ -332,7 +332,10 @@ GRADE THESE ANSWERS:
                 "answer_text", qa.get("student_answer", qa.get("answer", ""))
             )
             question_id = qa.get("question_id", f"Q{i}")
-            max_score = qa.get("max_score", 10.0)  # Default to 10 if not specified
+            max_score = qa.get("max_score")  # Extract from guide, no default
+            if max_score is None:
+                logger.warning(f"No max_score found for question {i}, guide may not be properly processed")
+                max_score = 0.0  # Use 0 to indicate missing score
 
             user_prompt += f"""
 {i}. ID: {question_id} (Max Score: {max_score} points)
@@ -405,8 +408,11 @@ Return format: {{"grades": [...]}}
 
     def _validate_and_clean_grade(self, grade: Dict, qa_pair: Dict) -> Dict:
         """Validate and clean individual grade."""
-        # Get max score from qa_pair or grade, default to 10.0
-        max_score = qa_pair.get("max_score", grade.get("max_score", 10.0))
+        # Get max score from qa_pair or grade - NO DEFAULT
+        max_score = qa_pair.get("max_score") or grade.get("max_score")
+        if max_score is None:
+            logger.warning("No max_score found in grade validation, guide may not be properly processed")
+            max_score = 0.0  # Use 0 to indicate missing score
 
         # Ensure required fields
         validated = {
@@ -445,7 +451,10 @@ Return format: {{"grades": [...]}}
 
     def _grade_single_qa_pair(self, qa_pair: Dict, marking_guide: str) -> Dict:
         """Grade a single Q&A pair as fallback."""
-        max_score = qa_pair.get("max_score", 10.0)
+        max_score = qa_pair.get("max_score")
+        if max_score is None:
+            logger.warning("No max_score found for single Q&A grading, guide may not be properly processed")
+            max_score = 0.0  # Use 0 to indicate missing score
 
         try:
             if self.llm_service:
@@ -523,7 +532,14 @@ Marking Guide: {marking_guide[:500]}"""
             }
 
         total_score = sum(grade.get("score", 0) for grade in grades)
-        max_possible = sum(grade.get("max_score", 10.0) for grade in grades)
+        max_possible = 0.0
+        for grade in grades:
+            grade_max_score = grade.get("max_score")
+            if grade_max_score is None:
+                logger.warning("Grade missing max_score in final results calculation")
+                grade_max_score = 0.0  # Use 0 instead of defaulting to 10
+            max_possible += float(grade_max_score)
+        
         percentage = (total_score / max_possible * 100) if max_possible > 0 else 0
 
         return {
