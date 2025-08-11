@@ -27,7 +27,7 @@ Object.assign(ExamGrader, {
 
   // Configuration
   config: {
-    maxFileSize: 100 * 1024 * 1024, // 100MB (increased from 16MB)
+    maxFileSize: Infinity, // No file size limit
     allowedFileTypes: [
       ".pdf",
       ".docx",

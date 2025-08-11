@@ -161,9 +161,9 @@ class APIConfig:
     llm_json_schema: Optional[Dict] = None  # Optional JSON schema validation
     llm_fallback_to_plaintext: bool = True  # Attempt plaintext parsing if JSON fails
 
-    # Direct LLM Guide Processing Configuration
-    enable_direct_llm_guide_processing: bool = True  # Enable direct LLM processing for guides
-    default_guide_processing_method: str = "direct_llm"  # Default processing method
+    # Guide Processing Configuration
+    enable_direct_llm_guide_processing: bool = False  # Disabled - using existing services
+    default_guide_processing_method: str = "traditional_ocr"  # Default processing method
     allow_guide_processing_method_selection: bool = True  # Allow users to choose method
     llm_vision_max_file_size: str = "20MB"  # Maximum file size for LLM vision processing
     llm_vision_supported_formats: List[str] = field(
@@ -443,9 +443,9 @@ class UnifiedConfig:
                 "LLM_FALLBACK_TO_PLAINTEXT", "True"
             ).lower()
             == "true",
-            # Direct LLM Guide Processing Configuration
-            enable_direct_llm_guide_processing=os.getenv("ENABLE_DIRECT_LLM_GUIDE_PROCESSING", "True").lower() == "true",
-            default_guide_processing_method=os.getenv("DEFAULT_GUIDE_PROCESSING_METHOD", "direct_llm"),
+            # Guide Processing Configuration (using existing services)
+            enable_direct_llm_guide_processing=os.getenv("ENABLE_DIRECT_LLM_GUIDE_PROCESSING", "False").lower() == "true",
+            default_guide_processing_method=os.getenv("DEFAULT_GUIDE_PROCESSING_METHOD", "traditional_ocr"),
             allow_guide_processing_method_selection=os.getenv("ALLOW_GUIDE_PROCESSING_METHOD_SELECTION", "True").lower() == "true",
             llm_vision_max_file_size=os.getenv("LLM_VISION_MAX_FILE_SIZE", "20MB"),
             llm_vision_supported_formats=os.getenv("LLM_VISION_SUPPORTED_FORMATS", "pdf,docx,jpg,png,tiff").split(","),

@@ -138,7 +138,7 @@ class RequirementsValidator:
         implementation_files = [
             'src/services/training_service.py',
             'src/services/consolidated_llm_service.py',
-            'src/services/direct_llm_guide_processor.py'
+
         ]
         
         test_files = [

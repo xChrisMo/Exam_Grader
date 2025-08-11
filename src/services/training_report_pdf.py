@@ -78,6 +78,19 @@ class TrainingReportPDFGenerator:
             import weasyprint
             from weasyprint import HTML, CSS
             
+            # Check for Windows-specific GTK issues
+            import platform
+            if platform.system() == "Windows":
+                try:
+                    # Test basic WeasyPrint functionality
+                    test_html = HTML(string="<html><body>Test</body></html>")
+                    # This will fail if GTK libraries aren't available
+                    test_html.render()
+                except Exception as gtk_error:
+                    logger.warning(f"WeasyPrint GTK libraries not available on Windows: {gtk_error}")
+                    logger.info("Consider installing GTK libraries. See docs/WEASYPRINT_WINDOWS_SETUP.md")
+                    raise ImportError("WeasyPrint GTK libraries not available on Windows")
+            
             # Generate HTML content
             html_content = self._create_html_report(session_data, analytics, chart_paths)
             
@@ -89,13 +102,21 @@ class TrainingReportPDFGenerator:
             pdf_filename = f"training_report_{timestamp}.pdf"
             pdf_path = output_dir / pdf_filename
             
-            # Generate PDF
-            html_doc = HTML(string=html_content)
-            css_doc = CSS(string=css_content)
-            
-            html_doc.write_pdf(str(pdf_path), stylesheets=[css_doc])
-            
-            return str(pdf_path)
+            # Generate PDF with error handling
+            try:
+                html_doc = HTML(string=html_content)
+                css_doc = CSS(string=css_content)
+                
+                html_doc.write_pdf(str(pdf_path), stylesheets=[css_doc])
+                
+                return str(pdf_path)
+                
+            except Exception as pdf_error:
+                logger.error(f"WeasyPrint PDF generation failed: {pdf_error}")
+                # Clean up partial file if it exists
+                if pdf_path.exists():
+                    pdf_path.unlink()
+                raise
             
         except ImportError:
             raise ImportError("WeasyPrint not available")

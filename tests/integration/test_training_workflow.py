@@ -263,29 +263,32 @@ class TestTrainingWorkflow:
 class TestTrainingServiceIntegration:
     """Test training service integration"""
     
-    @patch('src.services.training_service.DirectLLMGuideProcessor')
-    def test_guide_processing_integration(self, mock_processor, app):
+    @patch('src.services.guide_processing_router.guide_processing_router.route_guide_processing')
+    def test_guide_processing_integration(self, mock_router, app):
         """Test guide processing integration"""
         with app.app_context():
-            # Mock processor
-            mock_instance = Mock()
-            mock_instance.process_guide.return_value = {
-                'questions': [
-                    {
-                        'question_number': '1',
-                        'question_text': 'Test question',
-                        'expected_answer': 'Test answer',
-                        'point_value': 10.0,
-                        'confidence': 0.8
-                    }
-                ],
-                'metadata': {
+            # Mock guide processing router
+            from src.services.guide_processing_router import ProcessingResult
+            mock_router.return_value = ProcessingResult(
+                success=True,
+                processing_method="traditional_ocr_with_llm",
+                data={
+                    'extracted_criteria': [
+                        {
+                            'question_text': 'Test question',
+                            'expected_answer': 'Test answer',
+                            'point_value': 10,
+                            'marks_allocated': 10,
+                            'rubric_details': 'Test rubric'
+                        }
+                    ]
+                },
+                metadata={
                     'total_questions': 1,
                     'total_marks': 10.0,
                     'format_confidence': 0.9
                 }
-            }
-            mock_processor.return_value = mock_instance
+            )
             
             # Test guide processing
             result = training_service.process_uploaded_guides(

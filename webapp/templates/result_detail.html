@@ -160,7 +160,7 @@
                         {% if guide.questions %}
                         <div>
                             <label class="block text-sm font-medium text-gray-500 mb-1">Questions</label>
-                            <div class="font-semibold text-gray-900">{{ guide.questions|length }} questions</div>
+                            <div class="font-semibold text-gray-900">{{ guide.questions|count_grouped_questions }} questions</div>
                         </div>
                         {% endif %}
                     </div>

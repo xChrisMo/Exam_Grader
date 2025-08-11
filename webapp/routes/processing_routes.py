@@ -37,18 +37,29 @@ def processing_page():
 @processing_bp.route("/unified")
 @login_required
 def unified_processing():
-    """Unified processing interface."""
+    """Unified processing interface with guide-filtered submissions."""
     progress_id = request.args.get("progress_id")
+    selected_guide_id = request.args.get("guide_id")
 
     if progress_id:
         # This is a progress tracking request - render the progress page
         guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
-        submissions = Submission.query.filter_by(user_id=current_user.id).all()
+        
+        # Filter submissions by selected guide if provided
+        if selected_guide_id:
+            submissions = Submission.query.filter_by(
+                user_id=current_user.id,
+                marking_guide_id=selected_guide_id
+            ).all()
+        else:
+            # Load all submissions but indicate they should be filtered by guide selection
+            submissions = []
 
         return render_template(
             "unified_processing.html",
             guides=guides,
             submissions=submissions,
+            selected_guide_id=selected_guide_id,
             progress_id=progress_id,
             allowed_types=[
                 ".pdf",
@@ -67,12 +78,22 @@ def unified_processing():
     else:
         # No progress_id - show enhanced processing interface
         guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
-        submissions = Submission.query.filter_by(user_id=current_user.id).all()
+        
+        # Filter submissions by selected guide if provided
+        if selected_guide_id:
+            submissions = Submission.query.filter_by(
+                user_id=current_user.id,
+                marking_guide_id=selected_guide_id
+            ).all()
+        else:
+            # Load all submissions but indicate they should be filtered by guide selection
+            submissions = []
 
         return render_template(
             "enhanced_processing.html",
             guides=guides,
             submissions=submissions,
+            selected_guide_id=selected_guide_id,
             allowed_types=[
                 ".pdf",
                 ".docx",
@@ -539,13 +560,24 @@ def batch_processing():
             return jsonify({"success": False, "error": "Batch processing failed"}), 500
 
     # GET request - show batch processing interface
+    selected_guide_id = request.args.get("guide_id")
     guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
-    submissions = Submission.query.filter_by(user_id=current_user.id).all()
+    
+    # Filter submissions by selected guide if provided
+    if selected_guide_id:
+        submissions = Submission.query.filter_by(
+            user_id=current_user.id,
+            marking_guide_id=selected_guide_id
+        ).all()
+    else:
+        # Load all submissions but indicate they should be filtered by guide selection
+        submissions = []
 
     return render_template(
         "batch_processing.html",
         guides=guides,
         submissions=submissions,
+        selected_guide_id=selected_guide_id,
         allowed_types=[
             ".pdf",
             ".docx",
@@ -642,6 +674,137 @@ def api_cleanup_progress():
             jsonify({"success": False, "error": "Failed to cleanup progress data"}),
             500,
         )
+
+
+@processing_bp.route("/api/submissions", methods=["GET"])
+@login_required
+def api_get_submissions():
+    """Get submissions filtered by guide ID."""
+    try:
+        guide_id = request.args.get("guide_id")
+        
+        if not guide_id:
+            return jsonify({
+                "success": False, 
+                "error": "guide_id parameter is required"
+            }), 400
+        
+        # Verify guide ownership
+        guide = MarkingGuide.query.filter_by(
+            id=guide_id, user_id=current_user.id
+        ).first()
+        
+        if not guide:
+            return jsonify({
+                "success": False, 
+                "error": "Guide not found or access denied"
+            }), 404
+        
+        # Get submissions linked to this guide
+        submissions = Submission.query.filter_by(
+            user_id=current_user.id,
+            marking_guide_id=guide_id
+        ).order_by(Submission.created_at.desc()).all()
+        
+        submissions_list = []
+        for submission in submissions:
+            submissions_list.append({
+                "id": submission.id,
+                "filename": submission.filename,
+                "student_name": submission.student_name or "",
+                "student_id": submission.student_id or "",
+                "processing_status": submission.processing_status,
+                "file_size": submission.file_size,
+                "file_type": submission.file_type,
+                "marking_guide_id": submission.marking_guide_id,
+                "ocr_confidence": submission.ocr_confidence,
+                "created_at": (
+                    submission.created_at.isoformat()
+                    if submission.created_at
+                    else None
+                ),
+                "updated_at": (
+                    submission.updated_at.isoformat()
+                    if submission.updated_at
+                    else None
+                ),
+            })
+        
+        return jsonify({
+            "success": True,
+            "guide": {
+                "id": guide.id,
+                "title": guide.title,
+                "description": guide.description
+            },
+            "submissions": submissions_list,
+            "total_count": len(submissions_list)
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get submissions for guide: {e}")
+        return jsonify({
+            "success": False, 
+            "error": "Failed to retrieve submissions"
+        }), 500
+
+
+@processing_bp.route("/api/submissions/all", methods=["GET"])
+@login_required
+def api_get_all_submissions():
+    """Get all submissions for the current user (fallback endpoint)."""
+    try:
+        submissions = Submission.query.filter_by(user_id=current_user.id).order_by(
+            Submission.created_at.desc()
+        ).all()
+        
+        submissions_list = []
+        for submission in submissions:
+            # Get guide info if linked
+            guide_info = None
+            if submission.marking_guide_id:
+                guide = MarkingGuide.query.get(submission.marking_guide_id)
+                if guide:
+                    guide_info = {
+                        "id": guide.id,
+                        "title": guide.title
+                    }
+            
+            submissions_list.append({
+                "id": submission.id,
+                "filename": submission.filename,
+                "student_name": submission.student_name or "",
+                "student_id": submission.student_id or "",
+                "processing_status": submission.processing_status,
+                "file_size": submission.file_size,
+                "file_type": submission.file_type,
+                "marking_guide_id": submission.marking_guide_id,
+                "guide": guide_info,
+                "ocr_confidence": submission.ocr_confidence,
+                "created_at": (
+                    submission.created_at.isoformat()
+                    if submission.created_at
+                    else None
+                ),
+                "updated_at": (
+                    submission.updated_at.isoformat()
+                    if submission.updated_at
+                    else None
+                ),
+            })
+        
+        return jsonify({
+            "success": True,
+            "submissions": submissions_list,
+            "total_count": len(submissions_list)
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get all submissions: {e}")
+        return jsonify({
+            "success": False, 
+            "error": "Failed to retrieve submissions"
+        }), 500
 
 
 @processing_bp.route("/export/<result_id>")

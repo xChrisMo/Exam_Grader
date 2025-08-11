@@ -126,7 +126,7 @@ class TrainingDashboard {
     }
     
     validateFile(file) {
-        const maxSize = 50 * 1024 * 1024; // 50MB
+        const maxSize = Infinity; // No file size limit
         const extension = file.name.split('.').pop().toLowerCase();
         
         if (file.size > maxSize) {

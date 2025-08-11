@@ -64,6 +64,30 @@ def get_actual_service_status():
 
 main_bp = Blueprint("main", __name__)
 
+
+def count_grouped_questions(questions):
+    """Count questions treating grouped questions as one."""
+    if not questions:
+        return 0
+    
+    count = 0
+    for question in questions:
+        # Check if this is a grouped question
+        if isinstance(question, dict) and question.get('type') == 'grouped':
+            count += 1  # Count grouped question as one
+        else:
+            count += 1  # Count regular question as one
+    
+    return count
+
+
+# Register the template filter when the blueprint is registered
+@main_bp.record_once
+def register_template_filters(state):
+    """Register custom template filters when blueprint is registered."""
+    state.app.jinja_env.filters['count_grouped_questions'] = count_grouped_questions
+
+
 # In-memory progress store (in production, use Redis or database)
 progress_store = {}
 
@@ -1385,12 +1409,44 @@ def api_refactored_marking_guides():
 @main_bp.route("/refactored/api/submissions", methods=["GET"])
 @login_required
 def api_refactored_submissions():
-    """API endpoint to get submissions for refactored interface."""
+    """API endpoint to get submissions for refactored interface with optional guide filtering."""
     try:
-        submissions = Submission.query.filter_by(user_id=current_user.id).all()
+        guide_id = request.args.get("guide_id")
+        
+        # Filter submissions by guide if provided
+        if guide_id:
+            # Verify guide ownership first
+            guide = MarkingGuide.query.filter_by(
+                id=guide_id, user_id=current_user.id
+            ).first()
+            
+            if not guide:
+                return jsonify({
+                    "success": False, 
+                    "error": "Guide not found or access denied"
+                }), 404
+            
+            submissions = Submission.query.filter_by(
+                user_id=current_user.id,
+                marking_guide_id=guide_id
+            ).order_by(Submission.created_at.desc()).all()
+        else:
+            submissions = Submission.query.filter_by(user_id=current_user.id).order_by(
+                Submission.created_at.desc()
+            ).all()
 
         submissions_list = []
         for submission in submissions:
+            # Get guide info if linked
+            guide_info = None
+            if submission.marking_guide_id:
+                guide = MarkingGuide.query.get(submission.marking_guide_id)
+                if guide:
+                    guide_info = {
+                        "id": guide.id,
+                        "title": guide.title
+                    }
+            
             submissions_list.append(
                 {
                     "id": submission.id,
@@ -1400,6 +1456,7 @@ def api_refactored_submissions():
                     "file_size": submission.file_size,
                     "file_type": submission.file_type,
                     "marking_guide_id": submission.marking_guide_id,
+                    "guide": guide_info,
                     "content_text": submission.content_text or "",
                     "ocr_confidence": submission.ocr_confidence,
                     "created_at": (
@@ -1421,6 +1478,7 @@ def api_refactored_submissions():
                 "success": True,
                 "submissions": submissions_list,
                 "total_count": len(submissions_list),
+                "filtered_by_guide": guide_id is not None
             }
         )
 
@@ -2243,10 +2301,8 @@ def settings():
                 # Get or create user settings
                 user_settings = UserSettings.get_or_create_for_user(current_user.id)
 
-                # Get form data with validation
-                max_file_size = request.form.get("max_file_size", 100, type=int)
-                if max_file_size < 1 or max_file_size > 500:
-                    max_file_size = 100
+                # Get form data - file size limits removed
+                max_file_size = float('inf')  # No file size limit
 
                 allowed_formats = request.form.getlist("allowed_formats")
                 if not allowed_formats:
@@ -2496,11 +2552,9 @@ def api_settings():
 
             user_settings = UserSettings.get_or_create_for_user(current_user.id)
 
-            # Update settings with validation
+            # Update settings - file size limits removed
             if "max_file_size" in data:
-                max_file_size = int(data["max_file_size"])
-                if 1 <= max_file_size <= 500:
-                    user_settings.max_file_size = max_file_size
+                user_settings.max_file_size = float('inf')  # No file size limit
 
             if "allowed_formats" in data:
                 if isinstance(data["allowed_formats"], list):

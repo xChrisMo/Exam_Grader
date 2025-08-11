@@ -18,7 +18,6 @@ from utils.logger import logger
 
 class ProcessingMethod(Enum):
     """Available processing methods for marking guides."""
-    DIRECT_LLM = "direct_llm"
     TRADITIONAL_OCR = "traditional_ocr"
     AUTO_SELECT = "auto_select"
 
@@ -40,8 +39,8 @@ class GuideProcessingRouter:
     
     def __init__(self):
         """Initialize the guide processing router."""
-        self.direct_llm_enabled = os.getenv("ENABLE_DIRECT_LLM_GUIDE_PROCESSING", "true").lower() == "true"
-        self.default_method = ProcessingMethod(os.getenv("DEFAULT_GUIDE_PROCESSING_METHOD", "direct_llm"))
+        self.direct_llm_enabled = False  # Disabled - using existing services
+        self.default_method = ProcessingMethod(os.getenv("DEFAULT_GUIDE_PROCESSING_METHOD", "traditional_ocr"))
         self.allow_method_selection = os.getenv("ALLOW_GUIDE_PROCESSING_METHOD_SELECTION", "true").lower() == "true"
         
         # Supported formats for direct LLM processing
@@ -49,10 +48,10 @@ class GuideProcessingRouter:
             '.pdf', '.docx', '.doc', '.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif'
         }
         
-        # File size limits (in MB)
-        self.max_file_size_mb = int(os.getenv("LLM_VISION_MAX_FILE_SIZE", "20").replace("MB", ""))
+        # File size limits removed - unlimited processing
+        self.max_file_size_mb = float('inf')  # No limit
         
-        logger.info(f"GuideProcessingRouter initialized - Direct LLM: {self.direct_llm_enabled}, Default: {self.default_method.value}")
+        logger.info(f"GuideProcessingRouter initialized - Using existing services, Default: {self.default_method.value}")
     
     def determine_processing_method(self, file_info: Dict[str, Any], user_preference: Optional[str] = None) -> ProcessingMethod:
         """
@@ -106,27 +105,17 @@ class GuideProcessingRouter:
         # Get file extension
         file_ext = Path(file_path).suffix.lower()
         
-        # Check file size limits
+        # File size limits removed - unlimited processing
         file_size_mb = file_size / (1024 * 1024) if file_size else 0
-        if file_size_mb > self.max_file_size_mb:
-            logger.info(f"File size {file_size_mb:.1f}MB exceeds limit {self.max_file_size_mb}MB, using traditional OCR")
-            return ProcessingMethod.TRADITIONAL_OCR
+        logger.info(f"Processing file of size {file_size_mb:.1f}MB with unlimited processing")
         
         # Check if format is supported by LLM vision
         if file_ext not in self.llm_supported_formats:
             logger.info(f"File format {file_ext} not supported by LLM vision, using traditional OCR")
             return ProcessingMethod.TRADITIONAL_OCR
         
-        # Prefer direct LLM for image files and complex documents
-        if file_ext in {'.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif'}:
-            logger.info("Image file detected, using direct LLM processing")
-            return ProcessingMethod.DIRECT_LLM
-        
-        if file_ext in {'.pdf', '.docx', '.doc'}:
-            # For document files, use direct LLM if it's the default
-            if self.default_method == ProcessingMethod.DIRECT_LLM:
-                logger.info("Document file with direct LLM as default, using direct LLM processing")
-                return ProcessingMethod.DIRECT_LLM
+        # All files use traditional OCR with existing services
+        logger.info(f"File detected: {file_ext}, using traditional OCR with existing services")
         
         # Default to configured default method
         logger.info(f"Using default processing method: {self.default_method.value}")
@@ -146,24 +135,8 @@ class GuideProcessingRouter:
         if method == ProcessingMethod.TRADITIONAL_OCR:
             return True  # Traditional OCR can handle any file
         
-        if method == ProcessingMethod.DIRECT_LLM:
-            if not self.direct_llm_enabled:
-                return False
-            
-            file_path = file_info.get('path', '')
-            file_size = file_info.get('size', 0)
-            
-            # Check file format
-            file_ext = Path(file_path).suffix.lower()
-            if file_ext not in self.llm_supported_formats:
-                return False
-            
-            # Check file size
-            file_size_mb = file_size / (1024 * 1024) if file_size else 0
-            if file_size_mb > self.max_file_size_mb:
-                return False
-            
-            return True
+        # Direct LLM processing is no longer supported
+        # All processing uses traditional OCR with existing services
         
         return False
     
@@ -193,11 +166,8 @@ class GuideProcessingRouter:
             
             logger.info(f"Routing guide {guide_id} to {processing_method.value} processing")
             
-            # Route to appropriate processor
-            if processing_method == ProcessingMethod.DIRECT_LLM:
-                result = self._process_with_direct_llm(file_path, file_info, options)
-            else:
-                result = self._process_with_traditional_ocr(file_path, file_info, options)
+            # Route to appropriate processor (all processing now uses traditional OCR with existing services)
+            result = self._process_with_traditional_ocr(file_path, file_info, options)
             
             # Update result with routing metadata
             result.processing_method = processing_method.value
@@ -263,46 +233,11 @@ class GuideProcessingRouter:
                 'error': str(e)
             }
     
-    def _process_with_direct_llm(self, file_path: str, file_info: Dict[str, Any], options: Dict[str, Any]) -> ProcessingResult:
-        """
-        Process guide using direct LLM method.
-        
-        Args:
-            file_path: Path to the guide file
-            file_info: File metadata
-            options: Processing options
-            
-        Returns:
-            ProcessingResult
-        """
-        try:
-            # Import here to avoid circular dependencies
-            from src.services.direct_llm_guide_processor import DirectLLMGuideProcessor
-            
-            processor = DirectLLMGuideProcessor()
-            return processor.process_guide_directly(file_path, file_info, options)
-            
-        except ImportError:
-            logger.warning("DirectLLMGuideProcessor not available, falling back to traditional OCR")
-            return self._process_with_traditional_ocr(file_path, file_info, options)
-        except Exception as e:
-            logger.error(f"Direct LLM processing failed: {e}")
-            # Try fallback if enabled
-            if options.get('enable_fallback', True):
-                logger.info("Attempting fallback to traditional OCR")
-                fallback_result = self._process_with_traditional_ocr(file_path, file_info, options)
-                fallback_result.fallback_used = True
-                return fallback_result
-            else:
-                return ProcessingResult(
-                    success=False,
-                    processing_method="direct_llm",
-                    error_message=f"Direct LLM processing failed: {str(e)}"
-                )
+
     
     def _process_with_traditional_ocr(self, file_path: str, file_info: Dict[str, Any], options: Dict[str, Any]) -> ProcessingResult:
         """
-        Process guide using traditional OCR method.
+        Process guide using traditional OCR method with existing services for criteria extraction.
         
         Args:
             file_path: Path to the guide file
@@ -315,10 +250,14 @@ class GuideProcessingRouter:
         try:
             # Import here to avoid circular dependencies
             from src.services.file_processing_service import FileProcessingService
+            from src.services.consolidated_llm_service import ConsolidatedLLMService
+            from src.services.consolidated_mapping_service import ConsolidatedMappingService
             
-            processor = FileProcessingService()
+            file_processor = FileProcessingService()
+            llm_service = ConsolidatedLLMService()
+            mapping_service = ConsolidatedMappingService(llm_service)
             
-            # Prepare file info for traditional processing
+            # Step 1: Extract text content using traditional OCR
             traditional_file_info = {
                 'path': file_path,
                 'name': file_info.get('name', ''),
@@ -328,22 +267,66 @@ class GuideProcessingRouter:
                 'request_id': options.get('request_id', f"guide_proc_{int(time.time())}")
             }
             
-            # Process using traditional method
-            result = processor.process_file_with_fallback(file_path, traditional_file_info)
+            extraction_result = file_processor.process_file_with_fallback(file_path, traditional_file_info)
             
-            # Convert to ProcessingResult format
+            if not extraction_result.get('success', False):
+                return ProcessingResult(
+                    success=False,
+                    processing_method="traditional_ocr_with_llm",
+                    error_message=f"Failed to extract content: {extraction_result.get('error_message', 'Unknown error')}"
+                )
+            
+            # Step 2: Extract text content from the result
+            extracted_text = ""
+            if 'extracted_text' in extraction_result:
+                extracted_text = extraction_result['extracted_text']
+            elif 'content' in extraction_result:
+                extracted_text = extraction_result['content']
+            elif 'text' in extraction_result:
+                extracted_text = extraction_result['text']
+            
+            if not extracted_text or not extracted_text.strip():
+                return ProcessingResult(
+                    success=False,
+                    processing_method="traditional_ocr_with_llm",
+                    error_message="No text content extracted from file"
+                )
+            
+            # Step 3: Analyze guide type using existing mapping service
+            guide_type, confidence = mapping_service.determine_guide_type(extracted_text)
+            
+            # Step 4: Extract criteria using existing LLM service
+            criteria_data = self._extract_criteria_with_existing_llm(
+                extracted_text, 
+                guide_type,
+                options,
+                llm_service
+            )
+            
+            # Convert to ProcessingResult format with criteria extraction
             return ProcessingResult(
-                success=result.get('success', False),
-                processing_method="traditional_ocr",
-                data=result,
-                error_message=result.get('error_message') if not result.get('success') else None
+                success=True,
+                processing_method="traditional_ocr_with_llm",
+                data={
+                    'extracted_criteria': criteria_data,
+                    'extracted_text': extracted_text,
+                    'guide_type': guide_type,
+                    'guide_type_confidence': confidence,
+                    'extraction_metadata': extraction_result
+                },
+                metadata={
+                    'text_length': len(extracted_text),
+                    'criteria_count': len(criteria_data),
+                    'guide_type': guide_type,
+                    'processing_steps': ['traditional_ocr', 'guide_type_analysis', 'criteria_extraction']
+                }
             )
             
         except Exception as e:
-            logger.error(f"Traditional OCR processing failed: {e}")
+            logger.error(f"Traditional OCR processing with LLM analysis failed: {e}")
             return ProcessingResult(
                 success=False,
-                processing_method="traditional_ocr",
+                processing_method="traditional_ocr_with_llm",
                 error_message=f"Traditional OCR processing failed: {str(e)}"
             )
     
@@ -357,9 +340,7 @@ class GuideProcessingRouter:
         Returns:
             Set of supported file extensions
         """
-        if method == ProcessingMethod.DIRECT_LLM:
-            return self.llm_supported_formats.copy()
-        elif method == ProcessingMethod.TRADITIONAL_OCR:
+        if method == ProcessingMethod.TRADITIONAL_OCR:
             # Traditional OCR supports more formats
             return {'.pdf', '.docx', '.doc', '.txt', '.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif', '.rtf', '.html'}
         else:
@@ -373,13 +354,310 @@ class GuideProcessingRouter:
             Dictionary with capability information
         """
         return {
-            'direct_llm_enabled': self.direct_llm_enabled,
+            'existing_services_enabled': True,
             'default_method': self.default_method.value,
             'allow_method_selection': self.allow_method_selection,
             'max_file_size_mb': self.max_file_size_mb,
-            'llm_supported_formats': list(self.llm_supported_formats),
+            'supported_formats': {'.pdf', '.docx', '.doc', '.txt', '.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif', '.rtf', '.html'},
             'available_methods': [method.value for method in ProcessingMethod]
         }
+    
+    def _extract_criteria_with_existing_llm(
+        self, 
+        text_content: str, 
+        guide_type: str,
+        options: Dict[str, Any],
+        llm_service
+    ) -> list:
+        """
+        Extract grading criteria from text using existing LLM service
+        
+        Args:
+            text_content: Extracted text content
+            guide_type: Type of guide (questions/answers)
+            options: Processing options
+            llm_service: LLM service instance
+            
+        Returns:
+            List of extracted criteria dictionaries
+        """
+        try:
+            import json
+            
+            # Create system prompt for criteria extraction based on guide type
+            if guide_type == "questions":
+                system_prompt = """You are an expert at analyzing marking guides that contain questions.
+                
+Your task is to analyze the provided marking guide text and extract individual questions with their grading criteria.
+
+### JSON Output Format Required:
+
+You MUST return your response as a valid JSON array with this exact structure:
+
+```json
+[
+  {
+    "question_text": "Complete question text here",
+    "expected_answer": "Brief description of what the answer should contain",
+    "point_value": 5,
+    "marks_allocated": 5,
+    "rubric_details": "Additional grading criteria or rubric details",
+    "question_number": "1",
+    "subquestions": [
+      {
+        "number": "1a",
+        "text": "Sub-question text if applicable",
+        "points": 2
+      }
+    ]
+  }
+]
+```
+
+### Field Specifications:
+- `question_text`: Complete question or task description (string, required)
+- `expected_answer`: What the answer should contain (string, optional)
+- `point_value`: Numeric point value (integer, required - use 1 if not specified)
+- `marks_allocated`: Same as point_value for compatibility (integer, required)
+- `rubric_details`: Additional grading criteria (string, optional)
+- `question_number`: Question identifier (string, optional)
+- `subquestions`: Array of sub-questions if applicable (array, optional)
+
+### Rules:
+- Always return valid JSON array - no markdown code blocks or extra text
+- Never invent content; only use what is in the source text
+- If no clear questions found, return empty array []
+- Ensure all point values are integers (use 1 as default if not specified)
+- Preserve original question wording as much as possible"""
+            else:
+                system_prompt = """You are an expert at analyzing marking guides that contain model answers.
+                
+Your task is to analyze the provided marking guide text and extract individual answer criteria.
+
+### JSON Output Format Required:
+
+You MUST return your response as a valid JSON array with this exact structure:
+
+```json
+[
+  {
+    "question_text": "Question or topic being addressed",
+    "expected_answer": "The model answer or expected response",
+    "point_value": 5,
+    "marks_allocated": 5,
+    "rubric_details": "Additional grading criteria or rubric details",
+    "answer_components": [
+      {
+        "component": "Key point or concept",
+        "points": 2,
+        "description": "Detailed explanation of what earns these points"
+      }
+    ]
+  }
+]
+```
+
+### Field Specifications:
+- `question_text`: Question or topic being addressed (string, required)
+- `expected_answer`: Model answer or expected response (string, required)
+- `point_value`: Numeric point value (integer, required - use 1 if not specified)
+- `marks_allocated`: Same as point_value for compatibility (integer, required)
+- `rubric_details`: Additional grading criteria (string, optional)
+- `answer_components`: Breakdown of answer components with points (array, optional)
+
+### Rules:
+- Always return valid JSON array - no markdown code blocks or extra text
+- Never invent content; only use what is in the source text
+- If no clear answers found, return empty array []
+- Ensure all point values are integers (use 1 as default if not specified)
+- Preserve original answer content as much as possible"""
+
+            # Create user prompt with the text content
+            user_prompt = f"""Please analyze this marking guide text and extract the grading criteria in the specified JSON format:
+
+MARKING GUIDE TEXT:
+{text_content}
+
+PROCESSING PARAMETERS:
+- Guide type: {guide_type}
+- Max questions to extract: {options.get('max_questions', 'unlimited')}
+
+IMPORTANT: Return ONLY valid JSON array as specified in the system prompt. No additional text, explanations, or markdown formatting.
+
+If no clear criteria can be extracted, return: []"""
+
+            # Use LLM service to extract criteria
+            response = llm_service.generate_response(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.1  # Low temperature for consistent extraction
+            )
+            
+            if not response:
+                logger.warning("LLM service returned empty response")
+                return []
+            
+            # Parse the JSON response
+            try:
+                criteria_data = json.loads(response)
+                if not isinstance(criteria_data, list):
+                    logger.warning("LLM response is not a list, wrapping in array")
+                    criteria_data = [criteria_data] if criteria_data else []
+                
+                # Validate and clean criteria data
+                validated_criteria = []
+                for i, criterion in enumerate(criteria_data):
+                    if not isinstance(criterion, dict):
+                        logger.debug(f"Skipping non-dict criterion at index {i}: {type(criterion)}")
+                        continue
+                    
+                    try:
+                        # Ensure required fields exist with safe extraction
+                        point_value = self._extract_numeric_value(criterion, ['point_value', 'marks_allocated', 'points', 'marks'])
+                        marks_allocated = self._extract_numeric_value(criterion, ['marks_allocated', 'point_value', 'points', 'marks'])
+                        
+                        # Use the higher value if they differ, or default to 1 if both are 0
+                        final_points = max(point_value, marks_allocated) or 1
+                        
+                        validated_criterion = {
+                            'question_text': str(criterion.get('question_text', f'Question {i+1}')).strip() or f'Question {i+1}',
+                            'expected_answer': str(criterion.get('expected_answer', '')).strip(),
+                            'point_value': final_points,
+                            'marks_allocated': final_points,
+                            'rubric_details': str(criterion.get('rubric_details', criterion.get('details', ''))).strip()
+                        }
+                    except Exception as e:
+                        logger.warning(f"Error processing criterion {i}: {e}, using defaults")
+                        validated_criterion = {
+                            'question_text': f'Question {i+1}',
+                            'expected_answer': '',
+                            'point_value': 1,
+                            'marks_allocated': 1,
+                            'rubric_details': ''
+                        }
+                    
+                    validated_criteria.append(validated_criterion)
+                    
+                    # Limit number of questions if specified
+                    max_questions = options.get('max_questions')
+                    if max_questions and len(validated_criteria) >= max_questions:
+                        break
+                
+                logger.info(f"Extracted {len(validated_criteria)} criteria from text using existing LLM service")
+                return validated_criteria
+                
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse LLM response as JSON: {e}")
+                # Try to extract criteria using fallback method
+                return self._extract_criteria_fallback(response, options)
+            
+        except Exception as e:
+            logger.error(f"Failed to extract criteria with existing LLM service: {e}")
+            return []
+    
+    def _extract_numeric_value(self, data: Dict[str, Any], keys: list) -> int:
+        """
+        Extract numeric value from dictionary using multiple possible keys
+        
+        Args:
+            data: Dictionary to search
+            keys: List of keys to try
+            
+        Returns:
+            Extracted integer value or 0 if not found
+        """
+        if not isinstance(data, dict) or not keys:
+            return 0
+            
+        for key in keys:
+            if key in data:
+                try:
+                    value = data[key]
+                    
+                    # Handle None values
+                    if value is None:
+                        continue
+                        
+                    # Handle numeric values
+                    if isinstance(value, (int, float)):
+                        # Ensure the value is reasonable (0-1000 points)
+                        int_value = int(value)
+                        return max(0, min(int_value, 1000))
+                        
+                    elif isinstance(value, str) and value.strip():
+                        # Try to extract number from string
+                        import re
+                        # Look for numbers in the string
+                        match = re.search(r'\d+', value.strip())
+                        if match:
+                            int_value = int(match.group())
+                            return max(0, min(int_value, 1000))
+                            
+                except (ValueError, TypeError, AttributeError) as e:
+                    logger.debug(f"Failed to extract numeric value from {key}={value}: {e}")
+                    continue
+                    
+        return 0
+    
+    def _extract_criteria_fallback(self, llm_response: str, options: Dict[str, Any]) -> list:
+        """
+        Fallback method to extract criteria when JSON parsing fails
+        
+        Args:
+            llm_response: Raw LLM response text
+            options: Processing options
+            
+        Returns:
+            List of extracted criteria
+        """
+        try:
+            criteria = []
+            lines = llm_response.split('\n')
+            
+            current_criterion = {}
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Look for question patterns
+                if any(keyword in line.lower() for keyword in ['question', 'q:', 'criterion', 'task']):
+                    if current_criterion:
+                        criteria.append(current_criterion)
+                    current_criterion = {'question_text': line}
+                
+                # Look for answer patterns
+                elif any(keyword in line.lower() for keyword in ['answer', 'solution', 'expected']):
+                    if current_criterion:
+                        current_criterion['expected_answer'] = line
+                
+                # Look for point patterns
+                elif any(keyword in line.lower() for keyword in ['point', 'mark', 'score']):
+                    if current_criterion:
+                        import re
+                        match = re.search(r'\d+', line)
+                        if match:
+                            current_criterion['point_value'] = int(match.group())
+                            current_criterion['marks_allocated'] = int(match.group())
+            
+            # Add the last criterion
+            if current_criterion:
+                criteria.append(current_criterion)
+            
+            # Fill in missing fields
+            for i, criterion in enumerate(criteria):
+                criterion.setdefault('question_text', f'Question {i+1}')
+                criterion.setdefault('expected_answer', '')
+                criterion.setdefault('point_value', 1)
+                criterion.setdefault('marks_allocated', criterion.get('point_value', 1))
+                criterion.setdefault('rubric_details', '')
+            
+            logger.info(f"Extracted {len(criteria)} criteria using fallback method")
+            return criteria
+            
+        except Exception as e:
+            logger.error(f"Fallback criteria extraction failed: {e}")
+            return []
 
 
 # Global instance for easy access

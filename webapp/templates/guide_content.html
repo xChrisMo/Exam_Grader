@@ -81,7 +81,7 @@
                         </div>
                         <div class="ml-4">
                             <p class="text-sm font-medium text-gray-500">Questions</p>
-                            <p class="text-lg font-semibold text-gray-900">{{ questions|length if questions else (guide.questions|length if guide.questions else 0) }}</p>
+                            <p class="text-lg font-semibold text-gray-900">{{ questions|count_grouped_questions if questions else (guide.questions|count_grouped_questions if guide.questions else 0) }}</p>
                         </div>
                     </div>
                 </div>

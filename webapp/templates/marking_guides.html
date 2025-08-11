@@ -85,7 +85,7 @@
                                     <svg class="h-4 w-4 mr-2 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                     </svg>
-                                    <span class="truncate">{{ guide.questions|length }} questions</span>
+                                    <span class="truncate">{{ guide.questions|count_grouped_questions }} questions</span>
                                 </div>
                                 <div class="flex items-center">
                                     <svg class="h-4 w-4 mr-2 text-yellow-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -391,6 +391,25 @@ try {
 // Global variables for delete functionality - initialize at top level
 var currentDeleteGuideId = null;
 var currentDeleteGuideName = null;
+
+// Function to count grouped questions as one
+function countGroupedQuestions(questions) {
+    if (!questions || !Array.isArray(questions)) {
+        return 0;
+    }
+    
+    let count = 0;
+    for (let question of questions) {
+        // Check if this is a grouped question
+        if (question && typeof question === 'object' && question.type === 'grouped') {
+            count += 1;  // Count grouped question as one
+        } else {
+            count += 1;  // Count regular question as one
+        }
+    }
+    
+    return count;
+}
 
 // Toast notification system
 function showToast(message, type = 'success') {
@@ -718,7 +737,7 @@ function viewGuide(guideId) {
 
             <div class="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                    <span class="font-medium">Total Questions:</span> ${guide.questions.length}
+                    <span class="font-medium">Total Questions:</span> ${countGroupedQuestions(guide.questions)}
                 </div>
                 <div>
                     <span class="font-medium">Total Marks:</span> ${guide.total_marks}

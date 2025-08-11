@@ -10,7 +10,7 @@ class DragDropUpload {
             input: null,
             multiple: false,
             maxFiles: 10,
-            maxFileSize: 16 * 1024 * 1024, // 16MB
+            maxFileSize: Infinity, // No file size limit
             acceptedTypes: ['.pdf', '.docx', '.doc', '.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif'],
             showPreview: true,
             showProgress: true,

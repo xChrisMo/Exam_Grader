@@ -24,7 +24,7 @@ from src.database.models import (
 )
 from src.services.base_service import BaseService, ServiceStatus
 from src.services.consolidated_llm_service import ConsolidatedLLMService
-from src.services.direct_llm_guide_processor import DirectLLMGuideProcessor
+
 from src.services.file_processing_service import FileProcessingService
 from src.services.consolidated_ocr_service import ConsolidatedOCRService
 from src.services.websocket_manager import WebSocketManager
@@ -74,13 +74,12 @@ class TrainingService(BaseService):
         
         # Initialize dependent services
         self.llm_service = ConsolidatedLLMService()
-        self.guide_processor = DirectLLMGuideProcessor()
         self.file_processor = FileProcessingService()
         self.ocr_service = ConsolidatedOCRService()
         
         # Training configuration
         self.supported_formats = {'.pdf', '.docx', '.doc', '.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif'}
-        self.max_file_size_mb = 20
+        self.max_file_size_mb = float('inf')  # No file size limit
         self.temp_upload_dir = Path("uploads/training_guides")
         self.temp_upload_dir.mkdir(parents=True, exist_ok=True)
         
@@ -92,7 +91,6 @@ class TrainingService(BaseService):
             # Initialize dependent services
             services_to_init = [
                 self.llm_service,
-                self.guide_processor,
                 self.ocr_service
             ]
             
@@ -134,8 +132,6 @@ class TrainingService(BaseService):
             # Cleanup dependent services
             if hasattr(self.llm_service, 'cleanup'):
                 await self.llm_service.cleanup()
-            if hasattr(self.guide_processor, 'cleanup'):
-                await self.guide_processor.cleanup()
             if hasattr(self.ocr_service, 'cleanup'):
                 await self.ocr_service.cleanup()
             
@@ -521,9 +517,7 @@ class TrainingService(BaseService):
         if file_ext not in self.supported_formats:
             raise ValueError(f"Unsupported file format: {file_ext}")
         
-        # Check file size
-        if file_upload.file_size > self.max_file_size_mb * 1024 * 1024:
-            raise ValueError(f"File size exceeds maximum limit of {self.max_file_size_mb}MB")
+        # File size check removed - unlimited processing allowed
         
         # Check if file exists
         if not os.path.exists(file_upload.file_path):
@@ -672,9 +666,12 @@ class TrainingService(BaseService):
                 'max_questions': session.max_questions_to_answer
             }
             
-            processing_result = self.guide_processor.process_guide_directly(
+            # Use existing guide processing router
+            from src.services.guide_processing_router import guide_processing_router
+            
+            processing_result = guide_processing_router.route_guide_processing(
+                guide_id=str(guide.id),
                 file_path=guide.file_path,
-                file_info=file_info,
                 options=options
             )
             
@@ -764,11 +761,68 @@ class TrainingService(BaseService):
             if len(expected_answer) > 5:  # Reasonable answer length
                 confidence += 0.1
             
-            return min(confidence, 1.0)  # Cap at 1.0
+            return min(confidence, 1.0)
             
         except Exception as e:
             logger.warning(f"Failed to calculate extraction confidence: {e}")
-            return 0.5  # Default moderate confidence
+            return 0.0
+    
+
+    
+    def _create_training_results(self, session: TrainingSession) -> None:
+        """
+        Create training results summary for the session
+        
+        Args:
+            session: Training session to create results for
+        """
+        try:
+            # Calculate session statistics
+            total_guides = len(session.training_guides)
+            successful_guides = sum(1 for guide in session.training_guides if guide.processing_status == "completed")
+            total_questions = sum(guide.question_count or 0 for guide in session.training_guides)
+            
+            # Calculate average confidence
+            confidence_scores = []
+            for guide in session.training_guides:
+                for question in guide.training_questions:
+                    if question.extraction_confidence is not None:
+                        confidence_scores.append(question.extraction_confidence)
+            
+            average_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.0
+            
+            # Update session with final statistics
+            session.guides_processed = successful_guides
+            session.questions_extracted = total_questions
+            session.average_confidence = average_confidence
+            session.training_duration_seconds = int(time.time() - session.created_at.timestamp()) if session.created_at else 0
+            
+            # Create training result record
+            training_result = TrainingResult(
+                session_id=session.id,
+                result_type="training_summary",
+                result_data={
+                    'total_guides': total_guides,
+                    'successful_guides': successful_guides,
+                    'total_questions': total_questions,
+                    'average_confidence': average_confidence,
+                    'processing_duration': session.training_duration_seconds
+                },
+                training_metadata={
+                    'guides_processed': len(session.training_guides),
+                    'processing_method': 'existing_services',
+                    'confidence_threshold': session.confidence_threshold
+                }
+            )
+            
+            db.session.add(training_result)
+            db.session.commit()
+            
+            logger.info(f"Training results created for session {session.id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to create training results for session {session.id}: {e}")
+            raise
     
     def _create_training_results(self, session: TrainingSession) -> None:
         """
@@ -814,7 +868,7 @@ class TrainingService(BaseService):
                 predicted_accuracy=avg_confidence,  # Simple prediction based on confidence
                 training_metadata={
                     'guides_processed': len(session.training_guides),
-                    'processing_method': 'direct_llm',
+                    'processing_method': 'existing_services',
                     'confidence_threshold': session.confidence_threshold
                 }
             )

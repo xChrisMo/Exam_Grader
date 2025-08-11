@@ -122,10 +122,7 @@ const SettingsManager = {
     validateSettings: function(data) {
         const errors = [];
         
-        // Validate max file size
-        if (data.max_file_size && (data.max_file_size < 1 || data.max_file_size > 500)) {
-            errors.push('Max file size must be between 1 and 500 MB');
-        }
+        // File size validation removed - unlimited processing allowed
         
         // Validate results per page
         if (data.results_per_page && (data.results_per_page < 5 || data.results_per_page > 100)) {

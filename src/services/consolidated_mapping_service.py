@@ -6,7 +6,7 @@ mapping services with integration to the base service architecture.
 
 import json
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.services.base_service import BaseService, ServiceStatus
 from utils.logger import logger
@@ -493,7 +493,7 @@ Output JSON format:
         student_submission_content: str,
         num_questions: int = 1,
     ) -> Tuple[Dict, Optional[str]]:
-        """Map a student submission to a marking guide using intelligent LLM-based mapping."""
+        """Map a student submission to a marking guide using enhanced intelligent mapping for student exams."""
         try:
             with self.track_request("map_submission"):
                 # Check cache
@@ -506,24 +506,22 @@ Output JSON format:
                 if cached_result:
                     return cached_result
 
-                # Preprocess content
-                guide_content = self.preprocess_content(marking_guide_content)
-                submission_content = self.preprocess_content(student_submission_content)
+                # Enhanced preprocessing for student exam scenarios
+                guide_content = self._enhanced_preprocess_for_exams(marking_guide_content)
+                submission_content = self._enhanced_preprocess_for_exams(student_submission_content)
 
-                # Determine guide type
+                # Determine guide type with enhanced confidence
                 guide_type, confidence = self.determine_guide_type(guide_content)
 
-                logger.info(f"Processing mapping with guide type: {guide_type}")
+                logger.info(f"Processing enhanced exam mapping with guide type: {guide_type}, confidence: {confidence}")
 
-                # Perform mapping based on guide type
-                if guide_type == "questions":
-                    result = self._map_questions_to_answers(
-                        guide_content, submission_content
-                    )
-                else:
-                    result = self._map_answers_to_answers(
-                        guide_content, submission_content
-                    )
+                # Use enhanced mapping with multiple strategies
+                result = self._enhanced_exam_mapping(
+                    guide_content, submission_content, guide_type, num_questions
+                )
+
+                # Validate and enhance mapping results
+                result = self._validate_and_enhance_mappings(result, guide_content, submission_content)
 
                 # Cache result
                 self._cache_result(cache_key, (result, None))
@@ -531,7 +529,7 @@ Output JSON format:
                 return result, None
 
         except Exception as e:
-            error_msg = f"Mapping failed: {str(e)}"
+            error_msg = f"Enhanced exam mapping failed: {str(e)}"
             logger.error(error_msg)
             return {"mappings": [], "error": error_msg}, error_msg
 
@@ -661,6 +659,478 @@ Return JSON format:
         self._cache_timestamps.clear()
         self._guide_type_cache.clear()
         logger.info("Mapping service caches cleared")
+
+    def _enhanced_preprocess_for_exams(self, content: str) -> str:
+        """Enhanced preprocessing specifically designed for student exam scenarios."""
+        if not content or len(content.strip()) < 50:
+            return content.strip()
+
+        try:
+            with self.track_request("enhanced_exam_preprocess"):
+                if not self.llm_service:
+                    return self._basic_exam_preprocessing(content)
+
+                system_prompt = """You are an expert at preprocessing student exam content and marking guides. Your task is to clean and normalize the text while preserving all critical exam-related information.
+
+CRITICAL REQUIREMENTS:
+1. Preserve ALL question numbers, identifiers, and references (Q1, 1a, Part A, etc.)
+2. Fix OCR errors that commonly occur in handwritten student exams
+3. Normalize spacing and formatting while maintaining structure
+4. Preserve mathematical notation, formulas, and special characters
+5. Fix common handwriting recognition errors (e.g., "1" vs "l", "0" vs "O")
+6. Maintain the logical flow and organization of content
+7. Preserve marks allocation indicators (e.g., [5 marks], (10 points))
+
+COMMON EXAM OCR ISSUES TO FIX:
+- Question numbers: "Q1" might be read as "01" or "Ql"
+- Mathematical symbols: "=" might be "≡", "+" might be "±"
+- Parentheses and brackets: "()" might be "[]" or vice versa
+- Letter/number confusion: "l" vs "1", "O" vs "0", "S" vs "5"
+- Word boundaries: "Question1" should be "Question 1"
+
+Return ONLY the cleaned text without explanations."""
+
+                user_prompt = f"""Clean and normalize this exam content while preserving all structural and numerical information:
+
+{content[:3000]}"""
+
+                cleaned_content = self.llm_service.generate_response(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    temperature=0.0,
+                )
+
+                if cleaned_content and len(cleaned_content.strip()) > 20:
+                    logger.info("Enhanced exam preprocessing completed using LLM")
+                    return cleaned_content.strip()
+                else:
+                    logger.warning("LLM preprocessing returned insufficient content, using fallback")
+                    return self._basic_exam_preprocessing(content)
+
+        except Exception as e:
+            logger.warning(f"Enhanced exam preprocessing failed: {e}, using basic preprocessing")
+            return self._basic_exam_preprocessing(content)
+
+    def _basic_exam_preprocessing(self, content: str) -> str:
+        """Basic preprocessing for exam content when LLM is not available."""
+        import re
+        
+        if not content:
+            return ""
+        
+        # Basic OCR error corrections
+        corrections = [
+            # Question number fixes
+            (r'\bQl\b', 'Q1'),
+            (r'\bQ(\d)', r'Q\1'),
+            (r'\b0(\d+)\b', r'\1'),  # Fix leading zeros in question numbers
+            
+            # Common OCR character fixes
+            (r'\bl\b', '1'),  # Standalone 'l' likely means '1'
+            (r'\bO\b', '0'),  # Standalone 'O' likely means '0'
+            
+            # Spacing fixes
+            (r'([Qq]uestion)(\d)', r'\1 \2'),
+            (r'([Pp]art)([A-Za-z])', r'\1 \2'),
+            (r'(\d+)([a-z])\b', r'\1\2'),  # Keep 1a, 2b format
+            
+            # Mark allocation fixes
+            (r'\[(\d+)\s*marks?\]', r'[\1 marks]'),
+            (r'\((\d+)\s*points?\)', r'(\1 points)'),
+        ]
+        
+        cleaned = content
+        for pattern, replacement in corrections:
+            cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
+        
+        # Normalize whitespace
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        cleaned = re.sub(r'\n\s*\n', '\n\n', cleaned)
+        
+        return cleaned.strip()
+
+    def _enhanced_exam_mapping(
+        self, 
+        guide_content: str, 
+        submission_content: str, 
+        guide_type: str, 
+        num_questions: int
+    ) -> Dict[str, Any]:
+        """Enhanced mapping specifically designed for student exam scenarios."""
+        try:
+            if not self.llm_service:
+                return {"mappings": [], "error": "LLM service not available"}
+
+            # Use different strategies based on guide type
+            if guide_type == "questions":
+                return self._map_exam_questions_to_answers(guide_content, submission_content, num_questions)
+            else:
+                return self._map_exam_answers_to_answers(guide_content, submission_content, num_questions)
+
+        except Exception as e:
+            logger.error(f"Enhanced exam mapping failed: {e}")
+            return {"mappings": [], "error": str(e)}
+
+    def _map_exam_questions_to_answers(
+        self, 
+        guide_content: str, 
+        submission_content: str, 
+        num_questions: int
+    ) -> Dict[str, Any]:
+        """Map exam questions to student answers with enhanced intelligence for exam scenarios."""
+        try:
+            system_prompt = """You are an expert exam grader with extensive experience in mapping student answers to exam questions. You understand the complexities of student exam scenarios.
+
+EXAM MAPPING EXPERTISE:
+- Students may answer questions out of order
+- Question numbering can vary (1, Q1, Question 1, Part A, 1a, 1b, etc.)
+- Students may reference other questions or provide partial answers
+- Handwriting OCR may have errors in question identifiers
+- Students may combine multiple sub-questions in one response
+- Some answers may be incomplete, scattered, or cross-referenced
+
+YOUR TASK:
+1. Extract ALL questions from the marking guide with their identifiers
+2. Find corresponding student answers in the submission (even if out of order)
+3. Handle multi-part questions (1a, 1b, etc.) appropriately
+4. Map partial or scattered answers to their questions
+5. Identify when students reference other questions
+6. Provide confidence scores based on mapping certainty
+
+MAPPING RULES:
+- Look for question identifiers in various formats (Q1, 1., Question 1, Part A, etc.)
+- Consider content similarity even if identifiers don't match perfectly
+- Handle cases where students answer multiple parts together
+- Account for OCR errors in question numbers
+- Map even partial or incomplete answers
+- Provide detailed reasoning for low-confidence mappings
+
+OUTPUT FORMAT:
+{
+  "mappings": [
+    {
+      "question_id": "Q1",
+      "question_text": "Complete question text from guide",
+      "answer_text": "Student's answer text (even if partial)",
+      "confidence": 0.95,
+      "mapping_reason": "Direct question number match",
+      "answer_completeness": "complete|partial|scattered",
+      "sub_parts": ["1a", "1b"] // if applicable
+    }
+  ],
+  "unmapped_questions": ["Q3", "Q5"],
+  "unmapped_answers": ["Orphaned answer text..."],
+  "mapping_summary": {
+    "total_questions": 5,
+    "mapped_questions": 3,
+    "mapping_confidence_avg": 0.87
+  }
+}"""
+
+            user_prompt = f"""MARKING GUIDE (Questions):
+{self._intelligent_truncate(guide_content, 2000)}
+
+STUDENT SUBMISSION (Answers):
+{self._intelligent_truncate(submission_content, 2500)}
+
+Expected number of questions: {num_questions}
+
+Map each student answer to its corresponding question, handling all the complexities of student exam scenarios."""
+
+            response_text = self.llm_service.generate_response(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.0,
+            )
+
+            result = self._parse_json_response(response_text)
+            
+            # Ensure we have the expected structure
+            if "mappings" not in result:
+                result["mappings"] = []
+            if "mapping_summary" not in result:
+                result["mapping_summary"] = {
+                    "total_questions": num_questions,
+                    "mapped_questions": len(result["mappings"]),
+                    "mapping_confidence_avg": 0.5
+                }
+
+            logger.info(f"Enhanced exam question mapping completed: {len(result['mappings'])} mappings found")
+            return result
+
+        except Exception as e:
+            logger.error(f"Enhanced exam question mapping failed: {e}")
+            return {"mappings": [], "error": str(e)}
+
+    def _map_exam_answers_to_answers(
+        self, 
+        guide_content: str, 
+        submission_content: str, 
+        num_questions: int
+    ) -> Dict[str, Any]:
+        """Map model answers to student answers with enhanced intelligence for exam scenarios."""
+        try:
+            system_prompt = """You are an expert exam grader specializing in comparing student answers to model answers. You understand the nuances of student exam responses.
+
+EXAM ANSWER COMPARISON EXPERTISE:
+- Students may express correct concepts using different terminology
+- Answers may be partially correct or demonstrate partial understanding
+- Students may provide examples or explanations not in the model answer
+- Mathematical solutions may use different valid approaches
+- Students may make minor errors while demonstrating core understanding
+- Some answers may be incomplete due to time constraints
+
+YOUR TASK:
+1. Extract model answers from the marking guide
+2. Find corresponding student answers that address the same topics
+3. Map based on conceptual similarity, not just textual similarity
+4. Identify partial understanding and partial credit scenarios
+5. Handle different valid approaches to the same problem
+6. Account for student terminology vs. academic terminology
+
+MAPPING RULES:
+- Focus on conceptual understanding over exact wording
+- Consider partial credit scenarios
+- Map answers that demonstrate understanding even if incomplete
+- Handle alternative valid approaches or explanations
+- Account for different levels of detail in student responses
+- Provide detailed analysis for grading purposes
+
+OUTPUT FORMAT:
+{
+  "mappings": [
+    {
+      "model_answer_id": "A1",
+      "model_answer_text": "Complete model answer",
+      "student_answer_text": "Student's response",
+      "confidence": 0.85,
+      "conceptual_match": "high|medium|low",
+      "completeness": "complete|partial|minimal",
+      "key_concepts_covered": ["concept1", "concept2"],
+      "key_concepts_missing": ["concept3"],
+      "alternative_approach": true/false
+    }
+  ],
+  "unmapped_model_answers": ["Model answer text..."],
+  "unmapped_student_answers": ["Student answer text..."],
+  "mapping_summary": {
+    "total_model_answers": 5,
+    "mapped_answers": 4,
+    "avg_conceptual_match": "medium",
+    "overall_understanding": "good|fair|poor"
+  }
+}"""
+
+            user_prompt = f"""MARKING GUIDE (Model Answers):
+{self._intelligent_truncate(guide_content, 2000)}
+
+STUDENT SUBMISSION (Student Answers):
+{self._intelligent_truncate(submission_content, 2500)}
+
+Expected number of answers: {num_questions}
+
+Map each student answer to the most relevant model answer, focusing on conceptual understanding and partial credit scenarios."""
+
+            response_text = self.llm_service.generate_response(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.1,
+            )
+
+            result = self._parse_json_response(response_text)
+            
+            # Ensure we have the expected structure
+            if "mappings" not in result:
+                result["mappings"] = []
+            if "mapping_summary" not in result:
+                result["mapping_summary"] = {
+                    "total_model_answers": num_questions,
+                    "mapped_answers": len(result["mappings"]),
+                    "avg_conceptual_match": "medium",
+                    "overall_understanding": "fair"
+                }
+
+            logger.info(f"Enhanced exam answer mapping completed: {len(result['mappings'])} mappings found")
+            return result
+
+        except Exception as e:
+            logger.error(f"Enhanced exam answer mapping failed: {e}")
+            return {"mappings": [], "error": str(e)}
+
+    def _validate_and_enhance_mappings(
+        self, 
+        result: Dict[str, Any], 
+        guide_content: str, 
+        submission_content: str
+    ) -> Dict[str, Any]:
+        """Validate and enhance mapping results with additional quality checks."""
+        try:
+            if not result or "mappings" not in result:
+                return result
+
+            mappings = result["mappings"]
+            enhanced_mappings = []
+
+            for mapping in mappings:
+                # Validate required fields
+                if not isinstance(mapping, dict):
+                    continue
+
+                # Ensure confidence is valid
+                confidence = mapping.get("confidence", 0.5)
+                if not isinstance(confidence, (int, float)) or confidence < 0 or confidence > 1:
+                    mapping["confidence"] = 0.5
+
+                # Add quality indicators
+                mapping["quality_indicators"] = self._assess_mapping_quality(mapping)
+                
+                # Add suggestions for low-confidence mappings
+                if confidence < 0.6:
+                    mapping["improvement_suggestions"] = self._generate_improvement_suggestions(mapping)
+
+                enhanced_mappings.append(mapping)
+
+            result["mappings"] = enhanced_mappings
+            
+            # Add overall quality assessment
+            result["quality_assessment"] = self._assess_overall_mapping_quality(enhanced_mappings)
+            
+            logger.info(f"Mapping validation completed: {len(enhanced_mappings)} mappings validated")
+            return result
+
+        except Exception as e:
+            logger.error(f"Mapping validation failed: {e}")
+            return result
+
+    def _assess_mapping_quality(self, mapping: Dict[str, Any]) -> Dict[str, Any]:
+        """Assess the quality of an individual mapping."""
+        quality = {
+            "text_length_adequate": False,
+            "has_identifiers": False,
+            "confidence_level": "low"
+        }
+
+        try:
+            # Check text length adequacy
+            answer_text = mapping.get("answer_text", "")
+            question_text = mapping.get("question_text", "")
+            
+            if len(answer_text.strip()) > 10 and len(question_text.strip()) > 10:
+                quality["text_length_adequate"] = True
+
+            # Check for identifiers
+            import re
+            identifier_patterns = [
+                r'\b[Qq]\d+\b',  # Q1, Q2, etc.
+                r'\b\d+[a-z]?\b',  # 1, 1a, 2b, etc.
+                r'\b[Pp]art\s+[A-Za-z]\b',  # Part A, Part B, etc.
+            ]
+            
+            combined_text = f"{question_text} {answer_text}".lower()
+            for pattern in identifier_patterns:
+                if re.search(pattern, combined_text):
+                    quality["has_identifiers"] = True
+                    break
+
+            # Assess confidence level
+            confidence = mapping.get("confidence", 0.5)
+            if confidence >= 0.8:
+                quality["confidence_level"] = "high"
+            elif confidence >= 0.6:
+                quality["confidence_level"] = "medium"
+            else:
+                quality["confidence_level"] = "low"
+
+        except Exception as e:
+            logger.warning(f"Quality assessment failed for mapping: {e}")
+
+        return quality
+
+    def _generate_improvement_suggestions(self, mapping: Dict[str, Any]) -> List[str]:
+        """Generate suggestions for improving low-confidence mappings."""
+        suggestions = []
+        
+        try:
+            confidence = mapping.get("confidence", 0.5)
+            answer_text = mapping.get("answer_text", "")
+            question_text = mapping.get("question_text", "")
+
+            if confidence < 0.4:
+                suggestions.append("Very low confidence - manual review strongly recommended")
+            elif confidence < 0.6:
+                suggestions.append("Low confidence - manual verification recommended")
+
+            if len(answer_text.strip()) < 20:
+                suggestions.append("Answer text is very short - may be incomplete")
+
+            if len(question_text.strip()) < 20:
+                suggestions.append("Question text is very short - may need clarification")
+
+            # Check for common issues
+            if "..." in answer_text or "[truncated]" in answer_text.lower():
+                suggestions.append("Answer appears to be truncated - full text may be needed")
+
+            if not any(char.isdigit() for char in f"{question_text} {answer_text}"):
+                suggestions.append("No question identifiers found - mapping may be uncertain")
+
+        except Exception as e:
+            logger.warning(f"Failed to generate improvement suggestions: {e}")
+            suggestions.append("Unable to generate specific suggestions - manual review recommended")
+
+        return suggestions
+
+    def _assess_overall_mapping_quality(self, mappings: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Assess the overall quality of all mappings."""
+        if not mappings:
+            return {
+                "overall_score": 0.0,
+                "quality_level": "poor",
+                "recommendations": ["No mappings found - check input content quality"]
+            }
+
+        try:
+            # Calculate average confidence
+            confidences = [m.get("confidence", 0.5) for m in mappings]
+            avg_confidence = sum(confidences) / len(confidences)
+
+            # Count high-quality mappings
+            high_quality_count = sum(1 for m in mappings if m.get("confidence", 0) >= 0.8)
+            high_quality_ratio = high_quality_count / len(mappings)
+
+            # Determine overall quality level
+            if avg_confidence >= 0.8 and high_quality_ratio >= 0.7:
+                quality_level = "excellent"
+            elif avg_confidence >= 0.7 and high_quality_ratio >= 0.5:
+                quality_level = "good"
+            elif avg_confidence >= 0.6:
+                quality_level = "fair"
+            else:
+                quality_level = "poor"
+
+            # Generate recommendations
+            recommendations = []
+            if avg_confidence < 0.6:
+                recommendations.append("Low average confidence - consider manual review of mappings")
+            if high_quality_ratio < 0.5:
+                recommendations.append("Many low-confidence mappings - input content may need improvement")
+            if len(mappings) < 3:
+                recommendations.append("Few mappings found - check if all questions/answers were captured")
+
+            return {
+                "overall_score": round(avg_confidence, 2),
+                "quality_level": quality_level,
+                "high_quality_ratio": round(high_quality_ratio, 2),
+                "total_mappings": len(mappings),
+                "recommendations": recommendations
+            }
+
+        except Exception as e:
+            logger.error(f"Overall quality assessment failed: {e}")
+            return {
+                "overall_score": 0.5,
+                "quality_level": "unknown",
+                "recommendations": ["Quality assessment failed - manual review recommended"]
+            }
 
 
 # Backward compatibility aliases

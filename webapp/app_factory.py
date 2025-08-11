@@ -137,6 +137,23 @@ def _init_extensions(app: Flask) -> None:
             current_year=2025,
         )
 
+    # Custom template filters
+    @app.template_filter('count_grouped_questions')
+    def count_grouped_questions(questions):
+        """Count questions treating grouped questions as one."""
+        if not questions:
+            return 0
+        
+        count = 0
+        for question in questions:
+            # Check if this is a grouped question
+            if isinstance(question, dict) and question.get('type') == 'grouped':
+                count += 1  # Count grouped question as one
+            else:
+                count += 1  # Count regular question as one
+        
+        return count
+
     # Internationalization
     Babel(app)
 
