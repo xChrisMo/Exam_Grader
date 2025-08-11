@@ -148,13 +148,50 @@ def main():
         
         # Run the application
         try:
-            app.run(
-                host=host,
-                port=port,
-                debug=debug,
-                use_reloader=False,
-                threaded=True
-            )
+            # For production or when USE_WAITRESS env var is set, use Waitress (Windows compatible)
+            if not debug or os.getenv('USE_WAITRESS', '').lower() == 'true':
+                print("🚀 Starting with Waitress for better timeout handling...")
+                try:
+                    from waitress import serve
+                    print(f"📍 Waitress server starting on http://{host}:{port}")
+                    print("⏱️  Extended timeouts enabled for AI processing")
+                    print("🔧 Optimized for Windows compatibility")
+                    
+                    # Serve with Waitress - Windows compatible
+                    serve(
+                        app,
+                        host=host,
+                        port=port,
+                        threads=4,  # Number of threads
+                        connection_limit=100,
+                        cleanup_interval=30,
+                        channel_timeout=600,  # 10 minutes
+                        log_socket_errors=True,
+                        max_request_body_size=104857600,  # 100MB
+                    )
+                except ImportError:
+                    print("⚠️  Waitress not available, falling back to Flask dev server")
+                    app.run(
+                        host=host,
+                        port=port,
+                        debug=debug,
+                        use_reloader=False,
+                        threaded=True
+                    )
+                except KeyboardInterrupt:
+                    print("\n👋 Shutting down server...")
+                    shutdown_handler()
+                    raise
+            else:
+                # Development server with extended timeout
+                print("🔧 Starting Flask development server...")
+                app.run(
+                    host=host,
+                    port=port,
+                    debug=debug,
+                    use_reloader=False,
+                    threaded=True
+                )
         except KeyboardInterrupt:
             print("\n👋 Shutting down server...")
             shutdown_handler()

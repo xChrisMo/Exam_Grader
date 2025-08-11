@@ -260,7 +260,7 @@ class ConsolidatedGradingService(BaseService):
     def _grade_batch_llm(
         self, qa_pairs: List[Dict], marking_guide: str
     ) -> Optional[List[Dict]]:
-        """Grade a batch of Q&A pairs using LLM."""
+        """Grade a batch of Q&A pairs using LLM with timeout handling."""
         if not self.llm_service or not qa_pairs:
             return None
 
@@ -269,15 +269,41 @@ class ConsolidatedGradingService(BaseService):
                 qa_pairs, marking_guide
             )
 
-            response = self.llm_service.generate_response(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                temperature=0.0,  # Fully deterministic for consistency
-                use_cache=True    # Enable caching for identical inputs
-            )
+            # Add timeout handling for LLM requests
+            import signal
+            import time
+            
+            def timeout_handler(signum, frame):
+                raise TimeoutError("LLM grading request timed out")
+            
+            # Set timeout for LLM request (5 minutes)
+            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(300)  # 5 minutes timeout
+            
+            try:
+                logger.info(f"Starting LLM grading for {len(qa_pairs)} questions...")
+                start_time = time.time()
+                
+                response = self.llm_service.generate_response(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    temperature=0.0,  # Fully deterministic for consistency
+                    use_cache=True    # Enable caching for identical inputs
+                )
+                
+                elapsed_time = time.time() - start_time
+                logger.info(f"LLM grading completed in {elapsed_time:.2f} seconds")
+                
+                return self._parse_grading_response(response, qa_pairs)
+                
+            finally:
+                # Reset alarm
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
 
-            return self._parse_grading_response(response, qa_pairs)
-
+        except TimeoutError as e:
+            logger.error(f"LLM grading timed out after 5 minutes: {str(e)}")
+            return None
         except Exception as e:
             logger.error(f"LLM batch grading failed: {str(e)}")
             return None

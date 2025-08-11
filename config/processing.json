@@ -50,14 +50,14 @@
     }
   },
   "timeouts": {
-    "ocr_processing": 120,
-    "llm_processing": 180,
-    "file_processing": 60,
-    "mapping_service": 90,
-    "grading_service": 300,
+    "ocr_processing": 180,
+    "llm_processing": 300,
+    "file_processing": 90,
+    "mapping_service": 180,
+    "grading_service": 600,
     "health_check": 30,
     "service_initialization": 60,
-    "default": 30
+    "default": 60
   },
   "cache_configuration": {
     "enabled": true,
