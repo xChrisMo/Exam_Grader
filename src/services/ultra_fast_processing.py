@@ -794,8 +794,8 @@ def get_ultra_fast_processor():
     
     if _ultra_fast_processor is None:
         try:
-            from src.services.consolidated_llm_service import ConsolidatedLLMService
-            llm_service = ConsolidatedLLMService()
+            from src.services.consolidated_llm_service import get_llm_service_for_current_user
+            llm_service = get_llm_service_for_current_user()
             _ultra_fast_processor = UltraFastProcessor(llm_service)
         except Exception as e:
             logger.warning(f"Failed to initialize LLM service for ultra-fast processor: {e}")

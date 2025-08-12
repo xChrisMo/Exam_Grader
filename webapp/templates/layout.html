@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<html lang="{{ settings.language if settings and settings.language else 'en' }}"
-  data-theme="{{ settings.theme if settings and settings.theme else 'light' }}" class="h-full bg-gray-50">
+<html lang="{{ ui_prefs.language }}"
+  data-theme="{{ ui_prefs.theme }}" class="h-full {{ body_classes if body_classes else 'bg-gray-50' }}">
 
 <head>
   <meta charset="UTF-8" />

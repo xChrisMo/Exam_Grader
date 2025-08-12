@@ -1182,3 +1182,60 @@ class ConsolidatedLLMService(BaseService):
                 "service": "consolidated_llm_service",
                 "error": str(e),
             }
+
+
+def get_llm_service_for_user(user_id: str = None) -> ConsolidatedLLMService:
+    """Get LLM service configured with user-specific settings.
+    
+    Args:
+        user_id: User ID to get settings for. If None, uses default settings.
+        
+    Returns:
+        ConsolidatedLLMService configured with user settings
+    """
+    try:
+        # Import here to avoid circular imports
+        from src.database.models import UserSettings
+        
+        # Get user settings
+        if user_id:
+            user_settings = UserSettings.get_or_create_for_user(user_id)
+            settings_dict = user_settings.to_dict()
+        else:
+            settings_dict = UserSettings.get_default_settings()
+        
+        # Extract LLM configuration
+        api_key = settings_dict.get('llm_api_key') or os.getenv("DEEPSEEK_API_KEY")
+        model = settings_dict.get('llm_model', 'deepseek-chat')
+        base_url = settings_dict.get('llm_base_url') or "https://api.deepseek.com/v1"
+        
+        # Create service with user settings
+        return ConsolidatedLLMService(
+            api_key=api_key,
+            base_url=base_url,
+            model=model
+        )
+        
+    except Exception as e:
+        logger.warning(f"Failed to get user-specific LLM service: {e}")
+        # Fallback to default service
+        return ConsolidatedLLMService()
+
+
+def get_llm_service_for_current_user() -> ConsolidatedLLMService:
+    """Get LLM service configured for the current Flask user.
+    
+    Returns:
+        ConsolidatedLLMService configured with current user's settings
+    """
+    try:
+        from flask_login import current_user
+        
+        if current_user and current_user.is_authenticated:
+            return get_llm_service_for_user(current_user.id)
+        else:
+            return get_llm_service_for_user()
+            
+    except Exception as e:
+        logger.warning(f"Failed to get LLM service for current user: {e}")
+        return ConsolidatedLLMService()

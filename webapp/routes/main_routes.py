@@ -48,8 +48,8 @@ def get_actual_service_status():
             
         # Check LLM service
         try:
-            from src.services.consolidated_llm_service import ConsolidatedLLMService
-            llm_service = ConsolidatedLLMService()
+            from src.services.consolidated_llm_service import get_llm_service_for_current_user
+            llm_service = get_llm_service_for_current_user()
             status["llm_status"] = llm_service.is_available()
             status["ai_status"] = status["llm_status"]  # Alias
         except Exception as e:
@@ -405,6 +405,14 @@ def upload_guide():
                 logger.warning("Empty filename")
                 flash("No file selected", "error")
                 return redirect(request.url)
+            
+            # Validate file against user settings
+            from src.services.file_validation_service import file_validation_service
+            is_valid, error_message = file_validation_service.validate_file(file)
+            if not is_valid:
+                logger.warning(f"File validation failed: {error_message}")
+                flash(error_message, "error")
+                return redirect(request.url)
 
             # Secure the filename
             filename = secure_filename(file.filename)
@@ -629,6 +637,31 @@ def upload_submission():
                     )
                 flash("No file selected", "error")
                 return redirect(request.url)
+
+            # Validate files against user settings
+            from src.services.file_validation_service import file_validation_service
+            valid_files, validation_errors = file_validation_service.validate_files(files)
+            
+            if validation_errors:
+                if is_ajax:
+                    return (
+                        jsonify(
+                            {
+                                "status": "error",
+                                "error": "File validation failed",
+                                "uploaded_count": 0,
+                                "failed_count": len(validation_errors),
+                                "errors": [{"filename": "validation", "error": err} for err in validation_errors],
+                            }
+                        ),
+                        400,
+                    )
+                for error in validation_errors:
+                    flash(error, "error")
+                return redirect(request.url)
+            
+            # Use validated files for processing
+            files = valid_files
 
             guide_id = request.form.get("guide_id")
             if not guide_id:
@@ -2650,6 +2683,19 @@ def settings():
         user_settings = UserSettings.get_or_create_for_user(current_user.id)
         settings_data = user_settings.to_dict()
 
+        # Get comprehensive context for settings page
+        from src.services.template_context_service import template_context_service
+        context = template_context_service.get_comprehensive_context()
+        
+        # Add settings-specific context
+        context['settings'] = settings_data
+        
+        # Add available formats for checkboxes
+        context['available_formats'] = ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc', '.txt']
+        
+        return render_template("settings.html", **context)
+        settings_data = user_settings.to_dict()
+
         # Get configuration from service
         themes = app_config.get_available_themes()
         languages = app_config.get_available_languages()
@@ -2746,10 +2792,11 @@ def check_llm_service_status():
     """Check if LLM service is available."""
     try:
         from src.database.models import UserSettings
-        from src.services.consolidated_llm_service import ConsolidatedLLMService
+        from src.services.consolidated_llm_service import get_llm_service_for_current_user
 
-        # Try to initialize LLM service
-        ConsolidatedLLMService()
+        # Try to initialize LLM service with current user settings
+        llm_service = get_llm_service_for_current_user()
+        return llm_service.is_available()
 
         # Check if we have API configuration
         try:

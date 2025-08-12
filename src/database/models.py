@@ -1098,6 +1098,12 @@ class UserSettings(db.Model, TimestampMixin):
     # Notification settings
     email_notifications = db.Column(db.Boolean, default=True)
     processing_notifications = db.Column(db.Boolean, default=True)
+    notification_level = db.Column(db.String(20), default='info')
+    
+    # Additional preferences
+    auto_save = db.Column(db.Boolean, default=False)
+    show_tooltips = db.Column(db.Boolean, default=True)
+    results_per_page = db.Column(db.Integer, default=10)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -1108,13 +1114,19 @@ class UserSettings(db.Model, TimestampMixin):
             "allowed_formats": self.allowed_formats,
             "llm_model": self.llm_model,
             "llm_base_url": self.llm_base_url,
+            "llm_api_key": self.get_llm_api_key(),
             "ocr_api_url": self.ocr_api_url,
+            "ocr_api_key": self.get_ocr_api_key(),
             "theme": self.theme,
             "language": self.language,
             "email_notifications": self.email_notifications,
             "processing_notifications": self.processing_notifications,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "notification_level": self.notification_level,
+            "auto_save": self.auto_save,
+            "show_tooltips": self.show_tooltips,
+            "results_per_page": self.results_per_page,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
     
     @classmethod
@@ -1130,6 +1142,10 @@ class UserSettings(db.Model, TimestampMixin):
             "language": "en",
             "email_notifications": True,
             "processing_notifications": True,
+            "notification_level": "info",
+            "auto_save": False,
+            "show_tooltips": True,
+            "results_per_page": 10,
             "llm_api_key": "",
             "ocr_api_key": ""
         }

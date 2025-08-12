@@ -76,6 +76,9 @@ def create_app(config_name: str = "development") -> Flask:
     # Initialize monitoring services
     _init_monitoring_services(app)
     
+    # Register context processors for user settings integration
+    _register_context_processors(app)
+    
     # Initialize timeout middleware for AI operations
     _init_timeout_middleware(app)
     
@@ -365,6 +368,16 @@ def _init_performance_middleware(app: Flask) -> None:
         logger.info("Performance monitoring middleware initialized")
     except Exception as e:
         logger.error(f"Failed to initialize performance middleware: {e}")
+
+
+def _register_context_processors(app: Flask) -> None:
+    """Register context processors for user settings integration."""
+    try:
+        from webapp.context_processors import register_context_processors
+        register_context_processors(app)
+        logger.info("User settings context processors registered")
+    except Exception as e:
+        logger.error(f"Failed to register context processors: {e}")
 
 
 def cleanup_services() -> None:

@@ -45,7 +45,7 @@ def register_template_filters(state):
 
 
 # Initialize services
-llm_service = ConsolidatedLLMService()
+from src.services.consolidated_llm_service import get_llm_service_for_current_user
 ocr_service = ConsolidatedOCRService()
 
 
@@ -292,6 +292,9 @@ def _determine_guide_type_simple(content_text: str) -> str:
 def extract_questions_with_llm(content_text: str) -> list:
     """Extract questions from guide content using LLM."""
     try:
+        # Get LLM service with current user's settings
+        llm_service = get_llm_service_for_current_user()
+        
         if not llm_service.is_available():
             logger.error("LLM service not available for question extraction")
             return None
