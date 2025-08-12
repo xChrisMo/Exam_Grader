@@ -625,6 +625,7 @@
     </div>
   </div>
   {% endif %}
+  {% endif %}
 </div>
 
 <!-- View Submission Modal -->
@@ -679,7 +680,11 @@
     </div>
   </div>
 </div>
-{% endblock %} {% block extra_js %}
+{% endblock %}
+
+{% block extra_js %}
+<!-- Force refresh utility for proper UI updates -->
+<script src="{{ url_for('static', filename='js/force-refresh.js') }}"></script>
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     // Search functionality
@@ -865,10 +870,12 @@
           ExamGrader.utils.hideButtonLoading(deleteButton, "Delete");
           if (data.success) {
             ExamGrader.notificationManager.notify('Submission deleted successfully!', 'success');
-            // Reload the page to update all counts, including dashboard
-            window.location.reload();
+            // Force a hard refresh to bypass any browser caching
+            setTimeout(() => {
+              window.location.reload(true);
+            }, 500);
           } else {
-ExamGrader.notificationManager.notify(data.error || 'An unknown error occurred.', 'error');
+            ExamGrader.notificationManager.notify(data.error || 'An unknown error occurred.', 'error');
           }
         })
         .catch((error) => {

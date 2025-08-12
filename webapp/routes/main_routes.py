@@ -131,39 +131,33 @@ def index():
 @main_bp.route("/dashboard")
 @login_required
 def dashboard():
-    """User dashboard."""
+    """User dashboard with optimized queries."""
     try:
         if not current_user or not current_user.is_authenticated:
             logger.warning("Dashboard accessed by unauthenticated user")
             flash("Please log in to access the dashboard", "warning")
             return redirect(url_for("auth.login"))
 
-        # Get recent guides and submissions
-        recent_guides = (
-            MarkingGuide.query.filter_by(user_id=current_user.id)
-            .order_by(MarkingGuide.created_at.desc())
-            .limit(5)
-            .all()
-        )
+        # Single optimized query for guides with count
+        guides_query = MarkingGuide.query.filter_by(user_id=current_user.id)
+        recent_guides = guides_query.order_by(MarkingGuide.created_at.desc()).limit(5).all()
+        total_guides = guides_query.count()
 
-        recent_submissions = (
-            Submission.query.filter_by(user_id=current_user.id)
-            .order_by(Submission.created_at.desc())
-            .limit(5)
-            .all()
-        )
+        # Single optimized query for submissions with counts
+        submissions_query = Submission.query.filter_by(user_id=current_user.id)
+        recent_submissions = submissions_query.order_by(Submission.created_at.desc()).limit(5).all()
+        
+        # Get counts efficiently using a single query with conditional aggregation
+        from sqlalchemy import func, case
+        stats_result = db.session.query(
+            func.count(Submission.id).label('total_submissions'),
+            func.sum(case((Submission.processing_status == 'completed', 1), else_=0)).label('processed_submissions')
+        ).filter(Submission.user_id == current_user.id).first()
 
-        # Get statistics
         stats = {
-            "total_guides": MarkingGuide.query.filter_by(
-                user_id=current_user.id
-            ).count(),
-            "total_submissions": Submission.query.filter_by(
-                user_id=current_user.id
-            ).count(),
-            "processed_submissions": Submission.query.filter_by(
-                user_id=current_user.id, processing_status="completed"
-            ).count(),
+            "total_guides": total_guides,
+            "total_submissions": stats_result.total_submissions or 0,
+            "processed_submissions": stats_result.processed_submissions or 0,
         }
 
         template_context = get_template_context()
@@ -189,7 +183,7 @@ def dashboard():
             "dashboard.html",
             recent_guides=[],
             recent_submissions=[],
-            stats={},
+            stats={"total_guides": 0, "total_submissions": 0, "processed_submissions": 0},
             total_submissions=0,
             processed_submissions=0,
             guide_uploaded=False,
@@ -203,27 +197,40 @@ def dashboard():
 @main_bp.route("/guides")
 @login_required
 def guides():
-    """Marking guides management."""
+    """Marking guides management with optimized loading."""
     try:
         from flask import session
+        from src.services.cache_service import app_cache
 
         page = request.args.get("page", 1, type=int)
-        logger.info(f"Loading guides for user: {current_user.id}")
+        
+        # Try cache first
+        cache_key = f"guides_{current_user.id}_{page}"
+        cached_data = app_cache.get(cache_key)
+        
+        if cached_data:
+            return render_template(
+                "marking_guides.html",
+                **cached_data,
+                **get_template_context(),
+            )
 
-        guides = MarkingGuide.query.filter_by(user_id=current_user.id).paginate(
-            page=page, per_page=10, error_out=False
+        # Load full guide objects to include questions for counting
+        guides = (
+            MarkingGuide.query
+            .filter_by(user_id=current_user.id)
+            .order_by(MarkingGuide.created_at.desc())
+            .paginate(page=page, per_page=10, error_out=False)
         )
 
-        logger.info(f"Found {len(guides.items)} guides for user")
-        for guide in guides.items:
-            logger.info(f"Guide: {guide.title} (ID: {guide.id})")
-
+        # Convert to dict format efficiently
         saved_guides_list = []
         if guides and guides.items:
             for guide in guides.items:
                 guide_dict = guide.to_dict()
                 saved_guides_list.append(guide_dict)
 
+        # Only load current guide if needed
         active_guide_id = session.get("active_guide_id")
         current_guide = None
         if active_guide_id:
@@ -231,15 +238,20 @@ def guides():
                 id=active_guide_id, user_id=current_user.id
             ).first()
 
-        logger.info(f"Passing {len(saved_guides_list)} guides to template")
+        # Prepare data for caching
+        template_data = {
+            "guides": guides,
+            "saved_guides": saved_guides_list,
+            "current_guide": current_guide,
+        }
+        
+        # Cache for 5 minutes
+        app_cache.set(cache_key, template_data, ttl=300)
 
-        template_context = get_template_context()
         return render_template(
             "marking_guides.html",
-            guides=guides,
-            saved_guides=saved_guides_list,
-            current_guide=current_guide,
-            **template_context,
+            **template_data,
+            **get_template_context(),
         )
 
     except Exception as e:
@@ -250,6 +262,7 @@ def guides():
             "marking_guides.html",
             guides=None,
             saved_guides=[],
+            current_guide=None,
             **template_context,
         )
 
@@ -257,93 +270,89 @@ def guides():
 @main_bp.route("/submissions")
 @login_required
 def submissions():
-    """Submissions management with grouping by marking guide."""
+    """Submissions management with optimized queries and caching."""
     try:
         from src.database.models import Submission, MarkingGuide
+        from src.services.cache_service import app_cache
         
         # Check if grouped view is requested (default to true)
         grouped = request.args.get("grouped", "true").lower() == "true"
         page = request.args.get("page", 1, type=int)
         
-        # Get all submissions for the user
-        all_submissions = (
+        # Try to get from cache first
+        cache_key = f"submissions_{current_user.id}_{grouped}_{page}"
+        cached_data = app_cache.get(cache_key)
+        
+        if cached_data:
+            return render_template(
+                "submissions.html",
+                **cached_data,
+                **get_template_context(),
+            )
+        
+        # Optimized query with eager loading
+        submissions_query = (
             Submission.query
             .filter_by(user_id=current_user.id)
-            .outerjoin(MarkingGuide)
+            .options(db.joinedload(Submission.marking_guide))
             .order_by(Submission.created_at.desc())
-            .all()
         )
         
-        # Group submissions by marking guide
-        submissions_by_guide = {}
-        submissions_list = []
-        
-        for submission in all_submissions:
-            # Add to regular list
-            submissions_list.append(submission)
-            
-            # Group by marking guide
-            guide = submission.marking_guide
-            guide_key = guide.id if guide else "no_guide"
-            guide_title = guide.title if guide else "No Marking Guide"
-            
-            if guide_key not in submissions_by_guide:
-                submissions_by_guide[guide_key] = {
-                    "guide_id": guide.id if guide else None,
-                    "guide_title": guide_title,
-                    "submissions": [],
-                    "total_submissions": 0,
-                    "processed_count": 0,
-                    "pending_count": 0,
-                }
-            
-            submissions_by_guide[guide_key]["submissions"].append(submission)
-            submissions_by_guide[guide_key]["total_submissions"] += 1
-            
-            # Count processed vs pending
-            if submission.processed or submission.processing_status == "completed":
-                submissions_by_guide[guide_key]["processed_count"] += 1
-            else:
-                submissions_by_guide[guide_key]["pending_count"] += 1
-        
-        # Handle pagination for non-grouped view
         if grouped:
+            # For grouped view, get all submissions
+            all_submissions = submissions_query.all()
             submissions = None
+            
+            # Group submissions by marking guide efficiently
+            submissions_by_guide = {}
+            submissions_list = all_submissions
+            
+            for submission in all_submissions:
+                guide = submission.marking_guide
+                guide_key = guide.id if guide else "no_guide"
+                guide_title = guide.title if guide else "No Marking Guide"
+                
+                if guide_key not in submissions_by_guide:
+                    submissions_by_guide[guide_key] = {
+                        "guide_id": guide.id if guide else None,
+                        "guide_title": guide_title,
+                        "submissions": [],
+                        "total_submissions": 0,
+                        "processed_count": 0,
+                        "pending_count": 0,
+                    }
+                
+                submissions_by_guide[guide_key]["submissions"].append(submission)
+                submissions_by_guide[guide_key]["total_submissions"] += 1
+                
+                # Count processed vs pending
+                if submission.processed or submission.processing_status == "completed":
+                    submissions_by_guide[guide_key]["processed_count"] += 1
+                else:
+                    submissions_by_guide[guide_key]["pending_count"] += 1
         else:
-            per_page = 10
-            total = len(all_submissions)
-            start = (page - 1) * per_page
-            end = start + per_page
-            paginated_submissions = all_submissions[start:end]
-            
-            # Create a simple pagination-like object
-            class SimplePagination:
-                def __init__(self, items, page, per_page, total):
-                    self.items = items
-                    self.page = page
-                    self.per_page = per_page
-                    self.total = total
-                    self.pages = (total + per_page - 1) // per_page
-                    self.has_prev = page > 1
-                    self.has_next = page < self.pages
-                    self.prev_num = page - 1 if self.has_prev else None
-                    self.next_num = page + 1 if self.has_next else None
-            
-            submissions = SimplePagination(
-                items=paginated_submissions,
-                page=page,
-                per_page=per_page,
-                total=total
+            # For paginated view, use database pagination
+            submissions = submissions_query.paginate(
+                page=page, per_page=10, error_out=False
             )
+            submissions_list = submissions.items
+            submissions_by_guide = {}
 
-        template_context = get_template_context()
+        # Prepare data for caching and template
+        template_data = {
+            "submissions": submissions,
+            "submissions_list": submissions_list,
+            "submissions_by_guide": submissions_by_guide,
+            "grouped": grouped,
+        }
+        
+        # Cache the data for 2 minutes
+        app_cache.set(cache_key, template_data, ttl=120)
+
         return render_template(
             "submissions.html",
-            submissions=submissions,
-            submissions_list=submissions_list,
-            submissions_by_guide=submissions_by_guide,
-            grouped=grouped,
-            **template_context,
+            **template_data,
+            **get_template_context(),
         )
 
     except Exception as e:
@@ -505,6 +514,10 @@ def upload_guide():
 
             db.session.add(guide)
             db.session.commit()
+            
+            # Invalidate cache for this user
+            from src.services.cache_invalidation import invalidate_guide_cache
+            invalidate_guide_cache(current_user.id)
 
             logger.info(f"Guide saved successfully with ID: {guide.id}")
 
@@ -1154,7 +1167,11 @@ def api_delete_guide():
         db.session.delete(guide)
         db.session.commit()
 
-        logger.info(f"Successfully deleted guide {guide_id}")
+        # Invalidate cache for this user's guides and submissions
+        from src.services.cache_invalidation import invalidate_guide_cache
+        invalidate_guide_cache(current_user.id)
+
+        logger.info(f"Successfully deleted guide {guide_id} and cleared cache")
         return jsonify({"success": True, "message": "Guide deleted successfully"})
 
     except Exception as e:
@@ -1499,6 +1516,10 @@ def api_delete_submission():
         db.session.delete(submission)
         db.session.commit()
 
+        # Invalidate cache for this user's submissions
+        from src.services.cache_invalidation import invalidate_submission_cache
+        invalidate_submission_cache(current_user.id)
+
         return jsonify(
             {
                 "success": True,
@@ -1540,6 +1561,10 @@ def api_delete_grading_result():
 
         db.session.delete(result)
         db.session.commit()
+
+        # Invalidate cache for this user's submissions and results
+        from src.services.cache_invalidation import invalidate_submission_cache
+        invalidate_submission_cache(current_user.id)
 
         return jsonify(
             {"success": True, "message": "Grading result deleted successfully"}
@@ -2580,6 +2605,7 @@ def settings():
 
                 llm_api_key = request.form.get("llm_api_key", "").strip()
                 llm_model = request.form.get("llm_model", "deepseek-chat").strip()
+                llm_base_url = request.form.get("llm_base_url", "").strip()
                 ocr_api_key = request.form.get("ocr_api_key", "").strip()
                 ocr_api_url = request.form.get("ocr_api_url", "").strip()
                 theme = request.form.get("theme", "light")
@@ -2598,6 +2624,7 @@ def settings():
                 user_settings.allowed_formats_list = allowed_formats
                 user_settings.set_llm_api_key(llm_api_key)
                 user_settings.llm_model = llm_model
+                user_settings.llm_base_url = llm_base_url
                 user_settings.set_ocr_api_key(ocr_api_key)
                 user_settings.ocr_api_url = ocr_api_url
                 user_settings.theme = theme

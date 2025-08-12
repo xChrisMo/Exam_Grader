@@ -1087,6 +1087,7 @@ class UserSettings(db.Model, TimestampMixin):
     # API configuration (encrypted)
     llm_api_key_encrypted = db.Column(db.Text)
     llm_model = db.Column(db.String(100), default='deepseek-chat')
+    llm_base_url = db.Column(db.String(500))
     ocr_api_key_encrypted = db.Column(db.Text)
     ocr_api_url = db.Column(db.String(500))
     
@@ -1106,6 +1107,7 @@ class UserSettings(db.Model, TimestampMixin):
             "max_file_size": self.max_file_size,
             "allowed_formats": self.allowed_formats,
             "llm_model": self.llm_model,
+            "llm_base_url": self.llm_base_url,
             "ocr_api_url": self.ocr_api_url,
             "theme": self.theme,
             "language": self.language,
@@ -1122,6 +1124,7 @@ class UserSettings(db.Model, TimestampMixin):
             "max_file_size": 100,  # MB
             "allowed_formats": ".pdf,.jpg,.jpeg,.png,.docx,.doc,.txt",
             "llm_model": "deepseek-chat",
+            "llm_base_url": "",
             "ocr_api_url": "",
             "theme": "light",
             "language": "en",

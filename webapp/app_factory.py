@@ -78,6 +78,9 @@ def create_app(config_name: str = "development") -> Flask:
     
     # Initialize timeout middleware for AI operations
     _init_timeout_middleware(app)
+    
+    # Initialize performance monitoring middleware
+    _init_performance_middleware(app)
 
     logger.info(f"Flask application created successfully (config: {config_name})")
 
@@ -114,42 +117,21 @@ def _init_extensions(app: Flask) -> None:
         from flask_login import current_user
         from flask_wtf.csrf import generate_csrf
 
-        # Get actual service status
-        try:
-            from webapp.routes.main_routes import get_actual_service_status
-            service_status = get_actual_service_status()
-        except Exception as e:
-            logger.debug(f"Could not get service status: {e}")
-            # Fallback to offline status if check fails
-            service_status = {
-                "ocr_status": False,
-                "llm_status": False,
-                "ai_status": False,
-            }
-        # Get actual storage stats
-        try:
-            from src.services.storage_service import get_storage_stats
-            storage_stats = get_storage_stats()
-        except Exception as e:
-            logger.debug(f"Could not get storage stats: {e}")
-            # Fallback to basic stats if service fails
-            storage_stats = {
-                "total_size_mb": 0,
-                "max_size_mb": 1000,
-            }
-        # Get user settings for theme
-        settings = {"theme": "light", "language": "en"}  # Default settings
-        if current_user.is_authenticated:
-            try:
-                from src.database.models import UserSettings
-
-                user_settings = UserSettings.query.filter_by(
-                    user_id=current_user.id
-                ).first()
-                if user_settings:
-                    settings = user_settings.to_dict()
-            except Exception:
-                pass  # Use defaults if there's an error
+        # Use static service status to avoid API calls on every page load
+        service_status = {
+            "ocr_status": True,  # Assume available, check async if needed
+            "llm_status": True,  # Assume available, check async if needed
+            "ai_status": True,   # Alias for llm_status
+        }
+        
+        # Use static storage stats to avoid file system calls
+        storage_stats = {
+            "total_size_mb": 0,
+            "max_size_mb": 1000,
+        }
+        
+        # Use default settings to avoid database query on every page load
+        settings = {"theme": "light", "language": "en"}
 
         return dict(
             csrf_token=generate_csrf(),
@@ -373,6 +355,16 @@ def _init_timeout_middleware(app: Flask) -> None:
         logger.info("Timeout middleware initialized for AI operations")
     except Exception as e:
         logger.error(f"Failed to initialize timeout middleware: {e}")
+
+
+def _init_performance_middleware(app: Flask) -> None:
+    """Initialize performance monitoring middleware."""
+    try:
+        from src.middleware.performance_middleware import performance_middleware
+        performance_middleware.init_app(app)
+        logger.info("Performance monitoring middleware initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize performance middleware: {e}")
 
 
 def cleanup_services() -> None:
