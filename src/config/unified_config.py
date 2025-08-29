@@ -524,10 +524,12 @@ class UnifiedConfig:
         """
         Get Flask-compatible configuration dictionary.
 
-        Returns:
-            Dictionary of Flask configuration settings
-        """
-        from datetime import timedelta
+        elif database_url.startswith("postgres://"):
+            # Convert postgres:// to postgresql:// for SQLAlchemy 2.0+ compatibility
+            return database_url.replace("postgres://", "postgresql://", 1)
+        else:
+            # Not a SQLite or postgres database, return as-is
+            return database_url        from datetime import timedelta
         
         return {
             "SECRET_KEY": self.security.secret_key,
