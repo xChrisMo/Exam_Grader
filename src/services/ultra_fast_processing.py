@@ -370,6 +370,11 @@ Find up to {max_questions} questions and their corresponding answers."""
             questions_with_missing_marks = 0
             
             for i, question in enumerate(guide.questions):
+                # Skip non-dictionary questions
+                if not isinstance(question, dict):
+                    logger.warning(f"Skipping non-dictionary question {i} in guide {guide_id}")
+                    continue
+                    
                 marks = question.get('marks')
                 
                 # If marks is 0 or None, try to extract from question text as fallback

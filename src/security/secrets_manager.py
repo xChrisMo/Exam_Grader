@@ -136,9 +136,16 @@ class SecretsManager:
             logger.info("Secrets loaded successfully")
 
         except Exception as e:
-            logger.error(f"Failed to load secrets: {str(e)}")
+            logger.warning(f"Failed to load secrets (this is normal for first run): {str(e)}")
             self._secrets_cache = {}
-            self._encryption = SecretsEncryption(self.master_key)
+            try:
+                self._encryption = SecretsEncryption(self.master_key)
+                # Create empty secrets file for future use
+                self._save_secrets()
+                logger.info("Created new secrets file")
+            except Exception as init_error:
+                logger.warning(f"Could not initialize secrets encryption: {init_error}")
+                self._encryption = None
 
     def _save_secrets(self):
         """Save secrets to encrypted file."""

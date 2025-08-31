@@ -2,6 +2,11 @@
 
 {% block title %}LLM Training Dashboard{% endblock %}
 
+{% block extra_head %}
+<!-- CSRF Token for AJAX requests -->
+<meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+
 {% block extra_css %}
 <style>
   /* Custom styles for training dashboard */
@@ -77,9 +82,9 @@
           </p>
         </div>
         <div class="ml-3">
-          <button type="button" class="bg-blue-50 px-3 py-1.5 rounded-md text-sm font-medium text-blue-800 hover:bg-blue-100">
+          <a href="{{ url_for('training.view_progress', session_id=current_session.id) }}" class="bg-blue-50 px-3 py-1.5 rounded-md text-sm font-medium text-blue-800 hover:bg-blue-100">
             View Progress
-          </button>
+          </a>
         </div>
       </div>
     </div>
@@ -111,7 +116,7 @@
                   Supports PDF, DOCX, DOC, JPG, JPEG, PNG, TIFF, BMP, and GIF files
                 </p>
                 <p class="mt-1 text-xs text-gray-500">
-                  Maximum file size: 50MB per file
+                  Maximum file size: 50MB per file • Use Ctrl+U to upload files
                 </p>
               </div>
               <input type="file" id="file-input" class="hidden" multiple accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.tiff,.bmp,.gif">
@@ -264,7 +269,8 @@
           <div class="p-6">
             <button id="start-training" type="button" 
                     class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled>
+                    disabled
+                    title="Start training session (Ctrl+Enter)">
               <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
               </svg>

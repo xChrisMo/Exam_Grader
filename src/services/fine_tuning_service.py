@@ -92,6 +92,11 @@ class FineTuningService(BaseService):
             questions = guide.get('questions', [])
             
             for question in questions:
+                # Skip non-dictionary questions
+                if not isinstance(question, dict):
+                    logger.warning(f"Skipping non-dictionary question in fine-tuning dataset")
+                    continue
+                    
                 # Create training examples in OpenAI format
                 example = {
                     "messages": [

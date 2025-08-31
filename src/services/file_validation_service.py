@@ -31,13 +31,28 @@ class FileValidationService:
     def get_user_settings(self) -> dict:
         """Get current user's file validation settings."""
         try:
+            logger.debug(f"Getting user settings, current_user authenticated: {current_user.is_authenticated if current_user else False}")
+            
             if current_user and current_user.is_authenticated:
                 user_settings = UserSettings.get_or_create_for_user(current_user.id)
-                return user_settings.to_dict()
+                if user_settings:
+                    settings_dict = user_settings.to_dict()
+                    logger.debug(f"User settings retrieved: max_file_size={settings_dict.get('max_file_size')}")
+                    return settings_dict
+                else:
+                    logger.debug("No user settings found, creating default")
             else:
-                return UserSettings.get_default_settings()
+                logger.debug("No authenticated user, using default settings")
+            
+            # Fallback to default settings
+            default_settings = UserSettings.get_default_settings()
+            logger.debug(f"Default settings: max_file_size={default_settings.get('max_file_size')}")
+            return default_settings
+            
         except Exception as e:
-            logger.warning(f"Failed to get user settings for file validation: {e}")
+            logger.error(f"Error getting user settings: {e}")
+            import traceback
+            logger.error(f"Settings error stack trace: {traceback.format_exc()}")
             return UserSettings.get_default_settings()
     
     def validate_file(self, file: FileStorage) -> Tuple[bool, Optional[str]]:
@@ -66,9 +81,27 @@ class FileValidationService:
                 return False, f"File format not allowed. Allowed formats: {allowed_str}"
             
             # Check file size
-            max_size_mb = settings.get('max_file_size', self.default_max_size_mb)
+            max_size_mb = settings.get('max_file_size')
+            logger.debug(f"File validation: max_file_size from settings = {max_size_mb} (type: {type(max_size_mb)})")
+            
+            # If max_file_size is None (unlimited), use None; otherwise use default if not set
+            if max_size_mb is None:
+                # None means unlimited - this is the intended behavior
+                logger.debug("File validation: Using unlimited file size")
+                pass  # Will be handled in _is_size_valid
+            elif max_size_mb == 0:
+                # 0 also means unlimited in some contexts
+                logger.debug("File validation: Converting 0 to unlimited")
+                max_size_mb = None
+            # If max_size_mb is still None after settings, it means unlimited
+            
+            logger.debug(f"File validation: Final max_size_mb = {max_size_mb}")
             if not self._is_size_valid(file, max_size_mb):
-                return False, f"File size exceeds maximum limit of {max_size_mb} MB"
+                if max_size_mb is None or max_size_mb == float('inf'):
+                    size_limit_str = "unlimited"
+                else:
+                    size_limit_str = f"{max_size_mb} MB"
+                return False, f"File size exceeds maximum limit of {size_limit_str}"
             
             return True, None
             
@@ -123,11 +156,17 @@ class FileValidationService:
         return file_ext in allowed_formats
     
     def _is_size_valid(self, file: FileStorage, max_size_mb: float) -> bool:
-        """Check if file size is within limits."""
+        """Check if file size is within limits with comprehensive None protection."""
         try:
-            # Handle infinite file size (no limit)
-            if max_size_mb == float('inf'):
+            # Layer 1: Handle None or infinite file size (no limit)
+            if max_size_mb is None or max_size_mb == float('inf'):
+                logger.debug(f"File size validation: unlimited (max_size_mb={max_size_mb})")
                 return True
+            
+            # Layer 2: Additional safety check for invalid types
+            if not isinstance(max_size_mb, (int, float)):
+                logger.warning(f"Invalid max_size_mb type: {type(max_size_mb)}, value: {max_size_mb}")
+                return True  # Default to allowing the file if we can't validate
             
             # Get file size
             file.seek(0, os.SEEK_END)
@@ -135,22 +174,71 @@ class FileValidationService:
             file.seek(0)  # Reset file pointer
             
             file_size_mb = file_size_bytes / (1024 * 1024)
-            return file_size_mb <= max_size_mb
+            logger.debug(f"File size validation: {file_size_mb:.2f} MB <= {max_size_mb} MB")
+            
+            # Layer 3: Final safety check before comparison
+            if max_size_mb is None or not isinstance(max_size_mb, (int, float)):
+                logger.debug("Layer 3 None check triggered")
+                return True
+            
+            # Layer 4: Triple check to prevent any None comparison
+            if max_size_mb is None or max_size_mb == 'None' or str(max_size_mb).lower() == 'none':
+                logger.debug("Layer 4 None check triggered")
+                return True
+            
+            # Layer 5: Convert to float if it's a string number
+            if isinstance(max_size_mb, str):
+                try:
+                    max_size_mb = float(max_size_mb)
+                except ValueError:
+                    logger.warning(f"Could not convert max_size_mb string to float: {max_size_mb}")
+                    return True
+            
+            # Layer 6: Final type check
+            if not isinstance(max_size_mb, (int, float)):
+                logger.warning(f"Layer 6: max_size_mb is not a number: {max_size_mb} (type: {type(max_size_mb)})")
+                return True
+            
+            # Layer 7: Protected comparison with exception handling
+            try:
+                result = file_size_mb <= max_size_mb
+                return result
+            except TypeError as te:
+                logger.error(f"Type error in file size comparison: {te}, file_size_mb={file_size_mb}, max_size_mb={max_size_mb}")
+                return True  # Default to allowing the file
             
         except Exception as e:
+            import traceback
             logger.error(f"Error checking file size: {e}")
+            logger.error(f"Stack trace: {traceback.format_exc()}")
+            logger.error(f"max_size_mb value: {max_size_mb} (type: {type(max_size_mb)})")
+            logger.error(f"Function arguments - file: {file}, max_size_mb: {max_size_mb}")
+            
+            # If it's the specific TypeError we're trying to fix, provide more info
+            if "'<=' not supported between instances of 'float' and 'NoneType'" in str(e):
+                logger.error("CAUGHT THE SPECIFIC ERROR! This should not happen with our fixes.")
+                logger.error(f"File object: {type(file)}, filename: {getattr(file, 'filename', 'unknown')}")
+                
             return False
     
     def get_validation_info(self) -> dict:
         """Get current validation settings for display to user."""
         settings = self.get_user_settings()
         allowed_formats = self._parse_allowed_formats(settings.get('allowed_formats', ''))
-        max_size_mb = settings.get('max_file_size', self.default_max_size_mb)
+        max_size_mb = settings.get('max_file_size')
+        
+        # Handle None (unlimited) and display formatting
+        if max_size_mb is None or max_size_mb == float('inf'):
+            max_size_display = 'No limit'
+            max_size_value = None
+        else:
+            max_size_display = f"{max_size_mb} MB"
+            max_size_value = max_size_mb
         
         return {
-            'max_file_size_mb': max_size_mb,
+            'max_file_size_mb': max_size_value,
             'allowed_formats': allowed_formats,
-            'max_file_size_display': 'No limit' if max_size_mb == float('inf') else f"{max_size_mb} MB"
+            'max_file_size_display': max_size_display
         }
 
 

@@ -145,7 +145,7 @@ class APIConfig:
         default_factory=lambda: os.getenv("DEEPSEEK_API_URL", "")
     )
     deepseek_model: str = field(
-        default_factory=lambda: os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner")
+        default_factory=lambda: os.getenv("LLM_MODEL", "deepseek-chat")
     )
     api_timeout: int = 30
     api_retry_attempts: int = 3
@@ -430,7 +430,7 @@ class UnifiedConfig:
             ),
             deepseek_api_key=os.getenv("DEEPSEEK_API_KEY", ""),
             deepseek_api_url=os.getenv("DEEPSEEK_API_URL", ""),
-            deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner"),
+            deepseek_model=os.getenv("LLM_MODEL", "deepseek-chat"),
             # LLM-Only Mode Configuration
             llm_require_json_response=os.getenv("LLM_REQUIRE_JSON", "True").lower()
             == "true",

@@ -65,16 +65,22 @@
                     <div class="grid grid-cols-1 gap-6">
                         <!-- LLM API Settings -->
                         <div class="border border-gray-200 rounded-lg p-4">
-                            <h4 class="text-md font-medium text-gray-800 mb-3">LLM Service (DeepSeek)</h4>
+                            <h4 class="text-md font-medium text-gray-800 mb-3">LLM Service</h4>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label for="llm_api_key" class="block text-sm font-medium text-gray-700 mb-2">
                                         API Key
                                     </label>
-                                    <input type="password" id="llm_api_key" name="llm_api_key" 
-                                           value="{{ settings.llm_api_key }}"
-                                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                           placeholder="Enter DeepSeek API key">
+                                    <div class="flex space-x-2">
+                                        <input type="text" id="llm_api_key" name="llm_api_key" 
+                                               value="{{ settings.llm_api_key or '' }}"
+                                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono"
+                                               placeholder="Enter LLM API key">
+                                        <button type="button" id="test-llm-api" class="mt-1 inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                            <i class="fas fa-plug mr-1"></i>
+                                            Test
+                                        </button>
+                                    </div>
                                 </div>
                                 <div>
                                     <label for="llm_model" class="block text-sm font-medium text-gray-700 mb-2">
@@ -91,7 +97,7 @@
                                     <input type="url" id="llm_base_url" name="llm_base_url" 
                                            value="{{ settings.llm_base_url }}"
                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                           placeholder="https://api.deepseek.com (leave empty for default)">
+                                           placeholder="Enter LLM API base URL (leave empty for default)">
                                     <p class="text-xs text-gray-500 mt-1">Optional: Custom API endpoint URL. Leave empty to use the default endpoint.</p>
                                 </div>
                             </div>
@@ -105,10 +111,16 @@
                                     <label for="ocr_api_key" class="block text-sm font-medium text-gray-700 mb-2">
                                         API Key
                                     </label>
-                                    <input type="password" id="ocr_api_key" name="ocr_api_key" 
-                                           value="{{ settings.ocr_api_key }}"
-                                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                           placeholder="Enter HandwritingOCR API key">
+                                    <div class="flex space-x-2">
+                                        <input type="text" id="ocr_api_key" name="ocr_api_key" 
+                                               value="{{ settings.ocr_api_key or '' }}"
+                                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono"
+                                               placeholder="Enter HandwritingOCR API key">
+                                        <button type="button" id="test-ocr-api" class="mt-1 inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                            <i class="fas fa-plug mr-1"></i>
+                                            Test
+                                        </button>
+                                    </div>
                                 </div>
                                 <div>
                                     <label for="ocr_api_url" class="block text-sm font-medium text-gray-700 mb-2">
@@ -208,6 +220,333 @@
                 </div>
                 {% endif %}
 
+                <!-- Processing & Performance Settings -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                        <i class="fas fa-microchip mr-2"></i>
+                        Processing & Performance
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Processing Method -->
+                        <div>
+                            <label for="default_processing_method" class="block text-sm font-medium text-gray-700 mb-2">
+                                Default Processing Method
+                            </label>
+                            <select id="default_processing_method" name="default_processing_method" 
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                <option value="traditional_ocr" {% if settings.default_processing_method == 'traditional_ocr' %}selected{% endif %}>Traditional OCR</option>
+                                <option value="llm_vision" {% if settings.default_processing_method == 'llm_vision' %}selected{% endif %}>LLM Vision (Advanced)</option>
+                                <option value="hybrid" {% if settings.default_processing_method == 'hybrid' %}selected{% endif %}>Hybrid (OCR + LLM)</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">Choose the default method for processing documents</p>
+                        </div>
+                        
+                        <!-- Processing Timeout -->
+                        <div>
+                            <label for="processing_timeout" class="block text-sm font-medium text-gray-700 mb-2">
+                                Processing Timeout (seconds)
+                            </label>
+                            <input type="number" id="processing_timeout" name="processing_timeout" 
+                                   value="{{ settings.processing_timeout or 300 }}" min="30" max="1800"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <p class="text-xs text-gray-500 mt-1">Maximum time to wait for processing (30-1800 seconds)</p>
+                        </div>
+                        
+                        <!-- Retry Attempts -->
+                        <div>
+                            <label for="max_retry_attempts" class="block text-sm font-medium text-gray-700 mb-2">
+                                Max Retry Attempts
+                            </label>
+                            <input type="number" id="max_retry_attempts" name="max_retry_attempts" 
+                                   value="{{ settings.max_retry_attempts or 3 }}" min="1" max="10"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <p class="text-xs text-gray-500 mt-1">Number of retry attempts for failed operations</p>
+                        </div>
+                        
+                        <!-- Fallback removed - LLM is now required -->
+                    </div>
+                </div>
+
+                <!-- Grading & AI Settings -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                        <i class="fas fa-brain mr-2"></i>
+                        Grading & AI Configuration
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- LLM Strict Mode -->
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="llm_strict_mode" name="llm_strict_mode" 
+                                       {% if settings.llm_strict_mode %}checked{% endif %}
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                <span class="ml-2 text-sm text-gray-700">LLM Strict Mode</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">Fail completely if LLM processing fails (strict mode)</p>
+                        </div>
+                        
+                        <!-- Require JSON Response -->
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="llm_require_json_response" name="llm_require_json_response" 
+                                       {% if settings.llm_require_json_response %}checked{% endif %}
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                <span class="ml-2 text-sm text-gray-700">Require JSON Response</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">Enforce structured JSON responses from LLM</p>
+                        </div>
+                        
+                        <!-- Grading Confidence Threshold -->
+                        <div>
+                            <label for="grading_confidence_threshold" class="block text-sm font-medium text-gray-700 mb-2">
+                                Grading Confidence Threshold (%)
+                            </label>
+                            <input type="number" id="grading_confidence_threshold" name="grading_confidence_threshold" 
+                                   value="{{ settings.grading_confidence_threshold or 75 }}" min="50" max="100"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <p class="text-xs text-gray-500 mt-1">Minimum confidence level required for automatic grading</p>
+                        </div>
+                        
+                        <!-- Auto-Grade Threshold -->
+                        <div>
+                            <label for="auto_grade_threshold" class="block text-sm font-medium text-gray-700 mb-2">
+                                Auto-Grade Threshold (%)
+                            </label>
+                            <input type="number" id="auto_grade_threshold" name="auto_grade_threshold" 
+                                   value="{{ settings.auto_grade_threshold or 80 }}" min="60" max="100"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <p class="text-xs text-gray-500 mt-1">Confidence threshold for automatic grading without review</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security & Privacy Settings -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                        <i class="fas fa-shield-alt mr-2"></i>
+                        Security & Privacy
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Session Timeout -->
+                        <div>
+                            <label for="session_timeout" class="block text-sm font-medium text-gray-700 mb-2">
+                                Session Timeout (minutes)
+                            </label>
+                            <input type="number" id="session_timeout" name="session_timeout" 
+                                   value="{{ settings.session_timeout or 120 }}" min="15" max="480"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <p class="text-xs text-gray-500 mt-1">Automatic logout after inactivity (15-480 minutes)</p>
+                        </div>
+                        
+                        <!-- Auto-Delete Processed Files -->
+                        <div>
+                            <label for="auto_delete_after_days" class="block text-sm font-medium text-gray-700 mb-2">
+                                Auto-Delete Files After (days)
+                            </label>
+                            <input type="number" id="auto_delete_after_days" name="auto_delete_after_days" 
+                                   value="{{ settings.auto_delete_after_days or 30 }}" min="1" max="365"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <p class="text-xs text-gray-500 mt-1">Automatically delete processed files after specified days</p>
+                        </div>
+                        
+                        <!-- Enable Audit Logging -->
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="enable_audit_logging" name="enable_audit_logging" 
+                                       {% if settings.enable_audit_logging %}checked{% endif %}
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                <span class="ml-2 text-sm text-gray-700">Enable Audit Logging</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">Log all user actions for security auditing</p>
+                        </div>
+                        
+                        <!-- Encrypt Stored Files -->
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="encrypt_stored_files" name="encrypt_stored_files" 
+                                       {% if settings.encrypt_stored_files %}checked{% endif %}
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                <span class="ml-2 text-sm text-gray-700">Encrypt Stored Files</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">Encrypt uploaded and processed files at rest</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Monitoring & Logging Settings -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                        <i class="fas fa-chart-line mr-2"></i>
+                        Monitoring & Logging
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Log Level -->
+                        <div>
+                            <label for="log_level" class="block text-sm font-medium text-gray-700 mb-2">
+                                Log Level
+                            </label>
+                            <select id="log_level" name="log_level" 
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                <option value="DEBUG" {% if settings.log_level == 'DEBUG' %}selected{% endif %}>Debug (Verbose)</option>
+                                <option value="INFO" {% if settings.log_level == 'INFO' %}selected{% endif %}>Info (Normal)</option>
+                                <option value="WARNING" {% if settings.log_level == 'WARNING' %}selected{% endif %}>Warning (Important)</option>
+                                <option value="ERROR" {% if settings.log_level == 'ERROR' %}selected{% endif %}>Error (Critical Only)</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">Level of detail for system logging</p>
+                        </div>
+                        
+                        <!-- Enable Performance Monitoring -->
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="enable_performance_monitoring" name="enable_performance_monitoring" 
+                                       {% if settings.enable_performance_monitoring %}checked{% endif %}
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                <span class="ml-2 text-sm text-gray-700">Enable Performance Monitoring</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">Track system performance metrics and response times</p>
+                        </div>
+                        
+                        <!-- Enable Error Reporting -->
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="enable_error_reporting" name="enable_error_reporting" 
+                                       {% if settings.enable_error_reporting %}checked{% endif %}
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                <span class="ml-2 text-sm text-gray-700">Enable Error Reporting</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">Automatically report errors for debugging</p>
+                        </div>
+                        
+                        <!-- Metrics Retention Days -->
+                        <div>
+                            <label for="metrics_retention_days" class="block text-sm font-medium text-gray-700 mb-2">
+                                Metrics Retention (days)
+                            </label>
+                            <input type="number" id="metrics_retention_days" name="metrics_retention_days" 
+                                   value="{{ settings.metrics_retention_days or 90 }}" min="7" max="365"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <p class="text-xs text-gray-500 mt-1">How long to keep performance metrics (7-365 days)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Email & Notification Settings -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                        <i class="fas fa-envelope mr-2"></i>
+                        Email & Notifications
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Email Notifications -->
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="email_notifications" name="email_notifications" 
+                                       {% if settings.email_notifications %}checked{% endif %}
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                <span class="ml-2 text-sm text-gray-700">Email Notifications</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">Receive email notifications for important events</p>
+                        </div>
+                        
+                        <!-- Processing Notifications -->
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="processing_notifications" name="processing_notifications" 
+                                       {% if settings.processing_notifications %}checked{% endif %}
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                <span class="ml-2 text-sm text-gray-700">Processing Notifications</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">Get notified when processing completes</p>
+                        </div>
+                        
+                        <!-- Email Address -->
+                        <div>
+                            <label for="notification_email" class="block text-sm font-medium text-gray-700 mb-2">
+                                Notification Email
+                            </label>
+                            <input type="email" id="notification_email" name="notification_email" 
+                                   value="{{ settings.notification_email or '' }}"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                   placeholder="Enter email for notifications">
+                            <p class="text-xs text-gray-500 mt-1">Email address for receiving notifications</p>
+                        </div>
+                        
+                        <!-- Webhook URL -->
+                        <div>
+                            <label for="webhook_url" class="block text-sm font-medium text-gray-700 mb-2">
+                                Webhook URL (Optional)
+                            </label>
+                            <input type="url" id="webhook_url" name="webhook_url" 
+                                   value="{{ settings.webhook_url or '' }}"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                   placeholder="https://your-webhook-url.com">
+                            <p class="text-xs text-gray-500 mt-1">Webhook URL for external integrations</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cache & Storage Settings -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                        <i class="fas fa-database mr-2"></i>
+                        Cache & Storage
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Cache Type -->
+                        <div>
+                            <label for="cache_type" class="block text-sm font-medium text-gray-700 mb-2">
+                                Cache Type
+                            </label>
+                            <select id="cache_type" name="cache_type" 
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                <option value="simple" {% if settings.cache_type == 'simple' %}selected{% endif %}>Simple (Memory)</option>
+                                <option value="redis" {% if settings.cache_type == 'redis' %}selected{% endif %}>Redis (External)</option>
+                                <option value="filesystem" {% if settings.cache_type == 'filesystem' %}selected{% endif %}>Filesystem</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">Type of caching system to use</p>
+                        </div>
+                        
+                        <!-- Cache TTL -->
+                        <div>
+                            <label for="cache_ttl_hours" class="block text-sm font-medium text-gray-700 mb-2">
+                                Cache TTL (hours)
+                            </label>
+                            <input type="number" id="cache_ttl_hours" name="cache_ttl_hours" 
+                                   value="{{ settings.cache_ttl_hours or 24 }}" min="1" max="168"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <p class="text-xs text-gray-500 mt-1">How long to keep cached data (1-168 hours)</p>
+                        </div>
+                        
+                        <!-- Enable Cache Warming -->
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="enable_cache_warming" name="enable_cache_warming" 
+                                       {% if settings.enable_cache_warming %}checked{% endif %}
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                <span class="ml-2 text-sm text-gray-700">Enable Cache Warming</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">Pre-load frequently accessed data into cache</p>
+                        </div>
+                        
+                        <!-- Auto-Cleanup Storage -->
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="auto_cleanup_storage" name="auto_cleanup_storage" 
+                                       {% if settings.auto_cleanup_storage %}checked{% endif %}
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                <span class="ml-2 text-sm text-gray-700">Auto-Cleanup Storage</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">Automatically clean up old temporary files</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Additional Settings -->
                 <div class="mb-8">
                     <h3 class="text-lg font-medium text-gray-900 mb-4">
@@ -251,17 +590,139 @@
                     </div>
                 </div>
 
-                <!-- Submit Buttons -->
-                <div class="flex justify-end space-x-3">
-                    <!-- Reset and Export buttons will be added by JavaScript -->
-                    <button type="submit" 
-                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                        <i class="fas fa-save mr-2"></i>
-                        Save Settings
-                    </button>
+                <!-- Advanced System Settings -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                        <i class="fas fa-tools mr-2"></i>
+                        Advanced System Settings
+                    </h3>
+                    
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-exclamation-triangle text-yellow-400"></i>
+                            </div>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium text-yellow-800">
+                                    Advanced Settings Warning
+                                </h3>
+                                <div class="mt-2 text-sm text-yellow-700">
+                                    <p>These settings affect core system behavior. Changes may require a server restart and could impact performance.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Debug Mode -->
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="debug_mode" name="debug_mode" 
+                                       {% if settings.debug_mode %}checked{% endif %}
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                <span class="ml-2 text-sm text-gray-700">Debug Mode</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">Enable detailed debugging information (impacts performance)</p>
+                        </div>
+                        
+                        <!-- Maintenance Mode -->
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="maintenance_mode" name="maintenance_mode" 
+                                       {% if settings.maintenance_mode %}checked{% endif %}
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                <span class="ml-2 text-sm text-gray-700">Maintenance Mode</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">Put the system in maintenance mode (blocks new processing)</p>
+                        </div>
+                        
+                        <!-- Max Concurrent Processes -->
+                        <div>
+                            <label for="max_concurrent_processes" class="block text-sm font-medium text-gray-700 mb-2">
+                                Max Concurrent Processes
+                            </label>
+                            <input type="number" id="max_concurrent_processes" name="max_concurrent_processes" 
+                                   value="{{ settings.max_concurrent_processes or 4 }}" min="1" max="16"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <p class="text-xs text-gray-500 mt-1">Maximum number of simultaneous processing tasks</p>
+                        </div>
+                        
+                        <!-- Memory Limit -->
+                        <div>
+                            <label for="memory_limit_gb" class="block text-sm font-medium text-gray-700 mb-2">
+                                Memory Limit (GB)
+                            </label>
+                            <input type="number" id="memory_limit_gb" name="memory_limit_gb" 
+                                   value="{{ settings.memory_limit_gb or 4 }}" min="1" max="32"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <p class="text-xs text-gray-500 mt-1">Maximum memory usage for processing tasks</p>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- Submit Buttons -->
+                <div class="flex justify-between">
+                    <div class="flex space-x-3">
+                        <button type="button" id="export-settings-btn" 
+                                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            <i class="fas fa-download mr-2"></i>
+                            Export Settings
+                        </button>
+                        <button type="button" id="import-settings-btn" 
+                                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            <i class="fas fa-upload mr-2"></i>
+                            Import Settings
+                        </button>
+                        <input type="file" id="import-file-input" accept=".json" style="display: none;">
+                    </div>
+                    <div class="flex space-x-3">
+                        <button type="button" id="reset-settings-btn" 
+                                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            <i class="fas fa-undo mr-2"></i>
+                            Reset to Defaults
+                        </button>
+                        <button type="submit" 
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            <i class="fas fa-save mr-2"></i>
+                            Save Settings
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Auto-save indicator -->
+                <div id="auto-save-indicator" class="mt-2 text-sm text-gray-500 opacity-0 transition-opacity duration-300 text-right"></div>
             </form>
         </div>
     </div>
 </div>
+
+<!-- Loading Overlay -->
+<div id="settings-loading-overlay" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" style="display: none;">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3 text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+                <i class="fas fa-spinner fa-spin text-blue-600 text-xl"></i>
+            </div>
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mt-4">Saving Settings</h3>
+            <div class="mt-2 px-7 py-3">
+                <p class="text-sm text-gray-500">
+                    Please wait while we save your settings...
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof ExamGraderSettings !== 'undefined') {
+        ExamGraderSettings.init();
+    } else {
+        console.error('ExamGraderSettings not loaded');
+    }
+});
+</script>
 {% endblock %}

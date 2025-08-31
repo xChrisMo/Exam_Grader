@@ -748,6 +748,11 @@ class CoreService(BaseService):
         mappings = []
 
         for i, question in enumerate(questions):
+            # Skip non-dictionary questions
+            if not isinstance(question, dict):
+                logger.warning(f"Skipping non-dictionary question {i} in answer mapping")
+                continue
+                
             question_text = question.get("question", "")
 
             # Simple keyword-based matching

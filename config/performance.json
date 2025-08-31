@@ -1,9 +1,9 @@
 {
   "database": {
-    "pool_size": 20,
-    "pool_timeout": 30,
-    "pool_recycle": 3600,
-    "max_overflow": 10,
+    "pool_size": 30,
+    "pool_timeout": 15,
+    "pool_recycle": 1800,
+    "max_overflow": 20,
     "echo": false
   },
   "session": {
@@ -19,9 +19,9 @@
     "lockout_duration": 1800
   },
   "mapping": {
-    "batch_size": 10,
-    "timeout": 300,
-    "max_concurrent": 3,
+    "batch_size": 25,
+    "timeout": 180,
+    "max_concurrent": 8,
     "cache_results": true
   },
   "performance": {

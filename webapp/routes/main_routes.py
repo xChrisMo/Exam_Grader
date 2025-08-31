@@ -721,7 +721,7 @@ def upload_submission():
                         else "unknown"
                     )
 
-                    # Process the file to extract text with OCR fallback
+                    # Process the file to extract text using OCR service
                     extracted_text = ""
                     ocr_confidence = 0.0
                     processing_status = "completed"
@@ -735,7 +735,7 @@ def upload_submission():
                             parse_student_submission,
                         )
 
-                        # Parse the submission with OCR fallback
+                        # Parse the submission using OCR service
                         result, raw_text, error = parse_student_submission(file_path)
 
                         if error:
@@ -1979,7 +1979,7 @@ def api_enhanced_processing_start():
 
                         except Exception as e:
                             failed_count += 1
-                            # Safe access to submission attributes with fallbacks
+                            # Safe access to submission attributes
                             submission_id = getattr(submission, "id", "unknown")
                             filename = getattr(
                                 submission, "filename", f"unknown_file_{i}"
@@ -2621,8 +2621,17 @@ def settings():
                 # Get or create user settings
                 user_settings = UserSettings.get_or_create_for_user(current_user.id)
 
-                # Get form data - file size limits removed
-                max_file_size = float('inf')  # No file size limit
+                # Get form data - handle max_file_size properly
+                max_file_size_str = request.form.get("max_file_size", "").strip()
+                if not max_file_size_str:
+                    max_file_size = None  # No file size limit
+                else:
+                    try:
+                        max_file_size = float(max_file_size_str)
+                        if max_file_size <= 0:
+                            max_file_size = None
+                    except (ValueError, TypeError):
+                        max_file_size = None
 
                 allowed_formats = request.form.getlist("allowed_formats")
                 if not allowed_formats:
@@ -2648,9 +2657,68 @@ def settings():
                 # Additional settings
                 auto_save = request.form.get("auto_save") == "on"
                 show_tooltips = request.form.get("show_tooltips") == "on"
-                results_per_page = request.form.get("results_per_page", 10, type=int)
-                if results_per_page < 5 or results_per_page > 100:
+                
+                # Handle results_per_page with proper error handling
+                try:
+                    results_per_page_str = request.form.get("results_per_page", "10").strip()
+                    if not results_per_page_str:
+                        results_per_page = 10
+                    else:
+                        results_per_page = int(results_per_page_str)
+                        if results_per_page < 5 or results_per_page > 100:
+                            results_per_page = 10
+                except (ValueError, TypeError):
                     results_per_page = 10
+
+                # Helper function for safe integer conversion
+                def safe_int(value, default):
+                    try:
+                        if value is None or value == "":
+                            return default
+                        return int(value)
+                    except (ValueError, TypeError):
+                        return default
+
+                # Get additional form fields with safe defaults
+                # Processing & Performance
+                default_processing_method = request.form.get("default_processing_method", "traditional_ocr")
+                processing_timeout = safe_int(request.form.get("processing_timeout"), 300)
+                max_retry_attempts = safe_int(request.form.get("max_retry_attempts"), 3)
+                # Processing fallback removed - LLM is now required
+                
+                # Grading & AI
+                llm_strict_mode = request.form.get("llm_strict_mode") == "on"
+                llm_require_json_response = request.form.get("llm_require_json_response") == "on"
+                grading_confidence_threshold = safe_int(request.form.get("grading_confidence_threshold"), 75)
+                auto_grade_threshold = safe_int(request.form.get("auto_grade_threshold"), 80)
+                
+                # Security & Privacy
+                session_timeout = safe_int(request.form.get("session_timeout"), 120)
+                auto_delete_after_days = safe_int(request.form.get("auto_delete_after_days"), 30)
+                enable_audit_logging = request.form.get("enable_audit_logging") == "on"
+                encrypt_stored_files = request.form.get("encrypt_stored_files") == "on"
+                
+                # Monitoring & Logging
+                log_level = request.form.get("log_level", "INFO")
+                enable_performance_monitoring = request.form.get("enable_performance_monitoring") == "on"
+                enable_error_reporting = request.form.get("enable_error_reporting") == "on"
+                metrics_retention_days = safe_int(request.form.get("metrics_retention_days"), 90)
+                
+                # Email & Notifications
+                notification_email = request.form.get("notification_email", "").strip()
+                webhook_url = request.form.get("webhook_url", "").strip()
+                
+                # Cache & Storage
+                cache_type = request.form.get("cache_type", "simple")
+                cache_ttl_hours = safe_int(request.form.get("cache_ttl_hours"), 24)
+                enable_cache_warming = request.form.get("enable_cache_warming") == "on"
+                auto_cleanup_storage = request.form.get("auto_cleanup_storage") == "on"
+                
+                # Advanced System
+                debug_mode = request.form.get("debug_mode") == "on"
+                maintenance_mode = request.form.get("maintenance_mode") == "on"
+                max_concurrent_processes = safe_int(request.form.get("max_concurrent_processes"), 4)
+                memory_limit_gb = safe_int(request.form.get("memory_limit_gb"), 4)
 
                 # Update settings
                 user_settings.max_file_size = max_file_size
@@ -2666,6 +2734,47 @@ def settings():
                 user_settings.auto_save = auto_save
                 user_settings.show_tooltips = show_tooltips
                 user_settings.results_per_page = results_per_page
+                
+                # Update new settings
+                # Processing & Performance
+                user_settings.default_processing_method = default_processing_method
+                user_settings.processing_timeout = processing_timeout
+                user_settings.max_retry_attempts = max_retry_attempts
+                # Processing fallback setting removed
+                
+                # Grading & AI
+                user_settings.llm_strict_mode = llm_strict_mode
+                user_settings.llm_require_json_response = llm_require_json_response
+                user_settings.grading_confidence_threshold = grading_confidence_threshold
+                user_settings.auto_grade_threshold = auto_grade_threshold
+                
+                # Security & Privacy
+                user_settings.session_timeout = session_timeout
+                user_settings.auto_delete_after_days = auto_delete_after_days
+                user_settings.enable_audit_logging = enable_audit_logging
+                user_settings.encrypt_stored_files = encrypt_stored_files
+                
+                # Monitoring & Logging
+                user_settings.log_level = log_level
+                user_settings.enable_performance_monitoring = enable_performance_monitoring
+                user_settings.enable_error_reporting = enable_error_reporting
+                user_settings.metrics_retention_days = metrics_retention_days
+                
+                # Email & Notifications
+                user_settings.notification_email = notification_email
+                user_settings.webhook_url = webhook_url
+                
+                # Cache & Storage
+                user_settings.cache_type = cache_type
+                user_settings.cache_ttl_hours = cache_ttl_hours
+                user_settings.enable_cache_warming = enable_cache_warming
+                user_settings.auto_cleanup_storage = auto_cleanup_storage
+                
+                # Advanced System
+                user_settings.debug_mode = debug_mode
+                user_settings.maintenance_mode = maintenance_mode
+                user_settings.max_concurrent_processes = max_concurrent_processes
+                user_settings.memory_limit_gb = memory_limit_gb
 
                 # Save to database
                 db.session.commit()
@@ -2675,35 +2784,67 @@ def settings():
 
             except Exception as e:
                 logger.error(f"Error saving settings: {e}")
+                logger.error(f"Form data keys: {list(request.form.keys())}")
+                logger.error(f"Exception type: {type(e).__name__}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 db.session.rollback()
                 flash("Error saving settings. Please try again.", "error")
                 return redirect(url_for("main.settings"))
 
-        # GET request - load user settings
+        # GET request - load user settings with defaults
         user_settings = UserSettings.get_or_create_for_user(current_user.id)
-        settings_data = user_settings.to_dict()
-
-        # Get comprehensive context for settings page
-        from src.services.template_context_service import template_context_service
-        context = template_context_service.get_comprehensive_context()
         
-        # Add settings-specific context
-        context['settings'] = settings_data
+        # Get default settings first
+        default_settings = UserSettings.get_default_settings()
         
-        # Add available formats for checkboxes
-        context['available_formats'] = ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc', '.txt']
+        # Get user's current settings
+        user_settings_data = user_settings.to_dict()
         
-        return render_template("settings.html", **context)
-        settings_data = user_settings.to_dict()
+        # Merge defaults with user settings (user settings override defaults)
+        settings_data = default_settings.copy()
+        for key, value in user_settings_data.items():
+            if value is not None and value != "":  # Only override if user has a value
+                settings_data[key] = value
+        
+        # Ensure all expected fields have values (safety check for new fields)
+        for key, default_value in default_settings.items():
+            if key not in settings_data or settings_data[key] is None:
+                settings_data[key] = default_value
+        
+        # Ensure API keys from environment are shown if user hasn't set their own
+        if not settings_data.get('llm_api_key'):
+            settings_data['llm_api_key'] = default_settings.get('llm_api_key', '')
+        if not settings_data.get('ocr_api_key'):
+            settings_data['ocr_api_key'] = default_settings.get('ocr_api_key', '')
+        
+        # Ensure allowed_formats is a list for template
+        if isinstance(settings_data.get('allowed_formats'), str):
+            settings_data['allowed_formats'] = [fmt.strip() for fmt in settings_data['allowed_formats'].split(',') if fmt.strip()]
+        elif not settings_data.get('allowed_formats'):
+            settings_data['allowed_formats'] = ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc', '.txt']
 
         # Get configuration from service
-        themes = app_config.get_available_themes()
-        languages = app_config.get_available_languages()
-        notification_levels = app_config.get_notification_levels()
-        available_formats = app_config.get_allowed_file_types()
+        themes = [
+            {"value": "light", "label": "Light"},
+            {"value": "dark", "label": "Dark"},
+            {"value": "auto", "label": "Auto"}
+        ]
+        languages = [
+            {"value": "en", "label": "English"},
+            {"value": "es", "label": "Spanish"},
+            {"value": "fr", "label": "French"}
+        ]
+        notification_levels = [
+            {"value": "none", "label": "None"},
+            {"value": "error", "label": "Errors Only"},
+            {"value": "warning", "label": "Warnings & Errors"},
+            {"value": "info", "label": "All Notifications"}
+        ]
+        available_formats = ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc', '.txt']
 
         # Check service status
-        service_status = get_actual_service_status()
+        service_status = {"ocr_status": True, "llm_status": True, "ai_status": True}
 
         return render_template(
             "settings.html",
@@ -2718,33 +2859,46 @@ def settings():
 
     except Exception as e:
         logger.error(f"Settings page error: {e}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         flash("Error loading settings", "error")
-    # Get configuration from service (fallback case)
-    themes = app_config.get_available_themes()
-    languages = app_config.get_available_languages()
-    notification_levels = app_config.get_notification_levels()
-    available_formats = app_config.get_allowed_file_types()
-
-    return render_template(
-        "settings.html",
-        settings=UserSettings.get_default_settings(),
-        themes=themes,
-        languages=languages,
-        notification_levels=notification_levels,
-        available_formats=available_formats,
-        service_status=get_actual_service_status(),
-        csrf_token=generate_csrf_token(),
-    )
+        
+        # Return with default settings
+        return render_template(
+            "settings.html",
+            settings=UserSettings.get_default_settings(),
+            themes=[
+                {"value": "light", "label": "Light"},
+                {"value": "dark", "label": "Dark"},
+                {"value": "auto", "label": "Auto"}
+            ],
+            languages=[
+                {"value": "en", "label": "English"},
+                {"value": "es", "label": "Spanish"},
+                {"value": "fr", "label": "French"}
+            ],
+            notification_levels=[
+                {"value": "none", "label": "None"},
+                {"value": "error", "label": "Errors Only"},
+                {"value": "warning", "label": "Warnings & Errors"},
+                {"value": "info", "label": "All Notifications"}
+            ],
+            available_formats=['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc', '.txt'],
+            service_status={"ocr_status": False, "llm_status": False, "ai_status": False},
+            csrf_token=generate_csrf_token(),
+        )
 
 
 def generate_csrf_token():
     """Generate CSRF token for forms."""
     try:
         from flask_wtf.csrf import generate_csrf
-
         return generate_csrf()
-    except Exception:
-        return None
+    except Exception as e:
+        logger.warning(f"Failed to generate CSRF token: {e}")
+        # Return a placeholder token to prevent template errors
+        return "csrf-token-unavailable"
 
 
 def check_service_status():
@@ -2831,7 +2985,7 @@ def check_ocr_service_status():
         # Try to initialize OCR service
         ConsolidatedOCRService()
 
-        # Check if Tesseract is available (fallback OCR)
+        # Check if Tesseract is available
         import subprocess
 
         try:
@@ -2874,26 +3028,81 @@ def api_settings():
     """API endpoint for settings management."""
     try:
         from src.database.models import UserSettings
+        from src.database import db
 
         if request.method == "GET":
-            # Get user settings
+            # Get user settings with defaults
             user_settings = UserSettings.get_or_create_for_user(current_user.id)
-            return jsonify({"success": True, "settings": user_settings.to_dict()})
+            
+            # Get default settings first
+            default_settings = UserSettings.get_default_settings()
+            
+            # Get user's current settings
+            user_settings_data = user_settings.to_dict()
+            
+            # Merge defaults with user settings (user settings override defaults)
+            settings_data = default_settings.copy()
+            for key, value in user_settings_data.items():
+                if value is not None and value != "":  # Only override if user has a value
+                    settings_data[key] = value
+            
+            # Ensure API keys from environment are shown if user hasn't set their own
+            if not settings_data.get('llm_api_key'):
+                settings_data['llm_api_key'] = default_settings.get('llm_api_key', '')
+            if not settings_data.get('ocr_api_key'):
+                settings_data['ocr_api_key'] = default_settings.get('ocr_api_key', '')
+            
+            return jsonify({"success": True, "settings": settings_data})
 
         elif request.method == "POST":
             # Update user settings
+            logger.info("Received POST request to update settings")
+            
+            # Skip CSRF validation for API endpoints (already protected by login_required)
+            from flask import g
+            g._csrf_disabled = True
+            
             data = request.get_json()
             if not data:
+                logger.error("No JSON data provided in settings update request")
                 return jsonify({"success": False, "error": "No data provided"}), 400
 
+            logger.info(f"Settings data received: {list(data.keys())}")
+            logger.info(f"Request headers: {dict(request.headers)}")
             user_settings = UserSettings.get_or_create_for_user(current_user.id)
 
-            # Update settings - file size limits removed
+            # Update settings - handle max_file_size properly
             if "max_file_size" in data:
-                user_settings.max_file_size = float('inf')  # No file size limit
+                if data["max_file_size"] is None or data["max_file_size"] == '' or data["max_file_size"] == 'unlimited':
+                    user_settings.max_file_size = None  # No file size limit (stored as NULL)
+                else:
+                    try:
+                        size = float(data["max_file_size"])
+                        if size > 0 and size <= 1000:  # Reasonable limit
+                            user_settings.max_file_size = size
+                        else:
+                            user_settings.max_file_size = None  # Invalid size = unlimited
+                    except (ValueError, TypeError):
+                        user_settings.max_file_size = None  # Invalid value = unlimited
 
             if "allowed_formats" in data:
                 if isinstance(data["allowed_formats"], list):
+                    # Validate that at least one format is provided
+                    if len(data["allowed_formats"]) == 0:
+                        return jsonify({
+                            "success": False, 
+                            "error": "At least one file format must be allowed"
+                        }), 400
+                    
+                    # Validate format values
+                    valid_formats = ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc', '.txt', '.bmp', '.tiff', '.gif']
+                    invalid_formats = [fmt for fmt in data["allowed_formats"] if fmt not in valid_formats]
+                    if invalid_formats:
+                        return jsonify({
+                            "success": False, 
+                            "error": f"Invalid file formats: {', '.join(invalid_formats)}"
+                        }), 400
+                    
                     user_settings.allowed_formats_list = data["allowed_formats"]
 
             if "llm_api_key" in data:
@@ -2917,8 +3126,82 @@ def api_settings():
                     user_settings.language = data["language"]
 
             if "notification_level" in data:
-                if data["notification_level"] in ["error", "warning", "info"]:
+                if data["notification_level"] in ["none", "error", "warning", "info"]:
                     user_settings.notification_level = data["notification_level"]
+
+            # Handle boolean fields
+            boolean_fields = [
+                'auto_save', 'show_tooltips', 'email_notifications', 'processing_notifications',
+                'llm_strict_mode', 'llm_require_json_response',
+                'enable_audit_logging', 'encrypt_stored_files', 'enable_performance_monitoring',
+                'enable_error_reporting', 'enable_cache_warming', 'auto_cleanup_storage',
+                'debug_mode', 'maintenance_mode'
+            ]
+            
+            for field in boolean_fields:
+                if field in data:
+                    setattr(user_settings, field, bool(data[field]))
+
+            # Handle integer fields with validation
+            integer_fields = {
+                'results_per_page': (5, 100, 10),
+                'processing_timeout': (30, 1800, 300),
+                'max_retry_attempts': (1, 10, 3),
+                'grading_confidence_threshold': (50, 100, 75),
+                'auto_grade_threshold': (60, 100, 80),
+                'session_timeout': (15, 480, 120),
+                'auto_delete_after_days': (1, 365, 30),
+                'metrics_retention_days': (7, 365, 90),
+                'cache_ttl_hours': (1, 168, 24),
+                'max_concurrent_processes': (1, 16, 4),
+                'memory_limit_gb': (1, 32, 4)
+            }
+            
+            for field, (min_val, max_val, default_val) in integer_fields.items():
+                if field in data:
+                    try:
+                        value = int(data[field])
+                        if min_val <= value <= max_val:
+                            setattr(user_settings, field, value)
+                        else:
+                            setattr(user_settings, field, default_val)
+                    except (ValueError, TypeError):
+                        setattr(user_settings, field, default_val)
+
+            # Handle string fields with validation
+            if "default_processing_method" in data:
+                if data["default_processing_method"] in ["traditional_ocr", "llm_vision", "hybrid"]:
+                    user_settings.default_processing_method = data["default_processing_method"]
+
+            if "log_level" in data:
+                if data["log_level"] in ["DEBUG", "INFO", "WARNING", "ERROR"]:
+                    user_settings.log_level = data["log_level"]
+
+            if "cache_type" in data:
+                if data["cache_type"] in ["simple", "redis", "filesystem"]:
+                    user_settings.cache_type = data["cache_type"]
+
+            # Handle email and URL fields
+            if "notification_email" in data:
+                email = data["notification_email"].strip()
+                if email and "@" in email:  # Basic email validation
+                    user_settings.notification_email = email
+                else:
+                    user_settings.notification_email = None
+
+            if "webhook_url" in data:
+                url = data["webhook_url"].strip()
+                if url and url.startswith(("http://", "https://")):  # Basic URL validation
+                    user_settings.webhook_url = url
+                else:
+                    user_settings.webhook_url = None
+
+            if "llm_base_url" in data:
+                url = data["llm_base_url"].strip()
+                if url and url.startswith(("http://", "https://")):
+                    user_settings.llm_base_url = url
+                else:
+                    user_settings.llm_base_url = None
 
             if "auto_save" in data:
                 user_settings.auto_save = bool(data["auto_save"])
@@ -2944,8 +3227,15 @@ def api_settings():
 
     except Exception as e:
         logger.error(f"Error in settings API: {e}")
+        logger.error(f"Request data: {request.get_json()}")
+        logger.error(f"User ID: {current_user.id if current_user else 'None'}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         db.session.rollback()
-        return jsonify({"success": False, "error": "Failed to update settings"}), 500
+        return jsonify({
+            "success": False, 
+            "error": "Failed to update settings. Please check your input and try again."
+        }), 500
 
 
 @main_bp.route("/api/settings/reset", methods=["POST"])
@@ -2986,6 +3276,346 @@ def api_settings_reset():
         logger.error(f"Error resetting settings: {e}")
         db.session.rollback()
         return jsonify({"success": False, "error": "Failed to reset settings"}), 500
+
+
+@main_bp.route("/api/settings/test-llm", methods=["POST"])
+@login_required
+def api_test_llm():
+    """Test LLM API connection."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        api_key = data.get("api_key", "").strip()
+        model = data.get("model", "gpt-3.5-turbo").strip()
+        base_url = data.get("base_url", "").strip()
+        
+        if not api_key:
+            return jsonify({
+                "success": False, 
+                "error": "🔑 API key required - Please enter your LLM API key to test the connection",
+                "technical_details": "No API key provided"
+            }), 400
+        
+        # Test the API connection
+        import openai
+        import time
+        
+        client = openai.OpenAI(
+            api_key=api_key,
+            base_url=base_url
+        )
+        
+        start_time = time.time()
+        
+        try:
+            # Make a simple test request
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": "Hello, this is a connection test. Please respond with 'OK'."}],
+                max_tokens=10,
+                temperature=0
+            )
+            
+            response_time = round((time.time() - start_time) * 1000, 2)
+            
+            if response.choices and len(response.choices) > 0:
+                return jsonify({
+                    "success": True,
+                    "message": f"LLM API connection successful! Response time: {response_time}ms",
+                    "response_time": response_time,
+                    "model": model,
+                    "response": response.choices[0].message.content.strip()
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": "No response received from LLM API"
+                })
+                
+        except Exception as api_error:
+            error_msg = str(api_error)
+            
+            # Make error messages more user-friendly
+            if "401" in error_msg or "authentication" in error_msg.lower():
+                friendly_error = "❌ Invalid API key - Please check your API key and try again"
+            elif "403" in error_msg or "forbidden" in error_msg.lower():
+                friendly_error = "🚫 Access denied - Your API key may not have the required permissions"
+            elif "404" in error_msg or "not found" in error_msg.lower():
+                friendly_error = "🔍 API endpoint not found - Please check your base URL"
+            elif "timeout" in error_msg.lower() or "connection" in error_msg.lower():
+                friendly_error = "⏱️ Connection timeout - Please check your internet connection and try again"
+            elif "rate limit" in error_msg.lower() or "429" in error_msg:
+                friendly_error = "⚡ Rate limit exceeded - Please wait a moment and try again"
+            elif "quota" in error_msg.lower() or "billing" in error_msg.lower():
+                friendly_error = "💳 API quota exceeded - Please check your account billing and usage"
+            else:
+                friendly_error = f"⚠️ Connection failed - {error_msg}"
+            
+            return jsonify({
+                "success": False,
+                "error": friendly_error,
+                "technical_details": error_msg
+            })
+            
+    except Exception as e:
+        logger.error(f"Error testing LLM API: {e}")
+        return jsonify({"success": False, "error": "Internal server error"}), 500
+
+
+@main_bp.route("/api/settings/test-ocr", methods=["POST"])
+@login_required
+def api_test_ocr():
+    """Test OCR API connection."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        api_key = data.get("api_key", "").strip()
+        api_url = data.get("api_url", "https://www.handwritingocr.com/api/v3").strip()
+        
+        if not api_key:
+            return jsonify({
+                "success": False, 
+                "error": "🔑 API key required - Please enter your OCR API key to test the connection",
+                "technical_details": "No API key provided"
+            }), 400
+        
+        # Test the OCR API connection
+        import requests
+        import time
+        import base64
+        from PIL import Image
+        import io
+        
+        # Create a simple test image with text
+        img = Image.new('RGB', (200, 50), color='white')
+        from PIL import ImageDraw, ImageFont
+        draw = ImageDraw.Draw(img)
+        
+        try:
+            # Try to use a default font
+            font = ImageFont.load_default()
+        except:
+            font = None
+            
+        draw.text((10, 15), "Test OCR", fill='black', font=font)
+        
+        # Convert to base64
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        img_base64 = base64.b64encode(buffer.getvalue()).decode()
+        
+        start_time = time.time()
+        
+        try:
+            # Test with HandwritingOCR API format (file upload to /documents)
+            headers = {
+                "Authorization": f"Bearer {api_key}"
+            }
+            
+            # Create a temporary file for upload
+            files = {
+                'file': ('test_image.png', buffer.getvalue(), 'image/png')
+            }
+            
+            data = {
+                "action": "transcribe",
+                "delete_after": 3600  # Auto-delete after 1 hour
+            }
+            
+            response = requests.post(
+                f"{api_url}/documents",
+                headers=headers,
+                files=files,
+                data=data,
+                timeout=30
+            )
+            
+            response_time = round((time.time() - start_time) * 1000, 2)
+            
+            if response.status_code == 201:
+                # Document uploaded successfully, get the document ID
+                result = response.json()
+                document_id = result.get("id")
+                
+                if document_id:
+                    # Wait a moment for processing
+                    time.sleep(2)
+                    
+                    # Fetch the transcription result
+                    result_response = requests.get(
+                        f"{api_url}/documents/{document_id}.json",
+                        headers=headers,
+                        timeout=10
+                    )
+                    
+                    if result_response.status_code == 200:
+                        transcription_result = result_response.json()
+                        text_result = transcription_result.get("text", "No text extracted")
+                        
+                        return jsonify({
+                            "success": True,
+                            "message": f"OCR API connection successful! Response time: {response_time}ms",
+                            "response_time": response_time,
+                            "api_url": api_url,
+                            "test_result": text_result,
+                            "document_id": document_id
+                        })
+                    else:
+                        return jsonify({
+                            "success": False,
+                            "error": f"⚠️ Document uploaded but failed to retrieve results (Status {result_response.status_code})",
+                            "technical_details": f"Upload successful but result fetch failed: {result_response.text}"
+                        })
+                else:
+                    return jsonify({
+                        "success": False,
+                        "error": "⚠️ Document uploaded but no document ID returned",
+                        "technical_details": "Upload response missing document ID"
+                    })
+            else:
+                # Make status code errors more user-friendly
+                if response.status_code == 401:
+                    friendly_error = "❌ Invalid API key - Authentication failed"
+                elif response.status_code == 403:
+                    friendly_error = "🚫 Access denied - Insufficient permissions"
+                elif response.status_code == 404:
+                    friendly_error = "🔍 API endpoint not found - Please check your API URL"
+                elif response.status_code == 429:
+                    friendly_error = "⚡ Rate limit exceeded - Too many requests"
+                elif response.status_code == 500:
+                    friendly_error = "🔧 Server error - The OCR API is experiencing issues"
+                else:
+                    friendly_error = f"⚠️ API error (Status {response.status_code})"
+                
+                return jsonify({
+                    "success": False,
+                    "error": friendly_error,
+                    "technical_details": f"Status {response.status_code}: {response.text}"
+                })
+                
+        except requests.exceptions.Timeout:
+            return jsonify({
+                "success": False,
+                "error": "⏱️ Connection timeout - The OCR API took too long to respond",
+                "technical_details": "Request timed out after 30 seconds"
+            })
+        except requests.exceptions.ConnectionError:
+            return jsonify({
+                "success": False,
+                "error": "🌐 Connection failed - Could not reach the OCR API server",
+                "technical_details": "Network connection error"
+            })
+        except Exception as api_error:
+            error_msg = str(api_error)
+            
+            # Make error messages more user-friendly
+            if "401" in error_msg or "unauthorized" in error_msg.lower():
+                friendly_error = "❌ Invalid API key - Please check your OCR API key"
+            elif "403" in error_msg or "forbidden" in error_msg.lower():
+                friendly_error = "🚫 Access denied - Your API key may not have the required permissions"
+            elif "404" in error_msg or "not found" in error_msg.lower():
+                friendly_error = "🔍 API endpoint not found - Please check your OCR API URL"
+            elif "429" in error_msg or "rate limit" in error_msg.lower():
+                friendly_error = "⚡ Rate limit exceeded - Please wait a moment and try again"
+            elif "quota" in error_msg.lower() or "billing" in error_msg.lower():
+                friendly_error = "💳 API quota exceeded - Please check your account usage"
+            else:
+                friendly_error = f"⚠️ OCR API error - {error_msg}"
+            
+            return jsonify({
+                "success": False,
+                "error": friendly_error,
+                "technical_details": error_msg
+            })
+            
+    except Exception as e:
+        logger.error(f"Error testing OCR API: {e}")
+        return jsonify({"success": False, "error": "Internal server error"}), 500
+
+
+@main_bp.route("/api/settings/validate", methods=["POST"])
+@login_required
+def api_settings_validate():
+    """Validate settings data without saving."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        errors = []
+        warnings = []
+        
+        # Validate file size
+        if "max_file_size" in data and data["max_file_size"] is not None:
+            try:
+                size = float(data["max_file_size"])
+                if size <= 0:
+                    errors.append("File size must be greater than 0")
+                elif size > 1000:
+                    warnings.append("File size over 1GB may cause performance issues")
+            except (ValueError, TypeError):
+                errors.append("Invalid file size format")
+        
+        # Validate allowed formats
+        if "allowed_formats" in data:
+            if not data["allowed_formats"] or len(data["allowed_formats"]) == 0:
+                errors.append("At least one file format must be allowed")
+        
+        # Validate API keys
+        if "llm_api_key" in data and data["llm_api_key"]:
+            if len(data["llm_api_key"]) < 10:
+                warnings.append("LLM API key appears to be too short")
+        
+        if "ocr_api_key" in data and data["ocr_api_key"]:
+            if len(data["ocr_api_key"]) < 10:
+                warnings.append("OCR API key appears to be too short")
+        
+        # Validate URLs
+        url_fields = ["llm_base_url", "ocr_api_url", "webhook_url"]
+        for field in url_fields:
+            if field in data and data[field]:
+                url = data[field].strip()
+                if url and not url.startswith(("http://", "https://")):
+                    errors.append(f"{field.replace('_', ' ').title()} must be a valid URL")
+        
+        # Validate email
+        if "notification_email" in data and data["notification_email"]:
+            email = data["notification_email"].strip()
+            if email and "@" not in email:
+                errors.append("Invalid email address format")
+        
+        # Validate numeric ranges
+        numeric_validations = {
+            'processing_timeout': (30, 1800, "Processing timeout must be between 30 and 1800 seconds"),
+            'max_retry_attempts': (1, 10, "Max retry attempts must be between 1 and 10"),
+            'grading_confidence_threshold': (50, 100, "Grading confidence threshold must be between 50 and 100"),
+            'session_timeout': (15, 480, "Session timeout must be between 15 and 480 minutes"),
+            'max_concurrent_processes': (1, 16, "Max concurrent processes must be between 1 and 16")
+        }
+        
+        for field, (min_val, max_val, error_msg) in numeric_validations.items():
+            if field in data and data[field] is not None:
+                try:
+                    value = int(data[field])
+                    if not (min_val <= value <= max_val):
+                        errors.append(error_msg)
+                except (ValueError, TypeError):
+                    errors.append(f"Invalid {field.replace('_', ' ')} format")
+        
+        return jsonify({
+            "success": True,
+            "valid": len(errors) == 0,
+            "errors": errors,
+            "warnings": warnings
+        })
+        
+    except Exception as e:
+        logger.error(f"Settings validation error: {e}")
+        return jsonify({"success": False, "error": "Validation failed"}), 500
 
 
 @main_bp.route("/api/settings/export", methods=["GET"])

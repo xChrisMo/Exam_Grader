@@ -444,12 +444,14 @@ class ConsolidatedLLMService(BaseService):
         """
         super().__init__("consolidated_llm_service")
 
-        # Configuration
-        self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
+        # Configuration with proper fallback chain
+        self.api_key = (api_key or 
+                       os.getenv("LLM_API_KEY") or 
+                       os.getenv("DEEPSEEK_API_KEY"))
         self.base_url = base_url
-        self.model = model or (
-            config.api.deepseek_model if hasattr(config, "api") else "deepseek-reasoner"
-        )
+        self.model = (model or 
+                     os.getenv("LLM_MODEL_NAME") or
+                     (config.api.deepseek_model if hasattr(config, "api") else "deepseek-chat"))
         self.temperature = temperature
         self.max_retries = max_retries
         self.retry_delay = retry_delay
@@ -505,10 +507,10 @@ class ConsolidatedLLMService(BaseService):
             except Exception as e:
                 logger.warning(f"Failed to initialize connection pool: {e}")
 
-        # Set initial status based on API key availability
+        # Set initial status based on API key availability - strict mode
         if not self.api_key:
-            self.status = ServiceStatus.DEGRADED
-            logger.warning("LLM service initialized without API key - degraded mode")
+            self.status = ServiceStatus.UNHEALTHY
+            logger.error("LLM service requires API key - service unavailable")
         else:
             self.status = ServiceStatus.UNKNOWN
             # Initialize client synchronously
@@ -688,8 +690,8 @@ class ConsolidatedLLMService(BaseService):
             return False
 
     def is_available(self) -> bool:
-        """Check if the LLM service is available."""
-        return self.status in [ServiceStatus.HEALTHY, ServiceStatus.DEGRADED]
+        """Check if the LLM service is available - strict mode, only HEALTHY is acceptable."""
+        return self.status == ServiceStatus.HEALTHY
 
     def _get_cache_key(self, *args) -> str:
         """Generate deterministic cache key from arguments."""
@@ -966,7 +968,7 @@ class ConsolidatedLLMService(BaseService):
                 # Log the error with enhanced context
                 enhanced_logging_service.log_error(
                     f"LLM API call failed on attempt {attempt + 1}",
-                    LogCategory.API_ERROR,
+                    LogCategory.API,
                     {
                         "error": str(e),
                         "attempt": attempt + 1,
@@ -1002,7 +1004,7 @@ class ConsolidatedLLMService(BaseService):
         fallback_result = fallback_manager.execute_with_fallback(
             primary_func=lambda: None,  # Already failed
             fallback_func=self._get_fallback_response,
-            operation="llm_api_call",
+            operation="llm_processing",
             context=fallback_context,
             params=params,
             error=last_error,
@@ -1204,10 +1206,22 @@ def get_llm_service_for_user(user_id: str = None) -> ConsolidatedLLMService:
         else:
             settings_dict = UserSettings.get_default_settings()
         
-        # Extract LLM configuration
-        api_key = settings_dict.get('llm_api_key') or os.getenv("DEEPSEEK_API_KEY")
-        model = settings_dict.get('llm_model', 'deepseek-chat')
-        base_url = settings_dict.get('llm_base_url') or "https://api.deepseek.com/v1"
+        # Extract LLM configuration with proper fallback chain
+        api_key = (settings_dict.get('llm_api_key') or 
+                  os.getenv("LLM_API_KEY") or 
+                  os.getenv("DEEPSEEK_API_KEY"))
+        base_url = (settings_dict.get('llm_base_url') or 
+                   os.getenv("LLM_API_URL") or 
+                   os.getenv("DEEPSEEK_API_URL") or 
+                   "https://api.deepseek.com/v1")
+        
+        # Set appropriate default model based on base URL
+        if "deepseek" in base_url.lower():
+            default_model = "deepseek-chat"
+        else:
+            default_model = "gpt-3.5-turbo"
+            
+        model = settings_dict.get('llm_model', default_model)
         
         # Create service with user settings
         return ConsolidatedLLMService(
