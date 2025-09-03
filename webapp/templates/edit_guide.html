@@ -1,0 +1,302 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <nav class="flex" aria-label="Breadcrumb">
+            <ol class="inline-flex items-center space-x-1 md:space-x-3">
+                <li class="inline-flex items-center">
+                    <a href="{{ url_for('main.guides') }}"
+                        class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600">
+                        <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path
+                                d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z">
+                            </path>
+                        </svg>
+                        Marking Guides
+                    </a>
+                </li>
+                <li>
+                    <div class="flex items-center">
+                        <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd"
+                                d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                                clip-rule="evenodd"></path>
+                        </svg>
+                        <a href="{{ url_for('main.guide_details', guide_id=guide.id) }}"
+                            class="ml-1 text-sm font-medium text-gray-700 hover:text-blue-600 md:ml-2">{{ guide.title }}</a>
+                    </div>
+                </li>
+                <li>
+                    <div class="flex items-center">
+                        <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd"
+                                d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                                clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="ml-1 text-sm font-medium text-gray-500 md:ml-2">Edit</span>
+                    </div>
+                </li>
+            </ol>
+        </nav>
+        <h1 class="mt-2 text-3xl font-bold text-gray-900">Edit Marking Guide</h1>
+        <p class="mt-2 text-lg text-gray-600">Modify the details and questions for your marking guide.</p>
+    </div>
+
+    <!-- Edit Form -->
+    <form method="POST" class="space-y-8">
+        <!-- Basic Information -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900">Basic Information</h2>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                <div>
+                    <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
+                    <input type="text" id="title" name="title" value="{{ guide.title }}" required
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                </div>
+                <div>
+                    <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+                    <textarea id="description" name="description" rows="6"
+                        placeholder="Enter a detailed description of this marking guide..."
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 resize-y min-h-[120px]">{{ guide.description or '' }}</textarea>
+                    <p class="mt-1 text-sm text-gray-500">Provide a comprehensive description to help identify and understand this marking guide.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Questions Section -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-semibold text-gray-900">Questions & Marking Criteria</h2>
+                    <button type="button" id="add-question-btn"
+                        class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
+                        Add Question
+                    </button>
+                </div>
+            </div>
+            <div class="px-6 py-4">
+                <div id="questions-container" class="space-y-6">
+                    {% if guide.questions %}
+                        {% for question in guide.questions %}
+                        <div class="question-item border border-gray-200 rounded-lg p-4" data-question-index="{{ loop.index0 }}">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-medium text-gray-900">Question {{ loop.index }}</h3>
+                                <button type="button" class="remove-question-btn text-red-600 hover:text-red-800">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="space-y-6">
+                                <!-- Question Text - Full Width -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Question Text</label>
+                                    <textarea name="question_{{ loop.index0 }}_text" rows="8" required
+                                        placeholder="Enter the complete question text that students will see. Include all parts, sub-questions, and any specific instructions..."
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 resize-y min-h-[160px] max-w-none">{{ question.text or '' }}</textarea>
+                                    <p class="mt-1 text-sm text-gray-500">Provide the complete question text exactly as students will see it. Include any diagrams, formulas, or special formatting instructions.</p>
+                                </div>
+                                
+                                <!-- Marks -->
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Marks</label>
+                                        <input type="number" name="question_{{ loop.index0 }}_marks" value="{{ question.marks or 0 }}" min="0" step="0.5" required
+                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                                    </div>
+                                </div>
+                                
+                                <!-- Criteria - Full Width -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Marking Criteria</label>
+                                    <textarea name="question_{{ loop.index0 }}_criteria" rows="5"
+                                        placeholder="Enter detailed marking criteria, rubric details, and grading guidelines. Include point allocations, key concepts to look for, and assessment standards..."
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 resize-y min-h-[100px] max-w-none">{{ question.criteria or '' }}</textarea>
+                                    <p class="mt-1 text-sm text-gray-500">Provide comprehensive marking criteria including point breakdowns, key concepts, and assessment guidelines to ensure consistent grading.</p>
+                                </div>
+                                
+                                <!-- Expected Answer - Full Width -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Expected Answer</label>
+                                    <textarea name="question_{{ loop.index0 }}_answer" rows="6"
+                                        placeholder="Enter the model answer or key points students should include..."
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 resize-y min-h-[120px]">{{ question.answer or '' }}</textarea>
+                                    <p class="mt-1 text-sm text-gray-500">Provide a comprehensive model answer to guide the AI grading process.</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                
+                <!-- Hidden input to track question count -->
+                <input type="hidden" id="question-count" name="question_count" value="{{ guide.questions|count_grouped_questions if guide.questions else 0 }}">
+                
+                {% if not guide.questions or guide.questions|count_grouped_questions == 0 %}
+                <div id="no-questions-message" class="text-center py-12 text-gray-500">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">No questions yet</h3>
+                    <p class="mt-1 text-sm text-gray-500">Click "Add Question" to start building your marking guide.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-end space-x-3">
+            <a href="{{ url_for('main.guide_details', guide_id=guide.id) }}"
+                class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+                Cancel
+            </a>
+            <button type="submit"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Save Changes
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container" class="fixed top-4 right-4 z-50"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let questionCount = parseInt(document.getElementById('question-count').value) || 0;
+
+    // Add question functionality
+    document.getElementById('add-question-btn').addEventListener('click', function() {
+        addQuestion();
+    });
+
+    // Remove question functionality
+    document.addEventListener('click', function(event) {
+        if (event.target.closest('.remove-question-btn')) {
+            const questionItem = event.target.closest('.question-item');
+            removeQuestion(questionItem);
+        }
+    });
+
+    function addQuestion() {
+        const container = document.getElementById('questions-container');
+        const noQuestionsMessage = document.getElementById('no-questions-message');
+        
+        // Hide no questions message
+        if (noQuestionsMessage) {
+            noQuestionsMessage.style.display = 'none';
+        }
+
+        const questionHTML = `
+            <div class="question-item border border-gray-200 rounded-lg p-4" data-question-index="${questionCount}">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Question ${questionCount + 1}</h3>
+                    <button type="button" class="remove-question-btn text-red-600 hover:text-red-800">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="space-y-6">
+                    <!-- Question Text - Full Width -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Question Text</label>
+                        <textarea name="question_${questionCount}_text" rows="8" required
+                            placeholder="Enter the complete question text that students will see. Include all parts, sub-questions, and any specific instructions..."
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 resize-y min-h-[160px] max-w-none"></textarea>
+                        <p class="mt-1 text-sm text-gray-500">Provide the complete question text exactly as students will see it. Include any diagrams, formulas, or special formatting instructions.</p>
+                    </div>
+                    
+                    <!-- Marks -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Marks</label>
+                            <input type="number" name="question_${questionCount}_marks" value="0" min="0" step="0.5" required
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                        </div>
+                    </div>
+                    
+                    <!-- Criteria - Full Width -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Marking Criteria</label>
+                        <textarea name="question_${questionCount}_criteria" rows="5"
+                            placeholder="Enter detailed marking criteria, rubric details, and grading guidelines. Include point allocations, key concepts to look for, and assessment standards..."
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 resize-y min-h-[100px] max-w-none"></textarea>
+                        <p class="mt-1 text-sm text-gray-500">Provide comprehensive marking criteria including point breakdowns, key concepts, and assessment guidelines to ensure consistent grading.</p>
+                    </div>
+                    
+                    <!-- Expected Answer - Full Width -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Expected Answer</label>
+                        <textarea name="question_${questionCount}_answer" rows="6"
+                            placeholder="Enter the model answer or key points students should include..."
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 resize-y min-h-[120px]"></textarea>
+                        <p class="mt-1 text-sm text-gray-500">Provide a comprehensive model answer to guide the AI grading process.</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.insertAdjacentHTML('beforeend', questionHTML);
+        questionCount++;
+        updateQuestionCount();
+        updateQuestionNumbers();
+    }
+
+    function removeQuestion(questionItem) {
+        if (confirm('Are you sure you want to remove this question?')) {
+            questionItem.remove();
+            questionCount--;
+            updateQuestionCount();
+            updateQuestionNumbers();
+            
+            // Show no questions message if no questions left
+            const container = document.getElementById('questions-container');
+            const noQuestionsMessage = document.getElementById('no-questions-message');
+            if (container.children.length === 0 && noQuestionsMessage) {
+                noQuestionsMessage.style.display = 'block';
+            }
+        }
+    }
+
+    function updateQuestionCount() {
+        document.getElementById('question-count').value = questionCount;
+    }
+
+    function updateQuestionNumbers() {
+        const questionItems = document.querySelectorAll('.question-item');
+        questionItems.forEach((item, index) => {
+            const header = item.querySelector('h3');
+            if (header) {
+                header.textContent = `Question ${index + 1}`;
+            }
+            
+            // Update form field names
+            const inputs = item.querySelectorAll('input, textarea');
+            inputs.forEach(input => {
+                const name = input.getAttribute('name');
+                if (name && name.includes('question_')) {
+                    const newName = name.replace(/question_\d+_/, `question_${index}_`);
+                    input.setAttribute('name', newName);
+                }
+            });
+            
+            item.setAttribute('data-question-index', index);
+        });
+    }
+</script>
+{% endblock %}

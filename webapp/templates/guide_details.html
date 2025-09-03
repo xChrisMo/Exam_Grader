@@ -1,0 +1,675 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <nav class="flex" aria-label="Breadcrumb">
+                    <ol class="inline-flex items-center space-x-1 md:space-x-3">
+                        <li class="inline-flex items-center">
+                            <a href="{{ url_for('main.guides') }}"
+                                class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600">
+                                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path
+                                        d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z">
+                                    </path>
+                                </svg>
+                                Marking Guides
+                            </a>
+                        </li>
+                        <li>
+                            <div class="flex items-center">
+                                <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd"
+                                        d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                                        clip-rule="evenodd"></path>
+                                </svg>
+                                <span class="ml-1 text-sm font-medium text-gray-500 md:ml-2">Guide Details</span>
+                            </div>
+                        </li>
+                    </ol>
+                </nav>
+                <h1 class="mt-2 text-3xl font-bold text-gray-900">{{ guide.title }}</h1>
+                {% if guide.description %}
+                <p class="mt-2 text-lg text-gray-600">{{ guide.description }}</p>
+                {% endif %}
+            </div>
+            <div class="flex space-x-3">
+                <a href="{{ url_for('main.guides') }}"
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    Back to Guides
+                </a>
+                <button type="button" data-action="select-guide" data-guide-id="{{ guide.id }}"
+                    data-guide-name="{{ guide.title }}"
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                    Use This Guide
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Guide Overview -->
+    <div class="bg-white shadow rounded-lg mb-8">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-900">Guide Overview</h2>
+        </div>
+        <div class="px-6 py-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="text-center">
+                    <div class="text-3xl font-bold text-blue-600">{{ guide.questions|count_grouped_questions if guide.questions else 0 }}
+                    </div>
+                    <div class="text-sm text-gray-500">Questions</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl font-bold text-green-600">{{ guide.total_marks or 0 }}</div>
+                    <div class="text-sm text-gray-500">Total Marks</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl font-bold text-purple-600">{{ (guide.file_size / 1024)|round(1) if
+                        guide.file_size else 0 }}</div>
+                    <div class="text-sm text-gray-500">KB</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl font-bold text-orange-600">{{ guide.file_type.upper() if guide.file_type else
+                        'N/A' }}</div>
+                    <div class="text-sm text-gray-500">File Type</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Guide Information -->
+    <div class="bg-white shadow rounded-lg mb-8">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-900">Guide Information</h2>
+        </div>
+        <div class="px-6 py-4">
+            <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">File Name</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ guide.filename }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Created Date</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ guide.created_at.strftime('%B %d, %Y at %I:%M %p') }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Last Modified</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ guide.updated_at.strftime('%B %d, %Y at %I:%M %p') }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">File Size</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ (guide.file_size / 1024)|round(2) if guide.file_size else
+                        0 }} KB</dd>
+                </div>
+                {% if guide.content_hash %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Content Hash</dt>
+                    <dd class="mt-1 text-sm text-gray-900 font-mono">{{ guide.content_hash[:16] }}...</dd>
+                </div>
+                {% endif %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Status</dt>
+                    <dd class="mt-1">
+                        {% if guide.is_active %}
+                        <span
+                            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            Active
+                        </span>
+                        {% else %}
+                        <span
+                            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            Inactive
+                        </span>
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+
+    <!-- Questions Section -->
+    <div class="bg-white shadow rounded-lg mb-8">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-900">Questions & Marking Criteria</h2>
+        </div>
+        <div class="px-6 py-4">
+            {% if guide.questions and guide.questions|count_grouped_questions > 0 %}
+            <div class="space-y-6">
+                {% set question_counter = namespace(value=0) %}
+                {% for question in guide.questions %}
+                {% set question_counter.value = question_counter.value + 1 %}
+                <div class="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="flex items-center space-x-3">
+                            <h3 class="text-lg font-medium text-gray-900">Question {{ question.number or question_counter.value }}</h3>
+                            {% if question.type == 'grouped' %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                                </svg>
+                                Multi-part
+                            </span>
+                            {% endif %}
+                        </div>
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                            {{ question.marks or 0 }} marks
+                        </span>
+                    </div>
+                    
+                    {% if question.text %}
+                    <div class="mb-4">
+                        <h4 class="text-sm font-medium text-gray-700 mb-2">Question Text:</h4>
+                        {% if question.type == 'grouped' %}
+                        <!-- Grouped Question Display -->
+                        <div class="text-sm text-gray-700 bg-gray-50 p-4 rounded-lg border-l-4 border-purple-400">
+                            {% set question_lines = question.text.split('\n') %}
+                            {% set main_question = '' %}
+                            {% set sub_parts = [] %}
+                            
+                            {% for line in question_lines %}
+                                {% if line.strip() %}
+                                    {% if line.strip().startswith(('a)', 'b)', 'c)', 'd)', 'e)', 'f)', 'g)', 'h)', 'i)', 'j)')) %}
+                                        {% set _ = sub_parts.append(line.strip()) %}
+                                    {% elif line.strip().startswith(('1a)', '1b)', '1c)', '2a)', '2b)', '2c)', '3a)', '3b)', '3c)')) %}
+                                        {% set _ = sub_parts.append(line.strip()) %}
+                                    {% elif not line.strip().startswith('Question') %}
+                                        {% if not main_question %}
+                                            {% set main_question = line.strip() %}
+                                        {% else %}
+                                            {% set main_question = main_question + ' ' + line.strip() %}
+                                        {% endif %}
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if main_question %}
+                            <div class="font-semibold text-gray-800 mb-4">{{ main_question }}</div>
+                            {% endif %}
+                            
+                            {% if sub_parts %}
+                            <div class="space-y-3">
+                                {% for sub_part in sub_parts %}
+                                <div class="pl-4 border-l-2 border-purple-200">
+                                    <span class="font-medium text-purple-600">{{ sub_part }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            
+                            {% if question.sub_parts %}
+                            <div class="mt-4 pt-3 border-t border-gray-200">
+                                <div class="text-xs text-gray-500">
+                                    Sub-parts: {{ question.sub_parts|join(', ') }}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <!-- Regular Question Display -->
+                        <div class="text-sm text-gray-700 bg-gray-50 p-4 rounded-lg border-l-4 border-blue-400">
+                            {% set question_lines = question.text.split('\n') %}
+                            {% for line in question_lines %}
+                                {% if line.strip() %}
+                                    {% if line.strip().startswith('Question') %}
+                                        <div class="font-semibold text-gray-800 mb-2">{{ line.strip() }}</div>
+                                    {% else %}
+                                        <div class="mt-1">{{ line.strip() }}</div>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    {% if question.criteria %}
+                    <div class="mb-4">
+                        <h4 class="text-sm font-medium text-gray-700 mb-2">Marking Criteria:</h4>
+                        <div class="text-sm text-gray-700 bg-green-50 p-4 rounded-lg border-l-4 border-green-400">
+                            {% set criteria_lines = question.criteria.split('\n') %}
+                            {% for line in criteria_lines %}
+                                {% if line.strip() %}
+                                    {% if line.strip().startswith(('Part a:', 'Part b:', 'Part c:', 'Part d:', 'Part e:', 'Part f:')) %}
+                                        <div class="mt-3 font-medium text-green-700">{{ line.strip() }}</div>
+                                    {% elif '(' in line and 'mark' in line %}
+                                        <div class="mt-1">{{ line.strip() }}</div>
+                                    {% else %}
+                                        <div class="mt-1">{{ line.strip() }}</div>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if question.answer %}
+                    <div class="mb-4">
+                        <h4 class="text-sm font-medium text-gray-700 mb-2">Expected Answer:</h4>
+                        <div class="text-sm text-gray-700 bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-400">
+                            {% set answer_lines = question.answer.split('\n') %}
+                            {% for line in answer_lines %}
+                                {% if line.strip() %}
+                                    <div class="mt-1">{{ line.strip() }}</div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Question Summary -->
+                    <div class="mt-4 pt-3 border-t border-gray-200">
+                        <div class="flex items-center justify-between text-xs text-gray-500">
+                            <span>
+                                {% set has_subparts = question.text and ('a)' in question.text or 'b)' in question.text) %}
+                                {% if has_subparts %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full bg-purple-100 text-purple-700 mr-2">
+                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        Multi-part Question
+                                    </span>
+                                {% else %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full bg-gray-100 text-gray-700 mr-2">
+                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        Single Question
+                                    </span>
+                                {% endif %}
+                            </span>
+                            <span>Question {{ question_counter.value }} of {{ guide.questions|count_grouped_questions }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-12">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <h3 class="mt-2 text-sm font-medium text-gray-900">No questions extracted yet</h3>
+                <p class="mt-1 text-sm text-gray-500">Questions will appear here after the guide is processed by the AI
+                    system.</p>
+                <div class="mt-6">
+                    <button type="button" id="process-guide-btn" data-guide-id="{{ guide.id }}"
+                        class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        <span id="process-btn-text">Process Guide</span>
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Content Preview -->
+    {% if guide.content_text %}
+    <div class="bg-white shadow rounded-lg mb-8">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-900">Content Preview</h2>
+        </div>
+        <div class="px-6 py-4">
+            <div class="bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto">
+                <pre
+                    class="text-sm text-gray-700 whitespace-pre-wrap">{{ guide.content_text }}</pre>
+            </div>
+            {% if guide.content_text|length > 2000 %}
+            <p class="mt-2 text-sm text-gray-500">Showing first 2000 characters. Full content available in the original
+                file.</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-900">Actions</h2>
+        </div>
+        <div class="px-6 py-4">
+            <div class="flex flex-wrap gap-3">
+                <button type="button" data-action="select-guide" data-guide-id="{{ guide.id }}"
+                    data-guide-name="{{ guide.title }}"
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                    Use This Guide
+                </button>
+                <button type="button" data-action="download-guide" data-guide-id="{{ guide.id }}"
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Download Original
+                </button>
+                <button type="button" data-action="edit-guide" data-guide-id="{{ guide.id }}"
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit Guide
+                </button>
+                <button type="button" data-action="delete-guide" data-guide-id="{{ guide.id }}"
+                    data-guide-name="{{ guide.title }}"
+                    class="inline-flex items-center px-4 py-2 border border-red-300 shadow-sm text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete Guide
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container" class="fixed top-4 right-4 z-50"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Toast notification system
+    function showToast(message, type) {
+        type = type || 'success';
+        const toast = document.createElement('div');
+        toast.className = 'toast transform transition-all duration-300 ease-in-out translate-x-full';
+
+        const bgColor = type === 'success' ? 'bg-green-500' :
+            type === 'error' ? 'bg-red-500' :
+                type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500';
+
+        const icons = {
+            success: '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>',
+            error: '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>',
+            warning: '<path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>',
+            info: '<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>'
+        };
+
+        const iconPath = icons[type] || icons.info;
+
+        // Escape HTML to prevent XSS
+        const escapeHtml = (text) => {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        };
+
+        const safeMessage = escapeHtml(message);
+
+        toast.innerHTML =
+            '<div class="' + bgColor + ' text-white px-6 py-4 rounded-lg shadow-lg flex items-center max-w-sm">' +
+            '<svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">' +
+            iconPath +
+            '</svg>' +
+            '<span>' + safeMessage + '</span>' +
+            '</div>';
+
+        const container = document.getElementById('toast-container');
+        if (container) {
+            container.appendChild(toast);
+        } else {
+            document.body.appendChild(toast);
+        }
+
+        // Show toast
+        setTimeout(function () {
+            toast.classList.remove('translate-x-full');
+        }, 100);
+
+        // Hide and remove toast
+        setTimeout(function () {
+            toast.classList.add('translate-x-full');
+            setTimeout(function () {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 300);
+        }, 4000);
+    }
+
+    // Select guide functionality
+    function selectGuide(guideId, guideName) {
+        // Escape quotes in guideName to prevent syntax errors
+        const safeGuideName = String(guideName).replace(/"/g, '\\"');
+        const confirmMessage = 'Are you sure you want to set "' + safeGuideName + '" as your active marking guide?';
+
+        if (confirm(confirmMessage)) {
+            fetch('/api/select-guide', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name=csrf-token]') ? document.querySelector('meta[name=csrf-token]').getAttribute('content') : ''
+                },
+                body: JSON.stringify({
+                    guide_id: guideId,
+                    guide_name: guideName
+                })
+            })
+                .then(function (response) {
+                    return response.json();
+                })
+                .then(function (data) {
+                    if (data.success) {
+                        const successMessage = '"' + safeGuideName + '" is now your active marking guide';
+                        showToast(successMessage, 'success');
+                        setTimeout(function () {
+                            window.location.href = '/guides';
+                        }, 1500);
+                    } else {
+                        showToast(data.message || 'Failed to select guide', 'error');
+                    }
+                })
+                .catch(function (error) {
+                    console.error('Error selecting guide:', error);
+                    showToast('Failed to select guide', 'error');
+                });
+        }
+    }
+
+    // Download guide functionality
+    function downloadGuide(guideId) {
+        try {
+            // Create a temporary link to trigger download
+            const downloadUrl = `/api/download-guide/${guideId}`;
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showToast('Download started', 'success');
+        } catch (error) {
+            console.error('Download error:', error);
+            showToast('Failed to download file', 'error');
+        }
+    }
+
+    // Edit guide functionality
+    function editGuide(guideId) {
+        try {
+            // Navigate to the edit page
+            window.location.href = `/guides/${guideId}/edit`;
+        } catch (error) {
+            console.error('Edit navigation error:', error);
+            showToast('Failed to open editor', 'error');
+        }
+    }
+
+    // Delete guide functionality
+    function confirmDeleteGuide(guideId, guideName) {
+        // Escape quotes in guideName to prevent syntax errors
+        const safeGuideName = String(guideName).replace(/"/g, '\\"');
+        const confirmMessage = 'Are you sure you want to delete "' + safeGuideName + '"? This action cannot be undone.';
+
+        if (confirm(confirmMessage)) {
+            fetch('/api/delete-guide', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name=csrf-token]') ? document.querySelector('meta[name=csrf-token]').getAttribute('content') : ''
+                },
+                body: JSON.stringify({
+                    guide_id: guideId
+                })
+            })
+                .then(function (response) {
+                    return response.json();
+                })
+                .then(function (data) {
+                    if (data.success) {
+                        showToast('Guide deleted successfully', 'success');
+                        setTimeout(function () {
+                            window.location.href = '/guides';
+                        }, 1500);
+                    } else {
+                        showToast(data.message || 'Failed to delete guide', 'error');
+                    }
+                })
+                .catch(function (error) {
+                    console.error('Error deleting guide:', error);
+                    showToast('Failed to delete guide', 'error');
+                });
+        }
+    }
+
+    // Process guide functionality
+    function processGuide(guideId) {
+        const processBtn = document.getElementById('process-guide-btn');
+        const processBtnText = document.getElementById('process-btn-text');
+        
+        if (!processBtn || !processBtnText) {
+            showToast('Process button not found', 'error');
+            return;
+        }
+
+        // Disable button and show loading state
+        processBtn.disabled = true;
+        processBtnText.textContent = 'Processing...';
+        
+        // Add loading spinner
+        const spinner = document.createElement('div');
+        spinner.className = 'animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2';
+        spinner.id = 'process-spinner';
+        processBtn.insertBefore(spinner, processBtnText);
+
+        fetch('/api/process-guide', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name=csrf-token]') ? document.querySelector('meta[name=csrf-token]').getAttribute('content') : ''
+            },
+            body: JSON.stringify({
+                guide_id: guideId
+            })
+        })
+        .then(function (response) {
+            return response.json();
+        })
+        .then(function (data) {
+            if (data.success) {
+                showToast(data.message || 'Guide processed successfully', 'success');
+                // Reload the page to show the extracted questions
+                setTimeout(function () {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                showToast(data.message || 'Failed to process guide', 'error');
+                // Re-enable button
+                processBtn.disabled = false;
+                processBtnText.textContent = 'Process Guide';
+                const spinner = document.getElementById('process-spinner');
+                if (spinner) {
+                    spinner.remove();
+                }
+            }
+        })
+        .catch(function (error) {
+            console.error('Error processing guide:', error);
+            showToast('Failed to process guide', 'error');
+            // Re-enable button
+            processBtn.disabled = false;
+            processBtnText.textContent = 'Process Guide';
+            const spinner = document.getElementById('process-spinner');
+            if (spinner) {
+                spinner.remove();
+            }
+        });
+    }
+
+    // Event delegation for button clicks
+    document.addEventListener('DOMContentLoaded', function () {
+        // Handle process guide button
+        const processGuideBtn = document.getElementById('process-guide-btn');
+        if (processGuideBtn) {
+            processGuideBtn.addEventListener('click', function () {
+                const guideId = this.getAttribute('data-guide-id');
+                if (guideId) {
+                    processGuide(guideId);
+                }
+            });
+        }
+
+        document.addEventListener('click', function (event) {
+            const button = event.target.closest('button[data-action]');
+            if (!button) return;
+
+            const action = button.getAttribute('data-action');
+            const guideId = button.getAttribute('data-guide-id');
+            const guideName = button.getAttribute('data-guide-name');
+
+            switch (action) {
+                case 'select-guide':
+                    if (guideId && guideName) {
+                        selectGuide(guideId, guideName);
+                    }
+                    break;
+                case 'download-guide':
+                    if (guideId) {
+                        downloadGuide(guideId);
+                    }
+                    break;
+                case 'edit-guide':
+                    if (guideId) {
+                        editGuide(guideId);
+                    }
+                    break;
+                case 'delete-guide':
+                    if (guideId && guideName) {
+                        confirmDeleteGuide(guideId, guideName);
+                    }
+                    break;
+            }
+        });
+    });
+</script>
+{% endblock %}

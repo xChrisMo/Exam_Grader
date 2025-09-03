@@ -2,18 +2,27 @@
 Service modules for external integrations.
 """
 
-from src.services.grading_service import GradingService
-from src.services.llm_service import LLMService, LLMServiceError
-from src.services.mapping_service import MappingService
-
 # Import service classes only (no initialization)
-from src.services.ocr_service import OCRService, OCRServiceError
+from .consolidated_ocr_service import ConsolidatedOCRService, OCRServiceError
+from .consolidated_llm_service import ConsolidatedLLMService, LLMServiceError
+from .consolidated_mapping_service import ConsolidatedMappingService
+from .consolidated_grading_service import ConsolidatedGradingService
+
+# Backward compatibility aliases
+OCRService = ConsolidatedOCRService
+LLMService = ConsolidatedLLMService
+MappingService = ConsolidatedMappingService
+GradingService = ConsolidatedGradingService
 
 __all__ = [
     "OCRService",
-    "OCRServiceError",
+    "OCRServiceError", 
     "LLMService",
     "LLMServiceError",
     "MappingService",
     "GradingService",
+    "ConsolidatedOCRService",
+    "ConsolidatedLLMService", 
+    "ConsolidatedMappingService",
+    "ConsolidatedGradingService",
 ]

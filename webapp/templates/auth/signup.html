@@ -12,10 +12,10 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
             </svg>
         </div>
-        <h2 class="mt-4 text-center text-3xl font-extrabold text-gray-900">
+        <h2 class="mt-4 text-center text-3xl font-extrabold text-gray-900" data-i18n="create_account_title">
             Create Your Account
         </h2>
-        <p class="mt-2 text-center text-sm text-gray-600">
+        <p class="mt-2 text-center text-sm text-gray-600" data-i18n="create_account_subtitle">
             Join thousands of educators using AI-powered grading
         </p>
     </div>
@@ -61,7 +61,7 @@
         <div class="space-y-4">
             <!-- Username Field -->
             <div>
-                <label for="username" class="block text-sm font-medium text-gray-700 mb-1">
+                <label for="username" class="block text-sm font-medium text-gray-700 mb-1" data-i18n="username">
                     Username
                 </label>
                 <div class="relative">
@@ -72,16 +72,16 @@
                     </div>
                     <input id="username" name="username" type="text" required 
                            class="auth-input block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors sm:text-sm" 
-                           placeholder="Choose a username" 
+                           placeholder="{{ _('choose_username') }}" 
                            value="{{ username or '' }}"
                            autocomplete="username">
                 </div>
-                <p class="mt-1 text-xs text-gray-500">At least 3 characters, letters, numbers, hyphens, and underscores only</p>
+                <p class="mt-1 text-xs text-gray-500" data-i18n="username_requirements">At least 3 characters, letters, numbers, hyphens, and underscores only</p>
             </div>
 
             <!-- Email Field -->
             <div>
-                <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
+                <label for="email" class="block text-sm font-medium text-gray-700 mb-1" data-i18n="email_address">
                     Email Address
                 </label>
                 <div class="relative">
@@ -92,7 +92,7 @@
                     </div>
                     <input id="email" name="email" type="email" required 
                            class="auth-input block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors sm:text-sm" 
-                           placeholder="Enter your email address" 
+                           placeholder="{{ _('enter_email') }}" 
                            value="{{ email or '' }}"
                            autocomplete="email">
                 </div>
@@ -100,7 +100,7 @@
 
             <!-- Password Field -->
             <div>
-                <label for="password" class="block text-sm font-medium text-gray-700 mb-1">
+                <label for="password" class="block text-sm font-medium text-gray-700 mb-1" data-i18n="password">
                     Password
                 </label>
                 <div class="relative">
@@ -111,14 +111,14 @@
                     </div>
                     <input id="password" name="password" type="password" required 
                            class="auth-input block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors sm:text-sm" 
-                           placeholder="Create a strong password"
+                           placeholder="{{ _('create_strong_password') }}"
                            autocomplete="new-password">
                 </div>
             </div>
 
             <!-- Confirm Password Field -->
             <div>
-                <label for="confirm_password" class="block text-sm font-medium text-gray-700 mb-1">
+                <label for="confirm_password" class="block text-sm font-medium text-gray-700 mb-1" data-i18n="confirm_password">
                     Confirm Password
                 </label>
                 <div class="relative">
@@ -129,7 +129,7 @@
                     </div>
                     <input id="confirm_password" name="confirm_password" type="password" required 
                            class="auth-input block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors sm:text-sm" 
-                           placeholder="Confirm your password"
+                           placeholder="{{ _('confirm_your_password') }}"
                            autocomplete="new-password">
                 </div>
             </div>
@@ -142,10 +142,10 @@
                 </div>
                 <div class="ml-3 text-sm">
                     <label for="terms_accepted" class="text-gray-700">
-                        I agree to the
-                        <a href="#" class="text-primary-600 hover:text-primary-500 font-medium">Terms and Conditions</a>
-                        and
-                        <a href="#" class="text-primary-600 hover:text-primary-500 font-medium">Privacy Policy</a>
+                        <span data-i18n="i_agree_to">I agree to the</span>
+                        <a href="#" class="text-primary-600 hover:text-primary-500 font-medium" data-i18n="terms_and_conditions">Terms and Conditions</a>
+                        <span data-i18n="and">and</span>
+                        <a href="#" class="text-primary-600 hover:text-primary-500 font-medium" data-i18n="privacy_policy">Privacy Policy</a>
                     </label>
                 </div>
             </div>
@@ -160,7 +160,7 @@
                         <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z"></path>
                     </svg>
                 </span>
-                <span id="buttonText">Create Account</span>
+                <span id="buttonText" data-i18n="create_account_button">Create Account</span>
             </button>
         </div>
     </form>
@@ -169,13 +169,13 @@
 <!-- Additional Links -->
 <div class="text-center mt-6">
     <p class="text-sm text-gray-600">
-        Already have an account?
-        <a href="{{ url_for('auth.login') }}" class="font-medium text-primary-600 hover:text-primary-500 transition-colors">
+        <span data-i18n="already_have_account">Already have an account?</span>
+        <a href="{{ url_for('auth.login') }}" class="font-medium text-primary-600 hover:text-primary-500 transition-colors" data-i18n="sign_in_here">
             Sign in here
         </a>
     </p>
     <p class="text-xs text-gray-500 mt-2">
-        <a href="{{ url_for('landing') }}" class="hover:text-gray-700 transition-colors">
+        <a href="{{ url_for('main.index') }}" class="hover:text-gray-700 transition-colors" data-i18n="back_to_homepage">
             ← Back to homepage
         </a>
     </p>
@@ -232,7 +232,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Show loading state
         submitBtn.disabled = true;
-        buttonText.textContent = 'Creating Account...';
+        buttonText.textContent = ExamGrader.i18n.translate('creating_account');
     });
 
     // Initial validation

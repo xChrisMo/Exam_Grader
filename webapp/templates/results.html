@@ -12,15 +12,38 @@
                 </p>
             </div>
             <div class="flex space-x-3">
-                <button onclick="exportResults()" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                {% if grouped %}
+                <a href="{{ url_for('main.results') }}"
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                     <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                    List View
+                </a>
+                {% else %}
+                <a href="{{ url_for('main.results', grouped='true') }}"
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    Grouped View
+                </a>
+                {% endif %}
+                <button onclick="exportResults()"
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     Export Results
                 </button>
-                <a href="{{ url_for('dashboard') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <a href="{{ url_for('main.dashboard') }}"
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                     <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                     </svg>
                     Back to Dashboard
                 </a>
@@ -35,7 +58,8 @@
             <div class="p-5 text-center">
                 <div class="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mx-auto mb-3">
                     <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                 </div>
                 <dl>
@@ -49,7 +73,8 @@
             <div class="p-5 text-center">
                 <div class="w-12 h-12 bg-success-500 rounded-lg flex items-center justify-center mx-auto mb-3">
                     <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                 </div>
                 <dl>
@@ -63,7 +88,8 @@
             <div class="p-5 text-center">
                 <div class="w-12 h-12 bg-warning-500 rounded-lg flex items-center justify-center mx-auto mb-3">
                     <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                     </svg>
                 </div>
                 <dl>
@@ -77,7 +103,8 @@
             <div class="p-5 text-center">
                 <div class="w-12 h-12 bg-info-500 rounded-lg flex items-center justify-center mx-auto mb-3">
                     <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
                     </svg>
                 </div>
                 <dl>
@@ -86,12 +113,33 @@
                 </dl>
             </div>
         </div>
-    </div>
+    </div> 
 
-    <!-- Individual Results Table -->
-    <div class="bg-white shadow rounded-lg mb-8">
+    {% if grouped %}
+    <!-- Grouped Results by Marking Guide -->
+    {% for guide_key, guide_data in results_by_guide.items() %}
+    <div class="bg-white shadow rounded-lg mb-6">
         <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">Individual Submission Results</h3>
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">{{ guide_data.guide_title }}</h3>
+                    <p class="mt-1 text-sm text-gray-500">{{ guide_data.total_submissions }} submission(s)</p>
+                </div>
+                <div class="flex space-x-4 text-sm">
+                    <div class="text-center">
+                        <div class="text-lg font-semibold text-blue-600">{{ guide_data.average_score }}%</div>
+                        <div class="text-gray-500">Average</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-semibold text-green-600">{{ guide_data.highest_score }}%</div>
+                        <div class="text-gray-500">Highest</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-semibold text-red-600">{{ guide_data.lowest_score }}%</div>
+                        <div class="text-gray-500">Lowest</div>
+                    </div>
+                </div>
+            </div>
 
             <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
                 <table class="min-w-full divide-y divide-gray-300">
@@ -107,9 +155,100 @@
                                 Grade
                             </th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Graded At
+                            </th>
+                            <th scope="col" class="relative px-6 py-3">
+                                <span class="sr-only">Actions</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for result in guide_data.results %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10">
+                                        <div class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
+                                            <svg class="h-5 w-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">{{ result.filename }}</div>
+                                        <div class="text-sm text-gray-500">
+                                            {% if result.student_name %}{{ result.student_name }} • {% endif %}ID: {{ result.submission_id[:8] }}…
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900">{{ result.score }}%</div>
+                                <div class="w-16 bg-gray-200 rounded-full h-2 mt-1">
+                                    <div class="h-2 rounded-full {% if result.score >= 80 %}bg-success-500{% elif result.score >= 60 %}bg-warning-500{% else %}bg-danger-500{% endif %}"
+                                        style="width: {{ result.score }}%"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if result.score >= 90 %}bg-success-100 text-success-800{% elif result.score >= 80 %}bg-success-100 text-success-800{% elif result.score >= 70 %}bg-warning-100 text-warning-800{% elif result.score >= 60 %}bg-warning-100 text-warning-800{% else %}bg-danger-100 text-danger-800{% endif %}">
+                                    {{ result.letter_grade }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ result.graded_at[:10] if result.graded_at else 'Unknown' }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <a href="{{ url_for('processing.view_result', result_id=result.id) }}"
+                                    class="text-primary-600 hover:text-primary-900 mr-3">
+                                    View Details
+                                </a>
+                                <a href="{{ url_for('main.view_submission_content', submission_id=result.submission_id) }}"
+                                    class="text-info-600 hover:text-info-900 mr-3">
+                                    View Content
+                                </a>
+                                <button type="button" onclick="deleteResult('{{ result.id }}')"
+                                    class="text-red-600 hover:text-red-900"
+                                    title="Delete this result">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <!-- Individual Results Table -->
+    <div class="bg-white shadow rounded-lg mb-8">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">Individual Submission Results</h3>
+
+            <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                <table class="min-w-full divide-y divide-gray-300">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col"
+                                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Submission
+                            </th>
+                            <th scope="col"
+                                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Score
+                            </th>
+                            <th scope="col"
+                                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Grade
+                            </th>
+                            <th scope="col"
+                                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Questions
                             </th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col"
+                                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Graded At
                             </th>
                             <th scope="col" class="relative px-6 py-3">
@@ -123,26 +262,31 @@
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="flex items-center">
                                     <div class="flex-shrink-0 h-10 w-10">
-                                        <div class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
-                                            <svg class="h-5 w-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                        <div
+                                            class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
+                                            <svg class="h-5 w-5 text-primary-600" fill="none" stroke="currentColor"
+                                                viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                             </svg>
                                         </div>
                                     </div>
                                     <div class="ml-4">
                                         <div class="text-sm font-medium text-gray-900">{{ result.filename }}</div>
-                                        <div class="text-sm text-gray-500">ID: {{ result.submission_id[:8] }}...</div>
+                                        <div class="text-sm text-gray-500">ID: {{ result.submission_id[:8] }}…</div>
                                     </div>
                                 </div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="text-sm font-medium text-gray-900">{{ result.score }}%</div>
                                 <div class="w-16 bg-gray-200 rounded-full h-2 mt-1">
-                                    <div class="h-2 rounded-full {% if result.score >= 80 %}bg-success-500{% elif result.score >= 60 %}bg-warning-500{% else %}bg-danger-500{% endif %}" style="width: {{ result.score }}%"></div>
+                                    <div class="h-2 rounded-full {% if result.score >= 80 %}bg-success-500{% elif result.score >= 60 %}bg-warning-500{% else %}bg-danger-500{% endif %}"
+                                        style="width: {{ result.score }}%"></div>
                                 </div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if result.score >= 90 %}bg-success-100 text-success-800{% elif result.score >= 80 %}bg-success-100 text-success-800{% elif result.score >= 70 %}bg-warning-100 text-warning-800{% elif result.score >= 60 %}bg-warning-100 text-warning-800{% else %}bg-danger-100 text-danger-800{% endif %}">
+                                <span
+                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if result.score >= 90 %}bg-success-100 text-success-800{% elif result.score >= 80 %}bg-success-100 text-success-800{% elif result.score >= 70 %}bg-warning-100 text-warning-800{% elif result.score >= 60 %}bg-warning-100 text-warning-800{% else %}bg-danger-100 text-danger-800{% endif %}">
                                     {{ result.letter_grade }}
                                 </span>
                             </td>
@@ -153,12 +297,19 @@
                                 {{ result.graded_at[:10] if result.graded_at else 'Unknown' }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button onclick="viewDetails('{{ result.submission_id }}')" class="text-primary-600 hover:text-primary-900 mr-3">
+                                <a href="{{ url_for('processing.view_result', result_id=result.id) }}"
+                                    class="text-primary-600 hover:text-primary-900 mr-3">
                                     View Details
-                                </button>
-                                <a href="{{ url_for('view_submission_content', submission_id=result.submission_id) }}" class="text-info-600 hover:text-info-900">
+                                </a>
+                                <a href="{{ url_for('main.view_submission_content', submission_id=result.submission_id) }}"
+                                    class="text-info-600 hover:text-info-900 mr-3">
                                     View Content
                                 </a>
+                                <button type="button" onclick="deleteResult('{{ result.id }}')"
+                                    class="text-red-600 hover:text-red-900"
+                                    title="Delete this result">
+                                    Delete
+                                </button>
                             </td>
                         </tr>
                         {% endfor %}
@@ -167,19 +318,23 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     {% else %}
     <!-- No Results State -->
     <div class="text-center py-12">
         <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
         </svg>
         <h3 class="mt-2 text-sm font-medium text-gray-900">No grading results available</h3>
         <p class="mt-1 text-sm text-gray-500">Upload submissions and complete the grading process to see results here.</p>
         <div class="mt-6">
-            <a href="{{ url_for('upload_submission') }}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+            <a href="{{ url_for('main.upload_submission') }}"
+                class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                 <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
                 Upload Submissions
             </a>
@@ -188,22 +343,27 @@
     {% endif %}
 
     <!-- Detailed Results Modal -->
-    <div id="detailsModal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div id="detailsModal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog"
+        aria-modal="true">
         <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onclick="closeDetailsModal()"></div>
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"
+                onclick="closeDetailsModal()"></div>
 
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
 
-            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+            <div
+                class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
                 <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <div class="flex items-start justify-between">
                         <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
                             Detailed Results
                         </h3>
-                        <button type="button" onclick="closeDetailsModal()" class="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        <button type="button" onclick="closeDetailsModal()"
+                            class="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                             <span class="sr-only">Close</span>
                             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
                     </div>
@@ -216,146 +376,270 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
 {% block extra_js %}
+<!-- Results data for JavaScript -->
+<script type="application/json" id="results-data">{{ results_list_dict|tojson|safe }}</script>
+
 <script>
-function exportResults() {
-    // Call the API to export results
-    fetch('/api/export-results')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const dataStr = JSON.stringify(data.data, null, 2);
-                const dataBlob = new Blob([dataStr], {type: 'application/json'});
-
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(dataBlob);
-                link.download = data.filename;
-                link.click();
-
-                ExamGrader.utils.showToast('Results exported successfully!', 'success');
-            } else {
-                ExamGrader.utils.showToast('Failed to export results: ' + data.error, 'error');
+// Ensure ExamGrader is available
+if (typeof ExamGrader === 'undefined') {
+    console.warn('ExamGrader not defined, creating minimal fallback');
+    window.ExamGrader = {
+        notificationManager: {
+            notify: function (message, type) {
+                alert(type.toUpperCase() + ': ' + message);
             }
-        })
-        .catch(error => {
-            console.error('Export error:', error);
-            ExamGrader.utils.showToast('Failed to export results', 'error');
-        });
+        }
+    };
 }
 
-function viewDetails(submissionId) {
-    // Find the result data for this submission
-    const results = JSON.parse(`{{ results_list|tojson|safe }}`);
-    const result = results.find(r => r.submission_id === submissionId);
+// Safe viewDetails function
+window.viewDetails = function(submissionId) {
+    
+    try {
+        // Get results data safely
+        const resultsScript = document.getElementById('results-data');
+        let results = [];
+        
+        if (resultsScript) {
+            try {
+                results = JSON.parse(resultsScript.textContent);
+            } catch (parseError) {
+                console.error('Failed to parse results data:', parseError);
+                ExamGrader.notificationManager.notify('Invalid results data format', 'error');
+                return;
+            }
+        } else {
+            console.error('Results data script element not found');
+            ExamGrader.notificationManager.notify('Results data not available', 'error');
+            return;
+        }
+        
+        const result = results.find(function(r) { return r.submission_id === submissionId; });
+        
+        if (!result) {
+            console.error('Result not found for submission ID:', submissionId);
+            ExamGrader.notificationManager.notify('Result details not found', 'error');
+            return;
+        }
+        
+        // Create content using DOM manipulation
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'space-y-6';
+        
+        // Header section
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'bg-gray-50 rounded-lg p-4';
+        
+        const title = document.createElement('h4');
+        title.className = 'text-lg font-medium text-gray-900 mb-2';
+        title.textContent = result.filename || 'Unknown';
+        headerDiv.appendChild(title);
+        
+        const gridDiv = document.createElement('div');
+        gridDiv.className = 'grid grid-cols-2 gap-4 text-sm';
+        
+        // Score section
+        const scoreDiv = document.createElement('div');
+        const scoreLabel = document.createElement('span');
+        scoreLabel.className = 'font-medium text-gray-500';
+        scoreLabel.textContent = 'Score:';
+        const scoreValue = document.createElement('span');
+        scoreValue.className = 'ml-2 text-gray-900';
+        scoreValue.textContent = (result.score || 0) + '% (' + (result.letter_grade || 'N/A') + ')';
+        scoreDiv.appendChild(scoreLabel);
+        scoreDiv.appendChild(scoreValue);
+        
+        // Questions section
+        const questionsDiv = document.createElement('div');
+        const questionsLabel = document.createElement('span');
+        questionsLabel.className = 'font-medium text-gray-500';
+        questionsLabel.textContent = 'Questions:';
+        const questionsValue = document.createElement('span');
+        questionsValue.className = 'ml-2 text-gray-900';
+        questionsValue.textContent = result.total_questions || 0;
+        questionsDiv.appendChild(questionsLabel);
+        questionsDiv.appendChild(questionsValue);
+        
+        gridDiv.appendChild(scoreDiv);
+        gridDiv.appendChild(questionsDiv);
+        headerDiv.appendChild(gridDiv);
+        contentDiv.appendChild(headerDiv);
+        
+        // Feedback section
+        if (result.feedback) {
+            const feedbackDiv = document.createElement('div');
+            feedbackDiv.className = 'bg-blue-50 rounded-lg p-4';
+            
+            const feedbackTitle = document.createElement('h5');
+            feedbackTitle.className = 'text-sm font-medium text-blue-700 mb-2';
+            feedbackTitle.textContent = 'Feedback:';
+            
+            const feedbackText = document.createElement('p');
+            feedbackText.className = 'text-sm text-blue-600';
+            feedbackText.textContent = result.feedback;
+            
+            feedbackDiv.appendChild(feedbackTitle);
+            feedbackDiv.appendChild(feedbackText);
+            contentDiv.appendChild(feedbackDiv);
+        }
+        
+        // Show modal
+        const modalContent = document.getElementById('modalContent');
+        if (modalContent) {
+            modalContent.innerHTML = '';
+            modalContent.appendChild(contentDiv);
+        }
+        
+        const modal = document.getElementById('detailsModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+        
+    } catch (error) {
+        console.error('Error in viewDetails:', error);
+        ExamGrader.notificationManager.notify('Error loading result details', 'error');
+    }
+};
 
-    if (!result) {
-        ExamGrader.utils.showToast('Result details not found', 'error');
+// Close modal function
+window.closeDetailsModal = function() {
+    const modal = document.getElementById('detailsModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+};
+
+// Delete result function
+window.deleteResult = function(resultId) {
+    
+    if (!resultId) {
+        ExamGrader.notificationManager.notify('Invalid result ID', 'error');
         return;
     }
 
-    // Build detailed content
-    let content = `
-        <div class="space-y-6">
-            <div class="bg-gray-50 rounded-lg p-4">
-                <h4 class="text-lg font-medium text-gray-900 mb-2">${result.filename}</h4>
-                <div class="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <span class="font-medium text-gray-500">Score:</span>
-                        <span class="ml-2 text-gray-900">${result.score}% (${result.letter_grade})</span>
-                    </div>
-                    <div>
-                        <span class="font-medium text-gray-500">Questions:</span>
-                        <span class="ml-2 text-gray-900">${result.total_questions}</span>
-                    </div>
-                </div>
-            </div>
-
-            <div>
-                <h5 class="text-sm font-medium text-gray-700 mb-3">Question Breakdown:</h5>
-                <div class="space-y-3">
-    `;
-
-    // Add question details
-    if (result.criteria_scores) {
-        result.criteria_scores.forEach((criteria, index) => {
-            content += `
-                <div class="border border-gray-200 rounded-lg p-3">
-                    <div class="flex justify-between items-start mb-2">
-                        <h6 class="text-sm font-medium text-gray-900">${criteria.description}</h6>
-                        <span class="text-sm font-medium ${criteria.percentage >= 80 ? 'text-success-600' : criteria.percentage >= 60 ? 'text-warning-600' : 'text-danger-600'}">${criteria.points_earned}/${criteria.points_possible}</span>
-                    </div>
-                    <p class="text-xs text-gray-600">${criteria.feedback}</p>
-                </div>
-            `;
-        });
+    if (!confirm('Are you sure you want to delete this result? This action cannot be undone.')) {
+        return;
     }
 
-    content += `
-                </div>
-            </div>
+    // Get CSRF token from meta tag
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    
+    fetch('/api/delete-grading-result', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ result_id: resultId }),
+        credentials: 'same-origin'
+    })
+    .then(function(response) {
+        if (!response.ok) {
+            throw new Error('Delete failed: ' + response.status + ' ' + response.statusText);
+        }
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            ExamGrader.notificationManager.notify('Result deleted successfully!', 'success');
+            window.location.reload();
+        } else {
+            throw new Error(data.error || 'Failed to delete result');
+        }
+    })
+    .catch(function(error) {
+        console.error('Error deleting result:', error);
+        ExamGrader.notificationManager.notify('Error deleting result: ' + error.message, 'error');
+    });
+};
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <h5 class="text-sm font-medium text-success-700 mb-2">Strengths:</h5>
-                    <ul class="text-sm text-gray-600 space-y-1">
-    `;
-
-    if (result.strengths) {
-        result.strengths.forEach(strength => {
-            content += `<li>• ${strength}</li>`;
-        });
+// Export results function
+window.exportResults = function() {
+    
+    const exportBtn = document.querySelector('button[onclick="exportResults()"]');
+    let originalText = '';
+    
+    if (exportBtn) {
+        originalText = exportBtn.innerHTML;
+        exportBtn.innerHTML = 'Exporting...';
+        exportBtn.disabled = true;
     }
+    
+    fetch('/api/export-results', {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/pdf, application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(function(response) {
+        if (!response.ok) {
+            throw new Error('Export failed: ' + response.status + ' ' + response.statusText);
+        }
+        
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/pdf')) {
+            return response.blob().then(function(blob) { 
+                return { type: 'pdf', data: blob }; 
+            });
+        } else {
+            return response.json().then(function(json) { 
+                return { type: 'json', data: json }; 
+            });
+        }
+    })
+    .then(function(result) {
+        if (result.type === 'pdf') {
+            const url = window.URL.createObjectURL(result.data);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'grading_results_' + new Date().toISOString().split('T')[0] + '.pdf';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } else if (result.type === 'json') {
+            const data = result.data;
+            if (data.success) {
+                const dataStr = JSON.stringify(data.data, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(dataBlob);
+                link.download = data.filename || 'grading_results_' + new Date().toISOString().split('T')[0] + '.json';
+                link.click();
+                URL.revokeObjectURL(link.href);
+            } else {
+                throw new Error(data.error || 'Export failed');
+            }
+        }
+        
+        ExamGrader.notificationManager.notify('Results exported successfully!', 'success');
+    })
+    .catch(function(error) {
+        console.error('Export error:', error);
+        ExamGrader.notificationManager.notify('Export failed: ' + error.message, 'error');
+    })
+    .finally(function() {
+        if (exportBtn) {
+            exportBtn.innerHTML = originalText;
+            exportBtn.disabled = false;
+        }
+    });
+};
 
-    content += `
-                    </ul>
-                </div>
-                <div>
-                    <h5 class="text-sm font-medium text-warning-700 mb-2">Areas for Improvement:</h5>
-                    <ul class="text-sm text-gray-600 space-y-1">
-    `;
-
-    if (result.weaknesses) {
-        result.weaknesses.forEach(weakness => {
-            content += `<li>• ${weakness}</li>`;
-        });
-    }
-
-    content += `
-                    </ul>
-                </div>
-            </div>
-
-            <div>
-                <h5 class="text-sm font-medium text-info-700 mb-2">Suggestions:</h5>
-                <ul class="text-sm text-gray-600 space-y-1">
-    `;
-
-    if (result.suggestions) {
-        result.suggestions.forEach(suggestion => {
-            content += `<li>• ${suggestion}</li>`;
-        });
-    }
-
-    content += `
-                </ul>
-            </div>
-        </div>
-    `;
-
-    // Show modal
-    document.getElementById('modalContent').innerHTML = content;
-    document.getElementById('detailsModal').classList.remove('hidden');
-}
-
-function closeDetailsModal() {
-    document.getElementById('detailsModal').classList.add('hidden');
-}
-
-// Close modal on escape key
-document.addEventListener('keydown', function(event) {
-    if (event.key === 'Escape') {
-        closeDetailsModal();
-    }
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    // Close modal on escape key
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeDetailsModal();
+        }
+    });
 });
 </script>
 {% endblock %}

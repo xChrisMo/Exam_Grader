@@ -1,18 +1,29 @@
 """
-Logging configuration for the application.
+Unified Logging Configuration for Exam Grader Application.
+
+This module provides a standardized logging interface that integrates with
+the comprehensive logging system when available, with fallback to basic logging.
 """
 
 import logging
 import os
-from datetime import datetime
+import sys
+from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+# Disable comprehensive logging to avoid conflicts with standard logging module
+COMPREHENSIVE_LOGGING_AVAILABLE = False
+ComprehensiveLogger = None
+LogLevel = None
 
 
 def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
     """
     Set up a logger with proper configuration.
+
+    Uses comprehensive logging system when available, falls back to basic logging.
 
     Args:
         name: Name of the logger (usually __name__)
@@ -21,13 +32,26 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
     Returns:
         logging.Logger: Configured logger instance
     """
-    # Create logger
+    # Try to use comprehensive logging system first
+    if COMPREHENSIVE_LOGGING_AVAILABLE:
+        try:
+            comprehensive_logger = get_application_logger(name)
+            if comprehensive_logger:
+                return comprehensive_logger.logger  # Return the underlying logger
+        except Exception:
+            pass  # Fall back to basic logging
+
+    # Fall back to basic logging configuration
     logger = logging.getLogger(name)
 
-    # Only configure if it hasn't been configured before
     if not logger.handlers:
-        # Set log level from environment or default to INFO
         log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+
+        # Validate log level
+        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        if log_level not in valid_levels:
+            log_level = "INFO"  # Default to INFO for production
+
         logger.setLevel(getattr(logging, log_level, logging.INFO))
 
         # Create formatters
@@ -39,7 +63,9 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
         # Create console handler
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(console_formatter)
-        console_handler.setLevel(logging.DEBUG)
+        console_handler.setLevel(
+            getattr(logging, log_level, logging.DEBUG)
+        )  # Ensure console handler respects debug level
         logger.addHandler(console_handler)
 
         # Create file handler
@@ -48,12 +74,41 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
             log_dir.mkdir(exist_ok=True)
             log_file = log_dir / "app.log"
 
-        file_handler = RotatingFileHandler(
-            str(log_file),  # Convert Path to string
-            maxBytes=10 * 1024 * 1024,  # 10MB
-            backupCount=5,
-        )
+        # Use a Windows-compatible approach to avoid file locking issues
+        if sys.platform.startswith("win"):
+            try:
+                # On Windows, use a custom rotating handler that handles file locking better
+                from logging.handlers import TimedRotatingFileHandler
+
+                file_handler = TimedRotatingFileHandler(
+                    str(log_file),
+                    when="midnight",
+                    interval=1,
+                    backupCount=7,
+                    delay=True,
+                    encoding="utf-8",
+                )
+            except Exception as e:
+                temp_logger = logging.getLogger("setup_fallback")
+                temp_logger.warning(
+                    f"Failed to create rotating file handler: {e}, using basic file handler"
+                )
+                file_handler = logging.FileHandler(
+                    str(log_file), mode="a", delay=True, encoding="utf-8"
+                )
+        else:
+            # Unix systems can use the standard rotating handler
+            file_handler = RotatingFileHandler(
+                str(log_file),
+                maxBytes=10 * 1024 * 1024,  # 10MB
+                backupCount=5,
+                delay=True,
+                encoding="utf-8",
+            )
         file_handler.setFormatter(file_formatter)
+        file_handler.setLevel(
+            getattr(logging, log_level, logging.DEBUG)
+        )  # Ensure file handler respects debug level
         logger.addHandler(file_handler)
 
         # Don't propagate to root logger
@@ -83,7 +138,7 @@ class Logger:
 
         # Performance metrics
         self.metrics = {
-            "start_time": datetime.now(),
+            "start_time": datetime.now(timezone.utc),
             "api_calls": 0,
             "cache_hits": 0,
             "cache_misses": 0,
@@ -124,6 +179,37 @@ class Logger:
         self.log_metric("errors")
         self.logger.critical(message, *args, **kwargs)
 
+    def exception(self, message: str, *args, **kwargs) -> None:
+        """Log an exception with traceback."""
+        self.log_metric("errors")
+        self.logger.exception(message, *args, **kwargs)
+
+    def log_error_with_context(
+        self, error: Exception, context: Dict[str, Any], user_id: Optional[str] = None
+    ) -> None:
+        """Log an error with additional context information.
+
+        Args:
+            error: The exception that occurred
+            context: Additional context information
+            user_id: Optional user ID for tracking
+        """
+        self.log_metric("errors")
+
+        error_info = {
+            "error_type": type(error).__name__,
+            "error_message": str(error),
+            "context": context,
+            "user_id": user_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        self.logger.error(
+            f"Error occurred: {error_info['error_type']} - {error_info['error_message']}",
+            extra={"error_context": error_info},
+            exc_info=True,
+        )
+
     # Original enhanced logging methods
     def log_metric(self, metric_name: str, value: Any = 1) -> None:
         """Log a metric value."""
@@ -135,7 +221,9 @@ class Logger:
 
     def log_performance(self) -> None:
         """Log performance metrics."""
-        duration = (datetime.now() - self.metrics["start_time"]).total_seconds()
+        duration = (
+            datetime.now(timezone.utc) - self.metrics["start_time"]
+        ).total_seconds()
         self.info("Performance Metrics:")
         self.info(f"  Duration: {duration:.2f} seconds")
         self.info(f"  API Calls: {self.metrics['api_calls']}")
@@ -154,7 +242,6 @@ class Logger:
             ) * 100
             self.info(f"  Cache Hit Rate: {cache_hit_rate:.2f}%")
 
-    # Keep existing specialized logging methods for backward compatibility
     def log_error(
         self, error_type: str, message: str, context: Optional[Dict[str, Any]] = None
     ) -> None:

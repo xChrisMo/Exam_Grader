@@ -1,7 +1,39 @@
 {% extends "layout.html" %}
+
+{% block extra_css %}
+<!-- Dashboard styles are now included in consolidated-styles.css -->
+{% endblock %}
+
 {% block content %}
-<!-- Dashboard Statistics Cards -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+<div class="dashboard-container">
+  <!-- Marking Guide Warning -->
+  {% if not guide_uploaded %}
+  <div class="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+    <div class="flex">
+      <div class="flex-shrink-0">
+        <svg class="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+        </svg>
+      </div>
+      <div class="ml-3">
+        <h3 class="text-sm font-medium text-yellow-800">No Marking Guide Set</h3>
+        <div class="mt-2 text-sm text-yellow-700">
+          <p>You need to upload a marking guide before you can grade submissions. The marking guide defines the questions and scoring criteria.</p>
+        </div>
+        <div class="mt-4">
+          <div class="-mx-2 -my-1.5 flex">
+            <a href="{{ url_for('main.upload_guide') }}" class="bg-yellow-50 px-2 py-1.5 rounded-md text-sm font-medium text-yellow-800 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-yellow-50 focus:ring-yellow-600">
+              Upload Marking Guide
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Dashboard Statistics Cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
   <!-- Guide Status Card -->
   <div class="bg-white overflow-hidden shadow rounded-lg transform transition duration-300 hover:scale-105 hover:shadow-xl" role="region" aria-labelledby="guide-status-heading">
     <div class="p-5 text-center">
@@ -24,12 +56,12 @@
         </svg>
       </div>
       <dl>
-        <dt id="guide-status-heading" class="text-md font-semibold text-gray-600 mb-1">Guide Status</dt>
-        <dd class="text-2xl font-bold text-gray-900" aria-describedby="guide-status-heading">
+        <dt id="guide-status-heading" class="text-sm font-medium text-gray-500 mb-1" data-i18n="guide_status">Guide Status</dt>
+        <dd class="text-lg font-medium text-gray-900" aria-describedby="guide-status-heading">
           {% if guide_uploaded %}
-          <span class="text-success-600">Uploaded</span>
+          <span class="text-success-600" data-i18n="status_uploaded">Uploaded</span>
           {% else %}
-          <span class="text-gray-400">Not uploaded</span>
+          <span class="text-gray-400" data-i18n="status_not_uploaded">Not uploaded</span>
           {% endif %}
         </dd>
       </dl>
@@ -37,12 +69,12 @@
     <div class="bg-gray-100 px-5 py-3 text-center">
       <div class="text-sm">
         {% if guide_uploaded %}
-        <span class="text-success-600 font-medium">Ready to grade</span>
+        <span class="text-success-600 font-medium" data-i18n="ready_to_grade">Ready to grade</span>
         {% else %}
         <a
-          href="{{ url_for('upload_guide') }}"
+          href="{{ url_for('main.upload_guide') }}"
           class="text-primary-600 font-medium hover:text-primary-500"
-          >Upload required</a
+          data-i18n="upload_required">Upload required</a
         >
         {% endif %}
       </div>
@@ -71,16 +103,16 @@
         </svg>
       </div>
       <dl>
-        <dt class="text-md font-semibold text-gray-600 mb-1">Submissions</dt>
-        <dd class="text-2xl font-bold text-gray-900">
+        <dt class="text-sm font-medium text-gray-500 mb-1" data-i18n="submissions">Submissions</dt>
+        <dd class="text-lg font-medium text-gray-900">
           {{ total_submissions }}
         </dd>
       </dl>
     </div>
     <div class="bg-gray-100 px-5 py-3 text-center">
       <div class="text-sm">
-        <span class="text-gray-600 font-medium"
-          >{{ processed_submissions }} processed</span
+        <span class="text-gray-600 font-medium" id="processed-submissions-dashboard-count"
+          >{{ processed_submissions }} <span data-i18n="processed">processed</span></span
         >
       </div>
     </div>
@@ -107,19 +139,21 @@
         </svg>
       </div>
       <dl>
-        <dt class="text-md font-semibold text-gray-600 mb-1">Last Score</dt>
-        <dd class="text-2xl font-bold text-gray-900">
-          {% if last_score > 0 %} {{ last_score }}% {% else %} -- {% endif %}
+        <dt class="text-sm font-medium text-gray-500 mb-1" data-i18n="last_score">Last Score</dt>
+        <dd class="text-lg font-medium text-gray-900" id="last-score-value">
+          {% if last_score and last_score > 0 %} {{ last_score }}% {% else %} -- {% endif %}
         </dd>
       </dl>
     </div>
     <div class="bg-gray-100 px-5 py-3 text-center">
       <div class="text-sm">
-        {% if last_score > 0 %}
-        <span class="text-gray-600 font-medium">Latest result</span>
-        {% else %}
-        <span class="text-gray-600 font-medium">No grades yet</span>
-        {% endif %}
+        <span class="text-gray-600 font-medium" id="last-score-status">
+          {% if last_score and last_score > 0 %}
+            <span data-i18n="latest_result">Latest result</span>
+          {% else %}
+            <span data-i18n="no_grades">No grades yet</span>
+          {% endif %}
+        </span>
       </div>
     </div>
   </div>
@@ -145,12 +179,12 @@
         </svg>
       </div>
       <dl>
-        <dt class="text-md font-semibold text-gray-600 mb-1">System Status</dt>
-        <dd class="text-2xl font-bold text-gray-900">
+        <dt class="text-sm font-medium text-gray-500 mb-1" data-i18n="system_status">System Status</dt>
+        <dd class="text-lg font-medium text-gray-900">
           {% if service_status.ocr_status and service_status.llm_status %}
-          <span class="text-success-600">Online</span>
+          <span class="text-success-600" data-i18n="status_online">Online</span>
           {% else %}
-          <span class="text-warning-600">Limited</span>
+          <span class="text-warning-600" data-i18n="status_limited">Limited</span>
           {% endif %}
         </dd>
       </dl>
@@ -158,9 +192,9 @@
     <div class="bg-gray-100 px-5 py-3 text-center">
       <div class="text-sm">
         {% if service_status.ocr_status and service_status.llm_status %}
-        <span class="text-success-600 font-medium">All services ready</span>
+        <span class="text-success-600 font-medium" data-i18n="all_services_ready">All services ready</span>
         {% else %}
-        <span class="text-warning-600 font-medium">Some services offline</span>
+        <span class="text-warning-600 font-medium" data-i18n="some_services_offline">Some services offline</span>
         {% endif %}
       </div>
     </div>
@@ -189,28 +223,38 @@
           </svg>
         </div>
         <div class="ml-5">
-          <h3 class="text-lg leading-6 font-medium text-gray-900">
+          <h3 class="text-lg leading-6 font-medium text-gray-900" data-i18n="marking_guide">
             Marking Guide
           </h3>
-          <p class="mt-2 text-sm text-gray-500">Upload marking guide</p>
+          <p class="mt-2 text-sm text-gray-500" data-i18n="upload_marking_guide">Upload marking guide</p>
         </div>
       </div>
       <div class="mt-5">
         {% if not guide_uploaded %}
-        <a
-          href="{{ url_for('upload_guide') }}"
-          class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-        >
-          Upload Guide
-        </a>
+        <div class="text-center">
+          <div class="text-sm text-red-600 font-medium mb-2 flex items-center justify-center">
+            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+            </svg>
+            No Guide Set
+          </div>
+          <a
+            href="{{ url_for('main.upload_guide') }}"
+            class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            data-i18n="upload_guide"
+          >
+            Upload Guide Required
+          </a>
+        </div>
         {% else %}
         <div class="text-center">
-          <div class="text-sm text-success-600 font-medium mb-2">
+          <div class="text-sm text-success-600 font-medium mb-2" data-i18n="guide_uploaded">
             ✓ Guide Uploaded
           </div>
           <a
-            href="{{ url_for('upload_guide') }}"
+            href="{{ url_for('main.upload_guide') }}"
             class="text-sm text-primary-600 hover:text-primary-500"
+            data-i18n="upload_new_guide"
             >Upload New Guide</a
           >
         </div>
@@ -239,27 +283,29 @@
           </svg>
         </div>
         <div class="ml-5">
-          <h3 class="text-lg leading-6 font-medium text-gray-900">
+          <h3 class="text-lg leading-6 font-medium text-gray-900" data-i18n="upload_submission">
             Upload Submission
           </h3>
-          <p class="mt-2 text-sm text-gray-500">Upload student work</p>
+          <p class="mt-2 text-sm text-gray-500" data-i18n="upload_student_work">Upload student work</p>
         </div>
       </div>
       <div class="mt-5">
         {% if not guide_uploaded %}
         <div class="text-center">
-          <div class="text-sm text-gray-500 mb-2">Upload guide first</div>
+          <div class="text-sm text-gray-500 mb-2" data-i18n="upload_guide_first">Upload guide first</div>
           <button
             disabled
             class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-400 bg-gray-100 cursor-not-allowed"
+            data-i18n="upload_submission"
           >
             Upload Submission
           </button>
         </div>
         {% else %}
         <a
-          href="{{ url_for('upload_submission') }}"
+          href="{{ url_for('main.upload_submission') }}"
           class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-success-600 hover:bg-success-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-success-500"
+          data-i18n="upload_submission"
         >
           Upload Submission
         </a>
@@ -291,20 +337,23 @@
           <h3 class="text-lg leading-6 font-medium text-gray-900">
             AI Processing
           </h3>
-          <p class="mt-2 text-sm text-gray-500">Grade with AI</p>
+          <p class="mt-2 text-sm text-gray-500">Choose processing method</p>
         </div>
       </div>
       <div class="mt-5">
         {% if guide_uploaded and total_submissions > 0 %}
-        <button
-          id="process-unified-ai"
-          class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+        <!-- Enhanced AI Processing -->
+        <a
+          href="{{ url_for('processing.unified_processing') }}"
+          class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all duration-200"
         >
           <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
           </svg>
-          AI Processing
-        </button> {% else %}
+          Enhanced AI Pipeline
+        </a>
+
+        {% else %}
         <div class="text-center">
           <div class="text-sm text-gray-500 mb-2">
             {% if not guide_uploaded %} Need guide & submissions {% elif
@@ -314,7 +363,7 @@
             disabled
             class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-400 bg-gray-100 cursor-not-allowed"
           >
-            Process
+            Enhanced Pipeline
           </button>
         </div>
         {% endif %}
@@ -347,31 +396,191 @@
         </div>
       </div>
       <div class="mt-5">
-        {% if session.get('last_grading_result') %}
+        {% if processed_submissions > 0 %}
         <a
-          href="{{ url_for('view_results') }}"
+          href="{{ url_for('main.results') }}"
           class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 mb-2"
         >
           View Results
         </a>
         {% else %}
+        {% if submissions %}
         <div class="text-center mb-2">
-          <div class="text-sm text-gray-500 mb-2">No results yet</div>
-          <button
-            disabled
-            class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-400 bg-gray-100 cursor-not-allowed"
-          >
+          <a href="{{ url_for('main.results') }}"
+             class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
             View Results
-          </button>
+          </a>
         </div>
-        {% endif %} {% if total_submissions > 0 %}
+        {% else %}
+        <div class="text-center mb-2">
+          <div class="text-sm text-gray-500 mb-2">
+            <span class="spinner-border spinner-border-sm" role="status"></span>
+            Processing submissions...
+          </div>
+        </div>
+        {% endif %}
+        {% if total_submissions > 0 %}
         <a
-          href="{{ url_for('view_submissions') }}"
+          href="{{ url_for('main.submissions') }}"
           class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
         >
           View Submissions
         </a>
         {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Workflow Process Section -->
+<div class="bg-white shadow rounded-lg mb-8">
+  <div class="px-6 py-4 border-b border-gray-200">
+    <h3 class="text-lg leading-6 font-medium text-gray-900">Grading Workflow</h3>
+    <p class="mt-1 text-sm text-gray-500">Follow these steps to grade submissions efficiently</p>
+  </div>
+  <div class="p-6">
+    <div class="flow-chart">
+      <!-- Step 1: Upload Guide -->
+      <div class="flex items-center mb-6">
+        <div class="flex-shrink-0">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center {% if guide_uploaded %}bg-green-100 text-green-600{% else %}bg-gray-100 text-gray-400{% endif %}">
+            {% if guide_uploaded %}
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            {% else %}
+            <span class="text-sm font-medium">1</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="ml-4 flex-1">
+          <h4 class="text-sm font-medium text-gray-900">Upload Marking Guide</h4>
+          <p class="text-sm text-gray-500">Upload your marking rubric and answer key</p>
+          {% if not guide_uploaded %}
+          <a href="{{ url_for('main.upload_guide') }}" class="text-sm text-primary-600 hover:text-primary-500">Upload now →</a>
+          {% endif %}
+        </div>
+        <div class="flex-shrink-0">
+          {% if guide_uploaded %}
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Complete</span>
+          {% else %}
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Pending</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      {% if guide_uploaded %}
+      <div class="flex justify-center mb-6">
+        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+        </svg>
+      </div>
+      {% endif %}
+
+      <!-- Step 2: Upload Submissions -->
+      <div class="flex items-center mb-6">
+        <div class="flex-shrink-0">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center {% if total_submissions > 0 %}bg-green-100 text-green-600{% elif guide_uploaded %}bg-blue-100 text-blue-600{% else %}bg-gray-100 text-gray-400{% endif %}">
+            {% if total_submissions > 0 %}
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            {% elif guide_uploaded %}
+            <span class="text-sm font-medium">2</span>
+            {% else %}
+            <span class="text-sm font-medium">2</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="ml-4 flex-1">
+          <h4 class="text-sm font-medium text-gray-900">Upload Student Submissions</h4>
+          <p class="text-sm text-gray-500">Upload student work to be graded ({{ total_submissions }} uploaded)</p>
+          {% if guide_uploaded and total_submissions == 0 %}
+          <a href="{{ url_for('main.upload_submission') }}" class="text-sm text-primary-600 hover:text-primary-500">Upload submissions →</a>
+          {% endif %}
+        </div>
+        <div class="flex-shrink-0">
+          {% if total_submissions > 0 %}
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">{{ total_submissions }} files</span>
+          {% elif guide_uploaded %}
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Ready</span>
+          {% else %}
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Waiting</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      {% if guide_uploaded and total_submissions > 0 %}
+      <div class="flex justify-center mb-6">
+        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+        </svg>
+      </div>
+      {% endif %}
+
+      <!-- Step 3: Choose Processing Method -->
+      <div class="flex items-center mb-6">
+        <div class="flex-shrink-0">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center {% if guide_uploaded and total_submissions > 0 %}bg-blue-100 text-blue-600{% else %}bg-gray-100 text-gray-400{% endif %}">
+            <span class="text-sm font-medium">3</span>
+          </div>
+        </div>
+        <div class="ml-4 flex-1">
+          <h4 class="text-sm font-medium text-gray-900">Start AI Processing</h4>
+          <p class="text-sm text-gray-500">Use enhanced AI pipeline for grading</p>
+          {% if guide_uploaded and total_submissions > 0 %}
+          <div class="mt-2">
+            <a href="{{ url_for('processing.unified_processing') }}" class="text-sm text-emerald-600 hover:text-emerald-500">Enhanced Pipeline →</a>
+          </div>
+          {% endif %}
+        </div>
+        <div class="flex-shrink-0">
+          {% if guide_uploaded and total_submissions > 0 %}
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Ready</span>
+          {% else %}
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Waiting</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      {% if processed_submissions > 0 %}
+      <div class="flex justify-center mb-6">
+        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+        </svg>
+      </div>
+      {% endif %}
+
+      <!-- Step 4: View Results -->
+      <div class="flex items-center">
+        <div class="flex-shrink-0">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center {% if processed_submissions > 0 %}bg-green-100 text-green-600{% else %}bg-gray-100 text-gray-400{% endif %}">
+            {% if processed_submissions > 0 %}
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            {% else %}
+            <span class="text-sm font-medium">4</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="ml-4 flex-1">
+          <h4 class="text-sm font-medium text-gray-900">Review Results</h4>
+          <p class="text-sm text-gray-500">View graded submissions and export results</p>
+          {% if processed_submissions > 0 %}
+          <a href="{{ url_for('main.results') }}" class="text-sm text-primary-600 hover:text-primary-500">View results →</a>
+          {% endif %}
+        </div>
+        <div class="flex-shrink-0">
+          {% if processed_submissions > 0 %}
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">{{ processed_submissions }} graded</span>
+          {% else %}
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Pending</span>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
@@ -482,6 +691,20 @@
                     >{{ activity.timestamp[:10] }}</time
                   >
                 </div>
+                {% if activity.type == 'submission_deleted' or activity.type == 'grading_result_deleted' %}
+                <div class="flex-shrink-0 ml-2">
+                  <button
+                    type="button"
+                    class="delete-activity-btn inline-flex items-center p-1 border border-transparent rounded-full shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    data-id="{{ activity.id }}"
+                    data-type="{{ activity.type }}"
+                  >
+                    <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                      <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+                {% endif %}
               </div>
             </div>
           </div>
@@ -489,32 +712,75 @@
         {% endfor %}
       </ul>
     </div>
-  </div>
-</div>
+{% endif %}
 {% endif %}
 {% endblock %}
+
 {% block extra_js %}
 <script>
   document.addEventListener("DOMContentLoaded", function () {
+    // Clear any lingering button loading states when dashboard loads
+    const clearButtonLoadingStates = () => {
+      const processUnifiedAIBtn = document.getElementById("process-unified-ai");
+      if (processUnifiedAIBtn && processUnifiedAIBtn.disabled) {
+        try {
+          if (typeof ExamGrader !== 'undefined' && ExamGrader.utils && ExamGrader.utils.hideButtonLoading) {
+            ExamGrader.utils.hideButtonLoading(processUnifiedAIBtn);
+          }
+          processUnifiedAIBtn.disabled = false;
+        } catch (error) {
+          processUnifiedAIBtn.disabled = false;
+        }
+      }
+    };
+    
+    // Clear loading states immediately
+    clearButtonLoadingStates();
+    
+    // Ensure CSRF token is available
+    const refreshCsrfToken = async () => {
+      try {
+        if (typeof ExamGrader === 'undefined' || !ExamGrader.csrf) {
+          console.warn('ExamGrader.csrf not available, skipping token refresh');
+          return;
+        }
+        const token = await ExamGrader.csrf.refreshToken();
+      } catch (error) {
+        console.error('Error refreshing CSRF token on dashboard:', error);
+      }
+    };
+    
+    // Refresh token immediately
+    refreshCsrfToken();
     // Unified AI Processing Button
     const processUnifiedAIBtn = document.getElementById("process-unified-ai");
     if (processUnifiedAIBtn) {
       processUnifiedAIBtn.addEventListener("click", async function () {
-        ExamGrader.utils.showButtonLoading(this, "Processing...");
+        try {
+          if (typeof ExamGrader !== 'undefined' && ExamGrader.utils && typeof ExamGrader.utils.showButtonLoading === 'function') {
+            ExamGrader.utils.showButtonLoading(this, "Processing...");
+          } else {
+            console.warn('ExamGrader.utils.showButtonLoading not available');
+          }
+        } catch (error) {
+          console.error('Error showing button loading state:', error);
+        }
         this.disabled = true;
 
         try {
-          console.log("Starting unified AI processing...");
-
+          // Get CSRF token from meta tag
+          const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+          
           // Start the unified AI processing
           const response = await fetch('/api/process-unified-ai', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-            }
+              'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({}),
+            credentials: 'same-origin'
           });
-
-          console.log("Response status:", response.status);
 
           if (!response.ok) {
             const errorText = await response.text();
@@ -523,31 +789,124 @@
           }
 
           const data = await response.json();
-          console.log("Processing result:", data);
 
           if (data.success) {
+            // Check if we have a progress_id
+            if (data.progress_id) {
+              // Redirect to the unified processing page with the progress_id
+              window.location.href = `/unified-processing?progress_id=${data.progress_id}`;
+              return;
+            }
+            
             const summary = data.summary || {};
             const avgPercentage = summary.average_percentage || 0;
             const processingTime = summary.processing_time || 0;
 
-            ExamGrader.utils.showToast(
-              `AI processing completed! Average score: ${avgPercentage}% (${processingTime}s)`,
-              "success"
-            );
+            try {
+              if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+                ExamGrader.notificationManager.notify(
+                  `AI processing completed! Average score: ${avgPercentage}% (${processingTime}s)`,
+                  "success"
+                );
+              }
+            } catch (error) {
+              console.error('Error showing success notification:', error);
+            }
 
-            setTimeout(() => location.reload(), 2000);
+            setTimeout(() => window.location.href = '/results', 2000);
           } else {
             throw new Error(data.error || "AI processing failed");
           }
         } catch (error) {
           console.error("Error:", error);
-          ExamGrader.utils.showToast(`AI processing failed: ${error.message}`, "error");
+          try {
+            if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+              ExamGrader.notificationManager.notify(`AI processing failed: ${error.message}`, "error");
+            }
+          } catch (notifyError) {
+            console.error('Error showing error notification:', notifyError);
+          }
         } finally {
-          ExamGrader.utils.hideButtonLoading(this, "AI Processing");
+          try {
+            if (typeof ExamGrader !== 'undefined' && ExamGrader.utils && ExamGrader.utils.hideButtonLoading) {
+              ExamGrader.utils.hideButtonLoading(this, "AI Processing");
+            }
+          } catch (hideError) {
+            console.error('Error hiding button loading state:', hideError);
+          }
           this.disabled = false;
         }
       });
     }
+
+    // Delete Activity Button
+    document.querySelectorAll('.delete-activity-btn').forEach(button => {
+      button.addEventListener('click', async function() {
+        const id = this.dataset.id;
+        const type = this.dataset.type;
+        let endpoint = '';
+
+        if (type === 'submission_deleted') {
+          endpoint = '/api/delete-submission';
+        } else if (type === 'grading_result_deleted') {
+          endpoint = '/api/delete-grading-result';
+        } else {
+          console.error('Unknown activity type for deletion:', type);
+          return;
+        }
+
+        if (!confirm('Are you sure you want to delete this item?')) {
+          return;
+        }
+
+        try {
+          // Get CSRF token from meta tag
+          const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+          
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ [type.includes('submission') ? 'submission_id' : 'result_id']: id }),
+            credentials: 'same-origin'
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            try {
+              if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+                ExamGrader.notificationManager.notify(data.message, 'success');
+              }
+            } catch (notifyError) {
+              console.error('Error showing success notification:', notifyError);
+            }
+            setTimeout(() => location.reload(), 1000);
+          } else {
+            try {
+              if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+                ExamGrader.notificationManager.notify(data.message, 'error');
+              }
+            } catch (notifyError) {
+              console.error('Error showing error notification:', notifyError);
+            }
+          }
+        } catch (error) {
+          console.error('Error deleting item:', error);
+          try {
+            if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+              ExamGrader.notificationManager.notify('Error deleting item: ' + error.message, 'error');
+            }
+          } catch (notifyError) {
+            console.error('Error showing error notification:', notifyError);
+          }
+        }
+      });
+    });
   });
 </script>
+  </div>
+</div>
 {% endblock %}

@@ -6,16 +6,13 @@ sensitive configuration data using encryption and secure key derivation.
 """
 
 import base64
-import hashlib
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
 # Import logger with fallback
@@ -106,7 +103,6 @@ class SecretsManager:
         """Get master key from environment or generate one."""
         master_key = os.getenv("SECRETS_MASTER_KEY")
         if not master_key:
-            # Generate a master key for development
             master_key = base64.urlsafe_b64encode(os.urandom(32)).decode()
             logger.warning(
                 "Generated temporary master key. Set SECRETS_MASTER_KEY environment variable for production."
@@ -181,7 +177,7 @@ class SecretsManager:
             True if successful
         """
         try:
-            current_time = datetime.utcnow().isoformat()
+            current_time = datetime.now(timezone.utc).isoformat()
             self._secrets_cache[key] = {
                 "value": value,
                 "description": description or "",
@@ -209,7 +205,6 @@ class SecretsManager:
             Secret value or default
         """
         try:
-            # First check environment variables (for backward compatibility)
             env_value = os.getenv(key)
             if env_value:
                 return env_value
@@ -337,7 +332,7 @@ class SecretsManager:
         try:
             with open(env_file, "w") as f:
                 f.write("# Exported secrets from Exam Grader\n")
-                f.write(f"# Generated at: {datetime.utcnow().isoformat()}\n\n")
+                f.write(f"# Generated at: {datetime.now(timezone.utc).isoformat()}\n\n")
 
                 for key, data in self._secrets_cache.items():
                     description = data.get("description", "")
@@ -395,7 +390,6 @@ def initialize_secrets():
         "DATABASE_URL",
     ]
 
-    # Import from environment if available
     imported = secrets_manager.import_from_env(common_secrets)
 
     if imported > 0:

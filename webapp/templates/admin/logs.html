@@ -1,0 +1,256 @@
+{% extends "layout.html" %}
+
+{% block title %}System Logs - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">System Logs</h1>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><a href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+                        <li class="breadcrumb-item"><a href="{{ url_for('admin.dashboard') }}">Admin</a></li>
+                        <li class="breadcrumb-item active">Logs</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Log File Selection</h6>
+                    <form method="GET" class="d-flex gap-2">
+                        <select name="file" class="form-select">
+                            {% for log_file in log_files %}
+                            <option value="{{ log_file }}" {% if log_file == current_file %}selected{% endif %}>
+                                {{ log_file }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <input type="number" name="lines" class="form-control" placeholder="Lines" 
+                               value="{{ request.args.get('lines', 100) }}" min="10" max="1000" style="width: 100px;">
+                        <button type="submit" class="btn btn-primary">Load</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Log Controls</h6>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-secondary" onclick="refreshLogs()">
+                            <i class="fas fa-sync"></i> Refresh
+                        </button>
+                        <button type="button" class="btn btn-info" onclick="downloadLogs()">
+                            <i class="fas fa-download"></i> Download
+                        </button>
+                        <button type="button" class="btn btn-warning" onclick="clearLogs()">
+                            <i class="fas fa-trash"></i> Clear
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        Log Content: {{ current_file or 'No file selected' }}
+                    </h5>
+                    <small class="text-muted">
+                        Showing last {{ logs|length }} lines
+                    </small>
+                </div>
+                <div class="card-body p-0">
+                    <div class="log-container" style="height: 600px; overflow-y: auto; background-color: #1e1e1e; color: #d4d4d4; font-family: 'Courier New', monospace; font-size: 12px;">
+                        {% if logs %}
+                            <pre class="mb-0 p-3">{% for line in logs %}{{ line }}{% endfor %}</pre>
+                        {% else %}
+                            <div class="p-3 text-center text-muted">
+                                <i class="fas fa-file-alt fa-3x mb-3"></i>
+                                <p>No log entries found or unable to load log file.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if logs %}
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Log Analysis</h6>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h6>Total Lines</h6>
+                                <p class="h4 text-primary">{{ logs|length }}</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h6>Error Count</h6>
+                                <p class="h4 text-danger" id="error-count">-</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h6>Warning Count</h6>
+                                <p class="h4 text-warning" id="warning-count">-</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h6>Info Count</h6>
+                                <p class="h4 text-info" id="info-count">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function refreshLogs() {
+    window.location.reload();
+}
+
+function downloadLogs() {
+    const currentFile = '{{ current_file or "app.log" }}';
+    const lines = '{{ request.args.get("lines", 100) }}';
+    window.open(`/admin/logs/download?file=${currentFile}&lines=${lines}`, '_blank');
+}
+
+function clearLogs() {
+    if (!confirm('Are you sure you want to clear the current log file? This action cannot be undone.')) {
+        return;
+    }
+
+    const currentFile = '{{ current_file or "app.log" }}';
+    
+    fetch('/admin/api/logs/clear', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ file: currentFile })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', 'Log file cleared successfully');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            showAlert('error', data.error || 'Failed to clear log file');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('error', 'Failed to clear log file');
+    });
+}
+
+function showAlert(type, message) {
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    const alertHtml = `
+        <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    const container = document.querySelector('.container-fluid');
+    container.insertAdjacentHTML('afterbegin', alertHtml);
+    
+    setTimeout(() => {
+        const alert = container.querySelector('.alert');
+        if (alert) {
+            alert.remove();
+        }
+    }, 5000);
+}
+
+// Analyze log content on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const logContent = document.querySelector('.log-container pre');
+    if (logContent) {
+        const content = logContent.textContent;
+        const lines = content.split('\n');
+        
+        let errorCount = 0;
+        let warningCount = 0;
+        let infoCount = 0;
+        
+        lines.forEach(line => {
+            const lowerLine = line.toLowerCase();
+            if (lowerLine.includes('error')) {
+                errorCount++;
+            } else if (lowerLine.includes('warning') || lowerLine.includes('warn')) {
+                warningCount++;
+            } else if (lowerLine.includes('info')) {
+                infoCount++;
+            }
+        });
+        
+        document.getElementById('error-count').textContent = errorCount;
+        document.getElementById('warning-count').textContent = warningCount;
+        document.getElementById('info-count').textContent = infoCount;
+    }
+});
+
+// Auto-scroll to bottom of logs
+document.addEventListener('DOMContentLoaded', function() {
+    const logContainer = document.querySelector('.log-container');
+    if (logContainer) {
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+});
+</script>
+
+<style>
+.log-container {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+}
+
+.log-container pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Syntax highlighting for log levels */
+.log-container pre {
+    color: #d4d4d4;
+}
+
+.log-container pre:contains("ERROR") {
+    color: #f85149;
+}
+
+.log-container pre:contains("WARNING") {
+    color: #f0ad4e;
+}
+
+.log-container pre:contains("INFO") {
+    color: #5bc0de;
+}
+</style>
+{% endblock %}

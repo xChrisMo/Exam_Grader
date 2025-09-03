@@ -1,92 +1,132 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto">
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
     <!-- Page Header -->
-    <div class="mb-8">
-        <h1 class="text-2xl font-bold text-gray-900">Upload Marking Guide</h1>
-        <p class="mt-2 text-sm text-gray-600">
-            Upload your marking guide to enable automated grading. Supported formats: PDF, Word documents, and images.
+    <div class="mb-6 sm:mb-8">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900" data-i18n="upload_guide_title">Upload Marking Guide</h1>
+        <p class="mt-2 text-sm sm:text-base text-gray-600" data-i18n="upload_guide_description">
+            Upload a marking guide to enable automated grading. The system will extract questions and marks automatically.
         </p>
     </div>
 
     <!-- Upload Form -->
     <div class="bg-white shadow rounded-lg">
         <div class="px-4 py-5 sm:p-6">
-            <form method="POST" enctype="multipart/form-data" id="upload-form">
+            <!-- Message Display Area -->
+            <div class="upload-messages mb-4"></div>
+            
+            <form method="POST" enctype="multipart/form-data" id="upload-guide-form">
                 {% if csrf_token %}
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                 {% endif %}
+                
+                <!-- Guide Information -->
+                <div class="mb-6">
+                    <label for="title" class="block text-sm font-medium text-gray-700 mb-2">
+                        Guide Title
+                    </label>
+                    <input type="text" id="title" name="title" 
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                           placeholder="Enter guide title" required>
+                </div>
+
+                <div class="mb-6">
+                    <label for="description" class="block text-sm font-medium text-gray-700 mb-2">
+                        Description (Optional)
+                    </label>
+                    <textarea id="description" name="description" rows="3"
+                              class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                              placeholder="Enter guide description"></textarea>
+                </div>
+
+                <!-- AI Processing Option -->
+                <div class="mb-6">
+                    <div class="flex items-center">
+                        <input id="auto_process" name="auto_process" type="checkbox" checked
+                               class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                        <label for="auto_process" class="ml-2 block text-sm text-gray-900">
+                            Automatically extract questions using AI
+                        </label>
+                    </div>
+                    <p class="mt-1 text-sm text-gray-500">
+                        <svg class="inline w-4 h-4 mr-1 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                        When enabled, the system will use AI to automatically extract questions and marking criteria from your guide. You can also do this later from the guide details page.
+                    </p>
+                </div>
+
                 <!-- File Upload Area -->
                 <div class="mb-6">
                     <label for="guide_file" class="block text-sm font-medium text-gray-700 mb-2">
                         Marking Guide File
                     </label>
-                    <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-primary-400 transition-colors duration-200" id="drop-zone">
+                    
+                    <!-- File Validation Status -->
+                    <div id="file-validation" class="mb-3 hidden">
+                        <div class="flex items-center space-x-2">
+                            <div id="validation-icon" class="flex-shrink-0"></div>
+                            <span id="validation-message" class="text-sm"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-blue-400 transition-all duration-300 ease-in-out transform hover:scale-[1.02]"
+                        id="drop-zone">
                         <div class="space-y-1 text-center">
-                            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <svg class="mx-auto h-12 w-12 text-gray-400 transition-colors duration-200" stroke="currentColor" fill="none"
+                                viewBox="0 0 48 48" id="upload-icon">
+                                <path
+                                    d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
                             <div class="flex text-sm text-gray-600">
-                                <label for="guide_file" class="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500">
-                                    <span>Upload a file</span>
-                                    <input id="guide_file" name="guide_file" type="file" class="sr-only" accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.tiff,.bmp,.gif" required>
+                                <label for="guide_file"
+                                    class="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500 transition-colors duration-200">
+                                    <span id="upload-text">Upload guide file</span>
+                                    <input id="guide_file" name="guide_file" type="file" class="sr-only"
+                                        accept=".docx,.doc" required>
                                 </label>
                                 <p class="pl-1">or drag and drop</p>
                             </div>
                             <p class="text-xs text-gray-500">
-                                PDF, Word documents, or images up to 16MB
+                                Word documents (.docx, .doc) up to 100MB
                             </p>
+                            <div class="text-xs text-blue-600 mt-2">
+                                <span class="inline-flex items-center">
+                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    Only Word documents are supported - no OCR required!
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- File Preview -->
-                <div id="file-preview" class="hidden mb-6">
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <svg class="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                </svg>
-                            </div>
-                            <div class="ml-4 flex-1">
-                                <div class="text-sm font-medium text-gray-900" id="file-name"></div>
-                                <div class="text-sm text-gray-500" id="file-size"></div>
-                            </div>
-                            <div class="ml-4">
-                                <button type="button" id="remove-file" class="text-gray-400 hover:text-gray-500">
-                                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Selected File Display -->
+                <div id="selected-file" class="mb-6 hidden">
+                    <h3 class="text-sm font-medium text-gray-700 mb-2">Selected File:</h3>
+                    <div id="file-info" class="p-2 bg-gray-50 rounded"></div>
                 </div>
 
                 <!-- Upload Progress -->
-                <div id="upload-progress" class="hidden mb-6">
-                    <div class="bg-gray-200 rounded-full h-2">
-                        <div id="progress-bar" class="bg-primary-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                <div id="upload-progress" class="mb-6 hidden">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium text-gray-700" id="upload-status">Preparing upload...</span>
+                        <span id="progress-text" class="text-sm text-gray-500">0%</span>
                     </div>
-                    <p class="text-sm text-gray-600 mt-2">Uploading and processing...</p>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div id="progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
                 </div>
 
-                <!-- Form Actions -->
-                <div class="flex items-center justify-between">
-                    <a href="{{ url_for('dashboard') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                        </svg>
-                        Back to Dashboard
-                    </a>
-                    
-                    <button type="submit" id="submit-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed">
-                        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                        </svg>
-                        Upload Guide
+                <!-- Submit Button -->
+                <div class="flex justify-end">
+                    <button type="submit" id="submit-btn"
+                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-upload mr-2"></i>
+                        <span>Upload Guide</span>
                     </button>
                 </div>
             </form>
@@ -94,128 +134,471 @@
     </div>
 
     <!-- Help Section -->
-    <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <div class="flex">
-            <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
-                </svg>
-            </div>
-            <div class="ml-3">
-                <h3 class="text-sm font-medium text-blue-800">Tips for best results</h3>
-                <div class="mt-2 text-sm text-blue-700">
-                    <ul class="list-disc list-inside space-y-1">
-                        <li>Ensure your marking guide is clearly structured with question numbers and point values</li>
-                        <li>Use high-quality scans or images if uploading image files</li>
-                        <li>PDF and Word documents typically provide the best OCR results</li>
-                        <li>Include sample answers or key points for each question when possible</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
+    <div class="mt-8 bg-gray-50 rounded-lg p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">
+            <i class="fas fa-question-circle mr-2"></i>
+            Upload Guidelines
+        </h3>
+        <ul class="space-y-2 text-sm text-gray-600">
+            <li class="flex items-start">
+                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
+                Supported formats: Word documents (.docx, .doc) only
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
+                No file size limits - unlimited processing
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
+                The system will automatically extract text and questions from your Word document
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
+                Make sure your guide is clearly structured with question numbers and marks
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
+                No OCR processing required - direct text extraction from Word documents
+            </li>
+        </ul>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const dropZone = document.getElementById('drop-zone');
+    const form = document.getElementById('upload-guide-form');
     const fileInput = document.getElementById('guide_file');
-    const filePreview = document.getElementById('file-preview');
-    const fileName = document.getElementById('file-name');
-    const fileSize = document.getElementById('file-size');
-    const removeFileBtn = document.getElementById('remove-file');
-    const uploadProgress = document.getElementById('upload-progress');
+    const dropZone = document.getElementById('drop-zone');
+    const selectedFileDiv = document.getElementById('selected-file');
+    const fileInfoDiv = document.getElementById('file-info');
+    const progressDiv = document.getElementById('upload-progress');
     const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
     const submitBtn = document.getElementById('submit-btn');
-    const uploadForm = document.getElementById('upload-form');
+    const messagesDiv = document.querySelector('.upload-messages');
 
-    // Initialize drag and drop and file input using ExamGrader utilities
-    ExamGrader.fileUpload.initDragAndDrop(dropZone, fileInput, handleFileSelect);
+    // Set max file size (100MB default)
+    const maxFileSize = 100 * 1024 * 1024;
 
-    // Remove file
-    removeFileBtn.addEventListener('click', function() {
-        fileInput.value = '';
-        filePreview.classList.add('hidden');
-        dropZone.classList.remove('hidden');
-        ExamGrader.utils.showToast('File removed.', 'info');
-    });
+    // Upload form initialized
 
-    // Handle file selection and validation
-    function handleFileSelect(file) {
-        const errors = ExamGrader.fileUpload.validateFile(file);
-        if (errors.length > 0) {
-            errors.forEach(error => ExamGrader.utils.showToast(error, 'error'));
-            fileInput.value = ''; // Clear the input
-            filePreview.classList.add('hidden');
-            dropZone.classList.remove('hidden');
-            return;
+    // Enhanced file validation
+    function validateFile(file) {
+        const validationDiv = document.getElementById('file-validation');
+        const validationIcon = document.getElementById('validation-icon');
+        const validationMessage = document.getElementById('validation-message');
+        
+        // Reset validation display
+        validationDiv.classList.add('hidden');
+        
+        if (!file) return false;
+        
+        // File size validation
+        if (file.size > maxFileSize) {
+            showValidation('error', 'File size exceeds 100MB limit');
+            return false;
         }
-
-        console.log('File selected:', file);
-        fileName.textContent = file.name;
-        fileSize.textContent = ExamGrader.utils.formatFileSize(file.size);
-        filePreview.classList.remove('hidden');
-        dropZone.classList.add('hidden');
+        
+        // File type validation - only Word documents allowed
+        const allowedTypes = ['.docx', '.doc'];
+        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+        if (!allowedTypes.includes(fileExtension)) {
+            showValidation('error', 'Only Word documents (.docx, .doc) are supported.');
+            return false;
+        }
+        
+        // File name validation
+        if (file.name.length > 100) {
+            showValidation('warning', 'File name is very long. Consider renaming for better compatibility.');
+        } else if (fileExtension === '.docx') {
+            showValidation('success', 'Word document (.docx) selected - perfect!');
+        } else if (fileExtension === '.doc') {
+            showValidation('success', 'Word document (.doc) selected - great choice!');
+        }
+        
+        return true;
+    }
+    
+    function showValidation(type, message) {
+        const validationDiv = document.getElementById('file-validation');
+        const validationIcon = document.getElementById('validation-icon');
+        const validationMessage = document.getElementById('validation-message');
+        
+        const icons = {
+            success: '<svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>',
+            error: '<svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>',
+            warning: '<svg class="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>',
+            info: '<svg class="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>'
+        };
+        
+        const colors = {
+            success: 'text-green-700',
+            error: 'text-red-700',
+            warning: 'text-yellow-700',
+            info: 'text-blue-700'
+        };
+        
+        validationIcon.innerHTML = icons[type];
+        validationMessage.textContent = message;
+        validationMessage.className = `text-sm ${colors[type]}`;
+        validationDiv.classList.remove('hidden');
     }
 
-    // Form submission with progress
-    uploadForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        if (!fileInput.files.length) {
-            ExamGrader.utils.showToast('Please select a file to upload.', 'error');
-            return;
-        }
-
-        const formData = new FormData(uploadForm);
-        
-        // Show progress
-        uploadProgress.classList.remove('hidden');
-        ExamGrader.utils.showButtonLoading(submitBtn, 'Processing...');
-        submitBtn.disabled = true;
-
-        // Simulate progress
-        let progress = 0;
-        const progressInterval = setInterval(() => {
-            progress += Math.random() * 15;
-            if (progress > 90) progress = 90;
-            progressBar.style.width = progress + '%';
-        }, 200);
-
-        // Submit form
-        fetch(uploadForm.action, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            clearInterval(progressInterval);
-            progressBar.style.width = '100%';
+    // File selection handler with enhanced validation
+    if (fileInput) {
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
             
-            if (response.ok) {
-                setTimeout(() => {
-                    window.location.href = response.url || '{{ url_for("dashboard") }}';
-                }, 500);
+            if (file) {
+                if (validateFile(file)) {
+                    displaySelectedFile(file);
+                    updateDropZoneState('selected');
+                } else {
+                    // Clear the file input if validation fails
+                    fileInput.value = '';
+                    updateDropZoneState('error');
+                }
             } else {
-                // Attempt to parse error message from response
-                response.json().then(errorData => {
-                    const errorMessage = errorData.error || 'Upload failed. Please try again.';
-                    ExamGrader.utils.showToast(errorMessage, 'error');
-                }).catch(() => {
-                    ExamGrader.utils.showToast('Upload failed. Please try again.', 'error');
-                });
-                throw new Error('Upload failed');
+                updateDropZoneState('default');
             }
-        })
-        .catch(error => {
-            clearInterval(progressInterval);
-            uploadProgress.classList.add('hidden');
-            submitBtn.disabled = false;
-            ExamGrader.utils.hideButtonLoading(submitBtn, 'Upload Guide');
-            ExamGrader.utils.showToast('Upload failed. Please try again.', 'error');
         });
-    });
+    }
+
+    // Drag and drop handlers
+    if (dropZone) {
+        dropZone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            dropZone.classList.add('border-primary-400', 'bg-primary-50');
+        });
+
+        dropZone.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            dropZone.classList.remove('border-primary-400', 'bg-primary-50');
+        });
+
+        dropZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            dropZone.classList.remove('border-primary-400', 'bg-primary-50');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.size > maxFileSize) {
+                    showMessage('File size exceeds 100MB limit', 'error');
+                    return;
+                }
+                fileInput.files = files;
+                displaySelectedFile(file);
+            }
+        });
+    }
+
+    function displaySelectedFile(file) {
+        const fileSize = formatFileSize(file.size);
+        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+        
+        // Get file type icon
+        let fileIcon = 'fas fa-file';
+        if (fileExtension === '.pdf') {
+            fileIcon = 'fas fa-file-pdf text-red-500';
+        } else if (['.docx', '.doc'].includes(fileExtension)) {
+            fileIcon = 'fas fa-file-word text-blue-500';
+        } else if (fileExtension === '.txt') {
+            fileIcon = 'fas fa-file-alt text-gray-500';
+        }
+        
+        fileInfoDiv.innerHTML = `
+            <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                <div class="flex items-center">
+                    <i class="${fileIcon} mr-3 text-lg"></i>
+                    <div>
+                        <div class="text-sm font-medium text-gray-900">${file.name}</div>
+                        <div class="text-xs text-gray-500">${fileSize} • ${fileExtension.toUpperCase().substring(1)} file</div>
+                    </div>
+                </div>
+                <button type="button" onclick="clearSelectedFile()" class="text-gray-400 hover:text-red-500 transition-colors duration-200">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+            </div>
+        `;
+        selectedFileDiv.classList.remove('hidden');
+    }
+    
+    // Function to clear selected file
+    window.clearSelectedFile = function() {
+        fileInput.value = '';
+        selectedFileDiv.classList.add('hidden');
+        document.getElementById('file-validation').classList.add('hidden');
+        updateDropZoneState('default');
+    }
+    
+    // Function to update drop zone visual state
+    function updateDropZoneState(state) {
+        const uploadIcon = document.getElementById('upload-icon');
+        const uploadText = document.getElementById('upload-text');
+        
+        // Reset classes
+        dropZone.className = 'mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-md transition-all duration-300 ease-in-out';
+        
+        switch(state) {
+            case 'selected':
+                dropZone.classList.add('border-green-400', 'bg-green-50');
+                uploadIcon.classList.remove('text-gray-400');
+                uploadIcon.classList.add('text-green-500');
+                uploadText.textContent = 'File selected successfully';
+                break;
+            case 'error':
+                dropZone.classList.add('border-red-400', 'bg-red-50');
+                uploadIcon.classList.remove('text-gray-400');
+                uploadIcon.classList.add('text-red-500');
+                uploadText.textContent = 'Please select a valid file';
+                break;
+            case 'dragover':
+                dropZone.classList.add('border-blue-400', 'bg-blue-50', 'transform', 'scale-105');
+                uploadIcon.classList.remove('text-gray-400');
+                uploadIcon.classList.add('text-blue-500');
+                break;
+            default:
+                dropZone.classList.add('border-gray-300', 'hover:border-blue-400', 'transform', 'hover:scale-[1.02]');
+                uploadIcon.classList.remove('text-green-500', 'text-red-500', 'text-blue-500');
+                uploadIcon.classList.add('text-gray-400');
+                uploadText.textContent = 'Upload guide file';
+        }
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function showMessage(message, type) {
+        type = type || 'info';
+        const alertClass = type === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 
+                          type === 'success' ? 'bg-green-50 border-green-200 text-green-700' :
+                          'bg-blue-50 border-blue-200 text-blue-700';
+        
+        messagesDiv.innerHTML = '<div class="rounded-md border p-4 ' + alertClass + '"><div class="flex"><div class="ml-3"><p class="text-sm">' + message + '</p></div></div></div>';
+    }
+
+    // Form submission handler
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            if (!fileInput.files[0]) {
+                showMessage('Please select a file to upload.', 'error');
+                return;
+            }
+
+            const formData = new FormData(form);
+            
+            // Show progress
+            progressDiv.classList.remove('hidden');
+            submitBtn.disabled = true;
+            
+            const xhr = new XMLHttpRequest();
+            let currentStage = 'uploading';
+            
+            // Progress stages with their weights and labels
+            const stages = {
+                uploading: { weight: 30, label: 'Uploading file...' },
+                processing: { weight: 40, label: 'Processing document...' },
+                extracting: { weight: 20, label: 'Extracting content...' },
+                storing: { weight: 10, label: 'Storing in database...' }
+            };
+            
+            function updateProgress(stage, stagePercent) {
+                stagePercent = stagePercent || 0;
+                currentStage = stage;
+                
+                // Calculate overall progress
+                let totalProgress = 0;
+                const stageKeys = Object.keys(stages);
+                const currentIndex = stageKeys.indexOf(stage);
+                
+                // Add completed stages
+                for (let i = 0; i < currentIndex; i++) {
+                    totalProgress += stages[stageKeys[i]].weight;
+                }
+                
+                // Add current stage progress
+                totalProgress += (stagePercent / 100) * stages[stage].weight;
+                
+                // Update progress bar and text
+                progressBar.style.width = Math.min(totalProgress, 95) + '%';
+                progressText.textContent = stages[stage].label + ' ' + Math.round(totalProgress) + '%';
+                
+                // Update the label text
+                const progressLabel = progressDiv.querySelector('.text-sm.font-medium');
+                if (progressLabel) {
+                    progressLabel.textContent = stages[stage].label;
+                }
+            }
+            
+            // Function to animate progress gradually
+            function animateProgress(stage, startPercent, endPercent, duration) {
+                const startTime = Date.now();
+                const progressDiff = endPercent - startPercent;
+                
+                function animate() {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const currentPercent = startPercent + (progressDiff * progress);
+                    
+                    updateProgress(stage, currentPercent);
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    }
+                }
+                animate();
+            }
+            
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable && currentStage === 'uploading') {
+                    const uploadPercent = (e.loaded / e.total) * 100;
+                    updateProgress('uploading', uploadPercent);
+                }
+            });
+            
+            xhr.addEventListener('load', function() {
+                
+                if (xhr.status === 200) {
+                    // Check if auto-processing is enabled
+                    const autoProcessCheckbox = document.getElementById('auto_process');
+                    const isAutoProcessEnabled = autoProcessCheckbox && autoProcessCheckbox.checked;
+                    
+                    if (isAutoProcessEnabled) {
+                        // Show extended processing for LLM extraction
+                        updateProgress('processing', 0);
+                        
+                        // Stage 1: Text extraction (faster)
+                        setTimeout(function() { 
+                            animateProgress('processing', 0, 30, 3000); // 3 seconds for text extraction
+                        }, 500);
+                        
+                        // Stage 2: LLM question extraction (slower)
+                        setTimeout(function() { 
+                            updateProgress('extracting', 0);
+                            const progressLabel = progressDiv.querySelector('.text-sm.font-medium');
+                            if (progressLabel) {
+                                progressLabel.textContent = 'AI is extracting questions...';
+                            }
+                            animateProgress('extracting', 0, 80, 20000); // 20 seconds for LLM processing
+                        }, 4000);
+                        
+                        // Stage 3: Validation and storage
+                        setTimeout(function() { 
+                            updateProgress('storing', 0);
+                            const progressLabel = progressDiv.querySelector('.text-sm.font-medium');
+                            if (progressLabel) {
+                                progressLabel.textContent = 'Validating and storing results...';
+                            }
+                            animateProgress('storing', 0, 100, 4000); // 4 seconds for validation and storage
+                        }, 25000);
+                        
+                        // Complete after LLM processing
+                        setTimeout(function() {
+                            completeUpload();
+                        }, 30000);
+                    } else {
+                        // Quick processing for upload-only (no LLM)
+                        updateProgress('processing', 0);
+                        
+                        setTimeout(function() { 
+                            animateProgress('processing', 0, 60, 2000); // 2 seconds for basic processing
+                        }, 500);
+                        
+                        setTimeout(function() { 
+                            updateProgress('storing', 0);
+                            animateProgress('storing', 0, 100, 1500); // 1.5 seconds for storage
+                        }, 3000);
+                        
+                        // Complete quickly for basic upload
+                        setTimeout(function() {
+                            completeUpload();
+                        }, 5000);
+                    }
+                } else {
+                    // Handle error responses immediately
+                    progressDiv.classList.add('hidden');
+                    submitBtn.disabled = false;
+                    showMessage('Upload failed. Please try again.', 'error');
+                }
+            });
+            
+            // Function to complete the upload process
+            function completeUpload() {
+                progressBar.style.width = '100%';
+                progressText.textContent = 'Complete! 100%';
+                const progressLabel = progressDiv.querySelector('.text-sm.font-medium');
+                if (progressLabel) {
+                    progressLabel.textContent = 'Upload Complete';
+                }
+                
+                setTimeout(function() {
+                    progressDiv.classList.add('hidden');
+                    submitBtn.disabled = false;
+                    
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.success || response.status === 'success') {
+                            showMessage(response.message || 'Guide uploaded successfully!', 'success');
+                            setTimeout(function() {
+                                window.location.href = '/guides';
+                            }, 2000);
+                        } else {
+                            // Handle upload errors
+                            let errorMessage = response.error || response.message || 'Upload failed';
+                            if (errorMessage.toLowerCase().includes('word document') || 
+                                errorMessage.toLowerCase().includes('docx') ||
+                                errorMessage.toLowerCase().includes('unsupported')) {
+                                errorMessage = 'Please upload a valid Word document (.docx or .doc file). Other file formats are not supported.';
+                            } else if (errorMessage.toLowerCase().includes('empty') || 
+                                      errorMessage.toLowerCase().includes('insufficient text')) {
+                                errorMessage = 'The Word document appears to be empty or contains insufficient text. Please check your document and try again.';
+                            } else if (errorMessage.toLowerCase().includes('timeout')) {
+                                errorMessage = 'Upload timed out. The file may be too large or complex. Please try a smaller file or contact support.';
+                            }
+                            showMessage(errorMessage, 'error');
+                        }
+                    } catch (e) {
+                        // Parse the response text to show appropriate message
+                        const responseText = xhr.responseText;
+                        if (responseText.includes('extracted') && responseText.includes('questions')) {
+                            showMessage('Guide uploaded and processed successfully!', 'success');
+                        } else {
+                            showMessage('Guide uploaded successfully!', 'success');
+                        }
+                        setTimeout(function() {
+                            window.location.href = '/guides';
+                        }, 2000);
+                    }
+                }, 800);
+            }
+            
+            xhr.addEventListener('error', function() {
+                progressDiv.classList.add('hidden');
+                submitBtn.disabled = false;
+                showMessage('Upload failed. Please check your connection and try again.', 'error');
+            });
+            
+            xhr.open('POST', form.action || window.location.pathname);
+            
+            // Set CSRF token header
+            const csrfToken = document.querySelector('input[name="csrf_token"]');
+            if (csrfToken) {
+                xhr.setRequestHeader('X-CSRFToken', csrfToken.value);
+            }
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+            xhr.send(formData);
+        });
+    }
 });
 </script>
 {% endblock %}

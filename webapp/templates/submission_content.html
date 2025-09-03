@@ -9,7 +9,7 @@
             <li>
               <div>
                 <a
-                  href="{{ url_for('view_submissions') }}"
+                  href="{{ url_for('main.submissions') }}"
                   class="text-gray-400 hover:text-gray-500"
                 >
                   <svg
@@ -74,7 +74,7 @@
           Download
         </button>
         <a
-          href="{{ url_for('view_submissions') }}"
+          href="{{ url_for('main.submissions') }}"
           class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
         >
           <svg
@@ -178,7 +178,7 @@
         <dl>
           <dt class="text-sm font-medium text-gray-500 mb-1">Uploaded</dt>
           <dd class="text-lg font-medium text-gray-900">
-            {{ uploaded_at[:10] if uploaded_at else 'Unknown' }}
+            {{ submission.created_at.strftime("%Y-%m-%d") if submission.created_at else 'Unknown' }}
           </dd>
         </dl>
       </div>
@@ -206,7 +206,7 @@
         <dl>
           <dt class="text-sm font-medium text-gray-500 mb-1">Size</dt>
           <dd class="text-lg font-medium text-gray-900">
-            {{ "%.1f"|format(file_size) }} KB
+            {{ "%.1f"|format(file_size_kb) }} KB
           </dd>
         </dl>
       </div>
@@ -301,10 +301,41 @@
         {% for key, value in extracted_answers.items() %}
         <div class="bg-gray-50 rounded-lg p-4">
           <h4 class="text-sm font-medium text-gray-900 mb-2">
-            {{ key|title }}
+            {{ key|title|replace('_', ' ') }}
           </h4>
           <div class="text-sm text-gray-700">
-            {% if value is string %}
+            {% if key == 'content_analysis' %}
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <span class="font-medium">Total Lines:</span> {{ value.total_lines }}
+                </div>
+                <div>
+                  <span class="font-medium">Word Count:</span> {{ value.word_count }}
+                </div>
+                <div>
+                  <span class="font-medium">Character Count:</span> {{ value.character_count }}
+                </div>
+                <div>
+                  <span class="font-medium">Processing Status:</span> 
+                  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium 
+                    {% if processing_info.status == 'completed' %}bg-green-100 text-green-800
+                    {% elif processing_info.status == 'failed' %}bg-red-100 text-red-800
+                    {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                    {{ processing_info.status|title }}
+                  </span>
+                </div>
+              </div>
+              {% if value.sample_lines %}
+              <div class="mt-4">
+                <span class="font-medium">Sample Content (first 5 lines):</span>
+                <div class="mt-2 bg-white rounded border p-3">
+                  {% for line in value.sample_lines %}
+                  <div class="text-sm text-gray-600 mb-1">{{ loop.index }}. {{ line[:100] }}{% if line|length > 100 %}…{% endif %}</div>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+            {% elif value is string %}
             <pre class="whitespace-pre-wrap">{{ value }}</pre>
             {% else %}
             <pre class="whitespace-pre-wrap">{{ value|tojson(indent=2) }}</pre>
@@ -329,11 +360,28 @@
           />
         </svg>
         <h3 class="mt-2 text-sm font-medium text-gray-900">
-          No extracted answers
+          No structured answers yet
         </h3>
         <p class="mt-1 text-sm text-gray-500">
-          No structured answers were extracted from this submission.
+          {% if processing_info.status == 'completed' and processing_info.has_content %}
+          This submission has been processed and text extracted, but hasn't been graded yet. 
+          Structured answers will appear here after grading.
+          {% elif processing_info.status == 'failed' %}
+          Processing failed: {{ processing_info.error or 'Unknown error' }}
+          {% elif not processing_info.has_content %}
+          No text content was extracted from this submission.
+          {% else %}
+          This submission is still being processed.
+          {% endif %}
         </p>
+        {% if processing_info.has_content %}
+        <div class="mt-4 text-sm text-gray-600">
+          <p><strong>Content extracted:</strong> {{ processing_info.content_length }} characters</p>
+          {% if processing_info.ocr_confidence %}
+          <p><strong>OCR Confidence:</strong> {{ (processing_info.ocr_confidence * 100)|round }}%</p>
+          {% endif %}
+        </div>
+        {% endif %}
       </div>
       {% endif %}
     </div>
@@ -362,7 +410,7 @@
         <div>
           <dt class="text-sm font-medium text-gray-500">Upload Date</dt>
           <dd class="mt-1 text-sm text-gray-900">
-            {{ uploaded_at if uploaded_at else 'Unknown' }}
+            {{ submission.created_at.strftime("%Y-%m-%d %H:%M:%S") if submission.created_at else 'Unknown' }}
           </dd>
         </div>
         <div>
@@ -386,7 +434,7 @@
         <div>
           <dt class="text-sm font-medium text-gray-500">Content Size</dt>
           <dd class="mt-1 text-sm text-gray-900">
-            {{ "%.1f"|format(file_size) }} KB
+            {{ "%.1f"|format(file_size_kb) }} KB
           </dd>
         </div>
         <div>
@@ -395,6 +443,53 @@
             {{ raw_text|length }} characters
           </dd>
         </div>
+        {% if processing_info.ocr_confidence %}
+        <div>
+          <dt class="text-sm font-medium text-gray-500">OCR Confidence</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            <div class="flex items-center">
+              <span class="mr-2">{{ (processing_info.ocr_confidence * 100)|round }}%</span>
+              <div class="w-16 bg-gray-200 rounded-full h-2">
+                <div class="bg-blue-600 h-2 rounded-full" style="width: {{ (processing_info.ocr_confidence * 100)|round }}%"></div>
+              </div>
+            </div>
+          </dd>
+        </div>
+        {% endif %}
+        <div>
+          <dt class="text-sm font-medium text-gray-500">File Type</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-800">
+              {{ submission.file_type|upper if submission.file_type else 'Unknown' }}
+            </span>
+          </dd>
+        </div>
+        {% if processing_info.error %}
+        <div class="sm:col-span-2">
+          <dt class="text-sm font-medium text-gray-500">Processing Error</dt>
+          <dd class="mt-1 text-sm text-red-600">
+            {{ processing_info.error }}
+          </dd>
+        </div>
+        {% endif %}
+        {% if submission.student_name %}
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Student Name</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            {{ submission.student_name }}
+          </dd>
+        </div>
+        {% endif %}
+        {% if marking_guide %}
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Marking Guide</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            <a href="{{ url_for('main.guide_details', guide_id=marking_guide.id) }}" class="text-blue-600 hover:text-blue-800">
+              {{ marking_guide.title }}
+            </a>
+          </dd>
+        </div>
+        {% endif %}
       </dl>
     </div>
   </div>
@@ -437,41 +532,204 @@
   function copyToClipboard(contentType) {
     let textToCopy = "";
 
-    if (contentType === "raw-text") {
-      textToCopy = JSON.parse(`{{ raw_text|tojson|safe }}`);
-    }
+    try {
+      if (contentType === "raw-text") {
+        // Safely parse the raw text
+        try {
+          textToCopy = {{ raw_text|tojson|safe }};
+        } catch (parseError) {
+          console.error("Error parsing raw text:", parseError);
+          // Fallback to getting text from DOM
+          const contentElement = document.querySelector("#raw-text-content pre");
+          if (contentElement) {
+            textToCopy = contentElement.textContent || contentElement.innerText || "";
+          }
+        }
+      }
 
-    navigator.clipboard
-      .writeText(textToCopy)
-      .then(function () {
-        // Show success message
-        ExamGrader.utils.showToast("Content copied to clipboard!", "success");
-      })
-      .catch(function (err) {
-        console.error("Failed to copy: ", err);
-        ExamGrader.utils.showToast("Failed to copy content", "error");
-      });
+      if (!textToCopy) {
+        showNotification("No content available to copy", "warning");
+        return;
+      }
+
+      // Check if clipboard API is available
+      if (!navigator.clipboard) {
+        // Fallback for older browsers
+        fallbackCopyToClipboard(textToCopy);
+        return;
+      }
+
+      navigator.clipboard
+        .writeText(textToCopy)
+        .then(function () {
+          showNotification("Content copied to clipboard!", "success");
+        })
+        .catch(function (err) {
+          console.error("Failed to copy: ", err);
+          // Try fallback method
+          fallbackCopyToClipboard(textToCopy);
+        });
+    } catch (error) {
+      console.error("Error in copyToClipboard:", error);
+      showNotification("Failed to copy content", "error");
+    }
+  }
+
+  function fallbackCopyToClipboard(text) {
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      
+      if (successful) {
+        showNotification("Content copied to clipboard!", "success");
+      } else {
+        showNotification("Failed to copy content", "error");
+      }
+    } catch (err) {
+      console.error("Fallback copy failed:", err);
+      showNotification("Copy not supported in this browser", "error");
+    }
+  }
+
+  function showNotification(message, type) {
+    if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+      ExamGrader.notificationManager.notify(message, type);
+    } else {
+      // Custom notification fallback
+      showCustomNotification(message, type);
+    }
+  }
+
+  function showCustomNotification(message, type) {
+    const notification = document.createElement('div');
+    const bgColor = type === 'success' ? 'bg-success-100 border-success-500 text-success-700' : 
+                   type === 'error' ? 'bg-danger-100 border-danger-500 text-danger-700' :
+                   type === 'warning' ? 'bg-warning-100 border-warning-500 text-warning-700' :
+                   'bg-info-100 border-info-500 text-info-700';
+    
+    notification.className = `fixed top-4 right-4 max-w-sm w-full ${bgColor} border-l-4 p-4 rounded shadow-lg z-50`;
+    notification.innerHTML = `
+        <div class="flex">
+            <div class="flex-shrink-0">
+                ${type === 'success' ? 
+                    '<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>' :
+                    '<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>'
+                }
+            </div>
+            <div class="ml-3">
+                <p class="text-sm font-medium">${message}</p>
+            </div>
+            <div class="ml-auto pl-3">
+                <button type="button" class="inline-flex text-gray-400 hover:text-gray-600" onclick="this.parentElement.parentElement.parentElement.remove()">
+                    <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
   }
 
   function downloadContent() {
-    const content = {
-      submission_id: "{{ submission_id }}",
-      filename: "{{ filename }}",
-      uploaded_at: "{{ uploaded_at }}",
-      raw_text: JSON.parse("{{ raw_text|tojson }}"),
-      extracted_answers: JSON.parse(`{{ extracted_answers|tojson|safe }}`),
-    };
+    try {
+      // Show loading state
+      const downloadBtn = document.querySelector('button[onclick="downloadContent()"]');
+      let originalText = '';
+      
+      if (downloadBtn) {
+        originalText = downloadBtn.innerHTML;
+        downloadBtn.innerHTML = `
+          <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Processing...
+        `;
+        downloadBtn.disabled = true;
+      }
 
-    const dataStr = JSON.stringify(content, null, 2);
-    const dataBlob = new Blob([dataStr], { type: "application/json" });
+      // Safely prepare content
+      const content = {
+        submission_id: "{{ submission_id }}",
+        filename: "{{ filename }}",
+        uploaded_at: "{{ submission.created_at.isoformat() if submission.created_at else '' }}",
+        raw_text: {{ raw_text|tojson|safe }},
+        processing_info: {
+          status: "{{ processing_info.status if processing_info else 'unknown' }}",
+          has_content: {{ 'true' if processing_info and processing_info.has_content else 'false' }},
+          content_length: {{ processing_info.content_length if processing_info and processing_info.content_length else 0 }},
+          {% if processing_info and processing_info.ocr_confidence %}
+          ocr_confidence: {{ processing_info.ocr_confidence }},
+          {% endif %}
+          {% if processing_info and processing_info.error %}
+          error: "{{ processing_info.error }}",
+          {% endif %}
+        },
+        metadata: {
+          file_size_kb: {{ file_size_kb }},
+          character_count: {{ raw_text|length }},
+          file_type: "{{ submission.file_type if submission and submission.file_type else 'unknown' }}",
+          {% if submission and submission.student_name %}
+          student_name: "{{ submission.student_name }}",
+          {% endif %}
+          export_timestamp: new Date().toISOString()
+        }
+      };
 
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(dataBlob);
-    link.download = `submission_${content.submission_id.substring(
-      0,
-      8
-    )}_content.json`;
-    link.click();
+      // Safely parse extracted answers
+      try {
+        content.extracted_answers = {{ extracted_answers|tojson|safe if extracted_answers else '{}' }};
+      } catch (parseError) {
+        console.warn('Error parsing extracted answers:', parseError);
+        content.extracted_answers = {};
+      }
+
+      const dataStr = JSON.stringify(content, null, 2);
+      const dataBlob = new Blob([dataStr], { type: "application/json" });
+
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(dataBlob);
+      link.download = `submission_${content.submission_id.substring(0, 8)}_content.json`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up URL
+      setTimeout(() => {
+        URL.revokeObjectURL(link.href);
+      }, 100);
+
+      showNotification("Content downloaded successfully!", "success");
+
+    } catch (error) {
+      console.error("Error downloading content:", error);
+      showNotification("Failed to download content: " + error.message, "error");
+    } finally {
+      // Restore button state
+      const downloadBtn = document.querySelector('button[onclick="downloadContent()"]');
+      if (downloadBtn && originalText) {
+        downloadBtn.innerHTML = originalText;
+        downloadBtn.disabled = false;
+      }
+    }
   }
 </script>
 {% endblock %}

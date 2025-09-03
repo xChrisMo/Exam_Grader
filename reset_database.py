@@ -17,11 +17,17 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 # Add project root to Python path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from dotenv import load_dotenv
+from src.constants import (
+    CLI_YES_RESPONSES,
+    DEFAULT_DATABASE_URL,
+    ENV_DATABASE_URL,
+)
 
 # Load environment variables
 load_dotenv("instance/.env", override=True)
@@ -33,7 +39,7 @@ def reset_database(confirm: bool = False):
         print("⚠️  WARNING: This will completely delete the existing database!")
         print("   All users, submissions, and grading data will be lost.")
         response = input("   Are you sure you want to continue? (yes/no): ")
-        if response.lower() not in ['yes', 'y']:
+        if response.lower() not in CLI_YES_RESPONSES:
             print("Database reset cancelled.")
             return False
     
@@ -41,7 +47,7 @@ def reset_database(confirm: bool = False):
         print("🔄 Starting database reset...")
         
         # Get database URL from config
-        database_url = os.getenv("DATABASE_URL", "sqlite:///exam_grader.db")
+        database_url = os.getenv(ENV_DATABASE_URL, DEFAULT_DATABASE_URL)
         
         # Handle SQLite database file
         if database_url.startswith('sqlite:///'):
@@ -70,9 +76,60 @@ def reset_database(confirm: bool = False):
         db.init_app(app)
         
         with app.app_context():
-            # Create all tables
-            db.create_all()
-            print("✅ Database tables created")
+            # Drop all tables and indexes before creating to ensure a clean slate
+            try:
+                # First, try to drop all tables which should also drop associated indexes
+                db.drop_all()
+                print("✅ Dropped existing database tables and indexes (if any)")
+            except Exception as e:
+                print(f"⚠️  Warning during drop_all: {e}")
+                # If drop_all fails, try to manually drop problematic indexes
+                try:
+                    from sqlalchemy import text
+                    # Drop specific indexes that might cause conflicts
+                    problematic_indexes = [
+                        'idx_user_status',
+                        'idx_submission_user_status',
+                        'idx_grading_session_user_status',
+                        'idx_submission_guide', 
+                        'idx_progress_status',
+                        'idx_user_created',
+                        'idx_status_created',
+                        'idx_guide_status'
+                    ]
+                    for index_name in problematic_indexes:
+                        try:
+                            db.session.execute(text(f"DROP INDEX IF EXISTS {index_name}"))
+                            print(f"✅ Dropped index: {index_name}")
+                        except Exception as idx_e:
+                            print(f"⚠️  Could not drop index {index_name}: {idx_e}")
+                    db.session.commit()
+                except Exception as cleanup_e:
+                    print(f"⚠️  Warning during index cleanup: {cleanup_e}")
+            
+            # Create all tables with proper error handling
+            try:
+                db.create_all()
+                print("✅ Database tables created")
+            except Exception as create_e:
+                print(f"❌ Error creating tables: {create_e}")
+                # If creation fails due to existing indexes, try to handle it
+                if "already exists" in str(create_e):
+                    print("⚠️  Some indexes already exist, attempting to continue...")
+                    # Try to create tables individually to isolate the problem
+                    from src.database.models import User, MarkingGuide, Submission, Mapping, GradingResult, Session, GradingSession
+                    models = [User, MarkingGuide, Submission, Mapping, GradingResult, Session, GradingSession]
+                    for model in models:
+                        try:
+                            model.__table__.create(db.engine, checkfirst=True)
+                            print(f"✅ Created table: {model.__tablename__}")
+                        except Exception as model_e:
+                            if "already exists" not in str(model_e):
+                                print(f"❌ Error creating {model.__tablename__}: {model_e}")
+                            else:
+                                print(f"ℹ️  Table {model.__tablename__} already exists")
+                else:
+                    raise create_e
             
             # Verify tables exist
             from sqlalchemy import inspect
@@ -110,7 +167,7 @@ def check_database_status():
     try:
         print("🔍 Checking database status...")
         
-        database_url = os.getenv("DATABASE_URL", "sqlite:///exam_grader.db")
+        database_url = os.getenv(ENV_DATABASE_URL, DEFAULT_DATABASE_URL)
         print(f"Database URL: {database_url}")
         
         if database_url.startswith('sqlite:///'):

@@ -1,0 +1,392 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div class="px-4 py-5 sm:px-6">
+            <h2 class="text-lg leading-6 font-medium text-gray-900">AI Processing</h2>
+            <p class="mt-1 max-w-2xl text-sm text-gray-500">Your submissions are being processed by AI.</p>
+        </div>
+        <div class="border-t border-gray-200">
+            <div class="px-4 py-5 sm:p-6 text-center">
+                <div id="processing-status" class="mb-8">
+                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
+                        <svg class="animate-spin h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg leading-6 font-medium text-gray-900" id="progress-title">AI Processing in Progress</h3>
+                    
+                    <div class="mt-6 max-w-xl mx-auto">
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                            <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Processing progress"></div>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-2" id="progress-text">Initializing...</p>
+                        <p class="text-xs text-gray-400 mt-1" id="progress-details"></p>
+                        <p class="text-xs text-gray-400 mt-1" id="progress-eta"></p>
+                        
+                        <!-- Processing steps indicator -->
+                        <div class="mt-4 text-xs text-gray-500">
+                            <div class="flex justify-center space-x-4">
+                                <div class="flex items-center">
+                                    <div id="step-ocr" class="w-2 h-2 bg-gray-300 rounded-full mr-2" role="presentation"></div>
+                                    <span>OCR Processing</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <div id="step-mapping" class="w-2 h-2 bg-gray-300 rounded-full mr-2" role="presentation"></div>
+                                    <span>Answer Mapping</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <div id="step-grading" class="w-2 h-2 bg-gray-300 rounded-full mr-2" role="presentation"></div>
+                                    <span>AI Grading</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="processing-complete" class="hidden">
+                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                        <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">Processing Complete!</h3>
+                    <p class="text-sm text-gray-500 mt-2">Your submissions have been processed successfully.</p>
+                    
+                    <div class="mt-6">
+                        <a href="{{ url_for('main.results') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" role="button" tabindex="0">
+                            View Results
+                        </a>
+                        <a href="{{ url_for('main.dashboard') }}" class="ml-3 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" role="button" tabindex="0">
+                            Return to Dashboard
+                        </a>
+                    </div>
+                </div>
+                
+                <div id="processing-error" class="hidden">
+                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                        <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">Processing Failed</h3>
+                    <p class="text-sm text-gray-500 mt-2" id="error-message">An error occurred during processing.</p>
+                    
+                    <div class="mt-6">
+                        <button id="retry-button" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" role="button" tabindex="0">
+                            <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Retry Processing
+                        </button>
+                        <a href="{{ url_for('main.dashboard') }}" class="ml-3 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" role="button" tabindex="0">
+                            Return to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get progress ID from URL parameter or session
+        const urlParams = new URLSearchParams(window.location.search);
+        const progressId = urlParams.get('progress_id') || '';
+        
+        if (!progressId) {
+            console.warn('No progress ID found in URL parameters');
+            showError('No progress ID found. Please return to the dashboard and try again.');
+            return;
+        }
+        
+        // Start polling for progress updates
+        startProgressPolling(progressId);
+        
+        // Set up retry button
+        const retryButton = document.getElementById('retry-button');
+        if (retryButton) {
+            retryButton.addEventListener('click', function() {
+                retryProcessing();
+            });
+        }
+        
+        function startProgressPolling(progressId) {
+            
+            // Clear any existing interval
+            if (window.progressPollingInterval) {
+                clearInterval(window.progressPollingInterval);
+            }
+            
+            // Reset error count
+            window.progressErrorCount = 0;
+            
+            // Poll every 2 seconds with exponential backoff on errors
+            let pollInterval = 2000; // Start with 2 seconds
+            
+            function poll() {
+                getProgress(progressId)
+                    .then(progressData => {
+                        updateProgressUI(progressData);
+                        
+                        // Check status from either nested or flat structure
+                        const status = progressData.status || (progressData.progress && progressData.progress.status) || 'processing';
+                        const message = progressData.message || (progressData.progress && progressData.progress.message) || 'Processing failed';
+                        
+                        // Check if processing is complete or failed
+                        if (status === 'completed') {
+                            stopProgressPolling();
+                            showComplete();
+                        } else if (status === 'failed' || status === 'error') {
+                            stopProgressPolling();
+                            showError(message);
+                        } else {
+                            // Reset poll interval on successful request
+                            pollInterval = 2000;
+                            window.progressPollingInterval = setTimeout(poll, pollInterval);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error polling for progress:', error);
+                        
+                        // Don't stop polling immediately on network errors, retry a few times
+                        if (window.progressErrorCount === undefined) {
+                            window.progressErrorCount = 0;
+                        }
+                        window.progressErrorCount++;
+                        
+                        if (window.progressErrorCount >= 5) {
+                            stopProgressPolling();
+                            showError('Connection error: Unable to check progress. Please check your internet connection and try again.');
+                        } else {
+                            // Exponential backoff: increase interval on errors
+                            pollInterval = Math.min(pollInterval * 1.5, 10000); // Max 10 seconds
+                            window.progressPollingInterval = setTimeout(poll, pollInterval);
+                        }
+                    });
+            }
+            
+            // Start polling
+            poll();
+        }
+        
+        function stopProgressPolling() {
+            if (window.progressPollingInterval) {
+                clearTimeout(window.progressPollingInterval);
+                window.progressPollingInterval = null;
+            }
+        }
+        
+        async function getProgress(progressId) {
+            try {
+                const response = await fetch(`/processing/api/status/${progressId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || ''
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('Progress session not found. The processing may have completed or expired.');
+                    } else if (response.status >= 500) {
+                        throw new Error('Server error occurred. Please try again later.');
+                    } else {
+                        throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+                    }
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to get progress information');
+                }
+                
+                // Reset error count on successful request
+                window.progressErrorCount = 0;
+                
+                // Return the full data object to handle both structures
+                return data;
+            } catch (error) {
+                console.error('Progress fetch error:', error);
+                throw error;
+            }
+        }
+        
+        function updateProgressUI(progressData) {
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            const progressDetails = document.getElementById('progress-details');
+            const progressEta = document.getElementById('progress-eta');
+            
+            // Handle both nested progress object and flat structure
+            const progress = progressData.progress || progressData;
+            const percentage = progress.percentage || progressData.progress || 0;
+            const currentOperation = progress.current_operation || progressData.current_operation || 'Processing...';
+            const currentStep = progress.current_step || progressData.current_step || 1;
+            const totalSteps = progress.total_steps || progressData.total_steps || 3;
+            const submissionIndex = progress.submission_index || progressData.submission_index || 1;
+            const totalSubmissions = progress.total_submissions || progressData.total_submissions || 1;
+            const estimatedTime = progress.estimated_time_remaining || progressData.estimated_time_remaining;
+            const details = progress.details || progressData.details;
+            const status = progress.status || progressData.status || 'processing';
+            
+            if (progressBar) {
+                progressBar.style.width = `${percentage}%`;
+                progressBar.setAttribute('aria-valuenow', percentage);
+            }
+            
+            if (progressText) {
+                progressText.textContent = currentOperation;
+            }
+            
+            if (progressDetails) {
+                const detailsText = details || 
+                    `Step ${currentStep}/${totalSteps} - Submission ${submissionIndex}/${totalSubmissions}`;
+                progressDetails.textContent = detailsText;
+            }
+            
+            if (progressEta && estimatedTime) {
+                const eta = Math.round(estimatedTime);
+                progressEta.textContent = `Estimated time remaining: ${eta}s`;
+            } else if (progressEta) {
+                progressEta.textContent = '';
+            }
+            
+            // Update processing steps based on current operation
+            updateProcessingSteps(currentOperation);
+            
+            // Update status color based on progress status
+            if (status === 'completed') {
+                progressBar.classList.remove('bg-blue-600');
+                progressBar.classList.add('bg-green-600');
+            } else if (status === 'error' || status === 'failed') {
+                progressBar.classList.remove('bg-blue-600');
+                progressBar.classList.add('bg-red-600');
+            }
+        }
+        
+        function updateProcessingSteps(currentOperation) {
+            const stepOcr = document.getElementById('step-ocr');
+            const stepMapping = document.getElementById('step-mapping');
+            const stepGrading = document.getElementById('step-grading');
+            
+            // Reset all steps
+            [stepOcr, stepMapping, stepGrading].forEach(step => {
+                if (step) {
+                    step.className = 'w-2 h-2 bg-gray-300 rounded-full mr-2';
+                }
+            });
+            
+            // Update based on current operation
+            if (currentOperation) {
+                const operation = currentOperation.toLowerCase();
+                
+                if (operation.includes('ocr') || operation.includes('extract') || operation.includes('image')) {
+                    if (stepOcr) stepOcr.className = 'w-2 h-2 bg-blue-600 rounded-full mr-2';
+                } else if (operation.includes('map') || operation.includes('match')) {
+                    if (stepOcr) stepOcr.className = 'w-2 h-2 bg-green-600 rounded-full mr-2';
+                    if (stepMapping) stepMapping.className = 'w-2 h-2 bg-blue-600 rounded-full mr-2';
+                } else if (operation.includes('grade') || operation.includes('score') || operation.includes('evaluate')) {
+                    if (stepOcr) stepOcr.className = 'w-2 h-2 bg-green-600 rounded-full mr-2';
+                    if (stepMapping) stepMapping.className = 'w-2 h-2 bg-green-600 rounded-full mr-2';
+                    if (stepGrading) stepGrading.className = 'w-2 h-2 bg-blue-600 rounded-full mr-2';
+                } else if (operation.includes('complete') || operation.includes('finalize')) {
+                    [stepOcr, stepMapping, stepGrading].forEach(step => {
+                        if (step) step.className = 'w-2 h-2 bg-green-600 rounded-full mr-2';
+                    });
+                }
+            }
+        }
+        
+        function showComplete() {
+            document.getElementById('processing-status').classList.add('hidden');
+            document.getElementById('processing-complete').classList.remove('hidden');
+            
+            // Auto-redirect to results page after 5 seconds, but allow user to click immediately
+            setTimeout(() => {
+                // Only redirect if user hasn't already clicked a button
+                if (document.getElementById('processing-complete').style.display !== 'none') {
+                    window.location.href = '{{ url_for("main.results") }}';
+                }
+            }, 5000);
+        }
+        
+        function showError(message) {
+            document.getElementById('processing-status').classList.add('hidden');
+            document.getElementById('processing-error').classList.remove('hidden');
+            document.getElementById('error-message').textContent = message;
+        }
+        
+        async function retryProcessing() {
+            try {
+                // Show loading state
+                const retryButton = document.getElementById('retry-button');
+                if (retryButton) {
+                    retryButton.innerHTML = '<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Retrying...';
+                    retryButton.disabled = true;
+                }
+                
+                // Hide error state and show processing state
+                document.getElementById('processing-error').classList.add('hidden');
+                document.getElementById('processing-status').classList.remove('hidden');
+                
+                // Get CSRF token
+                const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || '';
+                
+                // Try to retry the processing using the API
+                const response = await fetch('/processing/api/retry', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        progress_id: progressId
+                    }),
+                    credentials: 'same-origin'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Restart progress polling with the same progress ID
+                    startProgressPolling(progressId);
+                } else {
+                    throw new Error(data.error || 'Retry failed');
+                }
+                
+            } catch (error) {
+                console.error('Retry failed:', error);
+                let errorMessage = 'Retry failed';
+                if (error.message) {
+                    errorMessage += `: ${error.message}`;
+                }
+                showError(errorMessage);
+                
+                // Reset retry button
+                const retryButton = document.getElementById('retry-button');
+                if (retryButton) {
+                    retryButton.innerHTML = '<svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>Retry Processing';
+                    retryButton.disabled = false;
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

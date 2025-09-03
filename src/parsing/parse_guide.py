@@ -1,166 +1,108 @@
-"""
-Parser for marking guides.
+"""Module for parsing marking guides from various formats.
 
-This module provides functionality to extract raw text content from marking guide documents.
-It supports DOCX and TXT formats and focuses solely on extracting the raw text without
-any additional parsing or analysis.
+This module provides functionality to parse marking guides from different file formats
+including PDF, DOCX, images, and text files. It extracts the raw content which can then
+be processed by the LLM service to identify questions, answers, and mark allocations.
 """
 
 import os
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Optional, Tuple
 
-import docx
-from docx.document import Document
-
+from src.parsing.parse_submission import DocumentParser
 from utils.logger import logger
 
 
+@dataclass
 class MarkingGuide:
-    """
-    Represents a marking guide with raw text content.
+    """Class representing a parsed marking guide."""
 
-    This class is a simple container for the raw text content of a marking guide.
-    It includes placeholder attributes for total_marks and questions to maintain
-    compatibility with existing code, but these are not populated during parsing.
-    """
-
-    def __init__(self):
-        # Raw text content of the guide
-        self.raw_content: str = ""
-        # Placeholder attributes for compatibility
-        self.total_marks: int = 0
-        self.questions: list = []
-
-    def set_raw_content(self, content: str) -> None:
-        """Set the raw content of the guide."""
-        self.raw_content = content
+    raw_content: str
+    file_path: str
+    file_type: str
+    title: Optional[str] = None
+    extraction_method: Optional[str] = None
 
 
 def parse_marking_guide(file_path: str) -> Tuple[Optional[MarkingGuide], Optional[str]]:
-    """
-    Extract raw text content from a marking guide document.
-
-    This function reads the document and extracts only the raw text content without
-    any additional parsing or analysis. It supports DOCX and TXT formats.
+    """Parse a marking guide from a file.
 
     Args:
-        file_path: Path to the marking guide document (DOCX or TXT)
+        file_path: Path to the marking guide file
 
     Returns:
         Tuple containing:
-        - MarkingGuide object with raw content if successful, None if failed
-        - Error message if failed, None if successful
+        - MarkingGuide object if successful, None otherwise
+        - Error message if parsing failed, None otherwise
     """
     try:
-        # Validate file exists
+        filename = os.path.basename(file_path)
+        logger.info(f"📄 Processing Word document: {filename}")
+
         if not os.path.exists(file_path):
-            return None, f"File not found: {file_path}"
+            error_msg = f"File not found: {file_path}"
+            logger.error(f"✗ {error_msg}")
+            return None, error_msg
 
-        # Create guide object
-        guide = MarkingGuide()
+        # Get file type
+        mime_type = DocumentParser.get_file_type(file_path)
 
-        # Determine file type and extract text
-        file_ext = Path(file_path).suffix.lower()
-        logger.info(f"Processing marking guide with extension: {file_ext}")
-
-        if file_ext == ".docx":
-            return _parse_docx_guide(file_path, guide)
-        elif file_ext == ".txt":
-            return _parse_txt_guide(file_path, guide)
+        if (
+            mime_type
+            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ):
+            file_type = "docx"
+        elif mime_type == "application/msword":
+            file_type = "doc"
         else:
-            return (
-                None,
-                f"Unsupported file format: {file_ext}. Only .docx and .txt are supported.",
-            )
+            file_type = os.path.splitext(file_path)[1].lower().lstrip(".")
+            if file_type not in ["docx", "doc"]:
+                error_msg = f"Only Word documents are supported. Found: {mime_type}"
+                logger.error(f"✗ {error_msg}")
+                return None, error_msg
 
-    except Exception as e:
-        logger.error(f"Error extracting text from marking guide: {str(e)}")
-        return None, f"Failed to extract text from marking guide: {str(e)}"
+        # Extract content - WORD DOCUMENTS ONLY (NO OCR)
+        raw_content = ""
+        extraction_method = "unknown"
 
-
-def _parse_docx_guide(
-    file_path: str, guide: MarkingGuide
-) -> Tuple[Optional[MarkingGuide], Optional[str]]:
-    """
-    Extract raw text content from a .docx marking guide.
-
-    This function extracts only the text content from the document without any
-    additional parsing or analysis.
-    """
-    try:
-        # Open the document
-        doc: Document = docx.Document(file_path)
-
-        # Extract all paragraphs as plain text
-        paragraphs = [para.text for para in doc.paragraphs]
-        raw_content = "\n".join(paragraphs)
-
-        # Check if document has content
-        if not raw_content.strip():
-            return None, "Document is empty or contains only whitespace"
-
-        # Set the raw content in the guide object
-        guide.set_raw_content(raw_content)
-
-        logger.info(
-            f"Successfully extracted {len(raw_content)} characters from DOCX guide"
-        )
-        return guide, None
-
-    except Exception as e:
-        logger.error(f"Error extracting text from DOCX marking guide: {str(e)}")
-        return None, f"Failed to extract text from DOCX guide: {str(e)}"
-
-
-def _parse_txt_guide(
-    file_path: str, guide: MarkingGuide
-) -> Tuple[Optional[MarkingGuide], Optional[str]]:
-    """
-    Extract raw text content from a .txt marking guide.
-
-    This function reads the text file and extracts its content without any
-    additional parsing or analysis. It handles different encodings (UTF-8, Latin-1)
-    to maximize compatibility.
-    """
-    try:
-        # Check if file is readable
-        if not os.access(file_path, os.R_OK):
-            return None, f"File is not readable: {file_path}"
-
-        # Read file content with encoding fallback
-        content = None
-
-        # Try UTF-8 first (most common encoding)
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-                logger.debug(
-                    f"Successfully read file with UTF-8 encoding: {len(content)} characters"
+            raw_content = DocumentParser.extract_text_from_docx(file_path)
+            extraction_method = f"{file_type}_text_extraction"
+
+            if raw_content and len(raw_content.strip()) >= 10:
+                logger.info(
+                    f"✓ Extracted {len(raw_content)} characters from Word document"
                 )
-        except UnicodeDecodeError:
-            # Fall back to Latin-1 (should handle most Western text)
-            try:
-                with open(file_path, "r", encoding="latin-1") as f:
-                    content = f.read()
-                    logger.debug(
-                        f"Successfully read file with Latin-1 encoding: {len(content)} characters"
-                    )
-            except Exception as e:
-                return None, f"Failed to read file with fallback encoding: {str(e)}"
+            else:
+                error_msg = (
+                    f"Word document appears to be empty or contains insufficient text"
+                )
+                logger.error(f"✗ {error_msg}")
+                return None, error_msg
+
         except Exception as e:
-            return None, f"Failed to read file: {str(e)}"
+            error_msg = f"Failed to extract text from Word document: {str(e)}"
+            if file_type == "doc":
+                error_msg += ". Please save as .docx format for better compatibility."
+            logger.error(f"✗ {error_msg}")
+            return None, error_msg
 
-        # Check if file has content
-        if not content or not content.strip():
-            return None, "File is empty or contains only whitespace"
+        # Create filename-based title (without extension)
+        title = os.path.splitext(filename)[0]
 
-        # Set the raw content in the guide object
-        guide.set_raw_content(content)
+        # Create and return MarkingGuide object
+        guide = MarkingGuide(
+            raw_content=raw_content,
+            file_path=file_path,
+            file_type=file_type,
+            title=title,
+            extraction_method=extraction_method,
+        )
 
-        logger.info(f"Successfully extracted {len(content)} characters from TXT guide")
+        logger.info(f"✓ Successfully parsed: {title}")
         return guide, None
 
     except Exception as e:
-        logger.error(f"Error extracting text from TXT marking guide: {str(e)}")
-        return None, f"Failed to extract text from TXT marking guide: {str(e)}"
+        error_msg = f"Error parsing marking guide: {str(e)}"
+        logger.error(error_msg)
+        return None, error_msg

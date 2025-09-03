@@ -1,0 +1,3 @@
+Test training guide content
+Question 1: What is AI?
+Answer: Artificial Intelligence

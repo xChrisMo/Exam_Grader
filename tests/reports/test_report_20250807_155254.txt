@@ -1,0 +1,64 @@
+COMPREHENSIVE TEST REPORT - LLM TRAINING PAGE
+================================================================================
+
+SUMMARY
+Start Time: 2025-08-07T15:50:33.504128
+End Time: 2025-08-07T15:52:54.446126
+Total Duration: 140.94 seconds
+Test Suites Run: 8
+Total Tests: 0
+Passed: 0
+Failed: 0
+Skipped: 0
+Overall Success Rate: 0.0%
+
+TEST SUITE DETAILS
+Database Models Unit Tests:
+  Duration: 0.00s
+  Tests: 1 (Passed: 0, Failed: 0, Skipped: 1)
+  Success Rate: 0.0%
+  Return Code: -1
+
+Training Service Unit Tests:
+  Duration: 18.79s
+  Tests: 0 (Passed: 0, Failed: 0, Skipped: 0)
+  Success Rate: 0.0%
+  Return Code: 2
+
+Report Service Unit Tests:
+  Duration: 31.66s
+  Tests: 0 (Passed: 0, Failed: 0, Skipped: 0)
+  Success Rate: 0.0%
+  Return Code: 1
+
+Integration Tests:
+  Duration: 0.00s
+  Tests: 1 (Passed: 0, Failed: 0, Skipped: 1)
+  Success Rate: 0.0%
+  Return Code: -1
+
+System Tests:
+  Duration: 13.10s
+  Tests: 0 (Passed: 0, Failed: 0, Skipped: 0)
+  Success Rate: 0.0%
+  Return Code: 2
+
+Performance Tests:
+  Duration: 22.81s
+  Tests: 0 (Passed: 0, Failed: 0, Skipped: 0)
+  Success Rate: 0.0%
+  Return Code: 2
+
+Security Tests:
+  Duration: 23.02s
+  Tests: 0 (Passed: 0, Failed: 0, Skipped: 0)
+  Success Rate: 0.0%
+  Return Code: 2
+
+Accessibility Tests:
+  Duration: 30.72s
+  Tests: 0 (Passed: 0, Failed: 0, Skipped: 0)
+  Success Rate: 0.0%
+  Return Code: 2
+
+RECOMMENDATIONS

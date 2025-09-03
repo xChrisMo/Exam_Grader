@@ -82,10 +82,7 @@
     />
 
     <!-- Custom CSS -->
-    <link
-      rel="stylesheet"
-      href="{{ url_for('static', filename='css/custom.css') }}"
-    />
+    <!-- Custom styles are now included in consolidated-styles.css -->
   </head>
   <body class="h-full font-sans antialiased">
     <!-- Navigation Header -->
@@ -117,7 +114,7 @@
           <div class="flex items-center space-x-4">
             {% if is_authenticated %}
             <a
-              href="{{ url_for('dashboard') }}"
+              href="{{ url_for('main.dashboard') }}"
               class="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
             >
               Dashboard
@@ -183,7 +180,7 @@
             </a>
             {% else %}
             <a
-              href="{{ url_for('dashboard') }}"
+              href="{{ url_for('main.dashboard') }}"
               class="bg-primary-600 hover:bg-primary-700 text-white px-8 py-4 rounded-lg text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
             >
               Go to Dashboard
@@ -336,7 +333,7 @@
           </a>
           {% else %}
           <a
-            href="{{ url_for('dashboard') }}"
+            href="{{ url_for('main.dashboard') }}"
             class="bg-white hover:bg-gray-100 text-primary-600 px-8 py-4 rounded-lg text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 inline-block"
           >
             Go to Your Dashboard

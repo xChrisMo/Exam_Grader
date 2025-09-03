@@ -39,7 +39,9 @@ class Config:
         """Validate configuration after initialization."""
         # API key is optional - app can run without OCR service
         if not self.handwriting_ocr_api_key:
-            logger.warning("HandwritingOCR API key not configured - OCR service will be disabled")
+            logger.warning(
+                "HandwritingOCR API key not configured - OCR service will be disabled"
+            )
 
 
 class ConfigManager:
@@ -59,7 +61,10 @@ class ConfigManager:
         if self._initialized:
             return
 
-        # Load environment variables from root .env file
+        self._initialize()
+
+    def _initialize(self):
+        """Internal initialization method."""
         load_dotenv(".env", override=True)
 
         # Create configuration object
@@ -101,6 +106,12 @@ class ConfigManager:
 
         self._initialized = True
         logger.debug("Configuration initialized successfully")
+
+    def reload(self):
+        """Force reload of configuration from environment variables."""
+        logger.info("Reloading configuration from environment variables")
+        self._initialized = False
+        self._initialize()
 
     def _create_directories(self) -> None:
         """Create necessary directories if they don't exist."""

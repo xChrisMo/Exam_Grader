@@ -1,0 +1,202 @@
+{% extends "layout.html" %}
+
+{% block title %}Cache Management - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">Cache Management</h1>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><a href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+                        <li class="breadcrumb-item"><a href="{{ url_for('admin.dashboard') }}">Admin</a></li>
+                        <li class="breadcrumb-item active">Cache Management</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Application Cache</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Clear application-level caches to free up memory and ensure fresh data.</p>
+                    <button type="button" class="btn btn-warning" onclick="clearCache('application')">
+                        <i class="fas fa-trash"></i> Clear Application Cache
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Processing Cache</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Clear processing caches to reset AI model states and temporary data.</p>
+                    <button type="button" class="btn btn-warning" onclick="clearCache('processing')">
+                        <i class="fas fa-trash"></i> Clear Processing Cache
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Cache Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div id="cache-stats">
+                        <p class="text-muted">Loading cache statistics...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">System Services</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Restart system services to resolve performance issues.</p>
+                    <button type="button" class="btn btn-danger" onclick="restartServices()">
+                        <i class="fas fa-sync"></i> Restart Services
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function clearCache(cacheType) {
+    if (!confirm(`Are you sure you want to clear the ${cacheType} cache?`)) {
+        return;
+    }
+
+    fetch('/admin/api/cache/clear', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ cache_type: cacheType })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message || 'Cache cleared successfully');
+            loadCacheStats();
+        } else {
+            showAlert('error', data.error || 'Failed to clear cache');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('error', 'Failed to clear cache');
+    });
+}
+
+function restartServices() {
+    if (!confirm('Are you sure you want to restart system services? This may cause temporary downtime.')) {
+        return;
+    }
+
+    fetch('/admin/api/system/restart', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message || 'Services restarted successfully');
+        } else {
+            showAlert('error', data.error || 'Failed to restart services');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('error', 'Failed to restart services');
+    });
+}
+
+function loadCacheStats() {
+    fetch('/admin/api/cache/stats')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const statsHtml = `
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <h6>Memory Usage</h6>
+                            <p class="h4 text-primary">${data.stats.memory_usage || 'N/A'}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <h6>Cache Entries</h6>
+                            <p class="h4 text-info">${data.stats.cache_entries || 0}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <h6>Hit Rate</h6>
+                            <p class="h4 text-success">${data.stats.hit_rate || 'N/A'}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('cache-stats').innerHTML = statsHtml;
+        } else {
+            document.getElementById('cache-stats').innerHTML = '<p class="text-muted">Unable to load cache statistics</p>';
+        }
+    })
+    .catch(error => {
+        console.error('Error loading cache stats:', error);
+        document.getElementById('cache-stats').innerHTML = '<p class="text-muted">Error loading cache statistics</p>';
+    });
+}
+
+function showAlert(type, message) {
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    const alertHtml = `
+        <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    // Insert alert at the top of the container
+    const container = document.querySelector('.container-fluid');
+    container.insertAdjacentHTML('afterbegin', alertHtml);
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        const alert = container.querySelector('.alert');
+        if (alert) {
+            alert.remove();
+        }
+    }, 5000);
+}
+
+// Load cache stats on page load
+document.addEventListener('DOMContentLoaded', loadCacheStats);
+</script>
+{% endblock %}

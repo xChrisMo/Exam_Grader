@@ -1,304 +1,412 @@
 {% extends "layout.html" %}
+
 {% block content %}
 <div class="max-w-3xl mx-auto">
     <!-- Page Header -->
     <div class="mb-8">
-        <h1 class="text-2xl font-bold text-gray-900">Upload Student Submissions</h1>
-        <p class="mt-2 text-sm text-gray-600">
-            Upload student exam papers for automated grading. Supported formats: PDF, Word documents, and images.
+        <h1 class="text-2xl font-bold text-gray-900" data-i18n="upload_submission_title">Upload Student Submission</h1>
+        <p class="mt-2 text-sm text-gray-600" data-i18n="upload_submission_description">
+            Upload student submissions for automated grading. Supported formats: PDF, Word documents, and images with OCR processing.
         </p>
+        {% if guide_id %}
+        <div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+            <p class="text-sm text-blue-700">
+                <i class="fas fa-info-circle mr-1"></i>
+                Using marking guide: {{ guide_id }}
+            </p>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Upload Form -->
-    <div class="bg-white shadow rounded-lg">
+    <div class="bg-white shadow rounded-lg" data-upload-container>
         <div class="px-4 py-5 sm:p-6">
-            <form method="POST" enctype="multipart/form-data" id="upload-form">
+            <!-- Message Display Area -->
+            <div class="upload-messages mb-4"></div>
+            <form method="POST" enctype="multipart/form-data" id="upload-form" data-upload-form>
                 {% if csrf_token %}
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                 {% endif %}
-                <!-- Marking Guide Selection -->
+                {% if guide_id %}
+                <input type="hidden" name="guide_id" value="{{ guide_id }}" />
+                {% endif %}
+                
+                <!-- Student Information -->
                 <div class="mb-6">
-                    <label for="marking_guide_id" class="block text-sm font-medium text-gray-700 mb-2">Select Marking Guide</label>
-                    <select id="marking_guide_id" name="marking_guide_id" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md">
-                        <option value="">-- Select a Marking Guide --</option>
-                        {% for guide in marking_guides %}
-                        <option value="{{ guide.id }}">{{ guide.filename }}</option>
-                        {% endfor %}
-                    </select>
+                    <label for="student_name" class="block text-sm font-medium text-gray-700 mb-2">
+                        Student Name (Optional)
+                    </label>
+                    <input type="text" id="student_name" name="student_name" 
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                           placeholder="Enter student name">
                 </div>
 
                 <!-- File Upload Area -->
                 <div class="mb-6">
-                    <label for="files" class="block text-sm font-medium text-gray-700 mb-2">
-                        Student Submission Files
+                    <label for="submission_files" class="block text-sm font-medium text-gray-700 mb-2"
+                        data-i18n="submission_files">
+                        Submission Files
                     </label>
-                    <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-primary-400 transition-colors duration-200" id="drop-zone">
+                    <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-primary-400 transition-colors duration-200"
+                        id="drop-zone">
                         <div class="space-y-1 text-center">
-                            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none"
+                                viewBox="0 0 48 48">
+                                <path
+                                    d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
                             <div class="flex text-sm text-gray-600">
-                                <label for="files" class="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500">
-                                    <span>Upload files</span>
-                                    <input id="files" name="files" type="file" class="sr-only" accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.tiff,.bmp,.gif" multiple required>
+                                <label for="submission_files"
+                                    class="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500">
+                                    <span data-i18n="upload_files">Upload files</span>
+                                    <input id="submission_files" name="submission_files" type="file" class="sr-only"
+                                        accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.tiff,.bmp,.gif" multiple required
+                                        data-max-size="104857600">
                                 </label>
-                                <p class="pl-1">or drag and drop</p>
+                                <p class="pl-1" data-i18n="or_drag_and_drop">or drag and drop</p>
                             </div>
-                            <p class="text-xs text-gray-500">
-                                PDF, Word documents, or images up to 16MB each
+                            <p class="text-xs text-gray-500" data-i18n="file_types_hint">
+                                PDF, Word documents, or images up to 100MB each
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Selected Files List -->
-                <div id="fileListContainer" class="mb-6 hidden">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Selected Files</label>
-                    <ul id="fileList" class="border border-gray-300 rounded-md bg-white divide-y divide-gray-200 max-h-60 overflow-y-auto">
-                        <!-- Files will be listed here -->
-                    </ul>
-                </div>
-
-                <!-- Processing Options -->
-                <div class="mb-6 bg-gray-50 rounded-lg p-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Processing Options</label>
-                    <div class="flex items-center mb-2">
-                        <input id="process_mode_parallel" name="process_mode" type="radio" value="parallel" class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" checked>
-                        <label for="process_mode_parallel" class="ml-2 block text-sm text-gray-900">Process in Parallel (faster for many files)</label>
-                    </div>
-                    <div class="flex items-center mb-4">
-                        <input id="process_mode_sequential" name="process_mode" type="radio" value="sequential" class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300">
-                        <label for="process_mode_sequential" class="ml-2 block text-sm text-gray-900">Process Sequentially (for debugging or resource-limited systems)</label>
-                    </div>
-
-                    <label for="batch_size" class="block text-sm font-medium text-gray-700 mb-2">Batch Size (for parallel processing)</label>
-                    <input type="number" id="batch_size" name="batch_size" value="5" min="1" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md">
+                <!-- Selected Files Display -->
+                <div id="selected-files" class="mb-6 hidden">
+                    <h3 class="text-sm font-medium text-gray-700 mb-2">Selected Files:</h3>
+                    <div id="file-list" class="space-y-2"></div>
                 </div>
 
                 <!-- Upload Progress -->
-                <div id="upload-progress" class="hidden mb-6">
-                    <div class="bg-gray-200 rounded-full h-2">
+                <div id="upload-progress" class="mb-6 hidden">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium text-gray-700" id="upload-status">Preparing upload...</span>
+                        <span id="progress-text" class="text-sm text-gray-500">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
                         <div id="progress-bar" class="bg-primary-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
                     </div>
-                    <p class="text-sm text-gray-600 mt-2">Uploading and processing...</p>
                 </div>
 
-                <!-- Form Actions -->
-                <div class="flex items-center justify-between">
-                    <a href="{{ url_for('dashboard') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                        </svg>
-                        Back to Dashboard
-                    </a>
-                    
-                    <button type="submit" id="submit-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed">
-                        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                        </svg>
-                        Upload Submissions
+                <!-- Submit Button -->
+                <div class="flex justify-end">
+                    <button type="submit" id="submit-btn"
+                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-upload mr-2"></i>
+                        <span data-i18n="upload_submission">Upload Submission</span>
                     </button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Processing Results Section -->
-    <div id="results-section" class="hidden mt-8 bg-white shadow rounded-lg p-6">
-        <h2 class="text-xl font-bold text-gray-900 mb-4">Processing Results</h2>
-        <div id="processing-summary" class="mb-4 text-sm text-gray-700">
-            <!-- Summary will be displayed here -->
-        </div>
-        <div id="results-list" class="divide-y divide-gray-200">
-            <!-- Results for each file will be displayed here -->
-        </div>
-        <div class="mt-6 text-right">
-            <a href="{{ url_for('dashboard') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                Back to Dashboard
-            </a>
-        </div>
-    </div>
-
     <!-- Help Section -->
-    <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <div class="flex">
-            <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
-                </svg>
-            </div>
-            <div class="ml-3">
-                <h3 class="text-sm font-medium text-blue-800">Tips for best results</h3>
-                <div class="mt-2 text-sm text-blue-700">
-                    <ul class="list-disc list-inside space-y-1">
-                        <li>Ensure student submissions are clear and legible.</li>
-                        <li>For best OCR results, use high-quality scans or images.</li>
-                        <li>PDF and Word documents generally yield better parsing accuracy.</li>
-                        <li>Review the processing results for any errors or discrepancies.</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
+    <div class="mt-8 bg-gray-50 rounded-lg p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">
+            <i class="fas fa-question-circle mr-2"></i>
+            Upload Guidelines
+        </h3>
+        <ul class="space-y-2 text-sm text-gray-600">
+            <li class="flex items-start">
+                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
+                Supported formats: PDF, Word documents (.docx, .doc), and images (.jpg, .jpeg, .png, .tiff, .bmp, .gif) with OCR processing
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
+                No file size limits - unlimited processing
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
+                You can upload multiple files for a single submission
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
+                Make sure you have uploaded a marking guide before uploading submissions
+            </li>
+        </ul>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('files'); // Changed from guide_file to files
-        const fileListContainer = document.getElementById('fileListContainer');
-        const fileList = document.getElementById('fileList');
-        const uploadProgress = document.getElementById('upload-progress');
-        const progressBar = document.getElementById('progress-bar');
-        const submitBtn = document.getElementById('submit-btn');
-        const uploadForm = document.getElementById('upload-form');
-        const resultsSection = document.getElementById('results-section');
-        const processingSummary = document.getElementById('processing-summary');
-        const resultsList = document.getElementById('results-list');
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('upload-form');
+    const fileInput = document.getElementById('submission_files');
+    const dropZone = document.getElementById('drop-zone');
+    const selectedFilesDiv = document.getElementById('selected-files');
+    const fileListDiv = document.getElementById('file-list');
+    const progressDiv = document.getElementById('upload-progress');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const submitBtn = document.getElementById('submit-btn');
+    const messagesDiv = document.querySelector('.upload-messages');
 
-        let selectedFiles = [];
+    // File selection handler
+    fileInput.addEventListener('change', handleFileSelection);
+    
+    // Drag and drop handlers
+    dropZone.addEventListener('dragover', handleDragOver);
+    dropZone.addEventListener('drop', handleDrop);
+    dropZone.addEventListener('dragleave', handleDragLeave);
 
-        // Initialize drag and drop and file input using ExamGrader utilities
-        if (dropZone && fileInput) {
-            ExamGrader.fileUpload.initDragAndDrop(dropZone, fileInput, handleFiles);
+    function handleFileSelection(e) {
+        const files = e.target.files;
+        displaySelectedFiles(files);
+    }
+
+    function handleDragOver(e) {
+        e.preventDefault();
+        dropZone.classList.add('border-primary-400', 'bg-primary-50');
+    }
+
+    function handleDragLeave(e) {
+        e.preventDefault();
+        dropZone.classList.remove('border-primary-400', 'bg-primary-50');
+    }
+
+    function handleDrop(e) {
+        e.preventDefault();
+        dropZone.classList.remove('border-primary-400', 'bg-primary-50');
+        
+        const files = e.dataTransfer.files;
+        fileInput.files = files;
+        displaySelectedFiles(files);
+    }
+
+    function displaySelectedFiles(files) {
+        if (files.length === 0) {
+            selectedFilesDiv.classList.add('hidden');
+            return;
         }
 
-        // Handle files selected via input or drag/drop
-        function handleFiles(files) {
-            console.log('Files received:', files);
-            let filesToAdd = Array.from(files);
+        fileListDiv.innerHTML = '';
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const fileDiv = document.createElement('div');
+            fileDiv.className = 'flex items-center justify-between p-2 bg-gray-50 rounded';
+            fileDiv.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-file mr-2 text-gray-500"></i>
+                    <span class="text-sm text-gray-700">${file.name}</span>
+                    <span class="text-xs text-gray-500 ml-2">(${formatFileSize(file.size)})</span>
+                </div>
+            `;
+            fileListDiv.appendChild(fileDiv);
+        }
+        selectedFilesDiv.classList.remove('hidden');
+    }
 
-            // If single file input, replace existing selection
-            if (!fileInput.multiple) {
-                selectedFiles = [];
-                if (filesToAdd.length > 1) {
-                    ExamGrader.utils.showToast('Only one file can be selected for this input.', 'warning');
-                    filesToAdd = [filesToAdd[0]]; // Take only the first file
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function showMessage(message, type = 'info') {
+        const alertClass = type === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 
+                          type === 'success' ? 'bg-green-50 border-green-200 text-green-700' :
+                          type === 'warning' ? 'bg-yellow-50 border-yellow-200 text-yellow-700' :
+                          'bg-blue-50 border-blue-200 text-blue-700';
+        
+        messagesDiv.innerHTML = `
+            <div class="rounded-md border p-4 ${alertClass}">
+                <div class="flex">
+                    <div class="ml-3">
+                        <p class="text-sm">${message}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function showDetailedMessage(message, type = 'info') {
+        const alertClass = type === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 
+                          type === 'success' ? 'bg-green-50 border-green-200 text-green-700' :
+                          type === 'warning' ? 'bg-yellow-50 border-yellow-200 text-yellow-700' :
+                          'bg-blue-50 border-blue-200 text-blue-700';
+        
+        const iconClass = type === 'error' ? 'fas fa-exclamation-triangle text-red-500' :
+                         type === 'success' ? 'fas fa-check-circle text-green-500' :
+                         type === 'warning' ? 'fas fa-exclamation-triangle text-yellow-500' :
+                         'fas fa-info-circle text-blue-500';
+        
+        // Convert newlines to HTML breaks and format bullet points
+        const formattedMessage = message
+            .replace(/\n/g, '<br>')
+            .replace(/• /g, '<span class="inline-block w-2 text-center">•</span> ');
+        
+        messagesDiv.innerHTML = `
+            <div class="rounded-md border p-4 ${alertClass}">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <i class="${iconClass}"></i>
+                    </div>
+                    <div class="ml-3">
+                        <div class="text-sm" style="white-space: pre-line;">${formattedMessage}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Form submission handler
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        if (fileInput.files.length === 0) {
+            showMessage('Please select at least one file to upload.', 'error');
+            return;
+        }
+
+        // Prevent multiple submissions
+        if (submitBtn.disabled) {
+            return;
+        }
+
+        const formData = new FormData(form);
+        
+        // Show progress
+        progressDiv.classList.remove('hidden');
+        submitBtn.disabled = true;
+        
+        // Clear any existing messages
+        messagesDiv.innerHTML = '';
+        
+        // Multi-stage progress tracking for submissions
+        const xhr = new XMLHttpRequest();
+        let currentStage = 'uploading';
+        let responseHandled = false;
+        
+        // Progress stages with their weights for submissions
+        const stages = {
+            uploading: { weight: 30, label: 'Uploading files...' },
+            processing: { weight: 35, label: 'Processing submissions...' },
+            validating: { weight: 25, label: 'Validating content...' },
+            storing: { weight: 10, label: 'Storing submissions...' }
+        };
+        
+        function updateProgress(stage, stagePercent = 0) {
+            currentStage = stage;
+            
+            // Calculate overall progress
+            let totalProgress = 0;
+            
+            for (const [stageName, stageInfo] of Object.entries(stages)) {
+                if (stageName === stage) {
+                    totalProgress += (stagePercent / 100) * stageInfo.weight;
+                    break;
+                } else if (Object.keys(stages).indexOf(stageName) < Object.keys(stages).indexOf(stage)) {
+                    totalProgress += stageInfo.weight;
                 }
             }
-
-            const newFiles = [];
-            filesToAdd.forEach(file => {
-                const errors = ExamGrader.fileUpload.validateFile(file);
-                if (errors.length > 0) {
-                    errors.forEach(error => ExamGrader.utils.showToast(error, 'error'));
-                } else {
-                    // Check for duplicates before adding
-                    const isDuplicate = selectedFiles.some(existingFile => 
-                        existingFile.name === file.name && existingFile.size === file.size
-                    );
-                    if (!isDuplicate) {
-                        newFiles.push(file);
-                    } else {
-                        ExamGrader.utils.showToast(`Duplicate file skipped: ${file.name}`, 'info');
-                    }
-                }
-            });
-            selectedFiles.push(...newFiles);
-            updateFileList();
+            
+            // Update progress bar and text
+            progressBar.style.width = Math.min(totalProgress, 95) + '%';
+            progressText.textContent = stages[stage].label + ' ' + Math.round(totalProgress) + '%';
         }
-
-        // Update the displayed list of selected files
-        function updateFileList() {
-            if (!fileList) return; // Ensure fileList exists
-            fileList.innerHTML = '';
-            if (selectedFiles.length > 0) {
-                if (fileListContainer) fileListContainer.classList.remove('hidden');
-                selectedFiles.forEach((file, index) => {
-                    const listItem = document.createElement('li');
-                    listItem.className = 'list-group-item flex justify-between items-center p-3 hover:bg-gray-50';
-                    listItem.innerHTML = `
-                        <span class="text-sm text-gray-800">${file.name} (${ExamGrader.utils.formatFileSize(file.size)})</span>
-                        <button type="button" class="remove-file-btn text-gray-400 hover:text-gray-600" data-index="${index}">
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
-                        </button>
-                    `;
-                    fileList.appendChild(listItem);
-                });
-            } else {
-                if (fileListContainer) fileListContainer.classList.add('hidden');
+        
+        xhr.upload.addEventListener('progress', function(e) {
+            if (e.lengthComputable && currentStage === 'uploading') {
+                const uploadPercent = (e.loaded / e.total) * 100;
+                updateProgress('uploading', uploadPercent);
             }
-        }
-
-        // Remove file from list
-        if (fileList) {
-            fileList.addEventListener('click', function(e) {
-                if (e.target.closest('.remove-file-btn')) {
-                    const index = parseInt(e.target.closest('.remove-file-btn').dataset.index);
-                    selectedFiles.splice(index, 1);
-                    updateFileList();
-                    ExamGrader.utils.showToast('File removed.', 'info');
-                }
-            });
-        }
-
-        // Form submission with progress
-        if (uploadForm) {
-            uploadForm.addEventListener('submit', async function(e) {
-                e.preventDefault();
+        });
+        
+        xhr.addEventListener('load', function() {
+            if (responseHandled) return;
+            responseHandled = true;
+            
+            if (xhr.status === 200) {
+                // Upload complete, show processing stages
+                updateProgress('processing', 0);
                 
-                if (selectedFiles.length === 0) {
-                    ExamGrader.utils.showToast('Please select at least one file to upload.', 'error');
-                    return;
-                }
-
-                const markingGuideId = document.getElementById('marking_guide_id').value;
-                if (!markingGuideId) {
-                    alert('Please select a marking guide.');
-                    return;
-                }
-
-                const formData = new FormData();
-                formData.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
-                formData.append('marking_guide_id', markingGuideId);
-                formData.append('process_mode', document.querySelector('input[name="process_mode"]:checked').value);
-                formData.append('batch_size', document.getElementById('batch_size').value);
-
-                selectedFiles.forEach(file => {
-                    formData.append('files', file); // Append each file with the same name 'files'
-                });
-                
-                // Show progress
-                if (uploadProgress) uploadProgress.classList.remove('hidden');
-                if (resultsSection) resultsSection.classList.add('hidden'); // Hide results section during new upload
-                if (typeof ExamGrader !== 'undefined' && ExamGrader.utils) {
-                        ExamGrader.utils.showButtonLoading(submitBtn, 'Processing...');
-                    }
-
-                try {
-                    const response = await fetch('/upload-submission', {
-                        method: 'POST',
-                        body: formData,
-                        // No 'Content-Type' header needed for FormData, browser sets it with boundary
-                    });
-
-                    if (response.ok) {
+                setTimeout(() => updateProgress('processing', 60), 300);
+                setTimeout(() => updateProgress('validating', 0), 1000);
+                setTimeout(() => updateProgress('validating', 80), 1800);
+                setTimeout(() => updateProgress('storing', 0), 2800);
+                setTimeout(() => {
+                    updateProgress('storing', 100);
+                    
+                    // Complete the progress
+                    setTimeout(() => {
+                        progressBar.style.width = '100%';
+                        progressText.textContent = 'Complete! 100%';
+                        
                         setTimeout(() => {
-                            window.location.href = response.url || '{{ url_for("dashboard") }}';
+                            progressDiv.classList.add('hidden');
+                            submitBtn.disabled = false;
+                            
+                            try {
+                                const response = JSON.parse(xhr.responseText);
+                                
+                                if (response.status === 'success' && response.failed_count === 0) {
+                                    // All files succeeded
+                                    showMessage(response.message || 'All submissions uploaded successfully!', 'success');
+                                    setTimeout(() => {
+                                        window.location.href = '/submissions';
+                                    }, 2000);
+                                } else if (response.status === 'success' || response.status === 'partial_failure') {
+                                    // Some files succeeded, some failed - show detailed information
+                                    let detailedMessage = response.message || 'Upload completed with some issues.';
+                                    
+                                    if (response.errors && response.errors.length > 0) {
+                                        detailedMessage += '\n\nFailed files:';
+                                        response.errors.forEach(error => {
+                                            detailedMessage += `\n• ${error.filename}: ${error.error}`;
+                                        });
+                                    }
+                                    
+                                    const messageType = response.uploaded_count > 0 ? 'warning' : 'error';
+                                    showDetailedMessage(detailedMessage, messageType);
+                                    
+                                    if (response.uploaded_count > 0) {
+                                        setTimeout(() => {
+                                            window.location.href = '/submissions';
+                                        }, 5000); // Give more time to read the detailed errors
+                                    }
+                                } else {
+                                    showMessage(response.error || response.message || 'Upload failed', 'error');
+                                }
+                            } catch (e) {
+                                showMessage('Upload completed but response was invalid', 'error');
+                            }
                         }, 500);
-                    } else {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || 'Upload failed');
-                    }
-
-                } catch (error) {
-                    console.error('Upload error:', error);
-                    ExamGrader.utils.showToast('An error occurred during upload: ' + error.message, 'error');
-                } finally {
-                    if (uploadProgress) uploadProgress.classList.add('hidden');
-                    if (typeof ExamGrader !== 'undefined' && ExamGrader.utils) {
-                        ExamGrader.utils.hideButtonLoading(submitBtn, 'Upload Submissions');
-                    }
-                    // Clear selected files after processing attempt
-                    selectedFiles = [];
-                    updateFileList();
+                    }, 200);
+                }, 3500);
+            } else {
+                // Handle error responses immediately
+                progressDiv.classList.add('hidden');
+                submitBtn.disabled = false;
+                
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    showMessage(response.error || response.message || 'Upload failed. Please try again.', 'error');
+                } catch (e) {
+                    showMessage('Upload failed. Please try again.', 'error');
                 }
-            });
-        }
+            }
+        });
+        
+        xhr.addEventListener('error', function() {
+            if (responseHandled) return;
+            responseHandled = true;
+            
+            progressDiv.classList.add('hidden');
+            submitBtn.disabled = false;
+            showMessage('Upload failed. Please check your connection and try again.', 'error');
+        });
+        
+        xhr.open('POST', form.action || window.location.pathname);
+        
+        // Set CSRF token header (must be after xhr.open())
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        xhr.setRequestHeader('X-CSRFToken', csrfToken);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.send(formData);
     });
+});
 </script>
 {% endblock %}

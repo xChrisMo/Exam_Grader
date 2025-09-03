@@ -1,0 +1,307 @@
+{% extends "layout.html" %}
+
+{% block title %}Refactored AI Processing{% endblock %}
+
+{% block extra_css %}
+<!-- AI processing styles are now included in consolidated-styles.css -->
+{% endblock %}
+
+{% block content %}
+<div class="ai-processing-container">
+    <!-- Header -->
+    <div class="processing-header">
+        <h1><i class="fas fa-robot"></i> Refactored AI Processing</h1>
+        <p>Centralized, efficient AI grading with detailed progress tracking</p>
+    </div>
+    
+    <!-- Processing Form -->
+    <div class="processing-form">
+        <h2><i class="fas fa-cog"></i> Configure AI Processing</h2>
+        <form id="refactored-ai-form">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label" for="submission-id">
+                            <i class="fas fa-file-alt"></i> Select Submission
+                        </label>
+                        <select class="form-control" id="submission-id" name="submission_id" required>
+                            <option value="">Choose a submission...</option>
+                            {% for submission in submissions %}
+                            <option value="{{ submission.id }}">
+                                {{ submission.filename }} ({{ submission.created_at.strftime('%Y-%m-%d %H:%M') }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label" for="guide-id">
+                            <i class="fas fa-book"></i> Select Marking Guide
+                        </label>
+                        <select class="form-control" id="guide-id" name="guide_id" required>
+                            <option value="">Choose a marking guide...</option>
+                            {% for guide in marking_guides %}
+                            <option value="{{ guide.id }}" data-max-questions="{{ guide.max_questions_to_answer or 'No limit' }}">
+                                {{ guide.title }} 
+                                {% if guide.max_questions_to_answer %}
+                                    (Max: {{ guide.max_questions_to_answer }} questions)
+                                {% else %}
+                                    (No limit)
+                                {% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Processing Pipeline:</strong>
+                    Retrieve Data → Map Answers → Grade Responses → Save Results
+                </div>
+            </div>
+            
+            <div class="text-center">
+                <button type="submit" class="btn btn-primary" id="start-processing-btn">
+                    <i class="fas fa-play"></i> Start AI Processing
+                </button>
+                <button type="button" class="btn btn-secondary hidden" id="stop-processing-btn">
+                    <i class="fas fa-stop"></i> Stop Processing
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Progress Section -->
+    <div class="progress-section" id="progress-section">
+        <h2><i class="fas fa-chart-line"></i> Processing Progress</h2>
+        
+        <!-- Current Status -->
+        <div class="current-operation">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>Status:</strong> 
+                    <span class="ai-processing-status status-not_started">Not Started</span>
+                </div>
+                <div>
+                    <span class="ai-progress-percentage">0%</span>
+                </div>
+            </div>
+            <div class="mt-2">
+                <strong>Current Operation:</strong> 
+                <span class="ai-current-operation">Waiting to start...</span>
+            </div>
+        </div>
+        
+        <!-- Progress Bar -->
+        <div class="h-5 bg-gray-300 rounded-lg overflow-hidden">
+            <div class="ai-progress-bar w-0 h-full bg-primary-600 transition-all duration-300" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        
+        <!-- Step Indicators -->
+        <div class="step-indicators">
+            <div class="ai-step ai-step-pending" data-step="text_retrieval">
+                <div class="step-icon">
+                    <i class="fas fa-database"></i>
+                </div>
+                <div class="step-text">Retrieve Data</div>
+                <div class="step-status">Pending</div>
+            </div>
+            
+            <div class="ai-step ai-step-pending" data-step="mapping">
+                <div class="step-icon">
+                    <i class="fas fa-project-diagram"></i>
+                </div>
+                <div class="step-text">Map Answers</div>
+                <div class="step-status">Pending</div>
+            </div>
+            
+            <div class="ai-step ai-step-pending" data-step="grading">
+                <div class="step-icon">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <div class="step-text">Grade Responses</div>
+                <div class="step-status">Pending</div>
+            </div>
+            
+            <div class="ai-step ai-step-pending" data-step="saving">
+                <div class="step-icon">
+                    <i class="fas fa-save"></i>
+                </div>
+                <div class="step-text">Save Results</div>
+                <div class="step-status">Pending</div>
+            </div>
+        </div>
+        
+        <!-- Processing Statistics -->
+        <div class="processing-stats">
+            <div class="stat-card">
+                <div class="stat-value stat-questions-mapped">0</div>
+                <div class="stat-label">Questions Mapped</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value stat-questions-graded">0</div>
+                <div class="stat-label">Questions Graded</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value stat-max-questions">No limit</div>
+                <div class="stat-label">Max Questions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value stat-processing-time">0s</div>
+                <div class="stat-label">Processing Time</div>
+            </div>
+        </div>
+        
+        <!-- Real-time Log -->
+        <div class="real-time-log" id="processing-log">
+            <div class="log-entry">
+                <span class="log-timestamp">[00:00:00]</span>
+                <span class="log-level-info">System ready for AI processing...</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Completion Section -->
+    <div class="completion-section ai-completion-message" id="completion-section">
+        <!-- Completion message will be inserted here -->
+    </div>
+    
+    <div class="completion-section ai-completion-actions" id="completion-actions">
+        <!-- Completion actions will be inserted here -->
+    </div>
+    
+    <!-- Error Section -->
+    <div class="error-section ai-error-message" id="error-section">
+        <!-- Error message will be inserted here -->
+    </div>
+    
+    <div class="error-section ai-error-actions" id="error-actions">
+        <!-- Error actions will be inserted here -->
+    </div>
+</div>
+
+<!-- CSRF Token -->
+<meta name="csrf-token" content="{{ csrf_token_func() }}">
+{% endblock %}
+
+{% block extra_js %}
+<!-- Socket.IO -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+
+<!-- Refactored AI Processor -->
+<script src="{{ url_for('static', filename='js/refactored_ai_processor.js') }}"></script>
+
+<script>
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize AI processor
+    const aiProcessor = new RefactoredAIProcessor({
+        apiBaseUrl: '/api/refactored-ai',
+        pollInterval: 2000,
+        maxRetries: 3
+    });
+    
+    // Form elements
+    const form = document.getElementById('refactored-ai-form');
+    const submissionSelect = document.getElementById('submission-id');
+    const guideSelect = document.getElementById('guide-id');
+    const startBtn = document.getElementById('start-processing-btn');
+    const stopBtn = document.getElementById('stop-processing-btn');
+    const progressSection = document.getElementById('progress-section');
+    const processingLog = document.getElementById('processing-log');
+    
+    // Update max questions display when guide changes
+    guideSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const maxQuestions = selectedOption.getAttribute('data-max-questions') || 'No limit';
+        document.querySelector('.stat-max-questions').textContent = maxQuestions;
+    });
+    
+    // Form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const submissionId = submissionSelect.value;
+        const guideId = guideSelect.value;
+        
+        if (!submissionId || !guideId) {
+            alert('Please select both a submission and marking guide.');
+            return;
+        }
+        
+        // Show progress section
+        progressSection.classList.add('active');
+        
+        // Update UI state
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-block';
+        form.style.opacity = '0.6';
+        form.style.pointerEvents = 'none';
+        
+        // Add log entry
+        addLogEntry('Starting AI processing...', 'info');
+        
+        try {
+            await aiProcessor.startProcessing(submissionId, guideId, {
+                onProgress: function(data) {
+                    addLogEntry(`Progress: ${data.current_operation || 'Processing...'}`, 'info');
+                },
+                onComplete: function(result) {
+                    addLogEntry('AI processing completed successfully!', 'info');
+                    resetFormState();
+                },
+                onError: function(error) {
+                    addLogEntry(`Error: ${error}`, 'error');
+                    resetFormState();
+                }
+            });
+        } catch (error) {
+            addLogEntry(`Failed to start processing: ${error.message}`, 'error');
+            resetFormState();
+        }
+    });
+    
+    // Stop processing
+    stopBtn.addEventListener('click', function() {
+        aiProcessor.stopProcessing();
+        addLogEntry('Processing stopped by user', 'warning');
+        resetFormState();
+    });
+    
+    // Helper function to add log entries
+    function addLogEntry(message, level = 'info') {
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = document.createElement('div');
+        logEntry.className = 'log-entry';
+        logEntry.innerHTML = `
+            <span class="log-timestamp">[${timestamp}]</span>
+            <span class="log-level-${level}">${message}</span>
+        `;
+        
+        processingLog.appendChild(logEntry);
+        processingLog.scrollTop = processingLog.scrollHeight;
+        
+        // Keep only last 50 entries
+        const entries = processingLog.querySelectorAll('.log-entry');
+        if (entries.length > 50) {
+            entries[0].remove();
+        }
+    }
+    
+    // Helper function to reset form state
+    function resetFormState() {
+        startBtn.style.display = 'inline-block';
+        stopBtn.style.display = 'none';
+        form.style.opacity = '1';
+        form.style.pointerEvents = 'auto';
+    }
+    
+    // Initialize log
+    addLogEntry('Refactored AI Processing system initialized', 'info');
+});
+</script>
+{% endblock %}

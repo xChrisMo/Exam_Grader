@@ -1,0 +1,691 @@
+{% extends "layout.html" %}
+
+{% block title %}Comprehensive Report - {{ report_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .report-section {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    margin-bottom: 2rem;
+    overflow: hidden;
+  }
+  
+  .report-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 2rem;
+    text-align: center;
+  }
+  
+  .metric-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  
+  .metric-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #1f2937;
+    margin-bottom: 0.5rem;
+  }
+  
+  .metric-label {
+    color: #6b7280;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  
+  .performance-chart {
+    height: 300px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+  }
+  
+  .model-comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+  }
+  
+  .model-comparison-table th,
+  .model-comparison-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  .model-comparison-table th {
+    background: #f9fafb;
+    font-weight: 600;
+    color: #374151;
+  }
+  
+  .score-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+  
+  .score-excellent {
+    background: #d1fae5;
+    color: #065f46;
+  }
+  
+  .score-good {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+  
+  .score-fair {
+    background: #fef3c7;
+    color: #92400e;
+  }
+  
+  .score-poor {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+  
+  .insight-card {
+    background: #f0f9ff;
+    border: 1px solid #0ea5e9;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  .insight-icon {
+    color: #0ea5e9;
+    margin-right: 0.5rem;
+  }
+  
+  .chat-interface {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    height: 400px;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .chat-messages {
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  .chat-input-area {
+    padding: 1rem;
+    display: flex;
+    gap: 0.5rem;
+  }
+  
+  .chat-input {
+    flex: 1;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 0.5rem;
+    font-size: 0.875rem;
+  }
+  
+  .chat-send-btn {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+  }
+  
+  .chat-send-btn:hover {
+    background: #2563eb;
+  }
+  
+  .message {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+    max-width: 80%;
+  }
+  
+  .message.user {
+    background: #3b82f6;
+    color: white;
+    margin-left: auto;
+  }
+  
+  .message.assistant {
+    background: #f3f4f6;
+    color: #374151;
+  }
+  
+  .export-buttons {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  
+  .export-btn {
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  
+  .export-btn:hover {
+    background: #059669;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+  <!-- Report Header -->
+  <div class="report-header">
+    <h1 class="text-3xl font-bold mb-2">{{ report_name }}</h1>
+    <p class="text-blue-100">Comprehensive AI Model Training & Testing Analysis</p>
+    <div class="mt-4 text-sm text-blue-200">
+      Generated on {{ moment().format('MMMM Do YYYY, h:mm:ss a') }}
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto px-6 py-8">
+    <!-- Export Options -->
+    <div class="export-buttons">
+      <button class="export-btn" onclick="exportToPDF()">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        Export PDF
+      </button>
+      <button class="export-btn" onclick="exportToExcel()">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        Export Excel
+      </button>
+      <button class="export-btn" onclick="shareReport()">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
+        </svg>
+        Share
+      </button>
+    </div>
+
+    <!-- Executive Summary -->
+    <div class="report-section">
+      <div class="p-6">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">Executive Summary</h2>
+        
+        <!-- Key Metrics -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div class="metric-card">
+            <div class="metric-value text-blue-600">3</div>
+            <div class="metric-label">Models Tested</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value text-green-600">87.5%</div>
+            <div class="metric-label">Average Accuracy</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value text-purple-600">12</div>
+            <div class="metric-label">Test Submissions</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value text-orange-600">2.3s</div>
+            <div class="metric-label">Avg Response Time</div>
+          </div>
+        </div>
+
+        <!-- Key Insights -->
+        <div class="space-y-4">
+          <div class="insight-card">
+            <div class="flex items-start">
+              <svg class="insight-icon h-5 w-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+              </svg>
+              <div>
+                <h4 class="font-medium text-gray-900">Best Performing Model</h4>
+                <p class="text-sm text-gray-600 mt-1">GPT-4 Math Grading Model achieved 92% accuracy with consistent performance across all question types.</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="insight-card">
+            <div class="flex items-start">
+              <svg class="insight-icon h-5 w-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+              </svg>
+              <div>
+                <h4 class="font-medium text-gray-900">Performance Trend</h4>
+                <p class="text-sm text-gray-600 mt-1">All models showed improved accuracy on algebraic problems compared to geometry problems, suggesting training data bias.</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="insight-card">
+            <div class="flex items-start">
+              <svg class="insight-icon h-5 w-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+              </svg>
+              <div>
+                <h4 class="font-medium text-gray-900">Recommendation</h4>
+                <p class="text-sm text-gray-600 mt-1">Consider adding more geometry examples to training data and implementing ensemble methods for improved consistency.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Model Performance Comparison -->
+    <div class="report-section">
+      <div class="p-6">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">Model Performance Comparison</h2>
+        
+        <!-- Performance Chart -->
+        <div class="performance-chart mb-6">
+          <div class="text-center">
+            <svg class="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+            <p class="text-lg font-medium">Interactive Performance Chart</p>
+            <p class="text-sm text-gray-500">Chart visualization would be rendered here using Chart.js or D3.js</p>
+          </div>
+        </div>
+
+        <!-- Detailed Comparison Table -->
+        <table class="model-comparison-table">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Overall Accuracy</th>
+              <th>Avg Response Time</th>
+              <th>Consistency Score</th>
+              <th>Best Subject</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="font-medium">GPT-4 Math Grading Model</td>
+              <td><span class="score-badge score-excellent">92%</span></td>
+              <td>2.1s</td>
+              <td><span class="score-badge score-excellent">94%</span></td>
+              <td>Algebra</td>
+              <td><span class="text-green-600 font-medium">Active</span></td>
+            </tr>
+            <tr>
+              <td class="font-medium">DeepSeek Math Specialist</td>
+              <td><span class="score-badge score-good">85%</span></td>
+              <td>1.8s</td>
+              <td><span class="score-badge score-good">88%</span></td>
+              <td>Calculus</td>
+              <td><span class="text-green-600 font-medium">Active</span></td>
+            </tr>
+            <tr>
+              <td class="font-medium">GPT-3.5 General Grader</td>
+              <td><span class="score-badge score-fair">76%</span></td>
+              <td>3.2s</td>
+              <td><span class="score-badge score-fair">72%</span></td>
+              <td>Basic Math</td>
+              <td><span class="text-yellow-600 font-medium">Testing</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Detailed Analysis -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Subject-wise Performance -->
+      <div class="report-section">
+        <div class="p-6">
+          <h3 class="text-xl font-bold text-gray-900 mb-4">Subject-wise Performance</h3>
+          
+          <div class="space-y-4">
+            <div>
+              <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-medium text-gray-700">Algebra</span>
+                <span class="text-sm text-gray-500">91%</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-green-600 h-2 rounded-full" style="width: 91%"></div>
+              </div>
+            </div>
+            
+            <div>
+              <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-medium text-gray-700">Calculus</span>
+                <span class="text-sm text-gray-500">87%</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-blue-600 h-2 rounded-full" style="width: 87%"></div>
+              </div>
+            </div>
+            
+            <div>
+              <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-medium text-gray-700">Geometry</span>
+                <span class="text-sm text-gray-500">78%</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-yellow-600 h-2 rounded-full" style="width: 78%"></div>
+              </div>
+            </div>
+            
+            <div>
+              <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-medium text-gray-700">Statistics</span>
+                <span class="text-sm text-gray-500">83%</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-purple-600 h-2 rounded-full" style="width: 83%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Analysis -->
+      <div class="report-section">
+        <div class="p-6">
+          <h3 class="text-xl font-bold text-gray-900 mb-4">Common Error Patterns</h3>
+          
+          <div class="space-y-3">
+            <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+              <h4 class="font-medium text-red-800">Calculation Errors</h4>
+              <p class="text-sm text-red-600 mt-1">23% of errors - Arithmetic mistakes in multi-step problems</p>
+            </div>
+            
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <h4 class="font-medium text-yellow-800">Partial Credit Issues</h4>
+              <p class="text-sm text-yellow-600 mt-1">18% of errors - Difficulty assigning partial credit for incomplete solutions</p>
+            </div>
+            
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <h4 class="font-medium text-blue-800">Format Recognition</h4>
+              <p class="text-sm text-blue-600 mt-1">15% of errors - Misinterpreting handwritten mathematical notation</p>
+            </div>
+            
+            <div class="bg-purple-50 border border-purple-200 rounded-lg p-3">
+              <h4 class="font-medium text-purple-800">Context Understanding</h4>
+              <p class="text-sm text-purple-600 mt-1">12% of errors - Missing context clues in word problems</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Chat Interface -->
+    <div class="report-section">
+      <div class="p-6">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">Ask Questions About This Report</h2>
+        <p class="text-gray-600 mb-4">Chat with AI to get deeper insights about your model performance and recommendations.</p>
+        
+        <div class="chat-interface">
+          <div class="chat-messages" id="chat-messages">
+            <div class="message assistant">
+              <div class="flex items-start space-x-2">
+                <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <svg class="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                  </svg>
+                </div>
+                <div>
+                  <p>Hello! I'm here to help you understand your model performance report. You can ask me questions like:</p>
+                  <ul class="mt-2 text-sm text-gray-600 list-disc list-inside">
+                    <li>"Why is the GPT-4 model performing better than others?"</li>
+                    <li>"How can I improve geometry problem accuracy?"</li>
+                    <li>"What training data should I add next?"</li>
+                    <li>"Which model should I use for production?"</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="chat-input-area">
+            <input type="text" id="chat-input" class="chat-input" placeholder="Ask a question about your report..." onkeypress="handleChatKeyPress(event)">
+            <button class="chat-send-btn" onclick="sendChatMessage()">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="report-section">
+      <div class="p-6">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">Recommendations & Next Steps</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Immediate Actions</h3>
+            <div class="space-y-3">
+              <div class="flex items-start space-x-3">
+                <div class="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mt-0.5">
+                  <span class="text-green-600 text-sm font-bold">1</span>
+                </div>
+                <div>
+                  <h4 class="font-medium text-gray-900">Deploy GPT-4 Model</h4>
+                  <p class="text-sm text-gray-600">Use the best-performing model for production grading</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3">
+                <div class="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
+                  <span class="text-blue-600 text-sm font-bold">2</span>
+                </div>
+                <div>
+                  <h4 class="font-medium text-gray-900">Enhance Geometry Training</h4>
+                  <p class="text-sm text-gray-600">Add 50+ geometry examples to improve weak area performance</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3">
+                <div class="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center mt-0.5">
+                  <span class="text-purple-600 text-sm font-bold">3</span>
+                </div>
+                <div>
+                  <h4 class="font-medium text-gray-900">Implement Ensemble Method</h4>
+                  <p class="text-sm text-gray-600">Combine top 2 models for improved accuracy and consistency</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Long-term Strategy</h3>
+            <div class="space-y-3">
+              <div class="flex items-start space-x-3">
+                <div class="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center mt-0.5">
+                  <span class="text-orange-600 text-sm font-bold">A</span>
+                </div>
+                <div>
+                  <h4 class="font-medium text-gray-900">Continuous Learning Pipeline</h4>
+                  <p class="text-sm text-gray-600">Set up automated retraining with new graded submissions</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3">
+                <div class="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center mt-0.5">
+                  <span class="text-red-600 text-sm font-bold">B</span>
+                </div>
+                <div>
+                  <h4 class="font-medium text-gray-900">Multi-Subject Expansion</h4>
+                  <p class="text-sm text-gray-600">Extend to physics, chemistry, and other STEM subjects</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3">
+                <div class="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center mt-0.5">
+                  <span class="text-indigo-600 text-sm font-bold">C</span>
+                </div>
+                <div>
+                  <h4 class="font-medium text-gray-900">Advanced Analytics</h4>
+                  <p class="text-sm text-gray-600">Implement real-time monitoring and A/B testing framework</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-lg p-6 max-w-sm mx-auto">
+    <div class="flex items-center">
+      <div class="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mr-3"></div>
+      <span class="text-lg font-medium text-gray-900">Processing...</span>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Chat functionality
+function handleChatKeyPress(event) {
+  if (event.key === 'Enter') {
+    sendChatMessage();
+  }
+}
+
+function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const message = input.value.trim();
+  
+  if (!message) return;
+  
+  // Add user message to chat
+  addChatMessage(message, 'user');
+  input.value = '';
+  
+  // Show loading
+  showLoading();
+  
+  // Simulate AI response (in real implementation, this would call your AI service)
+  setTimeout(() => {
+    hideLoading();
+    const responses = [
+      "Based on your report data, the GPT-4 model performs better because it has more sophisticated reasoning capabilities and was trained on a larger dataset. The 92% accuracy indicates strong performance across different problem types.",
+      "To improve geometry accuracy, I recommend adding more visual problem examples to your training data. The current 78% accuracy suggests the model struggles with spatial reasoning problems.",
+      "For production use, I'd recommend the GPT-4 Math Grading Model due to its high accuracy (92%) and consistency (94%). However, consider the response time requirements - if speed is critical, the DeepSeek model might be better.",
+      "The error analysis shows calculation errors are most common (23%). Consider adding more step-by-step solution examples to your training data to help the model better understand mathematical procedures."
+    ];
+    
+    const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+    addChatMessage(randomResponse, 'assistant');
+  }, 1500);
+}
+
+function addChatMessage(message, sender) {
+  const messagesContainer = document.getElementById('chat-messages');
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${sender}`;
+  
+  if (sender === 'assistant') {
+    messageDiv.innerHTML = `
+      <div class="flex items-start space-x-2">
+        <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+          <svg class="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+          </svg>
+        </div>
+        <div><p>${message}</p></div>
+      </div>
+    `;
+  } else {
+    messageDiv.innerHTML = `<p>${message}</p>`;
+  }
+  
+  messagesContainer.appendChild(messageDiv);
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+// Export functions
+function exportToPDF() {
+  showLoading();
+  // In real implementation, this would generate and download a PDF
+  setTimeout(() => {
+    hideLoading();
+    alert('PDF export functionality would be implemented here');
+  }, 2000);
+}
+
+function exportToExcel() {
+  showLoading();
+  // In real implementation, this would generate and download an Excel file
+  setTimeout(() => {
+    hideLoading();
+    alert('Excel export functionality would be implemented here');
+  }, 1500);
+}
+
+function shareReport() {
+  // In real implementation, this would create a shareable link
+  const shareUrl = window.location.href;
+  if (navigator.share) {
+    navigator.share({
+      title: '{{ report_name }}',
+      text: 'Check out this comprehensive AI model training report',
+      url: shareUrl
+    });
+  } else {
+    // Fallback: copy to clipboard
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      alert('Report URL copied to clipboard!');
+    });
+  }
+}
+
+// Utility functions
+function showLoading() {
+  document.getElementById('loading-overlay').classList.remove('hidden');
+  document.getElementById('loading-overlay').classList.add('flex');
+}
+
+function hideLoading() {
+  document.getElementById('loading-overlay').classList.add('hidden');
+  document.getElementById('loading-overlay').classList.remove('flex');
+}
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+  // Add welcome message to chat
+  setTimeout(() => {
+    addChatMessage("Welcome! I'm ready to answer questions about your comprehensive training report. What would you like to know?", 'assistant');
+  }, 1000);
+});
+</script>
+{% endblock %}

@@ -41,34 +41,9 @@
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 
     <!-- CSRF Token for JavaScript -->
-    {% if csrf_token %}
     <meta name="csrf-token" content="{{ csrf_token }}">
-    {% endif %}
 
-    <!-- Custom CSS for authentication pages -->
-    <style>
-        .auth-gradient {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        
-        .auth-card {
-            backdrop-filter: blur(10px);
-            background: rgba(255, 255, 255, 0.95);
-        }
-        
-        .auth-input:focus {
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-        
-        .auth-button {
-            transition: all 0.2s ease-in-out;
-        }
-        
-        .auth-button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-        }
-    </style>
+    <!-- Authentication styles are now included in consolidated-styles.css -->
 </head>
 <body class="h-full font-sans antialiased">
     <!-- Background Pattern -->
@@ -88,7 +63,7 @@
                     <div class="flex items-center justify-between">
                         <!-- Logo and Brand -->
                         <div class="flex items-center">
-                            <a href="{{ url_for('landing') }}" class="flex items-center group">
+                            <a href="{{ url_for('main.index') }}" class="flex items-center group">
                                 <div class="h-10 w-10 bg-primary-600 rounded-lg flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow">
                                     <svg class="h-6 w-6 text-white" fill="currentColor" viewBox="0 0 20 20">
                                         <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>

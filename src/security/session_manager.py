@@ -7,43 +7,40 @@ session handling.
 """
 
 import base64
-import hashlib
 import json
-import os
 import secrets
-from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, Tuple
-
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
 
 # Import Flask request with fallback
 try:
-    from flask import request, has_request_context
+    from flask import has_request_context, request
 except ImportError:
     request = None
     has_request_context = lambda: False
-from flask import g, request
-from sqlalchemy.orm import sessionmaker
 
 # Import logger with fallback
-try:
-    from utils.logger import logger
-except ImportError:
-    import logging
+import logging
 
-    logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 # Import database models with fallback
 try:
-    from src.database.models import Session as SessionModel
-    from src.database.models import User, db
+    from src.database.models import Session as SessionModel, db
 except ImportError:
-    # Fallback for when models aren't available yet
     db = None
     SessionModel = None
     User = None
+
+# Import cryptography with fallback
+try:
+    from cryptography.fernet import Fernet
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+except ImportError:
+    Fernet = None
+    hashes = None
+    PBKDF2HMAC = None
 
 
 class SessionEncryption:
@@ -57,7 +54,6 @@ class SessionEncryption:
     def _get_fernet(self) -> Fernet:
         """Get or create Fernet instance for encryption."""
         if self._fernet is None:
-            # Derive key from secret
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
@@ -84,7 +80,8 @@ class SessionEncryption:
             return json.loads(decrypted_data.decode())
         except Exception as e:
             logger.error(f"Failed to decrypt session data: {str(e)}")
-            return {}
+            # Return None instead of empty dict to ensure consistent behavior with get_session
+            return None
 
 
 class SecureSessionManager:
@@ -112,7 +109,12 @@ class SecureSessionManager:
         self.encryption = SessionEncryption(secret_key)
         self._current_session = None
 
-    def create_session(self, user_id: str, session_data: Dict[str, Any] = None) -> str:
+    def create_session(
+        self,
+        user_id: str,
+        session_data: Dict[str, Any] = None,
+        remember_me: bool = False,
+    ) -> str:
         """
         Create a new secure session.
 
@@ -134,8 +136,8 @@ class SecureSessionManager:
             session_data.update(
                 {
                     "user_id": user_id,
-                    "created_at": datetime.utcnow().isoformat(),
-                    "last_accessed": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "last_accessed": datetime.now(timezone.utc).isoformat(),
                 }
             )
 
@@ -151,7 +153,8 @@ class SecureSessionManager:
                 id=session_id,
                 user_id=user_id,
                 data=encrypted_data,
-                expires_at=datetime.utcnow() + timedelta(seconds=self.session_timeout),
+                expires_at=datetime.now(timezone.utc)
+                + timedelta(seconds=self.session_timeout if not remember_me else 86400),
                 ip_address=ip_address,
                 user_agent=user_agent,
                 is_active=True,
@@ -170,7 +173,7 @@ class SecureSessionManager:
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
-        Get session data by session ID.
+        Get session data by session ID with full validation.
 
         Args:
             session_id: Session ID
@@ -179,7 +182,9 @@ class SecureSessionManager:
             Session data or None if invalid/expired
         """
         try:
-            # Get session from database
+            if not session_id:
+                return None
+
             session = SessionModel.query.filter_by(
                 id=session_id, is_active=True
             ).first()
@@ -187,26 +192,29 @@ class SecureSessionManager:
             if not session:
                 return None
 
-            # Check if session is expired
+            # Check expiration
             if session.is_expired():
                 self.invalidate_session(session_id)
                 return None
 
             # Validate client information
             if not self._validate_client_info(session):
-                logger.warning(f"Session {session_id} failed client validation")
                 self.invalidate_session(session_id)
                 return None
 
             # Decrypt and return session data
-            session_data = self.encryption.decrypt_data(session.data)
+            try:
+                session_data = self.encryption.decrypt_data(session.data)
+                self._current_session = session
 
-            # Update last accessed time
-            session.last_accessed = datetime.utcnow()
-            db.session.commit()
+                # Update last accessed time
+                session.last_accessed = datetime.now(timezone.utc)
+                db.session.commit()
 
-            self._current_session = session
-            return session_data
+                return session_data
+            except Exception as e:
+                logger.error(f"Failed to decrypt session data: {str(e)}")
+                return None
 
         except Exception as e:
             logger.error(f"Failed to get session {session_id}: {str(e)}")
@@ -232,11 +240,11 @@ class SecureSessionManager:
                 return False
 
             # Update session data
-            session_data["last_accessed"] = datetime.utcnow().isoformat()
+            session_data["last_accessed"] = datetime.now(timezone.utc).isoformat()
             encrypted_data = self.encryption.encrypt_data(session_data)
 
             session.data = encrypted_data
-            session.last_accessed = datetime.utcnow()
+            session.last_accessed = datetime.now(timezone.utc)
 
             db.session.commit()
 
@@ -351,7 +359,7 @@ class SecureSessionManager:
         """
         try:
             expired_sessions = SessionModel.query.filter(
-                SessionModel.expires_at < datetime.utcnow()
+                SessionModel.expires_at < datetime.now(timezone.utc)
             ).all()
 
             count = 0
@@ -394,7 +402,9 @@ class SecureSessionManager:
         """Get client user agent."""
         try:
             if request and has_request_context():
-                return request.headers.get("User-Agent", "unknown")[:500]  # Limit length
+                return request.headers.get("User-Agent", "unknown")[
+                    :500
+                ]  # Limit length
         except Exception as e:
             logger.warning(f"Error getting user agent: {str(e)}")
         return "unknown"
@@ -412,14 +422,13 @@ class SecureSessionManager:
         current_ip = self._get_client_ip()
         current_user_agent = self._get_user_agent()
 
-        # Allow IP changes for mobile users but log them
-        if session.ip_address != current_ip:
+        if str(session.ip_address) != current_ip:
             logger.info(
                 f"IP change detected for session {session.id}: {session.ip_address} -> {current_ip}"
             )
 
         # User agent should remain consistent
-        if session.user_agent != current_user_agent:
+        if str(session.user_agent) != current_user_agent:
             logger.warning(f"User agent change detected for session {session.id}")
             return False
 

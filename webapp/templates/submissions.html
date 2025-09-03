@@ -1,4 +1,12 @@
-{% extends "layout.html" %} {% block content %}
+{% extends "layout.html" %}
+
+{% block extra_css %}
+{% if session.guide_id %}
+<meta name="guide-id" content="{{ session.guide_id }}">
+{% endif %}
+{% endblock %}
+
+{% block content %}
 <div class="max-w-7xl mx-auto">
   <!-- Page Header -->
   <div class="mb-8">
@@ -30,14 +38,34 @@
           </svg>
           Clear Cache
         </button>
+        <a
+           href="{{ url_for('processing.unified_processing') }}"
+           class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+           title="Reprocess submissions with missing text content"
+         >
+          <svg
+            class="mr-2 h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          Reprocess
+        </a>
         <div class="flex items-center text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-md">
           <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
           </svg>
-          Cache: <span id="cache-entries">Loading...</span>
+          Cache: <span id="cache-entries">0</span>
         </div>
         <a
-          href="{{ url_for('upload_submission') }}"
+          href="{{ url_for('main.upload_submission') }}"
           class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
         >
           <svg
@@ -88,8 +116,8 @@
               <dt class="text-sm font-medium text-gray-500 truncate">
                 Total Submissions
               </dt>
-              <dd class="text-lg font-medium text-gray-900">
-                {{ submissions|length }}
+              <dd class="text-lg font-medium text-gray-900" id="total-submissions-count">
+                {{ submissions_list|length if submissions_list else (submissions.total if submissions else 0) }}
               </dd>
             </dl>
           </div>
@@ -124,8 +152,14 @@
               <dt class="text-sm font-medium text-gray-500 truncate">
                 Processed
               </dt>
-              <dd class="text-lg font-medium text-gray-900">
-                {{ submissions|selectattr('processed')|list|length }}
+              <dd class="text-lg font-medium text-gray-900" id="processed-submissions-count">
+                {% if submissions_list %}
+                  {{ submissions_list|selectattr('processed')|list|length + submissions_list|selectattr('processing_status', 'equalto', 'completed')|list|length }}
+                {% elif submissions %}
+                  {{ submissions.items|selectattr('processed')|list|length }}
+                {% else %}
+                  0
+                {% endif %}
               </dd>
             </dl>
           </div>
@@ -160,8 +194,14 @@
               <dt class="text-sm font-medium text-gray-500 truncate">
                 Pending
               </dt>
-              <dd class="text-lg font-medium text-gray-900">
-                {{ submissions|rejectattr('processed')|list|length }}
+              <dd class="text-lg font-medium text-gray-900" id="pending-submissions-count">
+                {% if submissions_list %}
+                  {{ submissions_list|rejectattr('processed')|rejectattr('processing_status', 'equalto', 'completed')|list|length }}
+                {% elif submissions %}
+                  {{ submissions.items|rejectattr('processed')|list|length }}
+                {% else %}
+                  0
+                {% endif %}
               </dd>
             </dl>
           </div>
@@ -170,7 +210,192 @@
     </div>
   </div>
 
-  <!-- Submissions Table -->
+  <!-- View Toggle Buttons -->
+  {% if submissions_list %}
+  <div class="mb-6">
+    <div class="flex items-center justify-between">
+      <div class="flex space-x-3">
+        {% if grouped %}
+        <a href="{{ url_for('main.submissions') }}"
+            class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+            <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+            </svg>
+            List View
+        </a>
+        {% else %}
+        <a href="{{ url_for('main.submissions', grouped='true') }}"
+            class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+            <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            Grouped View
+        </a>
+        {% endif %}
+      </div>
+      <div class="flex items-center space-x-2">
+        <div class="relative">
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Search submissions..."
+            class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+          />
+          <div
+            class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+          >
+            <svg
+              class="h-5 w-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if grouped %}
+  <!-- Grouped Submissions by Marking Guide -->
+  {% for guide_key, guide_data in submissions_by_guide.items() %}
+  <div class="bg-white shadow rounded-lg mb-6">
+    <div class="px-4 py-5 sm:p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="text-lg leading-6 font-medium text-gray-900">{{ guide_data.guide_title }}</h3>
+          <p class="mt-1 text-sm text-gray-500">{{ guide_data.total_submissions }} submission(s)</p>
+        </div>
+        <div class="flex space-x-4 text-sm">
+          <div class="text-center">
+            <div class="text-lg font-semibold text-green-600">{{ guide_data.processed_count }}</div>
+            <div class="text-gray-500">Processed</div>
+          </div>
+          <div class="text-center">
+            <div class="text-lg font-semibold text-yellow-600">{{ guide_data.pending_count }}</div>
+            <div class="text-gray-500">Pending</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Filename
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Uploaded
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            {% for submission in guide_data.submissions %}
+            <tr class="hover:bg-gray-50" id="submission-row-{{ submission.id }}">
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="flex items-center">
+                  <div class="flex-shrink-0 h-10 w-10">
+                    <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="ml-4">
+                    <div class="text-sm font-medium text-gray-900">{{ submission.filename }}</div>
+                    <div class="text-sm text-gray-500">ID: {{ submission.id[:8] }}…</div>
+                  </div>
+                </div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                {% set status = submission.processing_status or 'pending' %}
+                {% if status == 'completed' or submission.processed %}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-100 text-success-800">
+                  <svg class="mr-1.5 h-2 w-2 text-success-400" fill="currentColor" viewBox="0 0 8 8">
+                    <circle cx="4" cy="4" r="3" />
+                  </svg>
+                  Completed
+                </span>
+                {% elif status == 'processing' %}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  <svg class="mr-1.5 h-2 w-2 text-blue-400 animate-pulse" fill="currentColor" viewBox="0 0 8 8">
+                    <circle cx="4" cy="4" r="3" />
+                  </svg>
+                  Processing
+                </span>
+                {% elif status == 'failed' %}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  <svg class="mr-1.5 h-2 w-2 text-red-400" fill="currentColor" viewBox="0 0 8 8">
+                    <circle cx="4" cy="4" r="3" />
+                  </svg>
+                  Failed
+                </span>
+                {% else %}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-warning-100 text-warning-800">
+                  <svg class="mr-1.5 h-2 w-2 text-warning-400" fill="currentColor" viewBox="0 0 8 8">
+                    <circle cx="4" cy="4" r="3" />
+                  </svg>
+                  Pending
+                </span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {% if submission.created_at %}
+                  {{ submission.created_at.strftime("%Y-%m-%d %H:%M") }}
+                {% else %}
+                  <span class="text-gray-400">Unknown</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <div class="flex items-center space-x-2">
+                  <a href="{{ url_for('main.view_submission_content', submission_id=submission.id) }}"
+                    class="text-primary-600 hover:text-primary-900">
+                    View Content
+                  </a>
+                  <button type="button" class="text-info-600 hover:text-info-900"
+                    onclick="downloadSubmission('{{ submission.id }}')">
+                    Download
+                  </button>
+                  {% if submission.processed %}
+                  <button type="button" class="text-success-600 hover:text-success-900"
+                    onclick="gradeSubmission('{{ submission.id }}')" id="grade-button-{{ submission.id }}">
+                    Grade
+                  </button>
+                  {% endif %}
+                  <button type="button" class="text-danger-600 hover:text-danger-900"
+                    onclick="deleteSubmission('{{ submission.id }}')" id="delete-button-{{ submission.id }}">
+                    Delete
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <!-- Individual Submissions Table -->
   {% if submissions %}
   <div class="bg-white shadow rounded-lg overflow-hidden">
     <div class="px-4 py-5 sm:p-6">
@@ -178,33 +403,6 @@
         <h3 class="text-lg leading-6 font-medium text-gray-900">
           All Submissions
         </h3>
-        <div class="flex items-center space-x-2">
-          <div class="relative">
-            <input
-              type="text"
-              id="search-input"
-              placeholder="Search submissions..."
-              class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-            />
-            <div
-              class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-            >
-              <svg
-                class="h-5 w-5 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div class="overflow-x-auto">
@@ -272,13 +470,14 @@
                       {{ submission.filename }}
                     </div>
                     <div class="text-sm text-gray-500">
-                      ID: {{ submission.id[:8] }}...
+                      ID: {{ submission.id[:8] }}…
                     </div>
                   </div>
                 </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                {% if submission.processed %}
+                {% set status = submission.processing_status or 'pending' %}
+                {% if status == 'completed' or submission.processed %}
                 <span
                   class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-100 text-success-800"
                 >
@@ -289,7 +488,33 @@
                   >
                     <circle cx="4" cy="4" r="3" />
                   </svg>
-                  Processed
+                  Completed
+                </span>
+                {% elif status == 'processing' %}
+                <span
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                >
+                  <svg
+                    class="mr-1.5 h-2 w-2 text-blue-400 animate-pulse"
+                    fill="currentColor"
+                    viewBox="0 0 8 8"
+                  >
+                    <circle cx="4" cy="4" r="3" />
+                  </svg>
+                  Processing
+                </span>
+                {% elif status == 'failed' %}
+                <span
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                >
+                  <svg
+                    class="mr-1.5 h-2 w-2 text-red-400"
+                    fill="currentColor"
+                    viewBox="0 0 8 8"
+                  >
+                    <circle cx="4" cy="4" r="3" />
+                  </svg>
+                  Failed
                 </span>
                 {% else %}
                 <span
@@ -307,15 +532,18 @@
                 {% endif %}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ submission.uploaded_at[:10] if submission.uploaded_at else
-                'Unknown' }}
+                {% if submission.created_at %}
+                  {{ submission.created_at.strftime("%Y-%m-%d %H:%M") }}
+                {% else %}
+                  <span class="text-gray-400">Unknown</span>
+                {% endif %}
               </td>
               <td
                 class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"
               >
                 <div class="flex items-center space-x-2">
                   <a
-                    href="{{ url_for('view_submission_content', submission_id=submission.id) }}"
+                    href="{{ url_for('main.view_submission_content', submission_id=submission.id) }}"
                     class="text-primary-600 hover:text-primary-900"
                   >
                     View Content
@@ -376,7 +604,7 @@
     </p>
     <div class="mt-6">
       <a
-        href="{{ url_for('upload_submission') }}"
+        href="{{ url_for('main.upload_submission') }}"
         class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
       >
         <svg
@@ -396,6 +624,7 @@
       </a>
     </div>
   </div>
+  {% endif %}
   {% endif %}
 </div>
 
@@ -451,28 +680,53 @@
     </div>
   </div>
 </div>
-{% endblock %} {% block extra_js %}
+{% endblock %}
+
+{% block extra_js %}
+<!-- Force refresh utility for proper UI updates -->
+<script src="{{ url_for('static', filename='js/force-refresh.js') }}"></script>
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     // Search functionality
     const searchInput = document.getElementById("search-input");
-    const table = document.getElementById("submissions-table");
 
-    if (searchInput && table) {
+    if (searchInput) {
       searchInput.addEventListener("input", function () {
         const searchTerm = this.value.toLowerCase();
-        const rows = table.querySelectorAll("tbody tr");
-
-        rows.forEach((row) => {
-          const filename = row
-            .querySelector("td:first-child .text-sm.font-medium")
-            .textContent.toLowerCase();
-          if (filename.includes(searchTerm)) {
-            row.style.display = "";
-          } else {
-            row.style.display = "none";
-          }
+        
+        // Search in grouped view
+        const groupedTables = document.querySelectorAll(".bg-white.shadow.rounded-lg table");
+        groupedTables.forEach((table) => {
+          const rows = table.querySelectorAll("tbody tr");
+          rows.forEach((row) => {
+            const filename = row.querySelector("td:first-child .text-sm.font-medium");
+            if (filename) {
+              const filenameText = filename.textContent.toLowerCase();
+              if (filenameText.includes(searchTerm)) {
+                row.style.display = "";
+              } else {
+                row.style.display = "none";
+              }
+            }
+          });
         });
+        
+        // Search in list view
+        const listTable = document.getElementById("submissions-table");
+        if (listTable) {
+          const rows = listTable.querySelectorAll("tbody tr");
+          rows.forEach((row) => {
+            const filename = row.querySelector("td:first-child .text-sm.font-medium");
+            if (filename) {
+              const filenameText = filename.textContent.toLowerCase();
+              if (filenameText.includes(searchTerm)) {
+                row.style.display = "";
+              } else {
+                row.style.display = "none";
+              }
+            }
+          });
+        }
       });
     }
 
@@ -509,7 +763,7 @@
     modalContent.innerHTML = `
         <div class="flex justify-center items-center py-4">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            <span class="ml-2">Loading submission details...</span>
+            <span class="ml-2">Loading details...</span>
         </div>
     `;
 
@@ -556,32 +810,37 @@
       const gradeButton = document.querySelector(
         "#grade-button-" + submissionId
       );
-      ExamGrader.utils.showButtonLoading(gradeButton, "Grading...");
+      ExamGrader.utils.showButtonLoading(gradeButton, "Processing...");
+      
       ExamGrader.utils
         .apiRequest(
-          "/api/process-grading",
-          { submission_id: submissionId },
-          "POST"
+          "/api/process-ai-grading",
+          {
+            method: "POST",
+            body: { 
+              submission_ids: [submissionId]
+            }
+          }
         )
         .then((data) => {
           ExamGrader.utils.hideButtonLoading(gradeButton, "Grade");
           if (data.success) {
-            ExamGrader.utils.showToast(
+            ExamGrader.notificationManager.notify(
               "Submission graded successfully!",
               "success"
             );
-            // Optionally, update UI or redirect
+            // Reload the page to update all counts, including dashboard
             window.location.reload();
           } else {
-            ExamGrader.utils.showToast(
-              data.message || "Error grading submission.",
+            ExamGrader.notificationManager.notify(
+              data.error || data.message || "Error grading submission.",
               "error"
             );
           }
         })
         .catch((error) => {
           ExamGrader.utils.hideButtonLoading(gradeButton, "Grade");
-          ExamGrader.utils.showToast(
+          ExamGrader.notificationManager.notify(
             "An error occurred: " + error.message,
             "error"
           );
@@ -598,32 +857,30 @@
       const deleteButton = document.querySelector(
         "#delete-button-" + submissionId
       );
-      ExamGrader.utils.showButtonLoading(deleteButton, "Deleting...");
-      ExamGrader.utils
+      ExamGrader.utils.showButtonLoading(deleteButton, "Removing...");
+            ExamGrader.utils
         .apiRequest(
           "/api/delete-submission",
-          { body: { submission_id: submissionId } },
-          "POST"
+          {
+            method: "POST",
+            body: { submission_id: submissionId },
+          }
         )
         .then((data) => {
           ExamGrader.utils.hideButtonLoading(deleteButton, "Delete");
           if (data.success) {
-            ExamGrader.utils.showToast(
-              "Submission deleted successfully!",
-              "success"
-            );
-            // Remove the row from the table
-            document.getElementById("submission-row-" + submissionId).remove();
+            ExamGrader.notificationManager.notify('Submission deleted successfully!', 'success');
+            // Force a hard refresh to bypass any browser caching
+            setTimeout(() => {
+              window.location.reload(true);
+            }, 500);
           } else {
-            ExamGrader.utils.showToast(
-              data.message || "Error deleting submission.",
-              "error"
-            );
+            ExamGrader.notificationManager.notify(data.error || 'An unknown error occurred.', 'error');
           }
         })
         .catch((error) => {
           ExamGrader.utils.hideButtonLoading(deleteButton, "Delete");
-          ExamGrader.utils.showToast(
+          ExamGrader.notificationManager.notify(
             "An error occurred: " + error.message,
             "error"
           );
@@ -646,28 +903,30 @@
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          Clearing...
+          Processing...
         `;
         clearButton.disabled = true;
       }
 
+      const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content');
       fetch("/api/clear-cache", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken,
         },
       })
         .then((response) => response.json())
         .then((data) => {
           if (data.success) {
-            ExamGrader.utils.showToast(
+            ExamGrader.notificationManager.notify(
               "Cache cleared successfully!",
               "success"
             );
             // Refresh cache stats
             loadCacheStats();
           } else {
-            ExamGrader.utils.showToast(
+            ExamGrader.notificationManager.notify(
               "Error clearing cache: " + (data.message || "Unknown error"),
               "error"
             );
@@ -675,7 +934,7 @@
         })
         .catch((error) => {
           console.error("Error:", error);
-          ExamGrader.utils.showToast(
+          ExamGrader.notificationManager.notify(
             "Error clearing cache: " + error.message,
             "error"
           );

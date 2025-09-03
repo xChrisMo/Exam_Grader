@@ -4,15 +4,13 @@ File Cleanup Service for Exam Grader Application.
 Provides automated cleanup of temporary files, old uploads, and orphaned files.
 """
 
-import os
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-from src.database.models import MarkingGuide, Submission, db
 from utils.logger import logger
 
 
@@ -96,6 +94,10 @@ class FileCleanupService:
             self._cleanup_thread.join(timeout=30)
             logger.info("Stopped scheduled file cleanup")
 
+    def stop(self):
+        """Stop the file cleanup service (alias for stop_scheduled_cleanup)."""
+        self.stop_scheduled_cleanup()
+
     def _cleanup_worker(self):
         """Background worker for scheduled cleanup."""
         while not self._stop_cleanup.is_set():
@@ -112,7 +114,6 @@ class FileCleanupService:
             except Exception as e:
                 logger.error(f"Error in scheduled cleanup: {str(e)}")
 
-            # Wait for next cleanup cycle
             self._stop_cleanup.wait(self._cleanup_interval)
 
     def cleanup_all(self) -> CleanupStats:
@@ -150,13 +151,16 @@ class FileCleanupService:
 
         total_stats.duration_seconds = time.time() - start_time
 
-        # Only log if there's something meaningful to report
         if total_stats.files_deleted > 0 or total_stats.errors > 0:
-            logger.info(f"Cleanup completed: {total_stats.files_deleted} files deleted, "
-                       f"{total_stats.bytes_freed_mb:.1f}MB freed"
-                       f"{', ' + str(total_stats.errors) + ' errors' if total_stats.errors > 0 else ''}")
+            logger.info(
+                f"Cleanup completed: {total_stats.files_deleted} files deleted, "
+                f"{total_stats.bytes_freed_mb:.1f}MB freed"
+                f"{', ' + str(total_stats.errors) + ' errors' if total_stats.errors > 0 else ''}"
+            )
         else:
-            logger.debug(f"Cleanup completed: no files to clean (scanned {total_stats.files_scanned} files)")
+            logger.debug(
+                f"Cleanup completed: no files to clean (scanned {total_stats.files_scanned} files)"
+            )
 
         return total_stats
 
@@ -222,7 +226,9 @@ class FileCleanupService:
             Cleanup statistics
         """
         stats = CleanupStats()
-        cutoff_date = datetime.utcnow() - timedelta(days=self.upload_file_max_age_days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(
+            days=self.upload_file_max_age_days
+        )
 
         logger.info(
             f"Cleaning up uploads older than {self.upload_file_max_age_days} days"
@@ -232,7 +238,6 @@ class FileCleanupService:
             # Import here to avoid circular imports
             from src.database.models import MarkingGuide, Submission, db
 
-            # Check if we have app context, if not skip database cleanup
             try:
                 from flask import has_app_context
 
@@ -332,7 +337,6 @@ class FileCleanupService:
             # Import here to avoid circular imports
             from src.database.models import MarkingGuide, Submission
 
-            # Check if we have app context, if not skip database cleanup
             try:
                 from flask import has_app_context
 
@@ -345,7 +349,6 @@ class FileCleanupService:
                 logger.warning("Flask not available, skipping orphaned files cleanup")
                 return stats
 
-            # Get all file paths from database
             db_file_paths = set()
 
             # Submission files
@@ -362,7 +365,6 @@ class FileCleanupService:
                 if guide.file_path:
                     db_file_paths.add(Path(guide.file_path).resolve())
 
-            # Check upload directory for orphaned files
             for directory in [self.upload_dir, self.output_dir]:
                 if not directory.exists():
                     continue
@@ -372,7 +374,6 @@ class FileCleanupService:
                         stats.files_scanned += 1
 
                         try:
-                            # Check if file is referenced in database
                             if file_path.resolve() not in db_file_paths:
                                 # Check file age
                                 file_mtime = datetime.fromtimestamp(

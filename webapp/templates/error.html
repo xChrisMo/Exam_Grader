@@ -62,7 +62,7 @@
     <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div class="space-y-4">
             <!-- Primary Action -->
-            <a href="{{ url_for('dashboard') }}" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+            <a href="{{ url_for('main.dashboard') }}" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
                 <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"/>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h2a2 2 0 012 2v0M8 5a2 2 0 000 4h8a2 2 0 000-4M8 5v0"/>
@@ -103,13 +103,13 @@
                     <h3 class="text-sm font-medium text-blue-800">Looking for something specific?</h3>
                     <div class="mt-2 text-sm text-blue-700">
                         <ul class="list-disc list-inside space-y-1">
-                            <li><a href="{{ url_for('upload_guide') }}" class="underline hover:text-blue-600">Upload Marking Guide</a></li>
-                            <li><a href="{{ url_for('upload_submission') }}" class="underline hover:text-blue-600">Upload Submission</a></li>
-                            {% if session.get('submissions') %}
-                            <li><a href="{{ url_for('view_submissions') }}" class="underline hover:text-blue-600">View Submissions</a></li>
+                            <li><a href="{{ url_for('main.upload_guide') }}" class="underline hover:text-blue-600">Upload Marking Guide</a></li>
+                            <li><a href="{{ url_for('main.upload_submission') }}" class="underline hover:text-blue-600">Upload Submission</a></li>
+                            {% if current_user.is_authenticated %}
+                            <li><a href="{{ url_for('main.submissions') }}" class="underline hover:text-blue-600">View Submissions</a></li>
                             {% endif %}
-                            {% if session.get('last_grading_result') %}
-                            <li><a href="{{ url_for('view_results') }}" class="underline hover:text-blue-600">View Results</a></li>
+                            {% if current_user.is_authenticated %}
+                            <li><a href="{{ url_for('main.results') }}" class="underline hover:text-blue-600">View Results</a></li>
                             {% endif %}
                         </ul>
                     </div>
