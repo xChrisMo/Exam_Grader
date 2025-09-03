@@ -141,25 +141,19 @@ class FileProcessingService(BaseService):
             return ""
     
     def _extract_pdf(self, file_path: str) -> str:
-        """Extract text from PDF files using PyMuPDF"""
+        """Extract text from PDF files using OCR"""
         try:
-            import fitz  # PyMuPDF
+            from src.parsing.parse_submission import DocumentParser
             
-            text_content = []
-            doc = fitz.open(file_path)
+            # Use the OCR-based PDF extraction
+            text = DocumentParser.extract_text_from_pdf(file_path)
             
-            for page_num in range(len(doc)):
-                page = doc.load_page(page_num)
-                text = page.get_text()
-                if text.strip():
-                    text_content.append(text)
+            if text and text.strip():
+                return text
+            else:
+                logger.warning("No text extracted from PDF")
+                return ""
             
-            doc.close()
-            return '\n\n'.join(text_content)
-            
-        except ImportError:
-            logger.warning("PyMuPDF not available, cannot extract PDF content")
-            return ""
         except Exception as e:
             logger.error(f"Error extracting PDF content: {e}")
             return ""
@@ -197,34 +191,18 @@ class FileProcessingService(BaseService):
             return ""
     
     def _extract_image_ocr(self, file_path: str) -> str:
-        """Extract text from images using OCR"""
+        """Extract text from images using HandwritingOCR"""
         try:
-            # Try EasyOCR first (most reliable)
-            try:
-                import easyocr
-                reader = easyocr.Reader(['en'])
-                results = reader.readtext(file_path)
-                text_content = []
-                for (bbox, text, confidence) in results:
-                    if confidence > 0.5:  # Only include high-confidence text
-                        text_content.append(text)
-                return '\n'.join(text_content)
-            except ImportError:
-                pass
+            from src.parsing.parse_submission import DocumentParser
             
-            # Fallback to Tesseract
-            try:
-                import pytesseract
-                from PIL import Image
-                
-                image = Image.open(file_path)
-                text = pytesseract.image_to_string(image)
+            # Use the HandwritingOCR-based image extraction
+            text = DocumentParser.extract_text_from_image(file_path)
+            
+            if text and text.strip():
                 return text
-            except ImportError:
-                pass
-            
-            logger.warning("No OCR engines available, cannot extract text from images")
-            return ""
+            else:
+                logger.warning("No text extracted from image")
+                return ""
             
         except Exception as e:
             logger.error(f"Error extracting text from image: {e}")

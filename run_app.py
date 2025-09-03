@@ -157,17 +157,21 @@ def main():
                     print("⏱️  Extended timeouts enabled for AI processing")
                     print("🔧 Optimized for Windows compatibility")
                     
-                    # Serve with Waitress - Windows compatible
+                    # Serve with Waitress - Windows compatible with optimized settings
                     serve(
                         app,
                         host=host,
                         port=port,
-                        threads=4,  # Number of threads
-                        connection_limit=100,
-                        cleanup_interval=30,
-                        channel_timeout=600,  # 10 minutes
-                        log_socket_errors=True,
+                        threads=8,  # Increased threads for better concurrency
+                        connection_limit=200,  # Increased connection limit
+                        cleanup_interval=10,  # More frequent cleanup
+                        channel_timeout=300,  # 5 minutes (reduced from 10)
+                        log_socket_errors=False,  # Reduce log noise
                         max_request_body_size=104857600,  # 100MB
+                        recv_bytes=8192,  # Increased buffer size
+                        send_bytes=18000,  # Increased send buffer
+                        outbuf_overflow=1048576,  # 1MB overflow buffer
+                        inbuf_overflow=524288,  # 512KB input overflow
                     )
                 except ImportError:
                     print("⚠️  Waitress not available, falling back to Flask dev server")

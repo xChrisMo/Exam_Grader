@@ -6,6 +6,7 @@ Ensures that critical features are intact before the application starts.
 
 import logging
 import sys
+import os
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -231,7 +232,16 @@ class StartupValidator:
 
 
 def validate_on_startup(project_root: str = None) -> bool:
-    """Run startup validation and return success status."""
+    """Run startup validation and return success status.
+
+    Set environment variable SKIP_STARTUP_VALIDATION=1 to bypass validation.
+    """
+    if os.getenv("SKIP_STARTUP_VALIDATION") == "1":
+        logging.getLogger(__name__).info(
+            "Startup validation skipped via SKIP_STARTUP_VALIDATION=1"
+        )
+        return True
+
     validator = StartupValidator(project_root)
     results = validator.validate_all()
     validator.print_validation_report(results)

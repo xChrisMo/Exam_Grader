@@ -148,10 +148,10 @@ ExamGrader.translations = {
         'language': 'Language',
         'language_description': 'Choose your preferred language',
         'ai_settings': 'AI Configuration Settings',
-        'llm_api_key': 'LLM API Key (DeepSeek)',
-        'llm_api_key_description': 'API key for the DeepSeek LLM service',
+        'llm_api_key': 'LLM API Key',
+        'llm_api_key_description': 'API key for the LLM service',
         'llm_model': 'LLM Model',
-        'llm_model_description': 'Model name for the DeepSeek LLM service (e.g., deepseek-reasoner)',
+        'llm_model_description': 'Model name for the LLM service (e.g., gpt-3.5-turbo)',
         'save_settings': 'Save Settings',
         
         // Theme options
@@ -316,10 +316,10 @@ ExamGrader.translations = {
         'language': 'Idioma',
         'language_description': 'Elija su idioma preferido',
         'ai_settings': 'Configuración de IA',
-        'llm_api_key': 'Clave API LLM (DeepSeek)',
-        'llm_api_key_description': 'Clave API para el servicio DeepSeek LLM',
+        'llm_api_key': 'Clave API LLM',
+        'llm_api_key_description': 'Clave API para el servicio LLM',
         'llm_model': 'Modelo LLM',
-        'llm_model_description': 'Nombre del modelo para el servicio DeepSeek LLM (ej., deepseek-reasoner)',
+        'llm_model_description': 'Nombre del modelo para el servicio LLM (ej., gpt-3.5-turbo)',
         'save_settings': 'Guardar Configuración',
         
         // Theme options

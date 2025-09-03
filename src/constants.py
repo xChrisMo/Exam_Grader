@@ -65,7 +65,7 @@ DEEPSEEK_DEFAULT_BASE_URL = "https://api.deepseek.com/v1"
 HANDWRITING_OCR_DEFAULT_URL = "https://www.handwritingocr.com/api/v3"
 
 # Model names
-DEFAULT_DEEPSEEK_MODEL = "deepseek-reasoner"
+DEFAULT_LLM_MODEL = "deepseek-chat"
 
 # Cache settings
 DEFAULT_CACHE_SIZE = 10000

@@ -1081,7 +1081,7 @@ class UserSettings(db.Model, TimestampMixin):
     user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False, unique=True)
     
     # File processing settings
-    max_file_size = db.Column(db.Integer, default=100)  # MB
+    max_file_size = db.Column(db.Integer, nullable=True, default=None)  # MB, NULL = unlimited
     allowed_formats = db.Column(db.Text, default='.pdf,.jpg,.jpeg,.png,.docx,.doc,.txt')  # Comma-separated
     
     # API configuration (encrypted)
@@ -1105,39 +1105,128 @@ class UserSettings(db.Model, TimestampMixin):
     show_tooltips = db.Column(db.Boolean, default=True)
     results_per_page = db.Column(db.Integer, default=10)
     
+    # Processing & Performance settings
+    default_processing_method = db.Column(db.String(50), default='traditional_ocr')
+    processing_timeout = db.Column(db.Integer, default=300)  # seconds
+    max_retry_attempts = db.Column(db.Integer, default=3)
+    enable_processing_fallback = db.Column(db.Boolean, default=True)
+    
+    # Grading & AI settings
+    llm_strict_mode = db.Column(db.Boolean, default=False)
+    llm_require_json_response = db.Column(db.Boolean, default=True)
+    grading_confidence_threshold = db.Column(db.Integer, default=75)  # percentage
+    auto_grade_threshold = db.Column(db.Integer, default=80)  # percentage
+    
+    # Security & Privacy settings
+    session_timeout = db.Column(db.Integer, default=120)  # minutes
+    auto_delete_after_days = db.Column(db.Integer, default=30)
+    enable_audit_logging = db.Column(db.Boolean, default=False)
+    encrypt_stored_files = db.Column(db.Boolean, default=False)
+    
+    # Monitoring & Logging settings
+    log_level = db.Column(db.String(20), default='INFO')
+    enable_performance_monitoring = db.Column(db.Boolean, default=True)
+    enable_error_reporting = db.Column(db.Boolean, default=True)
+    metrics_retention_days = db.Column(db.Integer, default=90)
+    
+    # Email & Notification settings
+    notification_email = db.Column(db.String(255))
+    webhook_url = db.Column(db.String(500))
+    
+    # Cache & Storage settings
+    cache_type = db.Column(db.String(20), default='simple')
+    cache_ttl_hours = db.Column(db.Integer, default=24)
+    enable_cache_warming = db.Column(db.Boolean, default=False)
+    auto_cleanup_storage = db.Column(db.Boolean, default=True)
+    
+    # Advanced System settings
+    debug_mode = db.Column(db.Boolean, default=False)
+    maintenance_mode = db.Column(db.Boolean, default=False)
+    max_concurrent_processes = db.Column(db.Integer, default=4)
+    memory_limit_gb = db.Column(db.Integer, default=4)
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
-        return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "max_file_size": self.max_file_size,
-            "allowed_formats": self.allowed_formats,
-            "llm_model": self.llm_model,
-            "llm_base_url": self.llm_base_url,
-            "llm_api_key": self.get_llm_api_key(),
-            "ocr_api_url": self.ocr_api_url,
-            "ocr_api_key": self.get_ocr_api_key(),
-            "theme": self.theme,
-            "language": self.language,
-            "email_notifications": self.email_notifications,
-            "processing_notifications": self.processing_notifications,
-            "notification_level": self.notification_level,
-            "auto_save": self.auto_save,
-            "show_tooltips": self.show_tooltips,
-            "results_per_page": self.results_per_page,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-        }
+        try:
+            # Handle max_file_size - convert inf to a safe value for JSON serialization
+            max_file_size_value = self.max_file_size
+            if isinstance(max_file_size_value, str) and max_file_size_value.lower() == 'inf':
+                max_file_size_value = None  # Use None instead of inf for unlimited
+            elif max_file_size_value == float('inf'):
+                max_file_size_value = None  # Use None instead of inf for unlimited
+            elif max_file_size_value is not None and not isinstance(max_file_size_value, (int, float)):
+                max_file_size_value = None  # Invalid value = unlimited
+        
+            return {
+                "id": self.id,
+                "user_id": self.user_id,
+                "max_file_size": max_file_size_value,
+                "allowed_formats": self.allowed_formats or ".pdf,.jpg,.jpeg,.png,.docx,.doc,.txt",
+                "llm_model": self.llm_model or "deepseek-chat",
+                "llm_base_url": self.llm_base_url or "",
+                "llm_api_key": self.get_llm_api_key(),
+                "ocr_api_url": self.ocr_api_url or "https://www.handwritingocr.com/api/v3",
+                "ocr_api_key": self.get_ocr_api_key(),
+                "theme": self.theme or "light",
+                "language": self.language or "en",
+                "email_notifications": bool(self.email_notifications),
+                "processing_notifications": bool(self.processing_notifications),
+                "notification_level": self.notification_level or "info",
+                "auto_save": bool(self.auto_save),
+                "show_tooltips": bool(self.show_tooltips),
+                "results_per_page": self.results_per_page or 10,
+                # Processing & Performance
+                "default_processing_method": self.default_processing_method or "traditional_ocr",
+                "processing_timeout": self.processing_timeout or 300,
+                "max_retry_attempts": self.max_retry_attempts or 3,
+                "enable_processing_fallback": bool(self.enable_processing_fallback),
+                # Grading & AI
+                "llm_strict_mode": bool(self.llm_strict_mode),
+                "llm_require_json_response": bool(self.llm_require_json_response),
+                "grading_confidence_threshold": self.grading_confidence_threshold or 75,
+                "auto_grade_threshold": self.auto_grade_threshold or 80,
+                # Security & Privacy
+                "session_timeout": self.session_timeout or 120,
+                "auto_delete_after_days": self.auto_delete_after_days or 30,
+                "enable_audit_logging": bool(self.enable_audit_logging),
+                "encrypt_stored_files": bool(self.encrypt_stored_files),
+                # Monitoring & Logging
+                "log_level": self.log_level or "INFO",
+                "enable_performance_monitoring": bool(self.enable_performance_monitoring),
+                "enable_error_reporting": bool(self.enable_error_reporting),
+                "metrics_retention_days": self.metrics_retention_days or 90,
+                # Email & Notifications
+                "notification_email": self.notification_email or "",
+                "webhook_url": self.webhook_url or "",
+                # Cache & Storage
+                "cache_type": self.cache_type or "simple",
+                "cache_ttl_hours": self.cache_ttl_hours or 24,
+                "enable_cache_warming": bool(self.enable_cache_warming),
+                "auto_cleanup_storage": bool(self.auto_cleanup_storage),
+                # Advanced System
+                "debug_mode": bool(self.debug_mode),
+                "maintenance_mode": bool(self.maintenance_mode),
+                "max_concurrent_processes": self.max_concurrent_processes or 4,
+                "memory_limit_gb": self.memory_limit_gb or 4,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            }
+        except Exception as e:
+            logger.error(f"Error converting UserSettings to dict: {e}")
+            # Return safe defaults if conversion fails
+            return self.get_default_settings()
     
     @classmethod
     def get_default_settings(cls) -> Dict[str, Any]:
         """Get default settings dictionary."""
+        import os
+        
         return {
-            "max_file_size": 100,  # MB
+            "max_file_size": None,  # MB, None = unlimited
             "allowed_formats": ".pdf,.jpg,.jpeg,.png,.docx,.doc,.txt",
-            "llm_model": "deepseek-chat",
-            "llm_base_url": "",
-            "ocr_api_url": "",
+            "llm_model": os.getenv("LLM_MODEL_NAME", "deepseek-chat"),
+            "llm_base_url": os.getenv("LLM_API_URL", "https://api.deepseek.com/v1"),
+            "ocr_api_url": os.getenv("HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3"),
             "theme": "light",
             "language": "en",
             "email_notifications": True,
@@ -1146,8 +1235,41 @@ class UserSettings(db.Model, TimestampMixin):
             "auto_save": False,
             "show_tooltips": True,
             "results_per_page": 10,
-            "llm_api_key": "",
-            "ocr_api_key": ""
+            "llm_api_key": os.getenv("LLM_API_KEY", ""),
+            "ocr_api_key": os.getenv("HANDWRITING_OCR_API_KEY", ""),
+            # Processing & Performance
+            "default_processing_method": "traditional_ocr",
+            "processing_timeout": 300,
+            "max_retry_attempts": 3,
+            "enable_processing_fallback": True,
+            # Grading & AI
+            "llm_strict_mode": False,
+            "llm_require_json_response": True,
+            "grading_confidence_threshold": 75,
+            "auto_grade_threshold": 80,
+            # Security & Privacy
+            "session_timeout": 120,
+            "auto_delete_after_days": 30,
+            "enable_audit_logging": False,
+            "encrypt_stored_files": False,
+            # Monitoring & Logging
+            "log_level": "INFO",
+            "enable_performance_monitoring": True,
+            "enable_error_reporting": True,
+            "metrics_retention_days": 90,
+            # Email & Notifications
+            "notification_email": "",
+            "webhook_url": "",
+            # Cache & Storage
+            "cache_type": "simple",
+            "cache_ttl_hours": 24,
+            "enable_cache_warming": False,
+            "auto_cleanup_storage": True,
+            # Advanced System
+            "debug_mode": False,
+            "maintenance_mode": False,
+            "max_concurrent_processes": 4,
+            "memory_limit_gb": 4,
         }
     
     @classmethod
@@ -1155,7 +1277,58 @@ class UserSettings(db.Model, TimestampMixin):
         """Get or create user settings for a specific user."""
         settings = cls.query.filter_by(user_id=user_id).first()
         if not settings:
-            settings = cls(user_id=user_id)
+            # Create new settings with default values
+            defaults = cls.get_default_settings()
+            settings = cls(
+                user_id=user_id,
+                # Basic settings
+                max_file_size=defaults['max_file_size'],
+                allowed_formats=defaults['allowed_formats'],
+                llm_model=defaults['llm_model'],
+                llm_base_url=defaults['llm_base_url'],
+                ocr_api_url=defaults['ocr_api_url'],
+                theme=defaults['theme'],
+                language=defaults['language'],
+                email_notifications=defaults['email_notifications'],
+                processing_notifications=defaults['processing_notifications'],
+                notification_level=defaults['notification_level'],
+                auto_save=defaults['auto_save'],
+                show_tooltips=defaults['show_tooltips'],
+                results_per_page=defaults['results_per_page'],
+                # Processing & Performance
+                default_processing_method=defaults['default_processing_method'],
+                processing_timeout=defaults['processing_timeout'],
+                max_retry_attempts=defaults['max_retry_attempts'],
+                enable_processing_fallback=defaults['enable_processing_fallback'],
+                # Grading & AI
+                llm_strict_mode=defaults['llm_strict_mode'],
+                llm_require_json_response=defaults['llm_require_json_response'],
+                grading_confidence_threshold=defaults['grading_confidence_threshold'],
+                auto_grade_threshold=defaults['auto_grade_threshold'],
+                # Security & Privacy
+                session_timeout=defaults['session_timeout'],
+                auto_delete_after_days=defaults['auto_delete_after_days'],
+                enable_audit_logging=defaults['enable_audit_logging'],
+                encrypt_stored_files=defaults['encrypt_stored_files'],
+                # Monitoring & Logging
+                log_level=defaults['log_level'],
+                enable_performance_monitoring=defaults['enable_performance_monitoring'],
+                enable_error_reporting=defaults['enable_error_reporting'],
+                metrics_retention_days=defaults['metrics_retention_days'],
+                # Email & Notifications
+                notification_email=defaults['notification_email'],
+                webhook_url=defaults['webhook_url'],
+                # Cache & Storage
+                cache_type=defaults['cache_type'],
+                cache_ttl_hours=defaults['cache_ttl_hours'],
+                enable_cache_warming=defaults['enable_cache_warming'],
+                auto_cleanup_storage=defaults['auto_cleanup_storage'],
+                # Advanced System
+                debug_mode=defaults['debug_mode'],
+                maintenance_mode=defaults['maintenance_mode'],
+                max_concurrent_processes=defaults['max_concurrent_processes'],
+                memory_limit_gb=defaults['memory_limit_gb']
+            )
             db.session.add(settings)
             db.session.commit()
         return settings

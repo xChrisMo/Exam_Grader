@@ -23,7 +23,7 @@
 - **DeepSeek API**: Alternative LLM provider
 
 ### Data Processing
-- **PyMuPDF (fitz)**: PDF processing
+- **pdf2image**: PDF to image conversion for OCR processing
 - **python-docx**: Word document handling
 - **Pillow**: Image processing
 - **pandas/numpy**: Data analysis and export

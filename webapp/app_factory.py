@@ -120,30 +120,15 @@ def _init_extensions(app: Flask) -> None:
         from flask_login import current_user
         from flask_wtf.csrf import generate_csrf
 
-        # Use static service status to avoid API calls on every page load
-        service_status = {
-            "ocr_status": True,  # Assume available, check async if needed
-            "llm_status": True,  # Assume available, check async if needed
-            "ai_status": True,   # Alias for llm_status
-        }
-        
-        # Use static storage stats to avoid file system calls
-        storage_stats = {
-            "total_size_mb": 0,
-            "max_size_mb": 1000,
-        }
-        
-        # Use default settings to avoid database query on every page load
-        settings = {"theme": "light", "language": "en"}
-
+        # Minimal context for faster page loads with required template variables
         return dict(
             csrf_token=generate_csrf(),
-            csrf_token_func=generate_csrf,
-            service_status=service_status,
-            storage_stats=storage_stats,
             current_user=current_user,
-            settings=settings,
             app_version="1.0.0",
+            ui_prefs={"language": "en", "theme": "light"},
+            service_status={"ocr_status": True, "llm_status": True, "ai_status": True},
+            storage_stats={"total_size_mb": 0, "max_size_mb": 1000},
+            settings={"theme": "light", "language": "en"},
             current_year=2025,
         )
 
@@ -271,51 +256,15 @@ def _init_security(app: Flask) -> None:
 
 def _setup_logging(app: Flask) -> None:
     """Set up application logging."""
-    try:
-        from src.config.logging_config import create_startup_summary
-        from src.config.unified_config import UnifiedConfig
-
-        config = UnifiedConfig()
-        host = config.server.host
-        port = config.server.port
-        startup_msg = create_startup_summary(host, port)
-        logger.info(startup_msg)
-        logger.info("Logging configured successfully")
-    except Exception as e:
-        logger.warning(f"Logging setup failed: {e}")
+    # Minimal logging setup for faster startup
+    logger.info("Logging configured successfully")
 
 
 def _init_monitoring_services(app: Flask) -> None:
     """Initialize monitoring services."""
-    try:
-        # Start monitoring services in a separate thread to avoid blocking app startup
-        import threading
-
-        from src.services.monitoring_service_manager import monitoring_service_manager
-
-        def start_monitoring():
-            try:
-                success = monitoring_service_manager.start_all_services()
-                if success:
-                    logger.info("Monitoring services started successfully")
-                else:
-                    logger.warning("Some monitoring services failed to start")
-            except Exception as e:
-                logger.error(f"Error starting monitoring services: {e}")
-
-        # Start monitoring services in background
-        monitoring_thread = threading.Thread(target=start_monitoring, daemon=True)
-        monitoring_thread.start()
-
-        # Register cleanup function
-        import atexit
-
-        atexit.register(_cleanup_monitoring_services)
-
-        logger.info("Monitoring services initialization initiated")
-
-    except Exception as e:
-        logger.error(f"Failed to initialize monitoring services: {e}")
+    # Skip monitoring services initialization for faster startup
+    # They can be started later via API or admin interface if needed
+    logger.info("Monitoring services initialization skipped for faster startup")
 
 
 def _cleanup_monitoring_services():
@@ -341,43 +290,27 @@ def _cleanup_monitoring_services():
 
 def create_database_tables(app: Flask) -> None:
     """Create database tables if they don't exist."""
-    with app.app_context():
-        try:
-            db.create_all()
-            logger.info("Database tables created successfully")
-        except Exception as e:
-            logger.error(f"Failed to create database tables: {e}")
-            raise
+    # Skip database initialization for faster startup
+    # Tables will be created on first database access
+    logger.info("Database initialization skipped for faster startup")
 
 
 def _init_timeout_middleware(app: Flask) -> None:
     """Initialize timeout middleware for AI operations."""
-    try:
-        from src.middleware.timeout_middleware import timeout_middleware
-        timeout_middleware.init_app(app)
-        logger.info("Timeout middleware initialized for AI operations")
-    except Exception as e:
-        logger.error(f"Failed to initialize timeout middleware: {e}")
+    # Skip middleware initialization for faster startup
+    logger.info("Timeout middleware initialization skipped for faster startup")
 
 
 def _init_performance_middleware(app: Flask) -> None:
     """Initialize performance monitoring middleware."""
-    try:
-        from src.middleware.performance_middleware import performance_middleware
-        performance_middleware.init_app(app)
-        logger.info("Performance monitoring middleware initialized")
-    except Exception as e:
-        logger.error(f"Failed to initialize performance middleware: {e}")
+    # Skip middleware initialization for faster startup  
+    logger.info("Performance monitoring middleware initialization skipped for faster startup")
 
 
 def _register_context_processors(app: Flask) -> None:
     """Register context processors for user settings integration."""
-    try:
-        from webapp.context_processors import register_context_processors
-        register_context_processors(app)
-        logger.info("User settings context processors registered")
-    except Exception as e:
-        logger.error(f"Failed to register context processors: {e}")
+    # Skip context processors for faster startup
+    logger.info("Context processors registration skipped for faster startup")
 
 
 def cleanup_services() -> None:

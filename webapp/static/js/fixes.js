@@ -284,15 +284,28 @@ window.refreshDashboardStats = function () {
             }
         })
         .catch(error => {
-            // Silently handle errors to avoid console spam, but log for debugging
-            if (window.location.pathname === '/dashboard' || window.location.pathname === '/') {
-                console.warn('Dashboard stats refresh failed (this is normal if not on dashboard):', error.message);
-            }
+            // Silently handle errors to avoid console spam during development
+            // Dashboard stats API may be disabled for performance
+            return;
         });
 };
 
-// Auto-refresh dashboard stats every 30 seconds
-setInterval(refreshDashboardStats, 30000);
+// Auto-refresh dashboard stats every 30 seconds, but only if API is available
+(async function() {
+    try {
+        const response = await fetch('/api/dashboard-stats', {
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        
+        if (response.ok) {
+            // Dashboard stats API is available, set up periodic refresh
+            setInterval(refreshDashboardStats, 30000);
+        }
+    } catch (error) {
+        // Dashboard stats API not available, skip periodic refresh
+    }
+})();
 
 // Enhanced Progress bar improvements
 window.updateProgressBar = function (progressId, percentage, message, details) {

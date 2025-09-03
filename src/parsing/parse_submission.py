@@ -23,8 +23,8 @@ import os
 from pathlib import Path
 from typing import Dict, Optional, Tuple, Any
 
-import fitz  # PyMuPDF
 from docx import Document
+from pdf2image import convert_from_path
 
 from src.config.config_manager import ConfigManager
 from src.services.consolidated_ocr_service import (
@@ -120,7 +120,10 @@ class DocumentParser:
 
     @staticmethod
     def extract_text_from_pdf(file_path: str) -> str:
-        """Extract text from a PDF file.
+        """Extract text from a PDF file using OCR.
+
+        This method converts PDF pages to images and processes them with HandwritingOCR.
+        No direct text extraction is attempted - all PDFs are processed via OCR.
 
         Args:
             file_path: Path to the PDF file
@@ -131,52 +134,83 @@ class DocumentParser:
         Raises:
             Exception: If text extraction fails
         """
-        doc = None
         try:
-            logger.debug(f"Opening PDF file: {file_path}")
-            doc = fitz.open(file_path)
+            logger.debug(f"Processing PDF with OCR: {file_path}")
+            
+            if not ocr_service_instance:
+                logger.error("OCR service not available for PDF processing")
+                raise Exception("OCR service not configured - cannot process PDF")
 
-            if doc.page_count == 0:
-                logger.error("PDF Error: PDF document has no pages")
-                raise Exception("PDF document has no pages")
+            # Convert PDF to images
+            try:
+                images = convert_from_path(file_path, dpi=200)
+                if not images:
+                    logger.error("PDF conversion resulted in no images")
+                    raise Exception("PDF document has no pages or is corrupted")
+                
+                logger.info(f"Successfully converted PDF to {len(images)} images")
+                
+            except Exception as e:
+                logger.error(f"Error converting PDF to images: {str(e)}")
+                raise Exception(f"Failed to convert PDF to images: {str(e)}")
 
-            logger.info(f"Processing PDF with {doc.page_count} pages")
-            text = ""
-
-            # Try normal text extraction first
-            for page_num, page in enumerate(doc, 1):
-                try:
-                    page_text = page.get_text()
-                    logger.debug(
-                        f"Page {page_num}: Extracted {len(page_text)} characters"
-                    )
-                    text += page_text
-                except Exception as e:
-                    logger.error(
-                        f"PDF Page Error: Error extracting text from page {page_num}: {str(e)}"
-                    )
-                    continue
-
-            if not text.strip():
-                logger.warning("PDF text extraction yielded no text, OCR may be needed")
-                return ""
-            elif len(text.strip()) < 5:
-                logger.warning(
-                    f"PDF text extraction yielded very little text ({len(text.strip())} chars), OCR may be needed"
-                )
-                return ""
-
-            logger.info(f"Successfully extracted {len(text)} characters from PDF")
-            return text
+            # Process each page with OCR
+            text_content = []
+            temp_image_paths = []
+            
+            try:
+                import tempfile
+                import time
+                
+                temp_dir = tempfile.gettempdir()
+                
+                for page_num, image in enumerate(images, 1):
+                    temp_filename = f"pdf_page_{page_num}_{int(time.time() * 1000)}_{os.getpid()}.png"
+                    temp_path = os.path.join(temp_dir, temp_filename)
+                    
+                    try:
+                        # Save image to temporary file
+                        image.save(temp_path, 'PNG')
+                        temp_image_paths.append(temp_path)
+                        
+                        logger.debug(f"Processing page {page_num} with OCR")
+                        
+                        # Process with OCR
+                        page_text = ocr_service_instance.extract_text_from_image(temp_path)
+                        
+                        if page_text and page_text.strip():
+                            text_content.append(page_text)
+                            logger.debug(f"Page {page_num}: OCR extracted {len(page_text)} characters")
+                        else:
+                            logger.debug(f"Page {page_num}: No text extracted")
+                            
+                    except Exception as e:
+                        logger.error(f"Error processing page {page_num}: {str(e)}")
+                        continue
+                
+                # Combine all page text
+                full_text = "\n\n".join(text_content)
+                
+                if not full_text.strip():
+                    logger.error("No text could be extracted from PDF using OCR")
+                    raise Exception("No readable text found in PDF")
+                
+                logger.info(f"Successfully extracted {len(full_text)} characters from PDF using OCR")
+                return full_text
+                
+            finally:
+                # Clean up temporary files
+                for temp_path in temp_image_paths:
+                    try:
+                        if os.path.exists(temp_path):
+                            os.unlink(temp_path)
+                            logger.debug(f"Cleaned up temporary image: {temp_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to clean up {temp_path}: {str(e)}")
 
         except Exception as e:
-            logger.error(f"PDF Error: Error extracting text from PDF: {str(e)}")
-            # Return empty string to signal that extraction failed
-            # The caller will handle OCR fallback
-            return ""
-        finally:
-            if doc is not None:
-                doc.close()  # Ensure the document is closed
+            logger.error(f"PDF OCR Error: Error extracting text from PDF: {str(e)}")
+            raise
 
     @staticmethod
     def extract_text_from_docx(file_path: str) -> str:
@@ -205,11 +239,11 @@ class DocumentParser:
     def extract_text_from_image(file_path: str) -> str:
         """Extract text from an image using OCR.
 
-        This method can be used for both image files and as a fallback for PDFs.
-        For PDFs, it will convert each page to an image and process it with OCR.
+        This method processes regular image files (PNG, JPG, etc.) with HandwritingOCR.
+        PDF files should use extract_text_from_pdf() instead.
 
         Args:
-            file_path: Path to the image file or PDF
+            file_path: Path to the image file
 
         Returns:
             str: Extracted text
@@ -218,114 +252,18 @@ class DocumentParser:
             OCRServiceError: If OCR processing fails
         """
         try:
-            is_pdf = file_path.lower().endswith(".pdf")
-
-            if is_pdf:
-                logger.debug(f"Processing PDF with OCR: {file_path}")
-                doc = None
-                try:
-                    doc = fitz.open(file_path)
-
-                    if doc.page_count == 0:
-                        logger.error(f"PDF Error: PDF document has no pages")
-                        raise Exception("PDF document has no pages")
-
-                    # Process each page with OCR
-                    text = ""
-                    for page_num, page in enumerate(doc, 1):
-                        try:
-                            logger.debug(f"Converting page {page_num} to image")
-                            # Convert page to image
-                            import tempfile
-                            import time
-
-                            temp_img_path = None
-                            pix = None
-
-                            try:
-                                # Create temporary file with unique name to avoid conflicts
-                                temp_dir = tempfile.gettempdir()
-                                temp_filename = f"pdf_page_{page_num}_{int(time.time() * 1000)}_{os.getpid()}.png"
-                                temp_img_path = os.path.join(temp_dir, temp_filename)
-
-                                # Convert page to image
-                                pix = page.get_pixmap()
-                                pix.save(temp_img_path)
-
-                                logger.debug(f"Processing page {page_num} with OCR")
-                                # Process image with OCR
-                                if ocr_service_instance:
-                                    page_text = (
-                                        ocr_service_instance.extract_text_from_image(
-                                            temp_img_path
-                                        )
-                                    )
-                                else:
-                                    logger.warning(
-                                        "OCR service not available, skipping page"
-                                    )
-                                    page_text = ""
-                                text += page_text + "\n"
-                                logger.debug("OCR processing completed")
-
-                            except Exception as e:
-                                logger.error(
-                                    f"Error processing page {page_num}: {str(e)}"
-                                )
-                                page_text = ""
-                            finally:
-                                # Clean up resources
-                                if pix:
-                                    try:
-                                        del pix  # Explicitly delete pixmap to release resources
-                                    except Exception as e:
-                                        logger.debug(f"Error deleting pixmap: {str(e)}")
-
-                                if temp_img_path and os.path.exists(temp_img_path):
-                                    for attempt in range(3):  # Try up to 3 times
-                                        try:
-                                            time.sleep(
-                                                0.1
-                                            )  # Small delay to allow file handles to close
-                                            os.unlink(temp_img_path)
-                                            logger.debug(
-                                                f"Cleaned up temporary image {temp_img_path} for page {page_num}"
-                                            )
-                                            break
-                                        except (OSError, PermissionError) as e:
-                                            if attempt == 2:  # Last attempt
-                                                logger.warning(
-                                                    f"Failed to clean up temporary image {temp_img_path} after 3 attempts: {str(e)}"
-                                                )
-                                            else:
-                                                time.sleep(
-                                                    0.5
-                                                )  # Wait longer before retry
-
-                            logger.debug(
-                                f"Page {page_num}: OCR extracted {len(page_text)} characters"
-                            )
-                        except Exception as e:
-                            logger.error(
-                                f"OCR Error: Error processing page {page_num}: {str(e)}"
-                            )
-                            continue
-
-                    if not text.strip():
-                        logger.error(
-                            f"OCR Error: No text could be extracted from PDF using OCR"
-                        )
-                        raise OCRServiceError(
-                            "No text content could be extracted from PDF using OCR"
-                        )
-
-                    logger.info(
-                        f"Successfully extracted {len(text)} characters from PDF using OCR"
-                    )
-                    return text
-                finally:
-                    if doc is not None:
-                        doc.close()  # Ensure the document is closed
+            logger.debug(f"Starting OCR processing for image: {file_path}")
+            
+            if not ocr_service_instance:
+                logger.error("OCR service not available for image processing")
+                raise OCRServiceError("OCR service not configured")
+            
+            # Process the image file with OCR
+            text = ocr_service_instance.extract_text_from_image(file_path)
+            
+            if text and text.strip():
+                logger.info(f"Successfully extracted {len(text)} characters from image")
+                return text
             else:
                 # Process a regular image file
                 logger.debug(f"Starting OCR processing for image: {file_path}")
