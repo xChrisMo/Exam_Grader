@@ -11,11 +11,14 @@ from pathlib import Path
 import signal
 import threading
 
-from dotenv import load_dotenv
-
 # Add project root to Python path using centralized utility
 from utils.project_init import init_project
+from utils.env_loader import setup_environment
+
 project_root = init_project(__file__)
+
+# Setup environment (creates folders and loads .env files)
+setup_environment(project_root)
 
 from src.constants import (
     DEFAULT_DEBUG,
@@ -40,8 +43,7 @@ from src.constants import (
 # Set up UTF-8 encoding for Windows compatibility
 os.environ[ENV_PYTHONIOENCODING] = DEFAULT_ENCODING
 
-# Load environment variables
-load_dotenv()
+# Environment variables are already loaded by setup_environment()
 
 # Set default environment variables
 os.environ.setdefault(ENV_FLASK_APP, DEFAULT_FLASK_APP)

@@ -36,10 +36,10 @@ class UltraFastMapper:
                 questions_data = self._get_questions_from_database(guide_id)
                 logger.info(f"Retrieved {len(questions_data) if questions_data else 0} questions from database for guide {guide_id}")
 
-            # Balanced preprocessing - preserve more content for large submissions
-            # Increase limits significantly to handle large content better
-            guide_clean = self._ultra_preprocess(guide_content, 3000)  # Increased from 800
-            submission_clean = self._ultra_preprocess(submission_content, 8000)  # Increased from 1000
+            # Balanced preprocessing - preserve all content for large submissions
+            # No limits - process all content
+            guide_clean = self._ultra_preprocess(guide_content, None)  # No limit
+            submission_clean = self._ultra_preprocess(submission_content, None)  # No limit
 
             # Check cache first with consistent key
             cache_key = self._create_consistent_mapping_cache_key(guide_clean, submission_clean, max_questions, questions_data)
@@ -117,13 +117,17 @@ Find up to {max_questions} questions and their corresponding answers."""
             logger.error(f"Ultra-fast mapping failed: {e}")
             return self._instant_fallback_mapping_with_questions(guide_content, submission_content, max_questions, questions_data)
 
-    def _ultra_preprocess(self, content: str, max_chars: int) -> str:
+    def _ultra_preprocess(self, content: str, max_chars: int = None) -> str:
         """Intelligent preprocessing that preserves content structure while optimizing for LLM processing."""
         if not content:
             return ""
 
         # Remove extra whitespace but preserve structure
         content = ' '.join(content.split())
+
+        # No content limits - return all content
+        if max_chars is None:
+            return content.strip()
 
         # For large content, use intelligent truncation that preserves question structure
         if len(content) > max_chars * 4:  # Even more generous limit
@@ -461,9 +465,9 @@ class UltraFastGrader:
 
             # Improved grading prompt with proper max score handling
             questions_text = ""
-            for i, mapping in enumerate(mappings[:10]):  # Increased from 5 to 10
-                q = mapping.get('question_text', f"Q{i+1}")[:200]  # Increased from 50 to 200
-                a = mapping.get('student_answer', '')[:500]  # Increased from 150 to 500
+            for i, mapping in enumerate(mappings):  # No limit on number of mappings
+                q = mapping.get('question_text', f"Q{i+1}")  # No character limit
+                a = mapping.get('student_answer', '')  # No character limit
                 max_score = max_scores_from_guide.get(mapping.get('question_id', f"Q{i+1}"), 10.0)
                 questions_text += f"\nQuestion {i+1}: {q} (Max Score: {max_score} points)\nStudent Answer: {a}\n---"
 

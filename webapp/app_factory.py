@@ -5,20 +5,23 @@ This module provides a clean application factory pattern that replaces
 the monolithic app file with a modular, maintainable structure.
 """
 
+import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
 from flask import Flask
+from flask_cors import CORS
 # from flask_babel import Babel  # Optional - not required for core functionality
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
 
 from utils.project_init import init_project
+from utils.env_loader import setup_environment
+
 project_root = init_project(__file__, levels_up=2)
 
-# Load environment variables
-load_dotenv()
+# Setup environment (creates folders and loads .env files)
+setup_environment(project_root)
 
 from src.config.unified_config import UnifiedConfig
 from src.database.models import User, db
@@ -92,7 +95,16 @@ def _init_extensions(app: Flask) -> None:
     # Database
     db.init_app(app)
 
-    socketio.init_app(app, cors_allowed_origins="*")
+    # CORS configuration
+    allowed_origins = os.getenv("ALLOWED_ORIGINS", "*")
+    if allowed_origins != "*":
+        # Parse comma-separated origins
+        origins = [origin.strip() for origin in allowed_origins.split(",")]
+        CORS(app, origins=origins, supports_credentials=True)
+    else:
+        CORS(app, supports_credentials=True)
+
+    socketio.init_app(app, cors_allowed_origins=allowed_origins)
 
     # CSRF Protection
     CSRFProtect(app)

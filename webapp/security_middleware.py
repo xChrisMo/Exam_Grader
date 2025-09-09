@@ -28,7 +28,7 @@ def add_security_headers(app: Flask):
             "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com; "
             "img-src 'self' data: https:; "
-            "connect-src 'self'; "
+            "connect-src 'self' https://*.onrender.com https://*.render.com; "
             "frame-ancestors 'none';"
         )
 
