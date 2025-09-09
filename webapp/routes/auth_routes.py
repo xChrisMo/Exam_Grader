@@ -22,6 +22,15 @@ def login():
 
     if request.method == "POST":
         try:
+            # Check CSRF token first
+            from flask_wtf.csrf import validate_csrf
+            try:
+                validate_csrf(request.form.get('csrf_token'))
+            except Exception as csrf_error:
+                logger.warning(f"CSRF validation failed for login: {csrf_error}")
+                flash("Security validation failed. Please refresh the page and try again.", "error")
+                return render_template("auth/login.html")
+
             username = request.form.get("username", "").strip()
             password = request.form.get("password", "")
             remember = bool(request.form.get("remember"))
@@ -183,6 +192,15 @@ def change_password():
     """Change user password."""
     if request.method == "POST":
         try:
+            # Check CSRF token first
+            from flask_wtf.csrf import validate_csrf
+            try:
+                validate_csrf(request.form.get('csrf_token'))
+            except Exception as csrf_error:
+                logger.warning(f"CSRF validation failed for change password: {csrf_error}")
+                flash("Security validation failed. Please refresh the page and try again.", "error")
+                return render_template("auth/change_password.html")
+
             current_password = request.form.get("current_password", "")
             new_password = request.form.get("new_password", "")
             confirm_password = request.form.get("confirm_password", "")
