@@ -1117,20 +1117,18 @@ class CoreService(BaseService):
             # Prepare mapping prompt - simplified and focused
             system_prompt = """You are an expert at finding student answers in exam submissions.
 
-TASK: Find the student's answer for each question in the marking guide and extract the exact max_score.
+TASK: Find the student's answer for each question in the marking guide.
 
 OUTPUT FORMAT: Return ONLY valid JSON in this exact format:
-{"mappings":[{"question_id":"Q1a","question_text":"What is...?","student_answer":"The student's actual answer text","max_score":2.0}]}
+{"mappings":[{"question_id":"Q1a","question_text":"What is...?","student_answer":"The student's actual answer text"}]}
 
 CRITICAL INSTRUCTIONS:
 1. **FIND ALL STUDENT ANSWERS**: The student has written clear answers in the submission
 2. **STUDENT ANSWERS ARE THERE**: Look for any explanatory text that shows understanding
 3. **EXTRACT COMPLETE ANSWERS**: Copy the entire student response, including explanations
 4. **BE FLEXIBLE**: Students may use different wording but still answer correctly
-5. **FIND MAX SCORES**: Extract exact marks from marking criteria
-6. **NEVER USE 0.0**: Always provide a positive max_score
-7. **BE THOROUGH**: Search the entire submission text for each answer
-8. **FIND ALL QUESTIONS**: You must find answers for ALL questions in the guide
+5. **BE THOROUGH**: Search the entire submission text for each answer
+6. **FIND ALL QUESTIONS**: You must find answers for ALL questions in the guide
 
 STUDENT ANSWER PATTERNS TO LOOK FOR:
 - "Human factors and ergonomics: This involves..."
@@ -1187,8 +1185,7 @@ STUDENT SUBMISSION:
 
 TASK: 
 1. For each question in the guide, find the student's answer in the submission
-2. Extract the exact max_score from the marking criteria
-3. Return JSON with the actual student answer text (not "No answer provided")
+2. Return JSON with the actual student answer text (not "No answer provided")
 
 CRITICAL: The student has clearly written answers in the submission. Find them!
 
@@ -1201,7 +1198,16 @@ STUDENT ANSWERS TO LOOK FOR:
 - "Quality assurance: This is the process of auditing the quality requirements and the results of quality control measure to show ascertain that appropriate standards are being met."
 - "Quality control: This is the process of monitoring and recording the results of executing the quality activities to assess performance and recommend necessary changes."
 
-IMPORTANT: The student has answered multiple questions. Find ALL their answers. Do not skip any questions. The answers are clearly written in the submission text above."""
+IMPORTANT: The student has answered multiple questions. Find ALL their answers. Do not skip any questions. The answers are clearly written in the submission text above.
+
+SEARCH INSTRUCTIONS:
+1. Look for any text that explains concepts or processes
+2. Look for numbered lists or bullet points
+3. Look for explanatory sentences that show understanding
+4. Look for mathematical calculations or formulas
+5. Look for any text that demonstrates knowledge of the subject
+
+DO NOT return "No answer provided" - the answers are there!"""
 
             # Make LLM call
             response = self._llm_engine.generate_response(
@@ -1248,15 +1254,9 @@ IMPORTANT: The student has answered multiple questions. Find ALL their answers. 
             for i, mapping in enumerate(mappings_to_process):
                 question_id = mapping.get('question_id', f'Q{i+1}')
                 
-                # Use max_score from LLM response (extracted from guide)
-                llm_max_score = mapping.get('max_score')
-                if llm_max_score is not None:
-                    max_score = float(llm_max_score)
-                    logger.info(f"Using LLM-extracted max_score for {question_id}: {max_score}")
-                else:
-                    # Fallback: calculate from guide structure if LLM didn't provide it
-                    max_score = self._calculate_correct_max_score(question_id, questions_data)
-                    logger.warning(f"LLM didn't provide max_score for {question_id}, using calculated: {max_score}")
+                # Always use predefined max_score for consistency
+                max_score = self._calculate_correct_max_score(question_id, questions_data)
+                logger.info(f"Using predefined max_score for {question_id}: {max_score}")
                 
                 processed_mapping = {
                     'question_id': question_id,
@@ -1280,48 +1280,38 @@ IMPORTANT: The student has answered multiple questions. Find ALL their answers. 
             if not criteria_text or not sub_part:
                 return 0.0
             
-            # Convert sub_part to lowercase for matching
-            sub_part_lower = sub_part.lower()
-            
-            # Look for patterns like "Part a: ... – 1 mark", "Part b: ... – 2 marks", etc.
             import re
             
-            # Pattern 1: "Part a: ... – 1 mark" or "Part a: ... - 1 mark"
-            part_pattern = rf"Part\s+{sub_part_lower}.*?[–-]\s*(\d+(?:\.\d+)?)\s*mark"
-            match = re.search(part_pattern, criteria_text, re.IGNORECASE | re.DOTALL)
-            if match:
-                marks = float(match.group(1))
-                logger.info(f"Found exact marks for {sub_part}: {marks} from criteria")
+            # Find the specific part section in the criteria
+            part_section_pattern = rf"Part\s+{sub_part.lower()}:.*?(?=Part\s+[a-z]:|$)"
+            part_section_match = re.search(part_section_pattern, criteria_text, re.IGNORECASE | re.DOTALL)
+            
+            if part_section_match:
+                part_section = part_section_match.group(0)
+                
+                # Look for marks in this specific part section
+                # Pattern 1: "1 mark", "2 marks", etc.
+                mark_patterns = [
+                    r"(\d+(?:\.\d+)?)\s*mark(?:s)?",
+                    r"(\d+(?:\.\d+)?)\s*Mark(?:s)?",
+                ]
+                
+                for pattern in mark_patterns:
+                    matches = re.findall(pattern, part_section, re.IGNORECASE)
+                    if matches:
+                        # Take the first mark found in this part
+                        marks = float(matches[0])
+                        logger.info(f"Found marks for {sub_part}: {marks} from criteria section")
+                        return marks
+            
+            # Fallback: Look for marks anywhere in the criteria for this part
+            # Pattern: "Part a: ... (1 mark)" or "Part a: ... – 1 mark"
+            fallback_pattern = rf"Part\s+{sub_part.lower()}.*?[–-]?\s*(\d+(?:\.\d+)?)\s*mark"
+            fallback_match = re.search(fallback_pattern, criteria_text, re.IGNORECASE | re.DOTALL)
+            if fallback_match:
+                marks = float(fallback_match.group(1))
+                logger.info(f"Found marks for {sub_part}: {marks} from fallback pattern")
                 return marks
-            
-            # Pattern 2: Look for specific sub-part mentions with marks
-            # e.g., "Industry 1.0 (Late 18th century) – 1 mark"
-            specific_patterns = [
-                rf"{sub_part_lower}.*?[–-]\s*(\d+(?:\.\d+)?)\s*mark",
-                rf"Part\s+{sub_part_lower}.*?(\d+(?:\.\d+)?)\s*mark",
-            ]
-            
-            for pattern in specific_patterns:
-                match = re.search(pattern, criteria_text, re.IGNORECASE | re.DOTALL)
-                if match:
-                    marks = float(match.group(1))
-                    logger.info(f"Found specific marks for {sub_part}: {marks} from criteria")
-                    return marks
-            
-            # Pattern 3: Look for marks in the main criteria that might apply to this sub-part
-            # e.g., "Diagram – 2 marks" for part a
-            main_patterns = [
-                r"Diagram.*?[–-]\s*(\d+(?:\.\d+)?)\s*mark",
-                r"Industrial engineering.*?[–-]\s*(\d+(?:\.\d+)?)\s*mark",
-                r"marks for any.*?[–-]\s*(\d+(?:\.\d+)?)\s*mark",
-            ]
-            
-            for pattern in main_patterns:
-                match = re.search(pattern, criteria_text, re.IGNORECASE | re.DOTALL)
-                if match:
-                    marks = float(match.group(1))
-                    logger.info(f"Found main criteria marks for {sub_part}: {marks} from criteria")
-                    return marks
             
             logger.warning(f"No specific marks found for {sub_part} in criteria")
             return 0.0
@@ -1331,11 +1321,11 @@ IMPORTANT: The student has answered multiple questions. Find ALL their answers. 
             return 0.0
 
     def _calculate_correct_max_score(self, question_id: str, questions_data: List[Dict]) -> float:
-        """Calculate the correct max_score for a question based on exact marks from guide criteria."""
+        """Calculate the correct max_score for a question based on the marking guide structure."""
         try:
             if not questions_data:
                 logger.error(f"No questions_data provided for {question_id}")
-                raise ValueError("No questions data available - cannot calculate max_score")
+                return 10.0  # Default fallback
             
             # Extract main question number from question_id (e.g., "Q1a" -> "1")
             main_question_num = question_id
@@ -1360,30 +1350,31 @@ IMPORTANT: The student has answered multiple questions. Find ALL their answers. 
                     
                     if q_marks == 0:
                         logger.warning(f"Question {main_question_num} has 0 marks in guide")
-                        raise ValueError(f"Question {main_question_num} has no marks assigned in guide")
+                        return 10.0
                     
                     if q_type == 'grouped' and sub_parts and sub_part_suffix:
-                        # For grouped questions, try to extract exact marks from criteria
-                        exact_marks = self._extract_marks_from_criteria(criteria, sub_part_suffix)
-                        if exact_marks > 0:
-                            logger.info(f"Question {question_id}: {exact_marks} marks (extracted from criteria)")
-                            return float(exact_marks)
+                        # Try to extract specific marks from criteria for this sub-part
+                        specific_marks = self._extract_marks_from_criteria(criteria, sub_part_suffix)
+                        if specific_marks > 0:
+                            logger.info(f"Question {question_id}: {specific_marks} marks (extracted from criteria for part {sub_part_suffix})")
+                            return float(specific_marks)
                         else:
-                            # Fallback: distribute marks among sub-parts if no exact marks found
+                            # Fallback: distribute marks evenly among sub-parts
                             marks_per_sub_part = q_marks / len(sub_parts) if sub_parts else q_marks
-                            logger.warning(f"Question {question_id}: No exact marks found in criteria, using calculated: {marks_per_sub_part}")
+                            logger.warning(f"Question {question_id}: No specific marks found in criteria, using calculated: {marks_per_sub_part} marks")
                             return float(marks_per_sub_part)
                     else:
                         # For single questions
                         logger.info(f"Question {question_id}: {q_marks} marks (single question)")
                         return float(q_marks)
             
-            logger.error(f"Question {question_id} not found in guide questions")
-            raise ValueError(f"Question {question_id} not found in guide - cannot determine max_score")
+            # Question not found in guide
+            logger.warning(f"Question {question_id} not found in guide questions, using default")
+            return 10.0
             
         except Exception as e:
             logger.error(f"Error calculating max_score for {question_id}: {e}")
-            raise ValueError(f"Cannot determine max_score for {question_id}: {e}")
+            return 10.0
 
 
 

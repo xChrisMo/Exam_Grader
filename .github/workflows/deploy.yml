@@ -18,6 +18,24 @@ jobs:
       with:
         python-version: '3.11'
     
+    - name: Create instance folder and setup environment
+      run: |
+        # Create instance folder for Flask app
+        mkdir -p instance
+        echo "✅ Created instance folder"
+        
+        # Create .env file from env.example if it doesn't exist
+        if [ ! -f .env ]; then
+          cp env.example .env
+          echo "✅ Created .env file from env.example"
+        fi
+        
+        # Ensure .env is in the project root for loading anywhere
+        echo "✅ Environment setup complete"
+        
+        # Test environment loading
+        python3 -c "from utils.env_loader import setup_environment; setup_environment(); print('✅ Environment loading works')"
+    
     - name: Install dependencies
       run: |
         python3 -m pip install --upgrade pip
