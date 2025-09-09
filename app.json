@@ -1,0 +1,55 @@
+{
+  "name": "Exam Grader AI",
+  "description": "AI-Powered Exam Grading Application",
+  "repository": "https://github.com/your-username/exam-grader",
+  "logo": "https://via.placeholder.com/120x120.png?text=ExamAI",
+  "keywords": ["flask", "ai", "grading", "education", "ocr"],
+  "stack": "heroku-22",
+  "env": {
+    "SECRET_KEY": {
+      "description": "A secret key for Flask sessions and CSRF protection",
+      "generator": "secret"
+    },
+    "DEBUG": {
+      "description": "Enable debug mode (set to False in production)",
+      "value": "False"
+    },
+    "HANDWRITING_OCR_API_KEY": {
+      "description": "API key for HandwritingOCR service (get from https://www.handwritingocr.com)",
+      "required": false
+    },
+    "DEEPSEEK_API_KEY": {
+      "description": "API key for DeepSeek LLM service (get from https://platform.deepseek.com)",
+      "required": false
+    },
+    "DATABASE_URL": {
+      "description": "Database URL (automatically provided by Heroku Postgres)",
+      "required": false
+    },
+    "MAX_FILE_SIZE_MB": {
+      "description": "Maximum file size in MB",
+      "value": "20"
+    },
+    "CACHE_TTL": {
+      "description": "Cache time to live in seconds",
+      "value": "3600"
+    }
+  },
+  "addons": [
+    {
+      "plan": "heroku-postgresql:essential-0",
+      "as": "DATABASE"
+    }
+  ],
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ],
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  }
+}
