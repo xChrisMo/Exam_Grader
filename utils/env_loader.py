@@ -60,8 +60,12 @@ def load_environment(env_file: Optional[str] = None, project_root: Optional[Path
                 print(f"   is_production: {is_production}")
                 print(f"   has_api_key: {has_api_key}")
                 
-                if is_production or has_api_key:
-                    print(f"⏭️  Skipping env.example (production mode or API key already set)")
+                # ALWAYS skip env.example on Render.com/Heroku
+                if is_production:
+                    print(f"⏭️  Skipping env.example (production mode - Render.com/Heroku)")
+                    continue
+                elif has_api_key:
+                    print(f"⏭️  Skipping env.example (API key already set)")
                     continue
                 else:
                     # Only load env.example in development if no API key is set
