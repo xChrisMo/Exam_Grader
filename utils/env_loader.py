@@ -44,8 +44,23 @@ def load_environment(env_file: Optional[str] = None, project_root: Optional[Path
     # Load environment files
     for env_path in env_files:
         if env_path.exists():
-            load_dotenv(env_path, override=True)
-            print(f"✅ Loaded environment from: {env_path}")
+            # Skip env.example if we're in production or if key environment variables are already set
+            if env_path.name == "env.example":
+                # Check if we're in production or if key variables are already set
+                is_production = os.getenv("FLASK_ENV") == "production" or os.getenv("RENDER") == "true"
+                has_api_key = os.getenv("DEEPSEEK_API_KEY") and os.getenv("DEEPSEEK_API_KEY") != "your_deepseek_api_key_here"
+                
+                if is_production or has_api_key:
+                    print(f"⏭️  Skipping env.example (production mode or API key already set)")
+                    continue
+                else:
+                    # Only load env.example in development if no API key is set
+                    load_dotenv(env_path, override=False)
+                    print(f"✅ Loaded environment from: {env_path} (development fallback)")
+            else:
+                # For .env files, override as usual
+                load_dotenv(env_path, override=True)
+                print(f"✅ Loaded environment from: {env_path}")
             break
     else:
         print("⚠️  No .env file found, using system environment variables only")
