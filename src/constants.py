@@ -21,9 +21,9 @@ ENV_PYTHONIOENCODING = "PYTHONIOENCODING"
 # Default values (can be overridden by environment variables)
 import os
 
-DEFAULT_HOST = os.getenv("HOST", "127.0.0.1")
-DEFAULT_PORT = os.getenv("PORT", "8501")
-DEFAULT_DEBUG = os.getenv("DEBUG", "True")
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = "8501"
+DEFAULT_DEBUG = "True"
 DEFAULT_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///exam_grader.db")
 DEFAULT_LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 DEFAULT_ENCODING = os.getenv("ENCODING", "utf-8")
