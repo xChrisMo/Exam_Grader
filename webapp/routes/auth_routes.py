@@ -118,7 +118,8 @@ def signup():
             # Check database connectivity
             try:
                 # Test database connection
-                db.session.execute('SELECT 1')
+                from sqlalchemy import text
+                db.session.execute(text('SELECT 1'))
             except Exception as db_error:
                 logger.error(f"Database connection failed during signup: {db_error}")
                 flash("Database connection error. Please try again later.", "error")
