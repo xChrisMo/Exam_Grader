@@ -62,6 +62,11 @@ LLM_JSON_TIMEOUT=60.0
 HANDWRITING_OCR_API_KEY=your_handwriting_ocr_api_key_here
 OCR_BASE_URL=https://www.handwritingocr.com/api/v3
 OCR_REQUEST_TIMEOUT=30
+
+# OCR Fallback Configuration
+OCR_SERVICE_ENABLED=true
+TESSERACT_ENABLED=true
+EASYOCR_ENABLED=true
 OCR_RETRY_DELAY=5
 OCR_MAX_RETRIES=3
 

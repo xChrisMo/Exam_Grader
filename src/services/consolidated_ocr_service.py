@@ -110,6 +110,14 @@ class ConsolidatedOCRService(BaseService):
             logger.info("🔧 OCR service disabled via OCR_SERVICE_ENABLED=false")
             self.api_key = None
         
+        # Log OCR service configuration
+        if self.api_key:
+            logger.info("✅ PRIMARY OCR service (HandwritingOCR API) is configured and ready")
+            logger.info("🎯 OCR Priority: 1. HandwritingOCR API → 2. Tesseract → 3. EasyOCR → 4. Basic processing")
+        else:
+            logger.warning("⚠️ PRIMARY OCR service (HandwritingOCR API) is not configured - will use fallback methods only")
+            logger.info("🔄 OCR Priority: 1. Tesseract → 2. EasyOCR → 3. Basic processing")
+        
         self.allow_no_key = allow_no_key
 
         # Headers setup
@@ -567,6 +575,17 @@ class ConsolidatedOCRService(BaseService):
                 except json.JSONDecodeError as e:
                     logger.warning(f"Could not parse error response as JSON: {str(e)}")
                     error_msg += f" - {response.text}"
+                
+                # Provide specific error messages for common issues
+                if response.status_code == 401:
+                    error_msg = f"Authentication failed (401): API key may be invalid or expired. {error_msg}"
+                elif response.status_code == 403:
+                    error_msg = f"Access forbidden (403): API key may not have sufficient permissions. {error_msg}"
+                elif response.status_code == 429:
+                    error_msg = f"Rate limit exceeded (429): Too many requests. {error_msg}"
+                elif response.status_code >= 500:
+                    error_msg = f"Server error ({response.status_code}): HandwritingOCR service may be temporarily unavailable. {error_msg}"
+                
                 raise OCRServiceError(error_msg)
 
             # Get the document ID
@@ -865,21 +884,39 @@ class ConsolidatedOCRService(BaseService):
             return ""
 
     def _extract_with_fallback_ocr(self, file_path: Path) -> str:
-        """Extract text with multiple OCR fallback options."""
+        """Extract text with multiple OCR fallback options.
+        
+        Priority order:
+        1. HandwritingOCR API (PRIMARY - if enabled and API key available)
+        2. Tesseract OCR (SECONDARY fallback)
+        3. EasyOCR (TERTIARY fallback)
+        4. Basic image processing (EMERGENCY fallback)
+        """
         # Try primary OCR service first (if enabled and API key available)
         if self.ocr_enabled and self.api_key:
             try:
-                text = self._extract_with_api(file_path)
+                logger.info("🔄 Attempting primary OCR service (HandwritingOCR API)...")
+                text = self.extract_text_from_image(file_path)
                 if text.strip():
+                    logger.info("✅ Primary OCR service (HandwritingOCR API) successful")
                     return text
+                else:
+                    logger.warning("⚠️ Primary OCR service returned empty text")
             except Exception as e:
-                logger.warning(f"Primary OCR failed: {e}")
+                logger.warning(f"❌ Primary OCR service failed: {e}")
                 # If it's a 401 error, the API key is invalid, so skip API calls
                 if "401" in str(e) or "authentication" in str(e).lower():
-                    logger.warning("API authentication failed - switching to fallback methods only")
+                    logger.error("🔑 API authentication failed - API key may be invalid or expired")
+                    logger.warning("🔄 Switching to fallback methods only for this session")
                     self.api_key = None  # Disable API for future calls
+                elif "timeout" in str(e).lower():
+                    logger.warning("⏱️ API timeout - will retry with fallback methods")
+                else:
+                    logger.warning("🔄 API error - will try fallback methods")
         elif not self.ocr_enabled:
             logger.info("🔧 Primary OCR service disabled - using fallback methods only")
+        else:
+            logger.warning("⚠️ Primary OCR service not configured - using fallback methods only")
 
         # Try Tesseract as fallback
         if TESSERACT_SUPPORT:
@@ -893,6 +930,9 @@ class ConsolidatedOCRService(BaseService):
                     logger.warning("⚠️ Tesseract OCR returned empty text")
             except Exception as e:
                 logger.warning(f"❌ Tesseract OCR failed: {e}")
+                # Check if it's a binary not found error
+                if "tesseract is not installed" in str(e).lower() or "not in your path" in str(e).lower():
+                    logger.warning("⚠️ Tesseract binary not installed - this is expected on first deployment")
         else:
             logger.warning("⚠️ Tesseract not available - trying other fallbacks")
         
@@ -980,16 +1020,18 @@ class ConsolidatedOCRService(BaseService):
     def _extract_text_patterns(self, image: Image.Image) -> str:
         """Extract text using basic pattern recognition."""
         try:
-            # This is a very basic implementation
+            # This is a very basic implementation that provides helpful feedback
             # In a real scenario, you might use more sophisticated techniques
             
-            # For now, return a placeholder that indicates OCR was attempted
-            # but no readable text was found
-            return "Text extraction attempted but no readable content found. Please ensure the image contains clear, readable text."
+            # Get image dimensions for context
+            width, height = image.size
+            
+            # Return informative message about the image
+            return f"Image processed (size: {width}x{height}). OCR extraction attempted but no readable text was found. This may be due to: 1) Image quality issues, 2) Text not clearly visible, 3) OCR service temporarily unavailable. Please ensure the image contains clear, readable text or try uploading a different image."
             
         except Exception as e:
             logger.error(f"Text pattern extraction failed: {e}")
-            return ""
+            return "Image processing failed. Please try uploading a different image or contact support if the issue persists."
 
     def _extract_with_tesseract(self, file_path: Path) -> str:
         """Extract text using Tesseract OCR as fallback."""
