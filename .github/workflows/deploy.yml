@@ -24,11 +24,15 @@ jobs:
         pip install -r requirements.txt
     
     - name: Run basic tests
+      env:
+        FLASK_ENV: development
       run: |
         python3 -c "import webapp.app; print('✅ App imports successfully')"
         python3 -c "from src.services.consolidated_llm_service import ConsolidatedLLMService; print('✅ Services import successfully')"
     
     - name: Check code quality
+      env:
+        FLASK_ENV: development
       run: |
         python3 -m py_compile run_app.py
         python3 -m py_compile webapp/app.py

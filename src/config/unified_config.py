@@ -344,7 +344,7 @@ class UnifiedConfig:
         Args:
             environment: Environment name (development, testing, production)
         """
-        self.environment = environment or os.getenv("FLASK_ENV", "production")
+        self.environment = environment or os.getenv("FLASK_ENV", "development")
 
         # Migrate deprecated environment variables
         ConfigurationMigrator.migrate_environment_variables()
