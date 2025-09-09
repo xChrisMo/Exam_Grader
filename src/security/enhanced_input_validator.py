@@ -4,12 +4,12 @@ This module provides comprehensive input validation and sanitization
 for all user inputs, including forms, files, and API requests.
 """
 
-import hashlib
-import html
-import mimetypes
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+import hashlib
+import html
+import mimetypes
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -28,7 +28,6 @@ except ImportError:
 
     class SecurityError(Exception):
         pass
-
 
 class FileValidator:
     """Enhanced file validation with security checks."""
@@ -312,7 +311,6 @@ class FileValidator:
         """Generate SHA-256 hash of file content."""
         return hashlib.sha256(file_content).hexdigest()
 
-
 class FormValidator:
     """Enhanced form input validation."""
 
@@ -452,7 +450,6 @@ class FormValidator:
 
         return text
 
-
 class APIValidator:
     """API request validation."""
 
@@ -540,12 +537,10 @@ class APIValidator:
 
         return True
 
-
 # Global validator instances
 file_validator = FileValidator()
 form_validator = FormValidator()
 api_validator = APIValidator()
-
 
 def validate_file_upload(
     file_obj, filename: str
@@ -561,7 +556,6 @@ def validate_file_upload(
     """
     return file_validator.validate_file(file_obj, filename)
 
-
 def validate_form_input(
     form_data: Dict[str, Any], validation_rules: Dict[str, Dict[str, Any]]
 ) -> Tuple[bool, Dict[str, List[str]], Dict[str, Any]]:
@@ -575,7 +569,6 @@ def validate_form_input(
         Tuple of (is_valid, errors, sanitized_data)
     """
     return form_validator.validate_form_data(form_data, validation_rules)
-
 
 def validate_api_request(
     request_data: Any, schema: Dict[str, Any]

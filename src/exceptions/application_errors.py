@@ -1,12 +1,11 @@
 """Application-specific exception classes with standardized error handling."""
 
-import traceback
 from datetime import datetime
+import traceback
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from src.models.api_responses import ErrorCode
-
 
 class ErrorSeverity(Enum):
     """Error severity levels."""
@@ -15,7 +14,6 @@ class ErrorSeverity(Enum):
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
-
 
 class ApplicationError(Exception):
     """Base application error class with enhanced error tracking.
@@ -130,7 +128,6 @@ class ApplicationError(Exception):
             f")"
         )
 
-
 class ValidationError(ApplicationError):
     """Validation error for input validation failures."""
 
@@ -163,7 +160,6 @@ class ValidationError(ApplicationError):
             **kwargs,
         )
 
-
 class AuthenticationError(ApplicationError):
     """Authentication error for login/auth failures."""
 
@@ -176,7 +172,6 @@ class AuthenticationError(ApplicationError):
             recoverable=True,
             **kwargs,
         )
-
 
 class AuthorizationError(ApplicationError):
     """Authorization error for permission failures."""
@@ -196,7 +191,6 @@ class AuthorizationError(ApplicationError):
             severity=ErrorSeverity.MEDIUM,
             **kwargs,
         )
-
 
 class NotFoundError(ApplicationError):
     """Not found error for missing resources."""
@@ -224,7 +218,6 @@ class NotFoundError(ApplicationError):
             **kwargs,
         )
 
-
 class ProcessingError(ApplicationError):
     """Processing error for business logic failures."""
 
@@ -242,7 +235,6 @@ class ProcessingError(ApplicationError):
             recoverable=True,
             **kwargs,
         )
-
 
 class ServiceUnavailableError(ApplicationError):
     """Service unavailable error for external service failures."""
@@ -263,7 +255,6 @@ class ServiceUnavailableError(ApplicationError):
             **kwargs,
         )
 
-
 class RateLimitError(ApplicationError):
     """Rate limit error for too many requests."""
 
@@ -279,7 +270,6 @@ class RateLimitError(ApplicationError):
             retry_after=retry_after,
             **kwargs,
         )
-
 
 class TimeoutError(ApplicationError):
     """Timeout error for operations that take too long."""
@@ -301,7 +291,6 @@ class TimeoutError(ApplicationError):
             **kwargs,
         )
 
-
 class ConfigurationError(ApplicationError):
     """Configuration error for invalid or missing configuration."""
 
@@ -319,7 +308,6 @@ class ConfigurationError(ApplicationError):
             recoverable=False,
             **kwargs,
         )
-
 
 class FileOperationError(ApplicationError):
     """File operation error for file system operations."""
@@ -346,7 +334,6 @@ class FileOperationError(ApplicationError):
             recoverable=True,
             **kwargs,
         )
-
 
 class DatabaseError(ApplicationError):
     """Database error for database operation failures."""

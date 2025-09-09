@@ -8,9 +8,9 @@ New code should use src.exceptions.enhanced_error_handler for
 standardized error handling.
 """
 
+from datetime import datetime
 import logging
 import traceback
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 from flask import flash, session
@@ -29,7 +29,6 @@ except ImportError:
     ErrorCode = None
 
 logger = logging.getLogger(__name__)
-
 
 class ErrorHandler:
     """Centralized error handling utility."""
@@ -121,7 +120,6 @@ class ErrorHandler:
         """Clear error log."""
         self.error_log.clear()
         logger.info("Error log cleared")
-
 
 class ProgressTracker:
     """Track progress of long-running operations."""
@@ -237,11 +235,9 @@ class ProgressTracker:
         if to_remove:
             logger.info(f"Cleaned up {len(to_remove)} old operations")
 
-
 # Global instances
 error_handler = ErrorHandler()
 progress_tracker = ProgressTracker()
-
 
 def handle_error(
     error: Union[Exception, ApplicationError],
@@ -286,7 +282,6 @@ def handle_error(
             message = format_error_for_user(error)
         flash(message, "error")
 
-
 def create_user_notification(
     message: str, category: str = "info", persistent: bool = False
 ):
@@ -310,7 +305,6 @@ def create_user_notification(
     else:
         flash(message, category)
 
-
 def get_persistent_notifications() -> List[Dict]:
     """Get persistent notifications from session.
 
@@ -319,11 +313,9 @@ def get_persistent_notifications() -> List[Dict]:
     """
     return session.get("persistent_notifications", [])
 
-
 def clear_persistent_notifications():
     """Clear persistent notifications from session."""
     session.pop("persistent_notifications", None)
-
 
 def safe_execute(func, *args, context: str = "", default_return=None, **kwargs):
     """Safely execute function with error handling.
@@ -343,7 +335,6 @@ def safe_execute(func, *args, context: str = "", default_return=None, **kwargs):
     except Exception as e:
         handle_error(e, context, flash_message=False)
         return default_return
-
 
 def validate_input(value: Any, validator_func, error_message: str = "Invalid input"):
     """Validate input with custom validator.
@@ -366,7 +357,6 @@ def validate_input(value: Any, validator_func, error_message: str = "Invalid inp
     except Exception as e:
         handle_error(e, "Input validation")
         raise
-
 
 def format_error_for_user(error: Union[Exception, ApplicationError]) -> str:
     """Format error message for user display.
@@ -415,7 +405,6 @@ def format_error_for_user(error: Union[Exception, ApplicationError]) -> str:
         error_type, f"An unexpected error occurred: {str(error)}"
     )
 
-
 def add_recent_activity(activity_type: str, message: str, icon: str = "info"):
     """Add activity to recent activity log.
 
@@ -440,7 +429,6 @@ def add_recent_activity(activity_type: str, message: str, icon: str = "info"):
     except Exception as e:
         logger.error(f"Error adding recent activity: {str(e)}")
 
-
 def get_recent_activity(limit: int = 10) -> List[Dict]:
     """Get recent activity from session.
 
@@ -455,7 +443,6 @@ def get_recent_activity(limit: int = 10) -> List[Dict]:
     except Exception as e:
         logger.error(f"Error getting recent activity: {str(e)}")
         return []
-
 
 def handle_api_error(error: Union[Exception, ApplicationError], status_code: int = 500):
     """Handle API errors and return appropriate JSON response.

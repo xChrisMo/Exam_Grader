@@ -4,12 +4,12 @@ This module provides comprehensive performance optimization including caching,
 database optimization, resource management, and monitoring.
 """
 
-import gc
-import threading
 import time
 from collections import defaultdict, deque
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+import gc
+import threading
+from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -40,7 +40,6 @@ except ImportError:
     request = None
     g = None
     Cache = None
-
 
 @dataclass
 class PerformanceMetrics:
@@ -82,7 +81,6 @@ class PerformanceMetrics:
             "error_count": self.error_count,
             "timestamp": self.timestamp.isoformat(),
         }
-
 
 class MemoryCache:
     """High-performance in-memory cache with TTL support."""
@@ -231,7 +229,6 @@ class MemoryCache:
 
         return total_size
 
-
 class DatabaseOptimizer:
     """Database query optimization and monitoring."""
 
@@ -340,7 +337,6 @@ class DatabaseOptimizer:
         normalized = re.sub(r"\b\d+\b", "?", normalized)
 
         return normalized.upper()
-
 
 class ResourceMonitor:
     """System resource monitoring."""
@@ -458,7 +454,6 @@ class ResourceMonitor:
             except Exception as e:
                 logger.error(f"Error in monitoring loop: {str(e)}")
                 time.sleep(self.monitoring_interval)
-
 
 class PerformanceOptimizer:
     """Main performance optimization manager."""
@@ -578,7 +573,6 @@ class PerformanceOptimizer:
 
         if use_redis and self.redis_cache:
             try:
-                import pickle
 
                 serialized_value = pickle.dumps(value)
                 if ttl:
@@ -702,7 +696,6 @@ class PerformanceOptimizer:
         # Start initial cleanup timer
         threading.Timer(300, cleanup_task).start()
 
-
 def cached(timeout: int = 3600, key_prefix: str = ""):
     """Decorator for caching function results.
 
@@ -740,7 +733,6 @@ def cached(timeout: int = 3600, key_prefix: str = ""):
 
     return decorator
 
-
 def monitor_performance(f: Callable) -> Callable:
     """Decorator for monitoring function performance.
 
@@ -773,10 +765,8 @@ def monitor_performance(f: Callable) -> Callable:
 
     return decorated_function
 
-
 # Global performance optimizer instance
 performance_optimizer = None
-
 
 def init_performance_optimizer(
     app=None, redis_url: Optional[str] = None
@@ -793,7 +783,6 @@ def init_performance_optimizer(
     global performance_optimizer
     performance_optimizer = PerformanceOptimizer(app, redis_url)
     return performance_optimizer
-
 
 def get_performance_optimizer() -> Optional[PerformanceOptimizer]:
     """Get global performance optimizer instance.

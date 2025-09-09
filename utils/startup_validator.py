@@ -4,18 +4,16 @@ Startup Validator - Validates Critical Functionality on Application Start
 Ensures that critical features are intact before the application starts.
 """
 
-import logging
 import sys
 import os
 from pathlib import Path
+import logging
 from typing import Dict, List, Tuple
 
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+from utils.project_init import init_project
+project_root = init_project(__file__, levels_up=2)
 
 logger = logging.getLogger(__name__)
-
 
 class StartupValidator:
     """Validates critical functionality on application startup."""
@@ -191,7 +189,6 @@ class StartupValidator:
 
     def print_validation_report(self, results: Dict[str, any]):
         """Print a formatted validation report."""
-        import logging
 
         logger = logging.getLogger(__name__)
 
@@ -230,7 +227,6 @@ class StartupValidator:
 
         logger.info("\n" + "=" * 60)
 
-
 def validate_on_startup(project_root: str = None) -> bool:
     """Run startup validation and return success status.
 
@@ -246,7 +242,6 @@ def validate_on_startup(project_root: str = None) -> bool:
     results = validator.validate_all()
     validator.print_validation_report(results)
     return results["overall_valid"]
-
 
 if __name__ == "__main__":
     # Run validation when called directly

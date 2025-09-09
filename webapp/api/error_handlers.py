@@ -6,8 +6,8 @@ with consistent response formats, error categorization, and monitoring.
 """
 
 import time
-import traceback
 from datetime import datetime, timezone
+import traceback
 from typing import Any, Dict, Optional, Tuple
 
 from flask import current_app, jsonify, request
@@ -16,7 +16,6 @@ from src.services.enhanced_logging_service import LogCategory, enhanced_logging_
 from src.services.monitoring.monitoring_service import performance_monitor
 from src.services.processing_error_handler import ErrorContext, processing_error_handler
 from utils.logger import logger
-
 
 class APIErrorHandler:
     """Unified API error handler with standardized responses"""
@@ -255,10 +254,8 @@ class APIErrorHandler:
             request_id=request_id,
         )
 
-
 # Global error handler instance
 api_error_handler = APIErrorHandler()
-
 
 def register_error_handlers(app):
     """Register unified error handlers with Flask app"""

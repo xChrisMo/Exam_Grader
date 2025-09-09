@@ -4,14 +4,13 @@ Cache System for Exam Grader
 This module provides a simple in-memory cache with TTL support and statistics tracking.
 """
 
-import threading
 import time
 from collections import OrderedDict
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Union
 
 from utils.logger import logger
-
 
 @dataclass
 class CacheEntry:
@@ -33,7 +32,6 @@ class CacheEntry:
         """Record access to this entry."""
         self.access_count += 1
         self.last_accessed = time.time()
-
 
 class Cache:
     """Simple in-memory cache with TTL support."""
@@ -213,40 +211,32 @@ class Cache:
                 ),
             }
 
-
 # Global cache instance
 _global_cache = Cache(max_size=1000, default_ttl=3600)  # 1 hour default TTL
-
 
 def get_cache() -> Cache:
     """Get the global cache instance."""
     return _global_cache
 
-
 def cache_get(key: str) -> Any:
     """Get value from global cache."""
     return _global_cache.get(key)
-
 
 def cache_set(key: str, value: Any, ttl: Optional[float] = None) -> None:
     """Set value in global cache."""
     _global_cache.set(key, value, ttl)
 
-
 def cache_delete(key: str) -> bool:
     """Delete key from global cache."""
     return _global_cache.delete(key)
-
 
 def cache_clear() -> None:
     """Clear global cache."""
     _global_cache.clear()
 
-
 def cache_cleanup() -> Dict[str, int]:
     """Cleanup expired entries from global cache."""
     return _global_cache.cleanup()
-
 
 def cache_stats() -> Dict[str, Union[int, float]]:
     """Get global cache statistics."""

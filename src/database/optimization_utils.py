@@ -1,16 +1,13 @@
-"""Database optimization utilities for applying migrations and validating schema."""
+"""Database optimization utilities for validating schema."""
 
-import logging
 from datetime import datetime, timezone
+import logging
 from typing import Dict, List, Optional
 
 from flask import current_app
 from sqlalchemy import create_engine, inspect, text
 
-from .schema_migrations import MigrationManager
-
 logger = logging.getLogger(__name__)
-
 
 class DatabaseOptimizer:
     """Utility class for database optimization and validation."""
@@ -25,7 +22,6 @@ class DatabaseOptimizer:
             database_url or current_app.config["SQLALCHEMY_DATABASE_URI"]
         )
         self.engine = create_engine(self.database_url)
-        self.migration_manager = MigrationManager(self.database_url)
 
     def apply_all_migrations(self) -> Dict[str, bool]:
         """Apply all available migrations.
@@ -33,26 +29,8 @@ class DatabaseOptimizer:
         Returns:
             Dictionary mapping migration version to success status.
         """
-        results = {}
-
-        for migration in self.migration_manager.migrations:
-            try:
-                logger.info(
-                    f"Applying migration {migration.version}: {migration.description}"
-                )
-                success = self.migration_manager.apply_migration(migration.version)
-                results[migration.version] = success
-
-                if success:
-                    logger.info(f"Successfully applied migration {migration.version}")
-                else:
-                    logger.error(f"Failed to apply migration {migration.version}")
-
-            except Exception as e:
-                logger.error(f"Error applying migration {migration.version}: {str(e)}")
-                results[migration.version] = False
-
-        return results
+        logger.info("Migration functionality has been removed")
+        return {}
 
     def validate_indexes(self) -> Dict[str, List[str]]:
         """Validate that all expected indexes exist.
@@ -197,7 +175,7 @@ class DatabaseOptimizer:
                 result = conn.execute(
                     text(
                         """
-                    SELECT name FROM sqlite_master 
+                    SELECT name FROM sqlite_master
                     WHERE type='trigger' AND name LIKE 'validate_%'
                 """
                     )
@@ -237,7 +215,7 @@ class DatabaseOptimizer:
                 result = conn.execute(
                     text(
                         """
-                    SELECT name FROM sqlite_master 
+                    SELECT name FROM sqlite_master
                     WHERE type='view'
                 """
                     )
@@ -309,8 +287,8 @@ class DatabaseOptimizer:
         """
         logger.info("Starting database optimization...")
 
-        # Apply all migrations
-        migration_results = self.apply_all_migrations()
+        # Migrations have been removed
+        migration_results = {}
 
         # Generate final report
         optimization_report = self.generate_optimization_report()
@@ -318,8 +296,7 @@ class DatabaseOptimizer:
         result = {
             "migration_results": migration_results,
             "optimization_report": optimization_report,
-            "success": all(migration_results.values())
-            and not optimization_report["recommendations"],
+            "success": not optimization_report["recommendations"],
         }
 
         if result["success"]:
@@ -330,7 +307,6 @@ class DatabaseOptimizer:
             )
 
         return result
-
 
 def create_optimization_script():
     """Create a standalone script for database optimization."""
@@ -343,25 +319,25 @@ import json
 from pathlib import Path
 
 # Add project root to path
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+from utils.project_init import init_project
+project_root = init_project(__file__, levels_up=3)
 
 from src.database.optimization_utils import DatabaseOptimizer
-from src.config.unified_config import Config
+from src.config.unified_config import UnifiedConfig
 
 def main():
     """Main optimization function."""
-    config = Config()
+    config = UnifiedConfig()
     database_url = config.get_database_url()
-    
+
     optimizer = DatabaseOptimizer(database_url)
-    
+
     print("Starting database optimization...")
     result = optimizer.optimize_database()
-    
+
     print("\nOptimization Results:")
     print(json.dumps(result, indent=2, default=str))
-    
+
     if result['success']:
         print("\n✅ Database optimization completed successfully!")
         sys.exit(0)

@@ -6,16 +6,21 @@ LLMService and EnhancedLLMService with integration to the base service architect
 
 import json
 import os
+import time
+from datetime import datetime, timezone
 import random
 import threading
-import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from queue import Empty, Queue
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from packaging import version
+
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
 
 from src.config.unified_config import config
 from src.services.base_service import BaseService, ServiceStatus
@@ -23,11 +28,11 @@ from src.services.enhanced_logging_service import LogCategory, enhanced_logging_
 from src.services.fallback_manager import fallback_manager
 from src.services.monitoring.monitoring_service import monitoring_service
 from src.services.core.error_service import error_service, ErrorContext
+from src.utils.timeout_manager import timeout_manager
 from utils.logger import logger
 
 # Load environment variables
 load_dotenv()
-
 
 class LLMServiceError(Exception):
     """Exception raised for errors in the LLM service."""
@@ -52,7 +57,6 @@ class LLMServiceError(Exception):
         if self.error_code:
             return f"[{self.error_code}] {self.message}"
         return self.message
-
 
 class RateLimitManager:
     """Manages rate limiting for API calls"""
@@ -119,7 +123,6 @@ class RateLimitManager:
 
             return max(wait_times) if wait_times else 0
 
-
 class ConnectionPool:
     """Connection pool for managing multiple API clients"""
 
@@ -154,7 +157,6 @@ class ConnectionPool:
         except Empty:
             with self.lock:
                 if self.created_connections < self.pool_size * 2:  # Allow some overflow
-                    from openai import OpenAI
 
                     client = OpenAI(api_key=self.api_key, base_url=self.base_url)
                     self.created_connections += 1
@@ -171,7 +173,6 @@ class ConnectionPool:
             # Pool is full, connection will be garbage collected
             pass
 
-
 @dataclass
 class ResponseParsingStrategy:
     """Strategy for parsing LLM responses"""
@@ -179,7 +180,6 @@ class ResponseParsingStrategy:
     name: str
     parser_func: callable
     priority: int = 0  # Higher priority tried first
-
 
 class ResponseParser:
     """Enhanced response parser with multiple fallback strategies"""
@@ -320,7 +320,6 @@ class ResponseParser:
 
     def _extract_grading_data(self, text: str) -> Dict[str, Any]:
         """Extract grading data using regex patterns"""
-        import re
 
         # Score extraction patterns
         score_patterns = [
@@ -378,7 +377,6 @@ class ResponseParser:
             line = line.strip()
             if any(word in line.lower() for word in ["score", "grade", "points"]):
                 # Try to extract numeric value
-                import re
 
                 numbers = re.findall(r"\d+", line)
                 if numbers:
@@ -411,14 +409,13 @@ class ResponseParser:
             "original_response": original_text[:500],  # Truncate for logging
         }
 
-
 class ConsolidatedLLMService(BaseService):
     """Consolidated LLM service with enhanced functionality and base service integration."""
 
     def __init__(
         self,
         api_key: Optional[str] = None,
-        base_url: str = "https://api.deepseek.com/v1",
+        base_url: str = None,
         model: str = None,
         temperature: float = 0.0,  # Fully deterministic by default
         max_retries: int = 10,  # Increased retries
@@ -445,16 +442,21 @@ class ConsolidatedLLMService(BaseService):
         super().__init__("consolidated_llm_service")
 
         # Configuration with proper fallback chain
-        self.api_key = (api_key or 
-                       os.getenv("LLM_API_KEY") or 
+        self.api_key = (api_key or
+                       os.getenv("LLM_API_KEY") or
                        os.getenv("DEEPSEEK_API_KEY"))
-        self.base_url = base_url
-        self.model = (model or 
+        self.base_url = base_url or os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1")
+        self.model = (model or
                      os.getenv("LLM_MODEL_NAME") or
                      (config.api.deepseek_model if hasattr(config, "api") else "deepseek-chat"))
         self.temperature = temperature
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        
+        # Enhanced timeout configuration using timeout manager
+        self.api_timeout = timeout_manager.get_timeout("api")
+        self.llm_processing_timeout = timeout_manager.get_timeout("llm", "processing")
+        self.json_timeout = timeout_manager.get_timeout("llm", "json")
         self.seed = seed
         self.deterministic = deterministic
 
@@ -523,8 +525,12 @@ class ConsolidatedLLMService(BaseService):
                 logger.warning("No API key available for LLM client initialization")
                 return False
 
+            if OpenAI is None:
+                logger.error("OpenAI library not available - cannot initialize LLM client")
+                self.status = ServiceStatus.UNHEALTHY
+                return False
+
             # Initialize OpenAI client
-            from openai import OpenAI
 
             # Get OpenAI version
             try:
@@ -602,11 +608,9 @@ class ConsolidatedLLMService(BaseService):
                     return True
 
                 # Initialize OpenAI client
-                from openai import OpenAI
 
                 # Get OpenAI version
                 try:
-                    import openai
 
                     openai_version_str = openai.__version__
                     version.parse(openai_version_str)
@@ -836,7 +840,15 @@ class ConsolidatedLLMService(BaseService):
 
                 # Make the API call with timeout handling
                 try:
-                    response = client_to_use.chat.completions.create(**params)
+                    # Add timeout to the client if not already set
+                    if hasattr(client_to_use, '_timeout') and client_to_use._timeout is None:
+                        client_to_use._timeout = self.api_timeout
+                    
+                    # Create the completion with explicit timeout
+                    response = client_to_use.chat.completions.create(
+                        **params,
+                        timeout=self.api_timeout
+                    )
 
                     # Record successful request
                     self.rate_limiter.record_request()
@@ -862,6 +874,9 @@ class ConsolidatedLLMService(BaseService):
                             ),
                         },
                     )
+                    
+                    # Record performance for timeout adjustment
+                    timeout_manager.record_performance("llm", "api_call", duration, True)
 
                     return response
 
@@ -874,6 +889,10 @@ class ConsolidatedLLMService(BaseService):
             except Exception as e:
                 last_error = e
                 error_str = str(e).lower()
+                
+                # Record performance for failed attempt
+                duration = time.time() - start_time
+                timeout_manager.record_performance("llm", "api_call", duration, False)
 
                 # Enhanced error categorization and handling
                 context = ErrorContext(
@@ -921,6 +940,13 @@ class ConsolidatedLLMService(BaseService):
                         logger.warning(
                             f"Network error, retrying in {wait_time:.2f}s: {e}"
                         )
+                        
+                        # For timeout errors, adjust timeout using timeout manager
+                        if "timeout" in error_str and attempt < 2:
+                            new_timeout = timeout_manager.adjust_timeout("llm", "api_call", "timeout_error")
+                            self.api_timeout = new_timeout
+                            logger.info(f"Adjusted API timeout to {self.api_timeout}s for retry")
+                        
                         time.sleep(wait_time)
                         continue
 
@@ -1185,71 +1211,69 @@ class ConsolidatedLLMService(BaseService):
                 "error": str(e),
             }
 
-
 def get_llm_service_for_user(user_id: str = None) -> ConsolidatedLLMService:
     """Get LLM service configured with user-specific settings.
-    
+
     Args:
         user_id: User ID to get settings for. If None, uses default settings.
-        
+
     Returns:
         ConsolidatedLLMService configured with user settings
     """
     try:
         # Import here to avoid circular imports
         from src.database.models import UserSettings
-        
+
         # Get user settings
         if user_id:
             user_settings = UserSettings.get_or_create_for_user(user_id)
             settings_dict = user_settings.to_dict()
         else:
             settings_dict = UserSettings.get_default_settings()
-        
+
         # Extract LLM configuration with proper fallback chain
-        api_key = (settings_dict.get('llm_api_key') or 
-                  os.getenv("LLM_API_KEY") or 
+        api_key = (settings_dict.get('llm_api_key') or
+                  os.getenv("LLM_API_KEY") or
                   os.getenv("DEEPSEEK_API_KEY"))
-        base_url = (settings_dict.get('llm_base_url') or 
-                   os.getenv("LLM_API_URL") or 
-                   os.getenv("DEEPSEEK_API_URL") or 
+        base_url = (settings_dict.get('llm_base_url') or
+                   os.getenv("LLM_API_URL") or
+                   os.getenv("DEEPSEEK_API_URL") or
                    "https://api.deepseek.com/v1")
-        
+
         # Set appropriate default model based on base URL
         if "deepseek" in base_url.lower():
             default_model = "deepseek-chat"
         else:
             default_model = "gpt-3.5-turbo"
-            
+
         model = settings_dict.get('llm_model', default_model)
-        
+
         # Create service with user settings
         return ConsolidatedLLMService(
             api_key=api_key,
             base_url=base_url,
             model=model
         )
-        
+
     except Exception as e:
         logger.warning(f"Failed to get user-specific LLM service: {e}")
         # Fallback to default service
         return ConsolidatedLLMService()
 
-
 def get_llm_service_for_current_user() -> ConsolidatedLLMService:
     """Get LLM service configured for the current Flask user.
-    
+
     Returns:
         ConsolidatedLLMService configured with current user's settings
     """
     try:
         from flask_login import current_user
-        
+
         if current_user and current_user.is_authenticated:
             return get_llm_service_for_user(current_user.id)
         else:
             return get_llm_service_for_user()
-            
+
     except Exception as e:
         logger.warning(f"Failed to get LLM service for current user: {e}")
         return ConsolidatedLLMService()

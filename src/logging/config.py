@@ -22,7 +22,6 @@ except ImportError:
     LogAggregator = None
     FlaskLoggingIntegration = None
 
-
 class LoggingConfiguration:
     """Centralized logging configuration manager."""
 
@@ -276,10 +275,8 @@ class LoggingConfiguration:
             "configured": self._configured,
         }
 
-
 # Global configuration instance
 _global_config: Optional[LoggingConfiguration] = None
-
 
 def setup_application_logging(
     app_name: str = "exam_grader",
@@ -323,7 +320,6 @@ def setup_application_logging(
 
     return _global_config
 
-
 def get_application_logger(name: Optional[str] = None) -> Optional[ComprehensiveLogger]:
     """Get application logger instance.
 
@@ -336,7 +332,6 @@ def get_application_logger(name: Optional[str] = None) -> Optional[Comprehensive
     if _global_config:
         return _global_config.get_logger(name)
     return None
-
 
 def get_application_structured_logger(
     name: Optional[str] = None,
@@ -352,7 +347,6 @@ def get_application_structured_logger(
     if _global_config:
         return _global_config.get_structured_logger(name)
     return None
-
 
 def get_logging_metrics() -> Dict[str, Any]:
     """Get application logging metrics.

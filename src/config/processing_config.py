@@ -19,7 +19,6 @@ except ImportError:
 
     logger = logging.getLogger(__name__)
 
-
 @dataclass
 class RetryPolicyConfig:
     """Configuration for retry policies."""
@@ -42,7 +41,6 @@ class RetryPolicyConfig:
             "backoff_multiplier": self.backoff_multiplier,
         }
 
-
 @dataclass
 class CacheSizeConfig:
     """Configuration for cache size limits."""
@@ -53,7 +51,6 @@ class CacheSizeConfig:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {"max_size_mb": self.max_size_mb, "max_entries": self.max_entries}
-
 
 @dataclass
 class CacheConfig:
@@ -75,7 +72,6 @@ class CacheConfig:
     def get_expiration_time(self, data_type: str) -> int:
         """Get expiration time for specific data type."""
         return self.expiration_policies.get(data_type, self.default_ttl)
-
 
 @dataclass
 class HealthCheckThresholds:
@@ -107,7 +103,6 @@ class HealthCheckThresholds:
             "disk_usage_critical": self.disk_usage_critical,
         }
 
-
 @dataclass
 class HealthCheckConfig:
     """Configuration for health check system."""
@@ -122,7 +117,6 @@ class HealthCheckConfig:
     def get_interval(self, check_type: str) -> int:
         """Get interval for specific health check type."""
         return self.intervals.get(check_type, 60)
-
 
 @dataclass
 class LoggingDestination:
@@ -146,7 +140,6 @@ class LoggingDestination:
             "format": self.format,
         }
 
-
 @dataclass
 class LoggingConfig:
     """Configuration for logging system."""
@@ -162,7 +155,6 @@ class LoggingConfig:
     def get_destination(self, dest_name: str) -> Optional[LoggingDestination]:
         """Get logging destination configuration."""
         return self.output_destinations.get(dest_name)
-
 
 @dataclass
 class ResourceLimits:
@@ -182,7 +174,6 @@ class ResourceLimits:
             "max_file_size_mb": self.max_file_size_mb,
         }
 
-
 @dataclass
 class FallbackStrategy:
     """Configuration for fallback strategies."""
@@ -198,7 +189,6 @@ class FallbackStrategy:
             "fallbacks": self.fallbacks,
             "fallback_threshold": self.fallback_threshold,
         }
-
 
 class ProcessingConfigManager:
     """
@@ -627,7 +617,6 @@ class ProcessingConfigManager:
         else:
             # Return raw configuration data
             return self._config_data.copy()
-
 
 # Global processing configuration instance
 processing_config = ProcessingConfigManager()

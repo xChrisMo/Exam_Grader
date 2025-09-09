@@ -9,10 +9,10 @@ Provides comprehensive WebSocket connection management with:
 """
 
 import time
-import uuid
 from collections import defaultdict, deque
-from dataclasses import dataclass
 from datetime import datetime, timedelta
+import uuid
+from dataclasses import dataclass
 from enum import Enum
 from threading import Lock, Thread
 from typing import Any, Callable, Dict, List, Optional, Set
@@ -28,7 +28,6 @@ else:
 
     logger = logging.getLogger(__name__)
 
-
 class ConnectionStatus(Enum):
     """WebSocket connection status."""
 
@@ -37,7 +36,6 @@ class ConnectionStatus(Enum):
     RECONNECTING = "reconnecting"
     FAILED = "failed"
 
-
 class MessagePriority(Enum):
     """Message priority levels."""
 
@@ -45,7 +43,6 @@ class MessagePriority(Enum):
     NORMAL = 2
     HIGH = 3
     CRITICAL = 4
-
 
 @dataclass
 class ConnectionInfo:
@@ -74,7 +71,6 @@ class ConnectionInfo:
             "reconnect_attempts": self.reconnect_attempts,
         }
 
-
 @dataclass
 class QueuedMessage:
     """Queued message for offline clients."""
@@ -88,7 +84,6 @@ class QueuedMessage:
     expires_at: datetime
     retry_count: int = 0
     max_retries: int = 3
-
 
 class WebSocketManager:
     """Enhanced WebSocket manager with comprehensive connection handling."""

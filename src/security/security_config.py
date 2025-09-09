@@ -6,8 +6,8 @@ integrating all security components and providing unified security policies.
 
 import json
 import os
-from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
 try:
@@ -29,7 +29,6 @@ except ImportError:
 
     class Permission:
         pass
-
 
 @dataclass
 class SecurityHeaders:
@@ -74,7 +73,6 @@ class SecurityHeaders:
             "Cross-Origin-Opener-Policy": self.cross_origin_opener_policy,
             "Cross-Origin-Resource-Policy": self.cross_origin_resource_policy,
         }
-
 
 @dataclass
 class FileUploadSecurity:
@@ -150,7 +148,6 @@ class FileUploadSecurity:
     virus_scan_timeout: int = 30  # seconds
     content_validation: bool = True
 
-
 @dataclass
 class SessionSecurity:
     """Session security configuration."""
@@ -167,7 +164,6 @@ class SessionSecurity:
     session_encryption: bool = True
     idle_timeout_minutes: int = 15
     absolute_timeout_hours: int = 8
-
 
 @dataclass
 class AuthenticationSecurity:
@@ -189,7 +185,6 @@ class AuthenticationSecurity:
     brute_force_protection: bool = True
     captcha_after_failed_attempts: int = 3
 
-
 @dataclass
 class RateLimiting:
     """Rate limiting configuration."""
@@ -210,7 +205,6 @@ class RateLimiting:
     upload_attempts_per_minute: int = 10
     api_calls_per_minute: int = 100
 
-
 @dataclass
 class InputValidation:
     """Input validation configuration."""
@@ -226,7 +220,6 @@ class InputValidation:
     max_array_length: int = 1000
     unicode_normalization: bool = True
     trim_whitespace: bool = True
-
 
 @dataclass
 class AuditLogging:
@@ -245,7 +238,6 @@ class AuditLogging:
     log_level: str = "INFO"
     separate_security_log: bool = True
 
-
 @dataclass
 class EncryptionSettings:
     """Encryption settings configuration."""
@@ -261,7 +253,6 @@ class EncryptionSettings:
         default_factory=lambda: ["password_hash", "email", "personal_info"]
     )
     key_rotation_days: int = 365
-
 
 @dataclass
 class SecurityMonitoring:
@@ -279,7 +270,6 @@ class SecurityMonitoring:
     alert_recipients: List[str] = field(default_factory=list)
     real_time_monitoring: bool = True
 
-
 @dataclass
 class ComplianceSettings:
     """Compliance and regulatory settings."""
@@ -293,7 +283,6 @@ class ComplianceSettings:
     data_minimization: bool = True
     purpose_limitation: bool = True
     audit_trail_required: bool = True
-
 
 @dataclass
 class SecurityConfiguration:
@@ -516,7 +505,6 @@ class SecurityConfiguration:
 
         logger.info("Applied maximum security settings")
 
-
 class SecurityConfigManager:
     """Manage security configuration lifecycle."""
 
@@ -629,10 +617,8 @@ class SecurityConfigManager:
             logger.error(f"Error resetting security configuration: {str(e)}")
             return False
 
-
 # Global security config manager
 security_config_manager = None
-
 
 def init_security_config(
     config_path: str = None, environment: str = None
@@ -649,7 +635,6 @@ def init_security_config(
     global security_config_manager
     security_config_manager = SecurityConfigManager(config_path)
     return security_config_manager.load_config(environment)
-
 
 def get_security_config() -> SecurityConfiguration:
     """Get global security configuration.

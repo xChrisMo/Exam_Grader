@@ -5,10 +5,10 @@ This module provides caching mechanisms for database queries and expensive opera
 to improve application performance.
 """
 
-import hashlib
 import json
 import time
 from datetime import datetime, timedelta
+import hashlib
 from functools import wraps
 from typing import Any, Callable, Dict, Optional
 
@@ -19,7 +19,6 @@ except ImportError:
     Cache = None
 
 from utils.logger import logger
-
 
 class QueryCache:
     """Simple in-memory cache for query results."""
@@ -130,10 +129,8 @@ class QueryCache:
             "entries": list(self.cache.keys()),
         }
 
-
 # Global cache instance
 _query_cache = QueryCache()
-
 
 def cached_query(timeout: int = 300, key_prefix: str = ""):
     """Decorator for caching query results.
@@ -173,7 +170,6 @@ def cached_query(timeout: int = 300, key_prefix: str = ""):
 
     return decorator
 
-
 def invalidate_cache_pattern(pattern: str) -> int:
     """Invalidate cache entries matching a pattern.
 
@@ -197,17 +193,14 @@ def invalidate_cache_pattern(pattern: str) -> int:
     logger.info(f"Invalidated {invalidated} cache entries matching pattern: {pattern}")
     return invalidated
 
-
 def get_cache_stats() -> Dict[str, Any]:
     """Get global cache statistics."""
     return _query_cache.get_stats()
-
 
 def clear_cache() -> None:
     """Clear all cached data."""
     _query_cache.clear()
     logger.info("Cache cleared")
-
 
 # Performance monitoring decorator
 def monitor_performance(log_slow_queries: bool = True, slow_threshold: float = 1.0):

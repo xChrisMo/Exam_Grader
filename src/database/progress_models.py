@@ -37,7 +37,6 @@ if DB_AVAILABLE and db is not None:
 else:
     BaseModel = object
 
-
 class ProgressSession(BaseModel, TimestampMixin):
     """Model for tracking progress sessions with persistence."""
 
@@ -139,7 +138,6 @@ class ProgressSession(BaseModel, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class ProgressUpdate(BaseModel, TimestampMixin):
     """Model for individual progress updates with persistence."""
 
@@ -189,7 +187,6 @@ class ProgressUpdate(BaseModel, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class ProgressRecovery(BaseModel, TimestampMixin):
     """Model for tracking progress recovery operations."""
 
@@ -227,7 +224,6 @@ class ProgressRecovery(BaseModel, TimestampMixin):
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
-
 
 class ProgressMetrics(BaseModel, TimestampMixin):
     """Model for storing progress performance metrics."""

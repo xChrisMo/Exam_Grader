@@ -18,7 +18,6 @@ monitoring_routes_bp = Blueprint(
     "monitoring_routes", __name__, url_prefix="/monitoring"
 )
 
-
 def monitoring_required(f):
     """Decorator to ensure monitoring services are available"""
 
@@ -42,7 +41,6 @@ def monitoring_required(f):
 
     return decorated_function
 
-
 @monitoring_routes_bp.route("/")
 @monitoring_required
 def dashboard():
@@ -53,7 +51,6 @@ def dashboard():
         logger.error(f"Error rendering monitoring dashboard: {e}")
         flash(f"Error loading monitoring dashboard: {str(e)}", "error")
         return redirect(url_for("main.index"))
-
 
 @monitoring_routes_bp.route("/health")
 @monitoring_required
@@ -66,7 +63,6 @@ def health_dashboard():
         flash(f"Error loading health dashboard: {str(e)}", "error")
         return redirect(url_for("monitoring_routes.dashboard"))
 
-
 @monitoring_routes_bp.route("/performance")
 @monitoring_required
 def performance_dashboard():
@@ -78,7 +74,6 @@ def performance_dashboard():
         flash(f"Error loading performance dashboard: {str(e)}", "error")
         return redirect(url_for("monitoring_routes.dashboard"))
 
-
 @monitoring_routes_bp.route("/alerts")
 @monitoring_required
 def alerts_dashboard():
@@ -89,7 +84,6 @@ def alerts_dashboard():
         logger.error(f"Error rendering alerts dashboard: {e}")
         flash(f"Error loading alerts dashboard: {str(e)}", "error")
         return redirect(url_for("monitoring_routes.dashboard"))
-
 
 @monitoring_routes_bp.route("/start")
 def start_monitoring():
@@ -109,7 +103,6 @@ def start_monitoring():
 
     return redirect(url_for("monitoring_routes.dashboard"))
 
-
 @monitoring_routes_bp.route("/stop")
 def stop_monitoring():
     """Stop all monitoring services"""
@@ -127,7 +120,6 @@ def stop_monitoring():
         flash(f"Error stopping monitoring services: {str(e)}", "error")
 
     return redirect(url_for("main.index"))
-
 
 @monitoring_routes_bp.route("/restart")
 def restart_monitoring():
@@ -152,13 +144,11 @@ def restart_monitoring():
 
     return redirect(url_for("monitoring_routes.dashboard"))
 
-
 # Error handlers
 @monitoring_routes_bp.errorhandler(404)
 def not_found(error):
     flash("Monitoring page not found", "error")
     return redirect(url_for("monitoring_routes.dashboard"))
-
 
 @monitoring_routes_bp.errorhandler(500)
 def internal_error(error):

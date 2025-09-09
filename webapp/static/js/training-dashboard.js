@@ -76,6 +76,12 @@ class TrainingDashboard {
         if (clearFilesBtn) {
             clearFilesBtn.addEventListener('click', () => this.clearAllFiles());
         }
+        
+        // Stop training button
+        const stopTrainingBtn = document.getElementById('stop-training');
+        if (stopTrainingBtn) {
+            stopTrainingBtn.addEventListener('click', () => this.stopTraining());
+        }
     }
     
     bindKeyboardShortcuts() {
@@ -366,7 +372,8 @@ class TrainingDashboard {
                 current_step: 'Training in progress...'
             });
             
-            // Monitor progress
+            // Show stop button and monitor progress
+            this.showStopTrainingButton();
             this.monitorTrainingProgress();
             
         } catch (error) {
@@ -374,6 +381,7 @@ class TrainingDashboard {
             this.showError(`Training failed: ${error.message}`);
             this.isTraining = false;
             this.updateTrainingButtonState(false);
+            this.hideStopTrainingButton();
             this.hideProgressPanel();
         }
     }
@@ -476,7 +484,17 @@ class TrainingDashboard {
                     }
                 });
                 if (response.ok) {
-                    const progress = await response.json();
+                    let progress;
+                    try {
+                        const responseText = await response.text();
+                        progress = JSON.parse(responseText);
+                    } catch (jsonError) {
+                        console.error(`JSON parsing error for training progress:`, jsonError);
+                        console.error('Response text:', await response.text());
+                        setTimeout(checkProgress, 5000); // Retry after longer delay
+                        return;
+                    }
+                    
                     this.updateProgressDisplay(progress);
                     
                     if (progress.status === 'completed') {
@@ -489,6 +507,7 @@ class TrainingDashboard {
                     }
                 }
             } catch (error) {
+                console.error('Error checking training progress:', error);
                 setTimeout(checkProgress, 5000); // Retry after longer delay
             }
         };
@@ -517,6 +536,7 @@ class TrainingDashboard {
     onTrainingComplete() {
         this.isTraining = false;
         this.updateTrainingButtonState(false);
+        this.hideStopTrainingButton();
         
         const progressDetails = document.getElementById('progress-details');
         if (progressDetails) {
@@ -534,10 +554,69 @@ class TrainingDashboard {
         this.showSuccess('Training completed successfully!');
     }
     
+    async stopTraining() {
+        if (!this.currentSessionId) {
+            this.showError('No active training session to stop.');
+            return;
+        }
+        
+        if (!confirm('Are you sure you want to stop the current training session? This action cannot be undone.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/training/session/${this.currentSessionId}/stop`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || ''
+                }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                this.isTraining = false;
+                this.updateTrainingButtonState(false);
+                this.hideStopTrainingButton();
+                
+                const progressDetails = document.getElementById('progress-details');
+                if (progressDetails) {
+                    progressDetails.innerHTML = `
+                        <p class="text-orange-600 font-medium">Training stopped by user</p>
+                        <p class="text-sm text-gray-600 mt-1">The training session has been cancelled.</p>
+                    `;
+                }
+                
+                this.showSuccess('Training session stopped successfully.');
+            } else {
+                const errorData = await response.json();
+                this.showError(`Failed to stop training: ${errorData.error || 'Unknown error'}`);
+            }
+        } catch (error) {
+            console.error('Error stopping training:', error);
+            this.showError(`Failed to stop training: ${error.message}`);
+        }
+    }
+    
     onTrainingFailed(error) {
         this.isTraining = false;
         this.updateTrainingButtonState(false);
+        this.hideStopTrainingButton();
         this.showError(`Training failed: ${error || 'Unknown error'}`);
+    }
+    
+    showStopTrainingButton() {
+        const stopBtn = document.getElementById('stop-training');
+        if (stopBtn) {
+            stopBtn.style.display = 'inline-flex';
+        }
+    }
+    
+    hideStopTrainingButton() {
+        const stopBtn = document.getElementById('stop-training');
+        if (stopBtn) {
+            stopBtn.style.display = 'none';
+        }
     }
     
     updateTrainingButtonState(isTraining) {

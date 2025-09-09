@@ -1696,7 +1696,7 @@ ExamGrader.dashboard = {
       .then(data => {
         if (data.success) {
           // Update last score card
-          const lastScoreElement = document.querySelector('[data-i18n="last_score"]').parentElement.querySelector('.text-lg.font-medium.text-gray-900');
+          const lastScoreElement = document.getElementById('last-score-value');
           if (lastScoreElement && data.stats.last_score !== undefined) {
             lastScoreElement.textContent = data.stats.last_score > 0 ? `${data.stats.last_score}%` : '--';
           }
@@ -1865,7 +1865,7 @@ ExamGrader.progressBar = {
 document.addEventListener('DOMContentLoaded', function () {
   // Check if we're on the dashboard page
   if (window.location.pathname === '/dashboard' || window.location.pathname.endsWith('/dashboard')) {
-    ExamGrader.dashboard.initAutoRefresh(120); // Refresh every 2 minutes (reduced frequency)
+    ExamGrader.dashboard.initAutoRefresh(30); // Refresh every 30 seconds
   }
 
   // Check if we're on the submissions page

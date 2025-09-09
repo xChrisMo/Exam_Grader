@@ -4,15 +4,14 @@ File Cleanup Service for Exam Grader Application.
 Provides automated cleanup of temporary files, old uploads, and orphaned files.
 """
 
-import threading
 import time
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import threading
+from dataclasses import dataclass
 from typing import Any, Dict
 
 from utils.logger import logger
-
 
 @dataclass
 class CleanupStats:
@@ -34,7 +33,6 @@ class CleanupStats:
             "errors": self.errors,
             "duration_seconds": round(self.duration_seconds, 2),
         }
-
 
 class FileCleanupService:
     """
@@ -338,7 +336,6 @@ class FileCleanupService:
             from src.database.models import MarkingGuide, Submission
 
             try:
-                from flask import has_app_context
 
                 if not has_app_context():
                     logger.warning(

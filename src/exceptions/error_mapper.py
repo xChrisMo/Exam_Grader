@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional
 
 from .application_errors import ApplicationError, ErrorCode
 
-
 class MessageSeverity(Enum):
     """Message severity levels for user display."""
 
@@ -15,7 +14,6 @@ class MessageSeverity(Enum):
     WARNING = "warning"
     ERROR = "error"
     CRITICAL = "critical"
-
 
 @dataclass
 class UserMessage:
@@ -43,7 +41,6 @@ class UserMessage:
             "auto_dismiss_seconds": self.auto_dismiss_seconds,
         }
 
-
 class ErrorMapper(ABC):
     """Abstract base class for error mapping."""
 
@@ -68,7 +65,6 @@ class ErrorMapper(ABC):
         Returns:
             List of supported ErrorCode values
         """
-
 
 class UserFriendlyErrorMapper(ErrorMapper):
     """Default user-friendly error mapper with contextual messages."""
@@ -353,7 +349,6 @@ class UserFriendlyErrorMapper(ErrorMapper):
 
         return text
 
-
 class LocalizedErrorMapper(UserFriendlyErrorMapper):
     """Localized error mapper with multi-language support."""
 
@@ -413,7 +408,6 @@ class LocalizedErrorMapper(UserFriendlyErrorMapper):
                 # Add more Spanish translations as needed
             },
         }
-
 
 class ContextAwareErrorMapper(UserFriendlyErrorMapper):
     """Context-aware error mapper that provides highly specific messages."""
@@ -500,10 +494,8 @@ class ContextAwareErrorMapper(UserFriendlyErrorMapper):
         validation_type = details.get("validation_type", "invalid")
         return field_messages.get(validation_type, field_messages.get("invalid"))
 
-
 # Global error mapper instance
 _global_error_mapper = None
-
 
 def get_error_mapper() -> ErrorMapper:
     """Get global error mapper instance.
@@ -516,7 +508,6 @@ def get_error_mapper() -> ErrorMapper:
         _global_error_mapper = ContextAwareErrorMapper()
     return _global_error_mapper
 
-
 def set_error_mapper(mapper: ErrorMapper) -> None:
     """Set global error mapper instance.
 
@@ -525,7 +516,6 @@ def set_error_mapper(mapper: ErrorMapper) -> None:
     """
     global _global_error_mapper
     _global_error_mapper = mapper
-
 
 def map_error_to_user_message(
     error: ApplicationError, context: Optional[Dict[str, Any]] = None

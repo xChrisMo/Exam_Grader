@@ -1,17 +1,16 @@
 """Base service architecture for unified service management."""
 
+import time
+from datetime import datetime, timezone
 import logging
 import threading
-import time
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
-
 
 class ServiceStatus(Enum):
     """Service status enumeration."""
@@ -20,7 +19,6 @@ class ServiceStatus(Enum):
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
     UNKNOWN = "unknown"
-
 
 @dataclass
 class ServiceMetrics:
@@ -87,7 +85,6 @@ class ServiceMetrics:
             "status": self.status.value,
             "custom_metrics": self.custom_metrics,
         }
-
 
 class BaseService(ABC):
     """Base service class providing common functionality for all services."""
@@ -266,7 +263,6 @@ class BaseService(ABC):
     def __repr__(self) -> str:
         return self.__str__()
 
-
 class ServiceRegistry:
     """Registry for managing service instances and dependencies."""
 
@@ -406,7 +402,6 @@ class ServiceRegistry:
             for name in list(cls._services.keys()):
                 cls.unregister(name)
             cls._dependencies.clear()
-
 
 class ServiceInjector:
     """Dependency injection for services."""

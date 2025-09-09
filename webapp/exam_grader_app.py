@@ -8,18 +8,17 @@ import os
 import sys
 import json
 import time
-import uuid
 from datetime import datetime
 from pathlib import Path
+import uuid
 from typing import Dict, List, Any
 
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
 
-# Add project root to Python path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+from utils.project_init import init_project
+project_root = init_project(__file__, levels_up=2)
 
 # Flask imports
 from flask import (
@@ -540,8 +539,6 @@ def upload_guide():
             os.remove(file_path)
             return redirect(request.url)
 
-
-
         # Store guide in database
         logger.info("Storing guide in database.")
         try:
@@ -656,7 +653,6 @@ def upload_submission():
             return jsonify({'status': 'error', 'error': 'No marking guide selected'}), 400
 
         # Retrieve marking guide from DB
-        from src.database.models import MarkingGuide
         marking_guide = MarkingGuide.query.get(marking_guide_id)
         if not marking_guide or marking_guide.user_id != get_current_user().id:
             flash('Invalid marking guide selected.', 'error')
@@ -783,7 +779,6 @@ def api_get_marking_guides():
         if not current_user:
             return jsonify({'error': 'Unauthorized'}), 401
 
-        from src.database.models import MarkingGuide
         guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
         guide_list = [{
             'id': str(guide.id),
@@ -796,10 +791,6 @@ def api_get_marking_guides():
         logger.error(f"Error fetching marking guides via API: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
-
-
-
-
 @app.route('/view-submission/<submission_id>')
 @login_required
 def view_submission(submission_id):
@@ -807,7 +798,6 @@ def view_submission(submission_id):
     submission_data = session.get(f'submission_{submission_id}')
     if not submission_data:
         # Try to load from DB if not in session
-        from src.database.models import Submission
         submission = Submission.query.get(submission_id)
         if submission and submission.user_id == get_current_user().id:
             submission_data = {
@@ -823,7 +813,6 @@ def view_submission(submission_id):
 
     return render_template('view_submission.html', submission=submission_data, page_title='View Submission')
 
-
 @app.route('/grade-submission/<submission_id>')
 @login_required
 def grade_submission(submission_id):
@@ -831,7 +820,6 @@ def grade_submission(submission_id):
     submission_data = session.get(f'submission_{submission_id}')
     if not submission_data:
         # Try to load from DB if not in session
-        from src.database.models import Submission
         submission = Submission.query.get(submission_id)
         if submission and submission.user_id == get_current_user().id:
             submission_data = {
@@ -848,17 +836,12 @@ def grade_submission(submission_id):
     # For now, just display the extracted answers
     return render_template('grade_submission.html', submission=submission_data, page_title='Grade Submission')
 
-
 @app.route('/recent-activity')
 @login_required
 def recent_activity():
     """Recent activity page."""
     activity = session.get('recent_activity', [])
     return render_template('recent_activity.html', page_title='Recent Activity', activity=activity)
-
-
-
-
 
 @app.route('/logout')
 @login_required
@@ -868,19 +851,16 @@ def logout():
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
-
 @app.errorhandler(401)
 def unauthorized(error):
     """Handle unauthorized access."""
     flash('You need to be logged in to access this page.', 'warning')
     return redirect(url_for('login'))
 
-
 @app.errorhandler(404)
 def page_not_found(error):
     """Handle page not found errors."""
     return render_template('404.html', page_title='Page Not Found'), 404
-
 
 @app.errorhandler(500)
 def internal_server_error(error):
@@ -888,12 +868,10 @@ def internal_server_error(error):
     db.session.rollback()
     return render_template('500.html', page_title='Internal Server Error'), 500
 
-
 @app.context_processor
 def inject_user():
     """Inject current user into all templates."""
     return dict(current_user=get_current_user())
-
 
 @app.before_request
 def check_user_session():
@@ -904,16 +882,10 @@ def check_user_session():
         flash('Your session has expired. Please log in again.', 'warning')
         return redirect(url_for('login'))
 
-
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
     app.run(debug=True, port=5000)
-
-
-
-
-
 
 @app.route('/submissions')
 @login_required
@@ -928,7 +900,6 @@ def view_submissions():
         # Get submissions from database first
         if current_user:
             try:
-                from src.database.models import Submission
                 db_submissions = Submission.query.filter_by(user_id=current_user.id).order_by(
                     Submission.created_at.desc()
                 ).all()
@@ -1195,7 +1166,6 @@ def process_ai_grading():
         logger.error(f"Error in process_ai_grading: {str(e)}")
         return jsonify({'error': f'AI processing failed: {str(e)}'}), 500
 
-
 @app.route('/api/test-unified', methods=['GET', 'POST'])
 @csrf.exempt
 def test_unified_api():
@@ -1234,7 +1204,6 @@ def test_unified_api():
     except Exception as e:
         logger.error(f"Error in test_unified_api: {str(e)}")
         return jsonify({'error': f'Test failed: {str(e)}'}), 500
-
 
 @app.route('/api/process-unified-ai', methods=['POST'])
 @csrf.exempt
@@ -1391,13 +1360,11 @@ def process_unified_ai():
         logger.error(f"Error in process_unified_ai: {str(e)}")
         return jsonify({'error': f'Unified AI processing failed: {str(e)}'}), 500
 
-
 @app.route('/api/progress/<progress_id>', methods=['GET'])
 @csrf.exempt
 def get_progress(progress_id):
     """API endpoint to get real-time progress updates."""
     try:
-        from src.services.progress_tracker import progress_tracker
 
         progress_update = progress_tracker.get_progress(progress_id)
 
@@ -1417,13 +1384,11 @@ def get_progress(progress_id):
         logger.error(f"Error getting progress: {str(e)}")
         return jsonify({'error': f'Failed to get progress: {str(e)}'}), 500
 
-
 @app.route('/api/progress/<progress_id>/history', methods=['GET'])
 @csrf.exempt
 def get_progress_history(progress_id):
     """API endpoint to get full progress history."""
     try:
-        from src.services.progress_tracker import progress_tracker
 
         history = progress_tracker.get_progress_history(progress_id)
 
@@ -1431,7 +1396,6 @@ def get_progress_history(progress_id):
             return jsonify({'error': 'Progress ID not found'}), 404
 
         # Convert progress updates to dictionaries
-        from dataclasses import asdict
         history_data = [asdict(update) for update in history]
 
         return jsonify({
@@ -1778,7 +1742,6 @@ def export_results():
             'error': 'Internal server error'
         }), 500
 
-
 @app.route('/delete-guide/<guide_id>')
 @login_required
 def delete_guide(guide_id):
@@ -1968,7 +1931,6 @@ def delete_submission():
         logger.error(f"Error deleting submission: {str(e)}")
         return jsonify({'success': False, 'message': 'Internal server error.'}), 500
 
-
 @app.route('/api/clear-cache', methods=['POST'])
 @csrf.exempt
 def clear_cache():
@@ -2004,7 +1966,6 @@ def clear_cache():
             'message': f'Error clearing cache: {str(e)}'
         }), 500
 
-
 @app.route('/api/cache/stats', methods=['GET'])
 def get_cache_stats():
     """API endpoint to get cache statistics."""
@@ -2024,7 +1985,6 @@ def get_cache_stats():
             'status': 'error',
             'message': f'Error getting cache stats: {str(e)}'
         }), 500
-
 
 if __name__ == '__main__':
     print("[START] Starting Exam Grader Web Application...")

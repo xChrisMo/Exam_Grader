@@ -18,15 +18,16 @@ Example Usage:
     ```
 """
 
-import mimetypes
 import os
 from pathlib import Path
+import mimetypes
 from typing import Dict, Optional, Tuple, Any
 
 from docx import Document
 from pdf2image import convert_from_path
 
 from src.config.config_manager import ConfigManager
+from src.database.models import MarkingGuide
 from src.services.consolidated_ocr_service import (
     ConsolidatedOCRService as OCRService,
     OCRServiceError,
@@ -39,7 +40,6 @@ except ImportError:
 
     def get_helpful_error_message(file_path, original_error):
         return f"Error processing PDF: {original_error}"
-
 
 try:
     fallback_ocr_available = True
@@ -75,7 +75,6 @@ except Exception as e:
     ocr_service_instance = None
 else:
     ocr_service_instance = OCRService(api_key=api_key, base_url=api_url)
-
 
 class DocumentParser:
     """
@@ -119,7 +118,7 @@ class DocumentParser:
         return mime_type or "application/octet-stream"
 
     @staticmethod
-    def extract_text_from_pdf(file_path: str) -> str:
+    def extract_text_from_pdf(file_path: str, ocr_service=None) -> str:
         """Extract text from a PDF file using OCR.
 
         This method converts PDF pages to images and processes them with HandwritingOCR.
@@ -136,8 +135,10 @@ class DocumentParser:
         """
         try:
             logger.debug(f"Processing PDF with OCR: {file_path}")
-            
-            if not ocr_service_instance:
+
+            # Use the provided OCR service or fall back to the global instance
+            active_ocr_service = ocr_service or ocr_service_instance
+            if not active_ocr_service:
                 logger.error("OCR service not available for PDF processing")
                 raise Exception("OCR service not configured - cannot process PDF")
 
@@ -147,9 +148,9 @@ class DocumentParser:
                 if not images:
                     logger.error("PDF conversion resulted in no images")
                     raise Exception("PDF document has no pages or is corrupted")
-                
+
                 logger.info(f"Successfully converted PDF to {len(images)} images")
-                
+
             except Exception as e:
                 logger.error(f"Error converting PDF to images: {str(e)}")
                 raise Exception(f"Failed to convert PDF to images: {str(e)}")
@@ -157,47 +158,47 @@ class DocumentParser:
             # Process each page with OCR
             text_content = []
             temp_image_paths = []
-            
+
             try:
-                import tempfile
                 import time
-                
+                import tempfile
+
                 temp_dir = tempfile.gettempdir()
-                
+
                 for page_num, image in enumerate(images, 1):
                     temp_filename = f"pdf_page_{page_num}_{int(time.time() * 1000)}_{os.getpid()}.png"
                     temp_path = os.path.join(temp_dir, temp_filename)
-                    
+
                     try:
                         # Save image to temporary file
                         image.save(temp_path, 'PNG')
                         temp_image_paths.append(temp_path)
-                        
+
                         logger.debug(f"Processing page {page_num} with OCR")
-                        
+
                         # Process with OCR
-                        page_text = ocr_service_instance.extract_text_from_image(temp_path)
-                        
+                        page_text = active_ocr_service.extract_text_from_image(temp_path)
+
                         if page_text and page_text.strip():
                             text_content.append(page_text)
                             logger.debug(f"Page {page_num}: OCR extracted {len(page_text)} characters")
                         else:
                             logger.debug(f"Page {page_num}: No text extracted")
-                            
+
                     except Exception as e:
                         logger.error(f"Error processing page {page_num}: {str(e)}")
                         continue
-                
+
                 # Combine all page text
                 full_text = "\n\n".join(text_content)
-                
+
                 if not full_text.strip():
                     logger.error("No text could be extracted from PDF using OCR")
                     raise Exception("No readable text found in PDF")
-                
+
                 logger.info(f"Successfully extracted {len(full_text)} characters from PDF using OCR")
                 return full_text
-                
+
             finally:
                 # Clean up temporary files
                 for temp_path in temp_image_paths:
@@ -253,14 +254,14 @@ class DocumentParser:
         """
         try:
             logger.debug(f"Starting OCR processing for image: {file_path}")
-            
+
             if not ocr_service_instance:
                 logger.error("OCR service not available for image processing")
                 raise OCRServiceError("OCR service not configured")
-            
+
             # Process the image file with OCR
             text = ocr_service_instance.extract_text_from_image(file_path)
-            
+
             if text and text.strip():
                 logger.info(f"Successfully extracted {len(text)} characters from image")
                 return text
@@ -305,12 +306,11 @@ class DocumentParser:
             logger.error(f"File Error: Error reading text file: {str(e)}")
             raise
 
-
 def parse_student_submission(
     file_path: str,
     ocr_service: Optional[OCRService] = None,
     marking_guide: Optional[MarkingGuide] = None
-) -> Tuple[Dict[str, Any], Optional[str]]:
+) -> Tuple[Dict[str, Any], Optional[str], Optional[str]]:
     """Parses a student submission file and extracts its raw text content.
 
     Args:
@@ -338,98 +338,172 @@ def parse_student_submission(
         - OCR will be used as a fallback for PDFs if direct text extraction fails
         - The function attempts to handle various common errors gracefully
         - Returns empty dict and error message if extraction fails
+        - GUARANTEED to never return None - always returns a valid tuple
+    """
+    # Ensure function never returns None - wrap everything in try-catch
+    try:
+        logger.info(f"Starting parse_student_submission for: {file_path}")
+        
+        # Validate input
+        if not file_path:
+            error_msg = "No file path provided"
+            logger.error(error_msg)
+            return {}, None, error_msg
+            
+        if not os.path.exists(file_path):
+            error_msg = f"File not found: {file_path}"
+            logger.error(error_msg)
+            return {}, None, error_msg
+        
+        # Process the file and extract text
+        result = _process_file_safely(file_path, ocr_service, marking_guide)
+        
+        # Ensure we always return a valid tuple
+        if result is None:
+            error_msg = f"File processing returned None for: {file_path}"
+            logger.error(error_msg)
+            return {}, None, error_msg
+            
+        return result
+        
+    except Exception as critical_error:
+        # Final safety net - ensure we never return None
+        error_msg = f"Critical error processing {file_path}: {str(critical_error)}"
+        logger.error(error_msg)
+        logger.error(f"Exception details: {critical_error}", exc_info=True)
+        return {}, None, error_msg
+
+
+def _process_file_safely(
+    file_path: str,
+    ocr_service: Optional[OCRService] = None,
+    marking_guide: Optional[MarkingGuide] = None
+) -> Tuple[Dict[str, Any], Optional[str], Optional[str]]:
+    """Safely process a file and extract text content.
+    
+    This is the main processing logic separated into its own function
+    for better error handling and testing.
     """
     try:
-        if not os.path.exists(file_path):
-            return {}, None, f"File not found: {file_path}"
-
+        logger.debug(f"Processing file: {file_path}")
+        
         # Get file type
         file_type = DocumentParser.get_file_type(file_path)
         logger.debug(f"Detected file type: {file_type}")
+        
+        # Initialize variables
+        raw_text = None
+        error_message = None
 
+        # Process different file types
         if file_type == "application/pdf":
-            # Try to extract text directly from PDF first
-            extracted_pdf_text = DocumentParser.extract_text_from_pdf(file_path)
-            if extracted_pdf_text:
-                raw_text = extracted_pdf_text
-            elif ocr_service and config.ocr.enabled:
-                logger.info("PDF text extraction failed or yielded no content, attempting OCR...")
-                try:
-                    raw_text = ocr_service.extract_text_from_image(file_path)
-                except OCRServiceError as e:
-                    error_message = f"OCR processing failed for PDF: {str(e)}"
-                    logger.error(error_message)
-            else:
-                error_message = "Could not extract text from PDF. OCR service not available or enabled."
-                logger.error(error_message)
-
+            raw_text, error_message = _process_pdf_file(file_path, ocr_service)
+            
         elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-            raw_text = DocumentParser.extract_text_from_docx(file_path)
-
+            raw_text, error_message = _process_docx_file(file_path)
+            
         elif file_type.startswith("image/"):
-            if ocr_service and config.ocr.enabled:
-                raw_text = ocr_service.extract_text_from_image(file_path)
-            else:
-                return {}, None, f"Unsupported file type: {file_type}"
-        except Exception as e:
-            logger.warning(
-                f"Direct text extraction failed: {str(e)}. Attempting OCR fallback."
-            )
-            raw_text = None
+            raw_text, error_message = _process_image_file(file_path, ocr_service)
+            
+        else:
+            error_message = f"Unsupported file type: {file_type}"
 
-        # If direct extraction failed and OCR wasn't already used, try OCR as fallback
-        if (
-            (not raw_text or not raw_text.strip())
-            and not ocr_used
-            and file_type != "text/plain"
-        ):
-            if not ocr_service_instance:
-                logger.error(
-                    "OCR service not available - cannot process document without extractable text"
-                )
-                return (
-                    {},
-                    None,
-                    "Document contains no extractable text and OCR service is not configured. Please ensure the document contains readable text or configure OCR service.",
-                )
-
-            try:
-                logger.info("Attempting OCR as fallback for text extraction")
-                raw_text = DocumentParser.extract_text_from_image(file_path)
-                if raw_text and raw_text.strip():
-                    logger.info(
-                        f"OCR fallback successful, extracted {len(raw_text)} characters"
-                    )
-                else:
-                    logger.warning("OCR completed but returned empty text")
-                    return (
-                        {},
-                        None,
-                        "OCR processing completed but no readable text was found in the document. The document may be blank, contain only images, or have text that is too unclear to read.",
-                    )
-            except Exception as ocr_error:
-                logger.error(f"OCR fallback also failed: {str(ocr_error)}")
-                return (
-                    {},
-                    None,
-                    f"Text extraction failed and OCR fallback also failed: {str(ocr_error)}",
-                )
-
+        # Check if processing failed
+        if error_message:
+            logger.error(error_message)
+            return {}, None, error_message
+            
+        # Validate extracted text
         if not raw_text or not raw_text.strip():
             error_message = f"No text could be extracted from the document: {file_path}"
             logger.error(error_message)
-            return {}, "", error_message
+            return {}, None, error_message
 
-        # Return the raw text without any further processing
+        # Success - create result and return
         logger.info(f"Successfully extracted {len(raw_text)} characters of raw text")
-
-        # Create result dictionary
         result = {"raw": raw_text}
-
         return result, raw_text, None
 
+    except Exception as processing_error:
+        # Handle any processing errors gracefully
+        error_msg = f"Error processing file {file_path}: {str(processing_error)}"
+        logger.error(error_msg)
+        logger.error(f"Processing error details: {processing_error}", exc_info=True)
+        return {}, None, error_msg
+
+
+def _process_pdf_file(file_path: str, ocr_service) -> Tuple[Optional[str], Optional[str]]:
+    """Process a PDF file and extract text.
+    
+    Returns:
+        Tuple of (extracted_text, error_message)
+    """
+    try:
+        logger.debug(f"Processing PDF file: {file_path}")
+        
+        # Try to extract text from PDF using OCR
+        extracted_text = DocumentParser.extract_text_from_pdf(file_path, ocr_service)
+        
+        if extracted_text and extracted_text.strip():
+            logger.debug(f"PDF extraction successful: {len(extracted_text)} characters")
+            return extracted_text, None
+        elif ocr_service and config.ocr.enabled:
+            logger.info("PDF text extraction failed, attempting direct OCR...")
+            try:
+                extracted_text = ocr_service.extract_text_from_image(file_path)
+                if extracted_text and extracted_text.strip():
+                    return extracted_text, None
+                else:
+                    return None, "OCR processing completed but no readable text was found"
+            except Exception as e:
+                return None, f"OCR processing failed for PDF: {str(e)}"
+        else:
+            return None, "Could not extract text from PDF. OCR service not available or enabled."
+            
     except Exception as e:
-        logger.error(
-            f"Text Extraction Error: Error extracting text from submission: {str(e)}"
-        )
-        return {}, None, str(e)
+        logger.error(f"Error processing PDF {file_path}: {e}")
+        return None, f"PDF processing failed: {str(e)}"
+
+
+def _process_docx_file(file_path: str) -> Tuple[Optional[str], Optional[str]]:
+    """Process a DOCX file and extract text.
+    
+    Returns:
+        Tuple of (extracted_text, error_message)
+    """
+    try:
+        logger.debug(f"Processing DOCX file: {file_path}")
+        extracted_text = DocumentParser.extract_text_from_docx(file_path)
+        
+        if extracted_text and extracted_text.strip():
+            return extracted_text, None
+        else:
+            return None, "Could not extract text from DOCX file"
+            
+    except Exception as e:
+        logger.error(f"Error processing DOCX {file_path}: {e}")
+        return None, f"DOCX processing failed: {str(e)}"
+
+
+def _process_image_file(file_path: str, ocr_service) -> Tuple[Optional[str], Optional[str]]:
+    """Process an image file and extract text using OCR.
+    
+    Returns:
+        Tuple of (extracted_text, error_message)
+    """
+    try:
+        logger.debug(f"Processing image file: {file_path}")
+        
+        if not ocr_service or not config.ocr.enabled:
+            return None, "OCR service not available or enabled for image processing"
+        
+        extracted_text = ocr_service.extract_text_from_image(file_path)
+        
+        if extracted_text and extracted_text.strip():
+            return extracted_text, None
+        else:
+            return None, "OCR processing completed but no readable text was found in the image"
+            
+    except Exception as e:
+        logger.error(f"Error processing image {file_path}: {e}")
+        return None, f"Image OCR processing failed: {str(e)}"

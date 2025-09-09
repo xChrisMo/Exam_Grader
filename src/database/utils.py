@@ -2,10 +2,10 @@
 Database utilities for the Exam Grader application.
 """
 
+from datetime import datetime
 import logging
 import secrets
 import string
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from werkzeug.security import generate_password_hash
@@ -31,9 +31,7 @@ except ImportError:
 
         return decorator
 
-
 logger = logging.getLogger(__name__)
-
 
 class DatabaseUtils:
     """Utility class for database operations."""
@@ -150,7 +148,6 @@ class DatabaseUtils:
     def get_user_by_id(user_id: str) -> Optional[Any]:
         """Get user by ID with caching."""
         try:
-            from .models import User
 
             return User.query.filter_by(id=user_id).first()
         except Exception as e:

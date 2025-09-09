@@ -5,9 +5,9 @@ This module provides unified API endpoints with standardized error handling,
 request tracking, and performance monitoring for all processing operations.
 """
 
-import asyncio
 import time
 from datetime import datetime, timezone
+import asyncio
 from typing import Any, Dict, Optional
 
 from flask import Blueprint, jsonify, request
@@ -23,7 +23,6 @@ from .error_handlers import api_error_handler
 
 unified_api_bp = Blueprint("unified_api", __name__, url_prefix="/api/v1")
 
-
 def validate_request_data(
     data: Dict[str, Any], required_fields: list
 ) -> Optional[Dict[str, Any]]:
@@ -37,7 +36,6 @@ def validate_request_data(
             errors[field] = f"Field '{field}' cannot be empty"
 
     return errors if errors else None
-
 
 @unified_api_bp.route("/process/single", methods=["POST"])
 @login_required
@@ -194,7 +192,6 @@ def process_single_submission():
             request_id=request_id,
         )
         return jsonify(response), status
-
 
 @unified_api_bp.route("/process/batch", methods=["POST"])
 @login_required
@@ -380,7 +377,6 @@ def process_batch_submissions():
         )
         return jsonify(response), status
 
-
 @unified_api_bp.route("/submissions/<int:submission_id>/status", methods=["GET"])
 @login_required
 def get_submission_status(submission_id):
@@ -480,7 +476,6 @@ def get_submission_status(submission_id):
         )
         return jsonify(response), status
 
-
 @unified_api_bp.route("/results/<int:result_id>", methods=["GET"])
 @login_required
 def get_result_details(result_id):
@@ -568,7 +563,6 @@ def get_result_details(result_id):
             request_id=request_id,
         )
         return jsonify(response), status
-
 
 @unified_api_bp.route("/system/info", methods=["GET"])
 def system_info():

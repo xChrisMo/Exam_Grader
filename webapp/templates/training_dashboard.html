@@ -135,7 +135,18 @@
         <!-- Training Progress (Hidden by default) -->
         <div id="training-progress" class="bg-white shadow rounded-lg" style="display: none;">
           <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-medium text-gray-900">Training Progress</h2>
+            <div class="flex justify-between items-center">
+              <h2 class="text-lg font-medium text-gray-900">Training Progress</h2>
+              <button id="stop-training" type="button" 
+                      class="inline-flex items-center px-3 py-1.5 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                      style="display: none;"
+                      title="Stop current training session">
+                <svg class="-ml-1 mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                Stop Training
+              </button>
+            </div>
           </div>
           <div class="p-6">
             <div class="mb-4">

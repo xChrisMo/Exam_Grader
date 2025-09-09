@@ -5,19 +5,18 @@ This module provides a comprehensive caching system with multi-level caching sup
 automatic expiration, cleanup mechanisms, and performance monitoring.
 """
 
+import time
+from datetime import datetime, timezone
+from pathlib import Path
 import hashlib
 import pickle
 import threading
-import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 from src.config.processing_config import ProcessingConfigManager
 from utils.logger import logger
-
 
 class CacheType(Enum):
     """Types of cache storage"""
@@ -26,7 +25,6 @@ class CacheType(Enum):
     DISK = "disk"
     HYBRID = "hybrid"
 
-
 class CachePolicy(Enum):
     """Cache eviction policies"""
 
@@ -34,7 +32,6 @@ class CachePolicy(Enum):
     LFU = "lfu"  # Least Frequently Used
     FIFO = "fifo"  # First In, First Out
     TTL = "ttl"  # Time To Live only
-
 
 @dataclass
 class CacheEntry:
@@ -59,7 +56,6 @@ class CacheEntry:
         self.last_accessed = datetime.now(timezone.utc)
         self.access_count += 1
 
-
 @dataclass
 class CacheStats:
     """Cache statistics"""
@@ -81,7 +77,6 @@ class CacheStats:
     def miss_rate(self) -> float:
         """Calculate miss rate"""
         return 1.0 - self.hit_rate
-
 
 class CacheLevel:
     """Individual cache level implementation"""
@@ -415,7 +410,6 @@ class CacheLevel:
         self._stats.entry_count = len(self._entries)
         self._stats.total_size = sum(entry.size for entry in self._entries.values())
 
-
 class CacheManager:
     """Multi-level cache manager"""
 
@@ -729,7 +723,6 @@ class CacheManager:
     def __del__(self):
         """Cleanup on destruction"""
         self.stop_cleanup_thread()
-
 
 # Global instance
 cache_manager = CacheManager()

@@ -6,10 +6,10 @@ session invalidation, and security features to replace Flask's default
 session handling.
 """
 
-import base64
 import json
-import secrets
 from datetime import datetime, timedelta, timezone
+import base64
+import secrets
 from typing import Any, Dict, Optional
 
 # Import Flask request with fallback
@@ -41,7 +41,6 @@ except ImportError:
     Fernet = None
     hashes = None
     PBKDF2HMAC = None
-
 
 class SessionEncryption:
     """Handles session data encryption and decryption."""
@@ -82,7 +81,6 @@ class SessionEncryption:
             logger.error(f"Failed to decrypt session data: {str(e)}")
             # Return None instead of empty dict to ensure consistent behavior with get_session
             return None
-
 
 class SecureSessionManager:
     """

@@ -4,9 +4,9 @@ Provides centralized validation functions that can be used across the applicatio
 for consistent content validation, file validation, and duplicate detection.
 """
 
-import hashlib
 import os
 from pathlib import Path
+import hashlib
 from typing import Any, Dict, List, Union
 
 from werkzeug.datastructures import FileStorage
@@ -14,7 +14,6 @@ from werkzeug.datastructures import FileStorage
 # Using inline validation instead
 from src.database.models import MarkingGuide
 from utils.logger import logger
-
 
 class ValidationUtils:
     """Utility class for content validation and duplicate detection."""
@@ -473,7 +472,6 @@ class ValidationUtils:
         score -= len(suspicious_patterns) * 0.1
 
         return max(0.0, min(1.0, score))
-
 
 class ContentHashUtils:
     """Utilities for content hashing and comparison."""

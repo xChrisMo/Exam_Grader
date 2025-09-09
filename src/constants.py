@@ -18,13 +18,15 @@ ENV_DEEPSEEK_API_KEY = "DEEPSEEK_API_KEY"
 ENV_LOG_LEVEL = "LOG_LEVEL"
 ENV_PYTHONIOENCODING = "PYTHONIOENCODING"
 
-# Default values
-DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = "8501"
-DEFAULT_DEBUG = "True"
-DEFAULT_DATABASE_URL = "sqlite:///exam_grader.db"
-DEFAULT_LOG_LEVEL = "INFO"
-DEFAULT_ENCODING = "utf-8"
+# Default values (can be overridden by environment variables)
+import os
+
+DEFAULT_HOST = os.getenv("HOST", "127.0.0.1")
+DEFAULT_PORT = os.getenv("PORT", "8501")
+DEFAULT_DEBUG = os.getenv("DEBUG", "True")
+DEFAULT_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///exam_grader.db")
+DEFAULT_LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+DEFAULT_ENCODING = os.getenv("ENCODING", "utf-8")
 
 # Flask application defaults
 DEFAULT_FLASK_APP = "webapp.app"
@@ -51,58 +53,58 @@ SUPPORTED_DOCUMENT_EXTENSIONS = [".pdf", ".docx", ".doc", ".txt"]
 SUPPORTED_EXTENSIONS = SUPPORTED_IMAGE_EXTENSIONS + SUPPORTED_DOCUMENT_EXTENSIONS
 
 # Directory names
-DIR_TEMP = "temp"
-DIR_OUTPUT = "output"
-DIR_UPLOADS = "uploads"
-DIR_LOGS = "logs"
-DIR_INSTANCE = "instance"
+DIR_TEMP = os.getenv("TEMP_DIR", "temp")
+DIR_OUTPUT = os.getenv("OUTPUT_DIR", "output")
+DIR_UPLOADS = os.getenv("UPLOAD_DIR", "uploads")
+DIR_LOGS = os.getenv("LOGS_DIR", "logs")
+DIR_INSTANCE = os.getenv("INSTANCE_DIR", "instance")
 
 # File naming patterns
 UUID_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
 # API endpoints and URLs
-DEEPSEEK_DEFAULT_BASE_URL = "https://api.deepseek.com/v1"
-HANDWRITING_OCR_DEFAULT_URL = "https://www.handwritingocr.com/api/v3"
+DEEPSEEK_DEFAULT_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1")
+HANDWRITING_OCR_DEFAULT_URL = os.getenv("OCR_BASE_URL", "https://www.handwritingocr.com/api/v3")
 
 # Model names
-DEFAULT_LLM_MODEL = "deepseek-chat"
+DEFAULT_LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-chat")
 
 # Cache settings
-DEFAULT_CACHE_SIZE = 10000
-DEFAULT_CACHE_TTL = 86400  # 24 hours
+DEFAULT_CACHE_SIZE = int(os.getenv("CACHE_DEFAULT_SIZE", "10000"))
+DEFAULT_CACHE_TTL = int(os.getenv("CACHE_DEFAULT_TTL", "86400"))  # 24 hours
 
 # Rate limiting
-DEFAULT_REQUESTS_PER_MINUTE = 60
-DEFAULT_REQUESTS_PER_HOUR = 3600
+DEFAULT_REQUESTS_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
+DEFAULT_REQUESTS_PER_HOUR = int(os.getenv("RATE_LIMIT_PER_HOUR", "3600"))
 
 # Retry settings
-DEFAULT_MAX_RETRIES = 10
-DEFAULT_RETRY_DELAY = 0.5
-DEFAULT_MAX_BACKOFF_DELAY = 60.0
+DEFAULT_MAX_RETRIES = int(os.getenv("API_MAX_RETRIES", "10"))
+DEFAULT_RETRY_DELAY = float(os.getenv("API_RETRY_DELAY", "0.5"))
+DEFAULT_MAX_BACKOFF_DELAY = float(os.getenv("API_MAX_BACKOFF_DELAY", "60.0"))
 
 # File size limits
-DEFAULT_MAX_FILE_SIZE_MB = 20
-DEFAULT_STORAGE_MAX_SIZE_MB = 1000
+DEFAULT_MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "20"))
+DEFAULT_STORAGE_MAX_SIZE_MB = int(os.getenv("MAX_STORAGE_SIZE_MB", "1000"))
 
 # Session settings
-DEFAULT_SESSION_TIMEOUT = 3600  # 1 hour
+DEFAULT_SESSION_TIMEOUT = int(os.getenv("SESSION_TIMEOUT", "3600"))  # 1 hour
 
 # Logging settings
-DEFAULT_LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
-DEFAULT_LOG_BACKUP_COUNT = 5
+DEFAULT_LOG_MAX_BYTES = int(os.getenv("LOG_MAX_BYTES", "10485760"))  # 10MB
+DEFAULT_LOG_BACKUP_COUNT = int(os.getenv("LOG_BACKUP_COUNT", "5"))
 
 # Performance settings
-DEFAULT_CONNECTION_POOL_SIZE = 3
-DEFAULT_DATABASE_POOL_SIZE = 10
-DEFAULT_DATABASE_POOL_TIMEOUT = 30
-DEFAULT_DATABASE_POOL_RECYCLE = 3600
+DEFAULT_CONNECTION_POOL_SIZE = int(os.getenv("LLM_CONNECTION_POOL_SIZE", "3"))
+DEFAULT_DATABASE_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))
+DEFAULT_DATABASE_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+DEFAULT_DATABASE_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "3600"))
 
 # Security settings
-MIN_SECRET_KEY_LENGTH = 32
+MIN_SECRET_KEY_LENGTH = int(os.getenv("MIN_SECRET_KEY_LENGTH", "32"))
 
 # Processing settings
-DEFAULT_CLEANUP_INTERVAL_HOURS = 24
-DEFAULT_STORAGE_EXPIRATION_DAYS = 30
+DEFAULT_CLEANUP_INTERVAL_HOURS = int(os.getenv("CLEANUP_INTERVAL_HOURS", "24"))
+DEFAULT_STORAGE_EXPIRATION_DAYS = int(os.getenv("STORAGE_EXPIRATION_DAYS", "30"))
 
 # Error messages
 ERROR_NO_API_KEY = "API key not configured"

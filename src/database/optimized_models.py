@@ -7,9 +7,9 @@ This module contains enhanced versions of the database models with:
 - Optimized query methods
 """
 
+from datetime import datetime, timedelta, timezone
 import hashlib
 import uuid
-from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
 from flask_login import UserMixin
@@ -36,11 +36,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 # Initialize SQLAlchemy
 db = SQLAlchemy()
 
-
 def get_uuid_column():
     """Get appropriate UUID column type."""
     return Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-
 
 class TimestampMixin:
     """Mixin for adding timestamp fields to models."""
@@ -53,7 +51,6 @@ class TimestampMixin:
         nullable=False,
         index=True,
     )
-
 
 class ValidationMixin:
     """Mixin for adding validation methods to models."""
@@ -79,7 +76,6 @@ class ValidationMixin:
         if max_length and len(value) > max_length:
             errors.append(f"{field} must be no more than {max_length} characters")
         return errors
-
 
 class User(UserMixin, db.Model, TimestampMixin, ValidationMixin):
     """Enhanced User model with improved validation and indexes."""
@@ -232,7 +228,6 @@ class User(UserMixin, db.Model, TimestampMixin, ValidationMixin):
         """Return False as this is not an anonymous user."""
         return False
 
-
 class MarkingGuide(db.Model, TimestampMixin, ValidationMixin):
     """Enhanced MarkingGuide model with improved validation and indexes."""
 
@@ -341,7 +336,6 @@ class MarkingGuide(db.Model, TimestampMixin, ValidationMixin):
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
-
 
 class Submission(db.Model, TimestampMixin, ValidationMixin):
     """Enhanced Submission model with improved validation and indexes."""
@@ -484,7 +478,6 @@ class Submission(db.Model, TimestampMixin, ValidationMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class Mapping(db.Model, TimestampMixin, ValidationMixin):
     """Enhanced Answer mapping model."""
 
@@ -537,7 +530,6 @@ class Mapping(db.Model, TimestampMixin, ValidationMixin):
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
-
 
 class GradingResult(db.Model, TimestampMixin):
     """Enhanced grading result model."""
@@ -608,7 +600,6 @@ class GradingResult(db.Model, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class Session(db.Model, TimestampMixin):
     """Enhanced session model."""
 
@@ -663,7 +654,6 @@ class Session(db.Model, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
             "salt": self.salt,
         }
-
 
 class GradingSession(db.Model, TimestampMixin, ValidationMixin):
     """Enhanced grading session tracking model."""

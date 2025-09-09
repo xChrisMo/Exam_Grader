@@ -20,12 +20,11 @@ from utils.logger import logger
 
 guide_processing_bp = Blueprint("guide_processing", __name__)
 
-
 def count_grouped_questions(questions):
     """Count questions treating grouped questions as one."""
     if not questions:
         return 0
-    
+
     count = 0
     for question in questions:
         # Check if this is a grouped question
@@ -33,9 +32,8 @@ def count_grouped_questions(questions):
             count += 1  # Count grouped question as one
         else:
             count += 1  # Count regular question as one
-    
-    return count
 
+    return count
 
 # Register the template filter when the blueprint is registered
 @guide_processing_bp.record_once
@@ -43,17 +41,14 @@ def register_template_filters(state):
     """Register custom template filters when blueprint is registered."""
     state.app.jinja_env.filters['count_grouped_questions'] = count_grouped_questions
 
-
 # Initialize services
 from src.services.consolidated_llm_service import get_llm_service_for_current_user
 ocr_service = ConsolidatedOCRService()
-
 
 @guide_processing_bp.route("/api/test-guide-processing", methods=["GET"])
 def test_guide_processing():
     """Test route to verify blueprint is working."""
     return jsonify({"success": True, "message": "Guide processing blueprint is working"})
-
 
 @guide_processing_bp.route("/api/reprocess-guide", methods=["POST"])
 @login_required
@@ -136,7 +131,6 @@ def reprocess_guide():
             jsonify({"success": False, "message": f"Error reprocessing guide: {str(e)}"}),
             500,
         )
-
 
 @guide_processing_bp.route("/api/process-guide", methods=["POST"])
 @login_required
@@ -230,7 +224,6 @@ def process_guide():
             500,
         )
 
-
 def extract_text_from_file(file_path: str, file_type: str) -> str:
     """Extract text content from a file."""
     try:
@@ -282,7 +275,6 @@ def extract_text_from_file(file_path: str, file_type: str) -> str:
         logger.error(f"Error extracting text from file {file_path}: {e}")
         return None
 
-
 def _fix_unterminated_strings(json_text: str) -> str:
     """Fix unterminated strings in JSON text."""
     try:
@@ -291,47 +283,46 @@ def _fix_unterminated_strings(json_text: str) -> str:
         i = 0
         in_string = False
         escape_next = False
-        
+
         while i < len(json_text):
             char = json_text[i]
-            
+
             if escape_next:
                 result.append(char)
                 escape_next = False
                 i += 1
                 continue
-                
+
             if char == '\\':
                 result.append(char)
                 escape_next = True
                 i += 1
                 continue
-                
+
             if char == '"':
                 result.append(char)
                 in_string = not in_string
                 i += 1
                 continue
-                
+
             result.append(char)
             i += 1
-        
+
         # If we end while in a string, close it
         if in_string:
             result.append('"')
-            
+
         return ''.join(result)
-        
+
     except Exception as e:
         logger.warning(f"Error fixing unterminated strings: {e}")
         return json_text
-
 
 def _determine_guide_type_simple(content_text: str) -> str:
     """Simple guide type determination based on content analysis."""
     try:
         content_lower = content_text.lower()
-        
+
         # Count question indicators
         question_indicators = [
             'question', 'q.', 'q:', 'problem', 'task', 'exercise',
@@ -339,7 +330,7 @@ def _determine_guide_type_simple(content_text: str) -> str:
             'explain', 'describe', 'analyze', 'discuss', 'compare',
             'calculate', 'solve', 'find', 'determine', 'evaluate'
         ]
-        
+
         # Count answer indicators
         answer_indicators = [
             'answer', 'solution', 'response', 'model answer',
@@ -347,98 +338,77 @@ def _determine_guide_type_simple(content_text: str) -> str:
             'award marks', 'give credit', 'full marks',
             'marking scheme', 'rubric', 'criteria'
         ]
-        
+
         question_count = sum(1 for indicator in question_indicators if indicator in content_lower)
         answer_count = sum(1 for indicator in answer_indicators if indicator in content_lower)
-        
+
         # Also check for structural patterns
         question_patterns = len(re.findall(r'\b(?:question|q\.?)\s*\d+', content_lower))
         answer_patterns = len(re.findall(r'\b(?:answer|solution)\s*\d*', content_lower))
-        
+
         total_question_score = question_count + question_patterns * 2
         total_answer_score = answer_count + answer_patterns * 2
-        
+
         if total_question_score > total_answer_score:
             return "questions"
         else:
             return "answers"
-            
+
     except Exception as e:
         logger.warning(f"Error determining guide type: {e}")
         raise Exception("Unable to determine guide type - LLM service required")
-
 
 def extract_questions_with_llm(content_text: str) -> list:
     """Extract questions from guide content using LLM."""
     try:
         # Get LLM service with current user's settings
         llm_service = get_llm_service_for_current_user()
-        
+
         if not llm_service.is_available():
             logger.error("LLM service not available - cannot extract questions")
             raise Exception("LLM service is required for question extraction but is not available")
 
         # First, try to identify if this is a question-based or answer-based guide
         guide_type = _determine_guide_type_simple(content_text)
-        
-        system_prompt = """You are an expert at extracting questions and marking criteria from academic guides.
 
-CRITICAL INSTRUCTIONS:
-1. Return ONLY a valid JSON object - no explanations, no markdown, no extra text
-2. Start your response with { and end with }
-3. Use double quotes for all strings
-4. Ensure proper JSON syntax
+        system_prompt = """You are an expert at analyzing academic marking guides and extracting questions with their marks.
 
-REQUIRED JSON FORMAT:
-{
-  "questions": [
-    {
-      "number": "1",
-      "text": "Complete question or topic text",
-      "subquestions": []
-    }
-  ],
-  "marking_guide": [
-    {
-      "question_number": "1",
-      "points": [
-        {
-          "description": "Marking criteria or expected answer content",
-          "score": "5"
-        }
-      ]
-    }
-  ]
-}
+TASK: Extract questions and their marks from the provided marking guide text.
 
-MARK EXTRACTION RULES (MOST IMPORTANT):
-- ALWAYS look for explicit mark values in the text: (5 marks), [10 points], "worth 15 marks", etc.
-- Search for patterns like: "5 marks", "10 points", "15pts", "(20)", "[25 marks]", "Total: 30 marks"
-- If marks are specified for sub-parts (e.g., "a) 3 marks, b) 7 marks"), extract those exact values
-- If a question says "Total: 20 marks" with sub-parts, try to find individual sub-part marks
-- NEVER guess or estimate marks - only use explicitly stated values
-- If no marks are found, set "marks": 0 (do not default to any other number)
+OUTPUT FORMAT: Return ONLY a valid JSON array with this exact structure:
 
-QUESTION EXTRACTION RULES:
-- Look for numbered questions, topics, or assessment criteria
-- Extract ANY text that represents something to be graded or assessed
-- Include sub-questions as separate entries (1a, 1b, etc.)
-- If the content has headings or sections, treat each as a potential question
-- Even if formatting is messy, extract the core content
-- Preserve question numbering exactly as it appears
+[
+  {
+    "number": "1",
+    "text": "Complete question text here",
+    "marks": 10,
+    "criteria": "Marking criteria or expected answer"
+  },
+  {
+    "number": "1a", 
+    "text": "Sub-question text here",
+    "marks": 5,
+    "criteria": "Sub-question marking criteria"
+  }
+]
 
-STRICT REQUIREMENTS:
-- Only extract actual questions that exist in the content
-- Do not create or infer questions that are not explicitly present
-- If no questions are found, return an empty array
-- Maintain exact question numbering and text as provided
-- Only assign marks that are explicitly stated in the content"""
+EXTRACTION RULES:
+1. Look for numbered questions (1, 2, 3, etc.) or sub-questions (1a, 1b, etc.)
+2. Extract the complete question text as it appears
+3. Find explicit mark values: "10 marks", "(15)", "[20 points]", "worth 25 marks"
+4. If no marks are found for a question, set "marks": 0
+5. Include marking criteria if available
+6. Preserve original question numbering exactly
+7. Do NOT combine or group questions - extract each separately
+8. Do NOT create questions that don't exist in the text
 
-        user_prompt = f"""Extract from this marking guide content:
+IMPORTANT: Return ONLY the JSON array - no explanations, no markdown, no extra text."""
+
+        user_prompt = f"""Extract questions and marks from this marking guide:
 
 {content_text}
 
-Return ONLY the JSON object - no other text."""
+Return the JSON array of questions as specified in the system prompt."""
 
         # Generate response using LLM
         response = llm_service.generate_response(
@@ -454,7 +424,7 @@ Return ONLY the JSON object - no other text."""
         # Simplified JSON parsing with robust error handling
         try:
             cleaned_response = response.strip()
-            
+
             # Remove markdown code blocks
             if cleaned_response.startswith("```json"):
                 cleaned_response = cleaned_response[7:]
@@ -462,40 +432,73 @@ Return ONLY the JSON object - no other text."""
                 cleaned_response = cleaned_response[3:]
             if cleaned_response.endswith("```"):
                 cleaned_response = cleaned_response[:-3]
-            
-            # Find JSON boundaries (object or array)
-            start_brace = cleaned_response.find('{')
-            end_brace = cleaned_response.rfind('}')
+
+            # Find JSON boundaries (prefer array format)
             start_bracket = cleaned_response.find('[')
             end_bracket = cleaned_response.rfind(']')
-            
-            # Prefer object format, fall back to array format
-            if start_brace != -1 and end_brace != -1 and start_brace < end_brace:
-                # Object format
-                json_text = cleaned_response[start_brace:end_brace + 1]
-            elif start_bracket != -1 and end_bracket != -1 and start_bracket < end_bracket:
-                # Array format (legacy)
+            start_brace = cleaned_response.find('{')
+            end_brace = cleaned_response.rfind('}')
+
+            # Prefer array format, fall back to object format
+            if start_bracket != -1 and end_bracket != -1 and start_bracket < end_bracket:
+                # Array format (preferred)
                 json_text = cleaned_response[start_bracket:end_bracket + 1]
+            elif start_brace != -1 and end_brace != -1 and start_brace < end_brace:
+                # Object format (legacy)
+                json_text = cleaned_response[start_brace:end_brace + 1]
             else:
                 logger.error("No valid JSON found in LLM response")
                 raise Exception("LLM response does not contain valid JSON format")
-            
+
             # Clean up common issues
             json_text = re.sub(r',\s*]', ']', json_text)  # Remove trailing commas
             json_text = re.sub(r'\s+', ' ', json_text)  # Normalize whitespace
-            
+
             # Try to fix unterminated strings
             json_text = _fix_unterminated_strings(json_text)
-            
+
             logger.info(f"Attempting to parse JSON array of length {len(json_text)}")
             response_data = json.loads(json_text)
 
-            # Handle the new structured format from your prompt
-            if isinstance(response_data, dict) and "questions" in response_data:
+            # Handle the new array format (preferred)
+            if isinstance(response_data, list):
+                # New array format (preferred)
+                logger.info("LLM returned array format, processing questions")
+                validated_questions = []
+                for i, question in enumerate(response_data):
+                    if not isinstance(question, dict):
+                        logger.warning(f"Question {i} is not a dictionary, skipping")
+                        continue
+
+                    # Extract fields with validation
+                    number = str(question.get("number", str(i + 1))).strip()
+                    text = str(question.get("text", "")).strip()
+                    marks = question.get("marks", 0)
+                    criteria = str(question.get("criteria", "")).strip()
+
+                    # Skip empty questions
+                    if not text:
+                        continue
+
+                    # Validate marks
+                    if not isinstance(marks, (int, float)) or marks < 0:
+                        marks = 0
+
+                    validated_question = {
+                        "number": number,
+                        "text": text,
+                        "criteria": criteria or "No specific criteria provided",
+                        "marks": int(marks),
+                        "type": "individual"
+                    }
+
+                    validated_questions.append(validated_question)
+
+            elif isinstance(response_data, dict) and "questions" in response_data:
                 # New structured format: {"questions": [...], "marking_guide": [...]}
                 questions_list = response_data.get("questions", [])
                 marking_guide = response_data.get("marking_guide", [])
-                
+
                 # Convert to our internal format
                 validated_questions = []
                 for i, question in enumerate(questions_list):
@@ -507,7 +510,7 @@ Return ONLY the JSON object - no other text."""
                     question_number = question.get("number", str(i + 1))
                     total_marks = 0
                     criteria_parts = []
-                    
+
                     # Find matching marking guide entries
                     for guide_entry in marking_guide:
                         if guide_entry.get("question_number") == question_number:
@@ -519,20 +522,20 @@ Return ONLY the JSON object - no other text."""
                                         pass
                                 if point.get("description"):
                                     criteria_parts.append(point["description"])
-                    
+
                     # Handle sub-questions
                     subquestions = question.get("subquestions", [])
                     if subquestions:
                         # This is a grouped question with sub-parts
                         sub_parts = []
                         combined_text_parts = [question.get("text", "")]
-                        
+
                         for subq in subquestions:
                             sub_number = subq.get("number", "")
                             sub_text = subq.get("text", "")
                             sub_parts.append(sub_number)
                             combined_text_parts.append(f"{sub_number}) {sub_text}")
-                            
+
                             # Find marks for sub-questions
                             for guide_entry in marking_guide:
                                 if guide_entry.get("question_number") == sub_number:
@@ -544,11 +547,11 @@ Return ONLY the JSON object - no other text."""
                                                 pass
                                         if point.get("description"):
                                             criteria_parts.append(f"{sub_number}: {point['description']}")
-                        
+
                         # Don't default to 5 marks per subquestion - extract from guide or use 0
                         if total_marks == 0:
                             logger.warning(f"No marks found for grouped question {question_number}, guide may need better mark extraction")
-                        
+
                         validated_question = {
                             "number": str(question_number),
                             "text": "\n".join(combined_text_parts),
@@ -561,7 +564,7 @@ Return ONLY the JSON object - no other text."""
                         # Individual question
                         if total_marks == 0:
                             logger.warning(f"No marks found for individual question {question_number}, guide may need better mark extraction")
-                        
+
                         validated_question = {
                             "number": str(question_number),
                             "text": str(question.get("text", "")),
@@ -569,23 +572,23 @@ Return ONLY the JSON object - no other text."""
                             "marks": total_marks,  # Use actual extracted marks, don't default
                             "type": "individual"
                         }
-                    
+
                     # Skip empty questions
                     if not validated_question["text"].strip():
                         continue
 
                     validated_questions.append(validated_question)
-                    
+
             elif isinstance(response_data, list):
                 # Legacy array format - convert to our internal format
                 logger.info("LLM returned legacy array format, converting to internal format")
                 validated_questions = []
-                
+
                 for i, question in enumerate(response_data):
                     if not isinstance(question, dict):
                         logger.warning(f"Question {i} is not a dictionary, skipping")
                         continue
-                    
+
                     # Convert legacy format to internal format
                     validated_question = {
                         "number": str(question.get("number", str(i + 1))),
@@ -594,11 +597,11 @@ Return ONLY the JSON object - no other text."""
                         "marks": int(question.get("marks", 0)) if question.get("marks") else 0,
                         "type": "individual"
                     }
-                    
+
                     # Skip empty questions
                     if not validated_question["text"].strip():
                         continue
-                    
+
                     validated_questions.append(validated_question)
             else:
                 logger.error("LLM response is not in expected format")
@@ -618,112 +621,36 @@ Return ONLY the JSON object - no other text."""
 
     except Exception as e:
         logger.error(f"Error extracting questions with LLM: {e}")
-        logger.info("Falling back to basic question extraction")
-        return _create_basic_questions_from_content(content_text)
+        logger.error("LLM extraction failed - no fallback allowed. Only LLM extraction should be used.")
+        raise Exception(f"LLM extraction failed: {e}. Only LLM extraction is allowed for marking guides.")
 
-
-def _create_basic_questions_from_content(content_text: str) -> list:
-    """Create basic questions from content when LLM extraction fails."""
-    try:
-        import re
-        
-        # Basic patterns to find questions
-        question_patterns = [
-            r'(?:Question|Q\.?)\s*(\d+)[\.:]\s*(.+?)(?=(?:Question|Q\.?)\s*\d+|$)',
-            r'(\d+)[\.:]\s*(.+?)(?=\d+[\.:]\s*|$)',
-            r'([a-zA-Z])\)\s*(.+?)(?=[a-zA-Z]\)\s*|$)'
-        ]
-        
-        questions = []
-        question_id = 1
-        
-        for pattern in question_patterns:
-            matches = re.findall(pattern, content_text, re.IGNORECASE | re.DOTALL)
-            
-            for match in matches:
-                if len(match) >= 2:
-                    number = match[0].strip()
-                    text = match[1].strip()
-                    
-                    # Skip if text is too short or looks like noise
-                    if len(text) < 10 or not any(c.isalpha() for c in text):
-                        continue
-                    
-                    # Try to extract marks
-                    marks_match = re.search(r'\((\d+)\s*marks?\)', text, re.IGNORECASE)
-                    marks = int(marks_match.group(1)) if marks_match else 5
-                    
-                    # Clean up the text
-                    text = re.sub(r'\(\d+\s*marks?\)', '', text, flags=re.IGNORECASE).strip()
-                    
-                    questions.append({
-                        "id": f"q{question_id}",
-                        "number": number,
-                        "text": text,
-                        "marks": marks,
-                        "criteria": "",
-                        "answer": ""
-                    })
-                    question_id += 1
-            
-            # If we found questions with this pattern, use them
-            if questions:
-                break
-        
-        # If no questions found, create a default one
-        if not questions:
-            questions = [{
-                "id": "q1",
-                "number": "1",
-                "text": "Please review and manually add questions from the guide content.",
-                "marks": 10,
-                "criteria": "Manual review required",
-                "answer": ""
-            }]
-        
-        logger.info(f"Created {len(questions)} basic questions from content")
-        return questions
-        
-    except Exception as e:
-        logger.error(f"Error creating basic questions: {e}")
-        # Return a minimal fallback
-        return [{
-            "id": "q1",
-            "number": "1", 
-            "text": "Manual question extraction required - LLM and basic extraction failed",
-            "marks": 10,
-            "criteria": "Requires manual review",
-            "answer": ""
-        }]
-
+# Basic question extraction function removed - only LLM extraction is allowed
 
 def group_related_questions(questions: list) -> list:
     """Group related questions together based on question numbering patterns."""
     if not questions:
         return []
-    
-    import re
-    
+
     # Dictionary to group questions by their base number
     question_groups = {}
-    
+
     for question in questions:
         # Skip non-dictionary questions
         if not isinstance(question, dict):
             logger.warning(f"Skipping non-dictionary question in grouping: {type(question)}")
             continue
-            
+
         number = str(question.get("number", "1")).strip()
         text = question.get("text", "")
         criteria = question.get("criteria", "")
         marks = question.get("marks", 0)
-        
+
         # Extract base number using more comprehensive patterns
         # Handle patterns like: "1", "1a", "1b", "Question 1", "Q1", etc.
         base_number = "1"  # Default
         is_sub_part = False
         sub_part_letter = ""
-        
+
         # Pattern 1: "1a", "1b", "2a", etc.
         match = re.match(r"^(\d+)([a-z])$", number.lower())
         if match:
@@ -742,7 +669,7 @@ def group_related_questions(questions: list) -> list:
                 if match:
                     base_number = match.group(1)
                     is_sub_part = False
-        
+
         # Initialize group if it doesn't exist
         if base_number not in question_groups:
             question_groups[base_number] = {
@@ -751,7 +678,7 @@ def group_related_questions(questions: list) -> list:
                 "total_marks": 0,
                 "has_sub_parts": False
             }
-        
+
         # Add question to appropriate group
         question_data = {
             "original_number": number,
@@ -760,7 +687,7 @@ def group_related_questions(questions: list) -> list:
             "marks": marks,
             "sub_part_letter": sub_part_letter
         }
-        
+
         if is_sub_part:
             question_groups[base_number]["sub_parts"].append(question_data)
             question_groups[base_number]["has_sub_parts"] = True
@@ -772,16 +699,16 @@ def group_related_questions(questions: list) -> list:
                 # If we already have a main question, treat this as a sub-part
                 question_groups[base_number]["sub_parts"].append(question_data)
                 question_groups[base_number]["has_sub_parts"] = True
-        
+
         question_groups[base_number]["total_marks"] += marks
-    
+
     # Process groups and create final question list
     final_questions = []
     sequential_number = 1
-    
+
     for base_number in sorted(question_groups.keys(), key=lambda x: int(x) if x.isdigit() else 999):
         group = question_groups[base_number]
-        
+
         if not group["has_sub_parts"] and group["main_question"]:
             # Single standalone question
             main_q = group["main_question"]
@@ -796,18 +723,18 @@ def group_related_questions(questions: list) -> list:
             # Grouped question with sub-parts
             main_q = group["main_question"]
             sub_parts = sorted(group["sub_parts"], key=lambda x: x.get("sub_part_letter", x.get("original_number", "")))
-            
+
             # Build combined text
             combined_text_parts = []
             combined_criteria_parts = []
             sub_part_numbers = []
-            
+
             # Add main question text if available
             if main_q and main_q["text"].strip():
                 combined_text_parts.append(main_q["text"])
                 if main_q["criteria"].strip():
                     combined_criteria_parts.append(f"Main: {main_q['criteria']}")
-            
+
             # Add sub-parts
             for i, sub_part in enumerate(sub_parts):
                 # Determine sub-part letter
@@ -815,20 +742,20 @@ def group_related_questions(questions: list) -> list:
                     letter = sub_part["sub_part_letter"]
                 else:
                     letter = chr(ord('a') + i)
-                
+
                 sub_part_numbers.append(f"{sequential_number}{letter}")
-                
+
                 # Format sub-part text
                 sub_text = sub_part["text"].strip()
                 if not sub_text.startswith(f"{letter})"):
                     sub_text = f"{letter}) {sub_text}"
-                
+
                 combined_text_parts.append(sub_text)
-                
+
                 # Format sub-part criteria
                 if sub_part["criteria"].strip():
                     combined_criteria_parts.append(f"Part {letter}: {sub_part['criteria']}")
-            
+
             # Create the grouped question
             final_question = {
                 "number": str(sequential_number),
@@ -838,17 +765,15 @@ def group_related_questions(questions: list) -> list:
                 "type": "grouped",
                 "sub_parts": sub_part_numbers
             }
-            
+
             final_questions.append(final_question)
-        
+
         sequential_number += 1
-    
+
     logger.info(f"Grouped {len(questions)} individual questions into {len(final_questions)} final questions")
     return final_questions
 
-
 # Fallback functions removed - LLM is now required for all question extraction
-
 
 @guide_processing_bp.route("/api/test-question-extraction", methods=["POST"])
 @login_required
@@ -857,13 +782,13 @@ def test_question_extraction():
     try:
         data = request.get_json()
         test_content = data.get("content", "")
-        
+
         if not test_content:
             return jsonify({"success": False, "message": "No content provided"}), 400
-        
+
         # Test the extraction
         questions = extract_questions_with_llm(test_content)
-        
+
         if questions:
             return jsonify({
                 "success": True,
@@ -880,11 +805,10 @@ def test_question_extraction():
                 "extraction_method": "None",
                 "error": "LLM service is required but failed"
             })
-            
+
     except Exception as e:
         logger.error(f"Error in test question extraction: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
-
 
 @guide_processing_bp.route("/api/guide/<guide_id>/questions", methods=["GET"])
 @login_required
@@ -909,7 +833,6 @@ def get_guide_questions(guide_id):
     except Exception as e:
         logger.error(f"Error getting guide questions: {e}")
         return jsonify({"success": False, "message": "Error retrieving questions"}), 500
-
 
 @guide_processing_bp.route("/api/guide/<guide_id>/questions", methods=["PUT"])
 @login_required

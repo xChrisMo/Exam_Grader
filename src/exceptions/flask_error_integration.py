@@ -13,7 +13,6 @@ from .enhanced_error_handler import enhanced_error_handler
 
 logger = logging.getLogger(__name__)
 
-
 class FlaskErrorIntegration:
     """Flask integration for standardized error handling."""
 
@@ -387,7 +386,6 @@ class FlaskErrorIntegration:
             </html>
             """
 
-
 def error_handler_decorator(flash_errors: bool = True):
     """Decorator for automatic error handling in Flask routes.
 
@@ -449,7 +447,6 @@ def error_handler_decorator(flash_errors: bool = True):
         return wrapper
 
     return decorator
-
 
 api_error_handler = error_handler_decorator(flash_errors=False)
 

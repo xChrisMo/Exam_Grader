@@ -6,15 +6,15 @@ structured logging, performance monitoring, security logging, and audit trails.
 """
 
 import json
-import logging
 import sys
 import time
+from datetime import datetime, timezone
+from pathlib import Path
+import logging
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, List, Optional, Union
 
@@ -27,7 +27,6 @@ except ImportError:
     ApplicationError = None
     ErrorTracker = None
 
-
 class LogLevel(Enum):
     """Enhanced log levels with additional granularity."""
 
@@ -39,7 +38,6 @@ class LogLevel(Enum):
     CRITICAL = 50
     AUDIT = 60
     SECURITY = 70
-
 
 @dataclass
 class LogContext:
@@ -68,7 +66,6 @@ class LogContext:
             "span_id": self.span_id,
             **self.additional_data,
         }
-
 
 class ComprehensiveLogger:
     """Advanced logger with comprehensive features."""
@@ -452,7 +449,6 @@ class ComprehensiveLogger:
                 ],  # Last 10 warnings
             }
 
-
 class PerformanceLogger(ComprehensiveLogger):
     """Specialized logger for performance monitoring."""
 
@@ -525,7 +521,6 @@ class PerformanceLogger(ComprehensiveLogger):
         self.warning(f"Unknown operation ID: {operation_id}")
         return None
 
-
 class SecurityLogger(ComprehensiveLogger):
     """Specialized logger for security events."""
 
@@ -584,7 +579,6 @@ class SecurityLogger(ComprehensiveLogger):
         )
 
         self.security(f"Suspicious activity detected: {description}", context)
-
 
 class AuditLogger(ComprehensiveLogger):
     """Specialized logger for audit trails."""
@@ -645,11 +639,9 @@ class AuditLogger(ComprehensiveLogger):
 
         self.audit(f"System event: {event_type} - {description}", context)
 
-
 # Global logger registry
 _logger_registry: Dict[str, ComprehensiveLogger] = {}
 _registry_lock = Lock()
-
 
 def get_logger(
     name: str, logger_type: str = "comprehensive", **kwargs
@@ -676,7 +668,6 @@ def get_logger(
                 _logger_registry[name] = ComprehensiveLogger(name, **kwargs)
 
         return _logger_registry[name]
-
 
 def setup_logging(
     log_level: Union[str, LogLevel] = LogLevel.INFO,

@@ -8,13 +8,11 @@ This script shows how to use the unified configuration system and its utilities.
 import sys
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+from utils.project_init import init_project
+project_root = init_project(__file__, levels_up=3)
 
 from src.config.config_utils import ConfigurationUtils
 from src.config.unified_config import UnifiedConfig
-
 
 def main():
     """Demonstrate the unified configuration system."""
@@ -118,7 +116,6 @@ def main():
     print("  • Health checking and monitoring")
     print("  • Flask integration")
     print("  • Configuration utilities")
-
 
 if __name__ == "__main__":
     main()

@@ -25,7 +25,6 @@ from utils.logger import logger
 # Create blueprint
 monitoring_bp = Blueprint("monitoring", __name__, url_prefix="/api/monitoring")
 
-
 @monitoring_bp.route("/health", methods=["GET"])
 def get_system_health():
     """Get overall system health status"""
@@ -49,7 +48,6 @@ def get_system_health():
     except Exception as e:
         logger.error(f"Error getting system health: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
-
 
 @monitoring_bp.route("/health/<service_name>", methods=["GET"])
 def get_service_health(service_name: str):
@@ -85,7 +83,6 @@ def get_service_health(service_name: str):
         logger.error(f"Error getting service health for {service_name}: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 @monitoring_bp.route("/metrics", methods=["GET"])
 def get_all_metrics():
     """Get all current metrics"""
@@ -103,7 +100,6 @@ def get_all_metrics():
     except Exception as e:
         logger.error(f"Error getting metrics: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
-
 
 @monitoring_bp.route("/metrics/<metric_name>", methods=["GET"])
 def get_metric(metric_name: str):
@@ -157,7 +153,6 @@ def get_metric(metric_name: str):
         logger.error(f"Error getting metric {metric_name}: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 @monitoring_bp.route("/performance", methods=["GET"])
 def get_performance_summary():
     """Get performance summary"""
@@ -184,7 +179,6 @@ def get_performance_summary():
         logger.error(f"Error getting performance summary: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 @monitoring_bp.route("/performance/operations", methods=["GET"])
 def get_operation_stats():
     """Get detailed operation statistics"""
@@ -203,7 +197,6 @@ def get_operation_stats():
         logger.error(f"Error getting operation stats: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 @monitoring_bp.route("/dashboards", methods=["GET"])
 def list_dashboards():
     """List all available dashboards"""
@@ -221,7 +214,6 @@ def list_dashboards():
     except Exception as e:
         logger.error(f"Error listing dashboards: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
-
 
 @monitoring_bp.route("/dashboards/<dashboard_id>", methods=["GET"])
 def get_dashboard(dashboard_id: str):
@@ -251,7 +243,6 @@ def get_dashboard(dashboard_id: str):
     except Exception as e:
         logger.error(f"Error getting dashboard {dashboard_id}: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
-
 
 @monitoring_bp.route("/alerts", methods=["GET"])
 def get_alerts():
@@ -297,7 +288,6 @@ def get_alerts():
         logger.error(f"Error getting alerts: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 @monitoring_bp.route("/alerts/<alert_id>/resolve", methods=["POST"])
 def resolve_alert(alert_id: str):
     """Resolve an alert"""
@@ -327,7 +317,6 @@ def resolve_alert(alert_id: str):
         logger.error(f"Error resolving alert {alert_id}: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 @monitoring_bp.route("/alerts/statistics", methods=["GET"])
 def get_alert_statistics():
     """Get alerting system statistics"""
@@ -345,7 +334,6 @@ def get_alert_statistics():
     except Exception as e:
         logger.error(f"Error getting alert statistics: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
-
 
 @monitoring_bp.route("/system/status", methods=["GET"])
 def get_system_status():
@@ -398,7 +386,6 @@ def get_system_status():
         logger.error(f"Error getting system status: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 @monitoring_bp.route("/export/metrics", methods=["GET"])
 def export_metrics():
     """Export metrics data"""
@@ -432,7 +419,6 @@ def export_metrics():
         logger.error(f"Error exporting metrics: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 @monitoring_bp.route("/config/reload", methods=["POST"])
 def reload_monitoring_config():
     """Reload monitoring configuration"""
@@ -452,12 +438,10 @@ def reload_monitoring_config():
         logger.error(f"Error reloading monitoring config: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 # Error handlers
 @monitoring_bp.errorhandler(404)
 def not_found(error):
     return jsonify({"status": "error", "message": "Endpoint not found"}), 404
-
 
 @monitoring_bp.errorhandler(500)
 def internal_error(error):

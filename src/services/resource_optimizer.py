@@ -5,20 +5,19 @@ This module provides resource optimization and management capabilities,
 including memory management, resource pooling, and automatic cleanup.
 """
 
-import gc
 import os
-import threading
 import time
+from datetime import datetime, timezone
+import gc
+import threading
 import weakref
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
 import psutil
 
 from utils.logger import logger
-
 
 class ResourceType(Enum):
     """Types of resources to optimize"""
@@ -30,14 +29,12 @@ class ResourceType(Enum):
     FILE_HANDLES = "file_handles"
     THREADS = "threads"
 
-
 class OptimizationLevel(Enum):
     """Optimization levels"""
 
     CONSERVATIVE = "conservative"
     MODERATE = "moderate"
     AGGRESSIVE = "aggressive"
-
 
 @dataclass
 class ResourceUsage:
@@ -60,7 +57,6 @@ class ResourceUsage:
             "timestamp": self.timestamp.isoformat(),
             "metadata": self.metadata,
         }
-
 
 @dataclass
 class OptimizationAction:
@@ -85,7 +81,6 @@ class OptimizationAction:
             "success": self.success,
             "metadata": self.metadata,
         }
-
 
 class ResourcePool:
     """Generic resource pool for managing reusable resources"""
@@ -246,7 +241,6 @@ class ResourcePool:
 
             logger.info(f"Shutdown resource pool: {self.name}")
 
-
 class MemoryManager:
     """Memory management and optimization"""
 
@@ -338,7 +332,6 @@ class MemoryManager:
     def register_object(self, obj: Any):
         """Register an object for weak reference tracking"""
         self._weak_refs.append(weakref.ref(obj))
-
 
 class ResourceOptimizer:
     """Main resource optimization system"""
@@ -511,25 +504,23 @@ class ResourceOptimizer:
         elif resource_type == ResourceType.CPU:
             # CPU optimization - implement thread pool optimization
             try:
-                import threading
-                import gc
-                
+
                 # Force garbage collection to free CPU resources
                 gc.collect()
-                
+
                 # Get current thread count
                 thread_count_before = threading.active_count()
-                
+
                 # Optimize thread pools if available
                 optimized_threads = 0
                 for pool_name, pool in self.resource_pools.items():
                     if hasattr(pool, '_threads'):
                         # Clean up idle threads in thread pools
                         optimized_threads += len(getattr(pool, '_threads', []))
-                
+
                 thread_count_after = threading.active_count()
                 threads_optimized = max(0, thread_count_before - thread_count_after)
-                
+
                 action = OptimizationAction(
                     action_type="cpu_optimization",
                     resource_type=ResourceType.CPU,
@@ -539,7 +530,7 @@ class ResourceOptimizer:
                     success=True,
                 )
                 actions.append(action)
-                
+
             except Exception as e:
                 action = OptimizationAction(
                     action_type="cpu_optimization",
@@ -554,21 +545,21 @@ class ResourceOptimizer:
         elif resource_type == ResourceType.DISK:
             # Disk optimization - implement temp file cleanup
             try:
+                from pathlib import Path
                 import tempfile
                 import shutil
-                from pathlib import Path
-                
+
                 cleanup_results = {
                     'temp_files_removed': 0,
                     'cache_cleared_mb': 0,
                     'total_space_freed_mb': 0
                 }
-                
+
                 # Clean temporary files
                 temp_dir = Path(tempfile.gettempdir())
                 temp_files_removed = 0
                 space_freed = 0
-                
+
                 for temp_file in temp_dir.glob('tmp*'):
                     try:
                         if temp_file.is_file() and temp_file.stat().st_mtime < (time.time() - 3600):  # Older than 1 hour
@@ -578,10 +569,10 @@ class ResourceOptimizer:
                             space_freed += file_size
                     except (OSError, PermissionError):
                         pass
-                
+
                 cleanup_results['temp_files_removed'] = temp_files_removed
                 cleanup_results['total_space_freed_mb'] = space_freed / (1024 * 1024)
-                
+
                 # Clean application cache directories
                 cache_dirs = ['cache', 'temp', 'logs']
                 for cache_dir in cache_dirs:
@@ -599,7 +590,7 @@ class ResourceOptimizer:
                                         pass
                         except Exception:
                             pass
-                
+
                 action = OptimizationAction(
                     action_type="disk_cleanup",
                     resource_type=ResourceType.DISK,
@@ -610,7 +601,7 @@ class ResourceOptimizer:
                     metadata=cleanup_results,
                 )
                 actions.append(action)
-                
+
             except Exception as e:
                 action = OptimizationAction(
                     action_type="disk_cleanup",
@@ -738,7 +729,6 @@ class ResourceOptimizer:
 
         self.resource_pools.clear()
         logger.info("Resource optimizer shutdown complete")
-
 
 # Global instance
 resource_optimizer = ResourceOptimizer()

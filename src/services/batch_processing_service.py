@@ -3,16 +3,15 @@ Batch Processing Service for handling multiple file uploads efficiently.
 Supports parallel and sequential processing with progress tracking.
 """
 
+import os
+from datetime import datetime
 import asyncio
 import concurrent.futures
-import os
 import uuid
-from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 from werkzeug.datastructures import FileStorage
 
 from utils.logger import logger
-
 
 class BatchProcessingService:
     """Service for batch processing multiple submissions with OCR support."""
@@ -42,14 +41,14 @@ class BatchProcessingService:
     ) -> Dict[str, Any]:
         """
         Process multiple files in batches.
-        
+
         Args:
             files: List of uploaded files
             temp_dir: Temporary directory for file storage
             parallel: Whether to process files in parallel
             batch_size: Number of files to process simultaneously
             progress_callback: Optional callback for progress updates
-            
+
         Returns:
             Dictionary with processing results
         """
@@ -167,12 +166,12 @@ class BatchProcessingService:
     def _process_single_file(self, file: FileStorage, temp_dir: str, index: int) -> Dict[str, Any]:
         """
         Process a single file.
-        
+
         Args:
             file: The uploaded file
             temp_dir: Temporary directory
             index: File index in batch
-            
+
         Returns:
             Processing result dictionary
         """
@@ -210,17 +209,32 @@ class BatchProcessingService:
             if self.parse_function:
                 logger.info(f"Attempting to parse {file.filename} with parse_function.")
                 try:
-                    # Assuming parse_function returns (parsed_content_dict, error_message)
-                    parsed_content, parse_error = self.parse_function(
+                    # parse_function returns (parsed_content_dict, raw_text, error_message)
+                    result = self.parse_function(
                         file_path=file_path,
                         ocr_service=self.ocr_service,
                         marking_guide=self.marking_guide
                     )
+                    
+                    # Safety check - ensure we never get None
+                    if result is None:
+                        logger.error(f"CRITICAL: parse_function returned None for {file.filename}!")
+                        error_message = "Parse function returned None - this should never happen with the new implementation"
+                        continue
+                    
+                    # Safely unpack the result
+                    if not isinstance(result, (tuple, list)) or len(result) != 3:
+                        logger.error(f"CRITICAL: parse_function returned invalid format for {file.filename}: {type(result)} - {result}")
+                        error_message = f"Parse function returned invalid format: expected tuple of 3 elements, got {type(result)}"
+                        continue
+                    
+                    parsed_content, raw_text, parse_error = result
                     if parse_error:
                         error_message = parse_error
                     else:
                         parsed_data = parsed_content
-                        raw_text = parsed_content.get('raw_text', '')
+                        if not raw_text and parsed_content:
+                            raw_text = parsed_content.get('raw', '')
                         processing_method = 'parse_function'
                 except Exception as e:
                     error_message = f"Parse function execution failed: {str(e)}"
@@ -237,7 +251,7 @@ class BatchProcessingService:
                 except Exception as ocr_error:
                     error_message = f"OCR processing failed: {str(ocr_error)}"
                     logger.error(f"OCR processing failed for {file.filename}: {ocr_error}", exc_info=True)
-            
+
             if error_message:
                 raise Exception(error_message)
             elif not self.parse_function and not (self.ocr_service and (is_image or file_ext == 'pdf')):
@@ -271,7 +285,7 @@ class BatchProcessingService:
     def cleanup_temp_files(self, results: Dict[str, Any]) -> None:
         """Clean up temporary files after processing."""
         logger.info("Cleaning up temporary files...")
-        
+
         cleanup_count = 0
         for result_list in [results.get('successful', []), results.get('failed', [])]:
             for result in result_list:
@@ -290,7 +304,7 @@ class BatchProcessingService:
         successful_count = len(results.get('successful', []))
         failed_count = len(results.get('failed', []))
         total_count = results.get('total_files', 0)
-        
+
         duration = 0
         if results.get('start_time') and results.get('end_time'):
             duration = (results['end_time'] - results['start_time']).total_seconds()

@@ -17,7 +17,6 @@ from utils.logger import logger
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
-
 def admin_required(f):
     """Decorator to require admin privileges."""
 
@@ -31,7 +30,6 @@ def admin_required(f):
         return f(*args, **kwargs)
 
     return decorated_function
-
 
 @admin_bp.route("/")
 @login_required
@@ -81,7 +79,6 @@ def dashboard():
             service_health={},
         )
 
-
 @admin_bp.route("/users")
 @login_required
 @admin_required
@@ -98,16 +95,14 @@ def users():
         flash("Error loading users", "error")
         return render_template("admin/users.html", users=None)
 
-
 @admin_bp.route("/system-info")
 @login_required
 @admin_required
 def system_info():
     """System information and health checks."""
     try:
-        import platform
         import sys
-        from datetime import datetime
+        import platform
 
         import psutil
 
@@ -147,14 +142,12 @@ def system_info():
             "admin/system_info.html", system_info={}, db_info={}, service_health={}
         )
 
-
 @admin_bp.route("/cache-management")
 @login_required
 @admin_required
 def cache_management():
     """Cache management interface."""
     return render_template("admin/cache_management.html")
-
 
 @admin_bp.route("/api/cache/clear", methods=["POST"])
 @login_required
@@ -175,7 +168,6 @@ def clear_cache():
         logger.error(f"Cache clear error: {e}")
         return jsonify({"success": False, "error": "Failed to clear cache"}), 500
 
-
 @admin_bp.route("/api/system/restart", methods=["POST"])
 @login_required
 @admin_required
@@ -190,7 +182,6 @@ def restart_services():
     except Exception as e:
         logger.error(f"Service restart error: {e}")
         return jsonify({"success": False, "error": "Failed to restart services"}), 500
-
 
 @admin_bp.route("/logs")
 @login_required
@@ -234,7 +225,6 @@ def logs():
         flash("Error loading logs", "error")
         return render_template("admin/logs.html", logs=[], log_files=[])
 
-
 @admin_bp.route("/api/cache/stats", methods=["GET"])
 @login_required
 @admin_required
@@ -273,7 +263,6 @@ def cache_stats():
             500,
         )
 
-
 @admin_bp.route("/api/logs/clear", methods=["POST"])
 @login_required
 @admin_required
@@ -284,7 +273,6 @@ def clear_logs():
         log_file = data.get("file", "app.log")
 
         # Validate log file name
-        from pathlib import Path
 
         log_path = Path("logs") / log_file
 
@@ -308,7 +296,6 @@ def clear_logs():
         logger.error(f"Log clear error: {e}")
         return jsonify({"success": False, "error": "Failed to clear log file"}), 500
 
-
 @admin_bp.route("/api/health")
 @login_required
 @admin_required
@@ -322,7 +309,6 @@ def api_health():
         service_health = core_service.get_health_status()
 
         # Check file system
-        from pathlib import Path
 
         temp_dir = Path("temp")
         uploads_dir = Path("uploads")

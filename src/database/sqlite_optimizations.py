@@ -5,12 +5,11 @@ This module provides SQLite-specific optimizations to reduce database locking
 and improve concurrent access performance.
 """
 
+from pathlib import Path
 import logging
 import sqlite3
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
-
 
 class SQLiteOptimizer:
     """Handles SQLite database optimizations and WAL mode setup."""
@@ -181,7 +180,6 @@ class SQLiteOptimizer:
         except Exception as e:
             logger.error(f"Failed to optimize database on startup: {str(e)}")
             return False
-
 
 def initialize_sqlite_optimizations(database_url: str) -> bool:
     """

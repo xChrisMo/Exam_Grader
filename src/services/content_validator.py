@@ -7,13 +7,12 @@ and content structure analysis.
 """
 
 import re
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Tuple
 
 from utils.logger import logger
-
 
 class ContentQuality(Enum):
     """Content quality levels"""
@@ -24,7 +23,6 @@ class ContentQuality(Enum):
     POOR = "poor"
     INVALID = "invalid"
 
-
 class ValidationStatus(Enum):
     """Validation status levels"""
 
@@ -32,7 +30,6 @@ class ValidationStatus(Enum):
     WARNING = "warning"
     ERROR = "error"
     FAILED = "failed"
-
 
 @dataclass
 class QualityMetrics:
@@ -51,7 +48,6 @@ class QualityMetrics:
     coherence_score: float = 0.0
     diversity_score: float = 0.0
 
-
 @dataclass
 class ValidationResult:
     """Result of content validation"""
@@ -64,7 +60,6 @@ class ValidationResult:
     warnings: List[str] = field(default_factory=list)
     suggestions: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
-
 
 class ContentValidator:
     """Validates and assesses quality of extracted content"""
@@ -560,7 +555,6 @@ class ContentValidator:
             "poor_count": quality_counts.get("poor", 0),
             "invalid_count": quality_counts.get("invalid", 0),
         }
-
 
 # Global instance
 content_validator = ContentValidator()

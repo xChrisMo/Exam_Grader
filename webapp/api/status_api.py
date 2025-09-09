@@ -25,7 +25,6 @@ from .error_handlers import api_error_handler
 
 status_api_bp = Blueprint("status_api", __name__, url_prefix="/api/status")
 
-
 @status_api_bp.route("/health", methods=["GET"])
 def system_health():
     """Comprehensive system health check endpoint"""
@@ -208,7 +207,6 @@ def system_health():
         )
         return jsonify(response), status
 
-
 @status_api_bp.route("/services", methods=["GET"])
 def service_status():
     """Get detailed status of all services"""
@@ -275,7 +273,6 @@ def service_status():
         )
         return jsonify(response), status
 
-
 @status_api_bp.route("/performance", methods=["GET"])
 def performance_metrics():
     """Get system performance metrics"""
@@ -336,7 +333,6 @@ def performance_metrics():
         )
         return jsonify(response), status
 
-
 @status_api_bp.route("/processing/<task_id>", methods=["GET"])
 @login_required
 def processing_status(task_id):
@@ -391,7 +387,6 @@ def processing_status(task_id):
             error=e, status_code=500, message="Processing status retrieval failed"
         )
         return jsonify(response), status
-
 
 @status_api_bp.route("/database", methods=["GET"])
 def database_status():
@@ -469,7 +464,6 @@ def database_status():
             error=e, status_code=500, message="Database status check failed"
         )
         return jsonify(response), status
-
 
 @status_api_bp.route("/alerts", methods=["GET"])
 def system_alerts():

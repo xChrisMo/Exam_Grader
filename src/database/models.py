@@ -124,13 +124,13 @@ class User(UserMixin, db.Model, TimestampMixin):
 
 class MarkingGuide(db.Model, TimestampMixin):
     """Marking guide model for storing grading criteria."""
-    
+
     __tablename__ = "marking_guides"
     __table_args__ = (
         Index('idx_guide_user_title', 'user_id', 'title'),
         Index('idx_guide_created', 'created_at'),
     )
-    
+
     id = get_uuid_column()
     user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     title = Column(String(200), nullable=False)
@@ -291,13 +291,13 @@ class GradingResult(db.Model, TimestampMixin):
     grading_session_id = Column(String(36), ForeignKey("grading_sessions.id"), nullable=True, index=True)
     grading_method = Column(String(50), default="llm")  # llm, similarity, manual
     confidence = Column(Float)
-    
+
     # Add total_score as an alias property for backward compatibility
     @property
     def total_score(self):
         """Alias for score field to maintain compatibility."""
         return self.score
-    
+
     @total_score.setter
     def total_score(self, value):
         """Setter for total_score alias."""
@@ -430,24 +430,16 @@ class GradingSession(db.Model, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
-
-
-
-
-
-
-
 class ProcessingMetrics(db.Model, TimestampMixin):
     """Performance metrics for monitoring service operations."""
-    
+
     __tablename__ = "processing_metrics"
     __table_args__ = (
         Index('idx_service_operation', 'service_name', 'operation'),
         Index('idx_created_success', 'created_at', 'success'),
         Index('idx_duration', 'duration_ms'),
     )
-    
+
     id = get_uuid_column()
     service_name = Column(String(100), nullable=False)
     operation = Column(String(100), nullable=False)
@@ -455,7 +447,7 @@ class ProcessingMetrics(db.Model, TimestampMixin):
     success = Column(Boolean, nullable=False)
     error_message = Column(Text)
     processing_metadata = Column(JSON)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -472,7 +464,7 @@ class ProcessingMetrics(db.Model, TimestampMixin):
 
 class ProcessingError(db.Model, TimestampMixin):
     """Model for tracking processing errors with detailed context and categorization."""
-    
+
     __tablename__ = "processing_errors"
     __table_args__ = (
         Index('idx_error_service_operation', 'service_name', 'operation'),
@@ -481,7 +473,7 @@ class ProcessingError(db.Model, TimestampMixin):
         Index('idx_error_user', 'user_id'),
         Index('idx_error_request', 'request_id'),
     )
-    
+
     id = get_uuid_column()
     error_id = Column(String(100), nullable=False, unique=True, index=True)  # Unique error identifier
     service_name = Column(String(100), nullable=False)
@@ -491,33 +483,33 @@ class ProcessingError(db.Model, TimestampMixin):
     severity = Column(String(20), nullable=False)  # critical, high, medium, low
     error_message = Column(Text, nullable=False)
     user_message = Column(Text)  # User-friendly error message
-    
+
     # Context information
     user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     request_id = Column(String(100), nullable=True, index=True)
     file_path = Column(String(500), nullable=True)
-    
+
     # Error details and metadata
     stack_trace = Column(Text)
     context_data = Column(JSON)  # Additional context information
     error_metadata = Column(JSON)  # Error handler response data
-    
+
     # Resolution tracking
     resolved = Column(Boolean, default=False, nullable=False)
     resolution_notes = Column(Text)
     resolved_at = Column(DateTime)
     resolved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    
+
     # Retry and fallback information
     retry_attempted = Column(Boolean, default=False)
     retry_count = Column(Integer, default=0)
     fallback_used = Column(Boolean, default=False)
     fallback_strategy = Column(String(50))
-    
+
     # Relationships
     user = relationship("User", foreign_keys=[user_id], backref="processing_errors")
     resolver = relationship("User", foreign_keys=[resolved_by], backref="resolved_errors")
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -550,46 +542,46 @@ class ProcessingError(db.Model, TimestampMixin):
 
 class ServiceHealth(db.Model, TimestampMixin):
     """Model for tracking service health status and diagnostics."""
-    
+
     __tablename__ = "service_health"
     __table_args__ = (
         Index('idx_service_status', 'service_name', 'status'),
         Index('idx_health_created', 'created_at'),
         Index('idx_health_check_type', 'check_type'),
     )
-    
+
     id = get_uuid_column()
     service_name = Column(String(100), nullable=False)
     status = Column(String(20), nullable=False)  # healthy, degraded, unhealthy, unknown
     check_type = Column(String(50), nullable=False)  # startup, periodic, manual, api_request
     response_time_ms = Column(Integer)
-    
+
     # Health metrics
     cpu_usage_percent = Column(Float)
     memory_usage_percent = Column(Float)
     disk_usage_percent = Column(Float)
     active_connections = Column(Integer)
     queue_size = Column(Integer)
-    
+
     # Service-specific metrics
     cache_hit_rate = Column(Float)
     error_rate = Column(Float)
     throughput_per_second = Column(Float)
-    
+
     # Detailed health information
     health_details = Column(JSON)  # Detailed health check results
     diagnostic_info = Column(JSON)  # Diagnostic information
     dependencies_status = Column(JSON)  # Status of service dependencies
-    
+
     # Issues and recommendations
     issues = Column(JSON)  # List of identified issues
     recommendations = Column(JSON)  # List of recommendations
     alerts_triggered = Column(JSON)  # List of alerts triggered
-    
+
     # Check metadata
     check_duration_ms = Column(Integer)
     check_error = Column(Text)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -620,7 +612,7 @@ class ServiceHealth(db.Model, TimestampMixin):
 
 class PerformanceMetrics(db.Model, TimestampMixin):
     """Enhanced performance metrics model for detailed monitoring and analysis."""
-    
+
     __tablename__ = "performance_metrics"
     __table_args__ = (
         Index('idx_perf_service_operation', 'service_name', 'operation'),
@@ -628,45 +620,45 @@ class PerformanceMetrics(db.Model, TimestampMixin):
         Index('idx_perf_created', 'created_at'),
         Index('idx_perf_user', 'user_id'),
     )
-    
+
     id = get_uuid_column()
     service_name = Column(String(100), nullable=False)
     operation = Column(String(100), nullable=False)
     metric_type = Column(String(50), nullable=False)  # duration, throughput, error_rate, memory_usage, etc.
     metric_value = Column(Float, nullable=False)
     metric_unit = Column(String(20))  # ms, seconds, bytes, percent, count, etc.
-    
+
     # Request context
     user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     request_id = Column(String(100), nullable=True, index=True)
     session_id = Column(String(100), nullable=True)
-    
+
     # Performance context
     success = Column(Boolean, nullable=False)
     error_message = Column(Text)
-    
+
     # Detailed metrics
     cpu_usage_percent = Column(Float)
     memory_usage_mb = Column(Float)
     disk_io_mb = Column(Float)
     network_io_mb = Column(Float)
-    
+
     # Timing information
     start_time = Column(DateTime)
     end_time = Column(DateTime)
     duration_ms = Column(Integer)
-    
+
     # Additional metadata
     performance_metadata = Column(JSON)  # Additional performance data
     tags = Column(JSON)  # Tags for categorization and filtering
-    
+
     # Aggregation helpers
     batch_id = Column(String(100), nullable=True, index=True)  # For batch operations
     parent_operation = Column(String(100), nullable=True)  # For nested operations
-    
+
     # Relationships
     user = relationship("User", backref="performance_metrics")
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -698,9 +690,9 @@ class PerformanceMetrics(db.Model, TimestampMixin):
 
 class SystemAlert(db.Model, TimestampMixin):
     """Model for system alerts and notifications."""
-    
+
     __tablename__ = 'system_alert'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     alert_type = db.Column(db.String(50), nullable=False)  # 'error', 'warning', 'info'
     severity = db.Column(db.String(20), nullable=False)  # 'low', 'medium', 'high', 'critical'
@@ -710,16 +702,15 @@ class SystemAlert(db.Model, TimestampMixin):
     resolved = db.Column(db.Boolean, default=False)
     resolved_at = db.Column(db.DateTime)
     resolved_by = db.Column(db.String(36), db.ForeignKey('users.id'))
-    
+
     def __repr__(self):
         return f'<SystemAlert {self.id}: {self.title}>'
 
 # Training models are defined later in the file
 
-
 class SystemAlertsV2(db.Model, TimestampMixin):
     """Model for system alerts and notifications (v2)."""
-    
+
     __tablename__ = "system_alerts_v2"
     __table_args__ = (
         Index('idx_alert_v2_level_status', 'alert_level', 'status'),
@@ -727,47 +718,47 @@ class SystemAlertsV2(db.Model, TimestampMixin):
         Index('idx_alert_v2_created', 'created_at'),
         Index('idx_alert_v2_resolved', 'resolved_at'),
     )
-    
+
     id = get_uuid_column()
     user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     alert_type = Column(String(50), nullable=False)  # performance, error, health, resource, security
     alert_level = Column(String(20), nullable=False)  # info, warning, error, critical
     service_name = Column(String(100), nullable=False)
     operation = Column(String(100))
-    
+
     # Alert details
     title = Column(String(200), nullable=False)
     message = Column(Text, nullable=False)
     description = Column(Text)
-    
+
     # Alert data
     metric_value = Column(Float)
     threshold_value = Column(Float)
     condition = Column(String(50))  # greater_than, less_than, equals, contains
-    
+
     # Status tracking
     status = Column(String(20), default='active', nullable=False)  # active, acknowledged, resolved, suppressed
     acknowledged_at = Column(DateTime)
     acknowledged_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     resolved_at = Column(DateTime)
     resolved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    
+
     # Resolution information
     resolution_notes = Column(Text)
     auto_resolved = Column(Boolean, default=False)
-    
+
     # Alert metadata
     alert_data = Column(JSON)  # Additional alert data
     context_data = Column(JSON)  # Context when alert was triggered
-    
+
     # Notification tracking
     notifications_sent = Column(JSON)  # Track sent notifications
     notification_channels = Column(JSON)  # Channels to notify
-    
+
     # Relationships (with explicit foreign_keys to avoid conflicts)
     acknowledger = relationship("User", foreign_keys=[acknowledged_by], backref="acknowledged_alerts_v2")
     resolver = relationship("User", foreign_keys=[resolved_by], backref="resolved_alerts_v2")
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -797,51 +788,50 @@ class SystemAlertsV2(db.Model, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 # Training-related models for LLM Training Page feature
 
 class TrainingSession(db.Model, TimestampMixin):
     """Training session model for managing AI model training"""
-    
+
     __tablename__ = "training_sessions"
     __table_args__ = (
         Index('idx_training_session_user_status', 'user_id', 'status'),
         Index('idx_training_session_created', 'created_at'),
         Index('idx_training_session_active', 'is_active'),
     )
-    
+
     id = get_uuid_column()
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String(200), nullable=False)
     description = Column(Text)
     status = Column(String(50), default="created", nullable=False)  # created, processing, completed, failed
-    
+
     # Training configuration
     max_questions_to_answer = Column(Integer, nullable=True)
     use_in_main_app = Column(Boolean, default=False, nullable=False)
     confidence_threshold = Column(Float, default=0.6, nullable=False)
-    
+
     # Training metrics
     total_guides = Column(Integer, default=0)
     total_questions = Column(Integer, default=0)
     average_confidence = Column(Float, nullable=True)
     training_duration_seconds = Column(Integer, nullable=True)
-    
+
     # Status tracking
     current_step = Column(String(100), nullable=True)
     progress_percentage = Column(Float, default=0.0)
     error_message = Column(Text, nullable=True)
-    
+
     # Model metadata
     model_data = Column(JSON, nullable=True)
     is_active = Column(Boolean, default=False, nullable=False)
-    
+
     # Relationships
     user = relationship("User", backref="training_sessions")
     training_guides = relationship("TrainingGuide", back_populates="session", cascade="all, delete-orphan")
     training_results = relationship("TrainingResult", back_populates="session", cascade="all, delete-orphan")
     test_submissions = relationship("TestSubmission", back_populates="session", cascade="all, delete-orphan")
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -866,43 +856,42 @@ class TrainingSession(db.Model, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class TrainingGuide(db.Model, TimestampMixin):
     """Training guide model for storing uploaded marking guides"""
-    
+
     __tablename__ = "training_guides"
     __table_args__ = (
         Index('idx_training_guide_session', 'session_id'),
         Index('idx_training_guide_status', 'processing_status'),
         Index('idx_training_guide_hash', 'content_hash'),
     )
-    
+
     id = get_uuid_column()
     session_id = Column(String(36), ForeignKey("training_sessions.id"), nullable=False, index=True)
     filename = Column(String(255), nullable=False)
     file_path = Column(String(500), nullable=False)
     file_size = Column(Integer, nullable=False)
     file_type = Column(String(50), nullable=False)
-    
+
     # Guide classification
     guide_type = Column(String(50), nullable=False)  # questions_only, questions_answers, answers_only
     content_text = Column(Text)
     content_hash = Column(String(64), index=True)
-    
+
     # Processing results
     processing_status = Column(String(50), default="pending", nullable=False)
     processing_error = Column(Text, nullable=True)
     confidence_score = Column(Float, nullable=True)
-    
+
     # Extracted metadata
     question_count = Column(Integer, default=0)
     total_marks = Column(Float, default=0.0)
     format_confidence = Column(Float, nullable=True)
-    
+
     # Relationships
     session = relationship("TrainingSession", back_populates="training_guides")
     training_questions = relationship("TrainingQuestion", back_populates="guide", cascade="all, delete-orphan")
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -925,36 +914,35 @@ class TrainingGuide(db.Model, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class TrainingQuestion(db.Model, TimestampMixin):
     """Training question model for storing extracted questions and criteria"""
-    
+
     __tablename__ = "training_questions"
     __table_args__ = (
         Index('idx_training_question_guide', 'guide_id'),
         Index('idx_training_question_confidence', 'extraction_confidence'),
         Index('idx_training_question_review', 'manual_review_required'),
     )
-    
+
     id = get_uuid_column()
     guide_id = Column(String(36), ForeignKey("training_guides.id"), nullable=False, index=True)
     question_number = Column(String(50), nullable=False)
     question_text = Column(Text, nullable=False)
     expected_answer = Column(Text)
     point_value = Column(Float, nullable=False)
-    
+
     # Rubric details
     rubric_details = Column(JSON)
     visual_elements = Column(JSON)
     context = Column(Text)
-    
+
     # Confidence and quality metrics
     extraction_confidence = Column(Float, nullable=True)
     manual_review_required = Column(Boolean, default=False)
-    
+
     # Relationships
     guide = relationship("TrainingGuide", back_populates="training_questions")
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -973,36 +961,35 @@ class TrainingQuestion(db.Model, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class TrainingResult(db.Model, TimestampMixin):
     """Training result model for storing training outcomes"""
-    
+
     __tablename__ = "training_results"
     __table_args__ = (
         Index('idx_training_result_session', 'session_id'),
         Index('idx_training_result_confidence', 'average_confidence_score'),
     )
-    
+
     id = get_uuid_column()
     session_id = Column(String(36), ForeignKey("training_sessions.id"), nullable=False, index=True)
-    
+
     # Training metrics
     total_processing_time = Column(Float, nullable=False)
     questions_processed = Column(Integer, nullable=False)
     questions_with_high_confidence = Column(Integer, default=0)
     questions_requiring_review = Column(Integer, default=0)
-    
+
     # Model performance
     average_confidence_score = Column(Float, nullable=True)
     predicted_accuracy = Column(Float, nullable=True)
-    
+
     # Training data
     training_metadata = Column(JSON)
     model_parameters = Column(JSON)
-    
+
     # Relationships
     session = relationship("TrainingSession", back_populates="training_results")
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -1020,38 +1007,37 @@ class TrainingResult(db.Model, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class TestSubmission(db.Model, TimestampMixin):
     """Test submission model for model validation"""
-    
+
     __tablename__ = "test_submissions"
     __table_args__ = (
         Index('idx_test_submission_session', 'session_id'),
         Index('idx_test_submission_status', 'processing_status'),
     )
-    
+
     id = get_uuid_column()
     session_id = Column(String(36), ForeignKey("training_sessions.id"), nullable=False, index=True)
     filename = Column(String(255), nullable=False)
     file_path = Column(String(500), nullable=False)
-    
+
     # OCR and processing results
     extracted_text = Column(Text)
     ocr_confidence = Column(Float, nullable=True)
-    
+
     # Grading results
     predicted_score = Column(Float, nullable=True)
     confidence_score = Column(Float, nullable=True)
     matched_questions = Column(JSON)
     misalignments = Column(JSON)
-    
+
     # Test metadata
     processing_status = Column(String(50), default="pending")
     processing_error = Column(Text, nullable=True)
-    
+
     # Relationships
     session = relationship("TrainingSession", back_populates="test_submissions")
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -1071,80 +1057,79 @@ class TestSubmission(db.Model, TimestampMixin):
             "updated_at": self.updated_at.isoformat(),
         }
 
-
 class UserSettings(db.Model, TimestampMixin):
     """User settings model for storing user preferences and configuration."""
-    
+
     __tablename__ = 'user_settings'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False, unique=True)
-    
+
     # File processing settings
     max_file_size = db.Column(db.Integer, nullable=True, default=None)  # MB, NULL = unlimited
     allowed_formats = db.Column(db.Text, default='.pdf,.jpg,.jpeg,.png,.docx,.doc,.txt')  # Comma-separated
-    
+
     # API configuration (encrypted)
     llm_api_key_encrypted = db.Column(db.Text)
     llm_model = db.Column(db.String(100), default='deepseek-chat')
     llm_base_url = db.Column(db.String(500))
     ocr_api_key_encrypted = db.Column(db.Text)
     ocr_api_url = db.Column(db.String(500))
-    
+
     # UI preferences
     theme = db.Column(db.String(20), default='light')
     language = db.Column(db.String(10), default='en')
-    
+
     # Notification settings
     email_notifications = db.Column(db.Boolean, default=True)
     processing_notifications = db.Column(db.Boolean, default=True)
     notification_level = db.Column(db.String(20), default='info')
-    
+
     # Additional preferences
     auto_save = db.Column(db.Boolean, default=False)
     show_tooltips = db.Column(db.Boolean, default=True)
     results_per_page = db.Column(db.Integer, default=10)
-    
+
     # Processing & Performance settings
     default_processing_method = db.Column(db.String(50), default='traditional_ocr')
     processing_timeout = db.Column(db.Integer, default=300)  # seconds
     max_retry_attempts = db.Column(db.Integer, default=3)
     enable_processing_fallback = db.Column(db.Boolean, default=True)
-    
+
     # Grading & AI settings
     llm_strict_mode = db.Column(db.Boolean, default=False)
     llm_require_json_response = db.Column(db.Boolean, default=True)
     grading_confidence_threshold = db.Column(db.Integer, default=75)  # percentage
     auto_grade_threshold = db.Column(db.Integer, default=80)  # percentage
-    
+
     # Security & Privacy settings
     session_timeout = db.Column(db.Integer, default=120)  # minutes
     auto_delete_after_days = db.Column(db.Integer, default=30)
     enable_audit_logging = db.Column(db.Boolean, default=False)
     encrypt_stored_files = db.Column(db.Boolean, default=False)
-    
+
     # Monitoring & Logging settings
     log_level = db.Column(db.String(20), default='INFO')
     enable_performance_monitoring = db.Column(db.Boolean, default=True)
     enable_error_reporting = db.Column(db.Boolean, default=True)
     metrics_retention_days = db.Column(db.Integer, default=90)
-    
+
     # Email & Notification settings
     notification_email = db.Column(db.String(255))
     webhook_url = db.Column(db.String(500))
-    
+
     # Cache & Storage settings
     cache_type = db.Column(db.String(20), default='simple')
     cache_ttl_hours = db.Column(db.Integer, default=24)
     enable_cache_warming = db.Column(db.Boolean, default=False)
     auto_cleanup_storage = db.Column(db.Boolean, default=True)
-    
+
     # Advanced System settings
     debug_mode = db.Column(db.Boolean, default=False)
     maintenance_mode = db.Column(db.Boolean, default=False)
     max_concurrent_processes = db.Column(db.Integer, default=4)
     memory_limit_gb = db.Column(db.Integer, default=4)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         try:
@@ -1156,7 +1141,7 @@ class UserSettings(db.Model, TimestampMixin):
                 max_file_size_value = None  # Use None instead of inf for unlimited
             elif max_file_size_value is not None and not isinstance(max_file_size_value, (int, float)):
                 max_file_size_value = None  # Invalid value = unlimited
-        
+
             return {
                 "id": self.id,
                 "user_id": self.user_id,
@@ -1215,12 +1200,12 @@ class UserSettings(db.Model, TimestampMixin):
             logger.error(f"Error converting UserSettings to dict: {e}")
             # Return safe defaults if conversion fails
             return self.get_default_settings()
-    
+
     @classmethod
     def get_default_settings(cls) -> Dict[str, Any]:
         """Get default settings dictionary."""
         import os
-        
+
         return {
             "max_file_size": None,  # MB, None = unlimited
             "allowed_formats": ".pdf,.jpg,.jpeg,.png,.docx,.doc,.txt",
@@ -1271,7 +1256,7 @@ class UserSettings(db.Model, TimestampMixin):
             "max_concurrent_processes": 4,
             "memory_limit_gb": 4,
         }
-    
+
     @classmethod
     def get_or_create_for_user(cls, user_id: str) -> 'UserSettings':
         """Get or create user settings for a specific user."""
@@ -1332,14 +1317,14 @@ class UserSettings(db.Model, TimestampMixin):
             db.session.add(settings)
             db.session.commit()
         return settings
-    
+
     @property
     def allowed_formats_list(self) -> list:
         """Get allowed formats as a list."""
         if not self.allowed_formats:
             return []
         return [fmt.strip() for fmt in self.allowed_formats.split(',') if fmt.strip()]
-    
+
     @allowed_formats_list.setter
     def allowed_formats_list(self, formats: list):
         """Set allowed formats from a list."""
@@ -1347,22 +1332,22 @@ class UserSettings(db.Model, TimestampMixin):
             self.allowed_formats = ','.join(formats)
         else:
             self.allowed_formats = str(formats)
-    
+
     def set_llm_api_key(self, api_key: str):
         """Set LLM API key (encrypted storage)."""
         # For now, just store as plain text - in production, this should be encrypted
         self.llm_api_key_encrypted = api_key
-    
+
     def get_llm_api_key(self) -> str:
         """Get LLM API key (decrypted)."""
         # For now, just return as plain text - in production, this should be decrypted
         return self.llm_api_key_encrypted or ""
-    
+
     def set_ocr_api_key(self, api_key: str):
         """Set OCR API key (encrypted storage)."""
         # For now, just store as plain text - in production, this should be encrypted
         self.ocr_api_key_encrypted = api_key
-    
+
     def get_ocr_api_key(self) -> str:
         """Get OCR API key (decrypted)."""
         # For now, just return as plain text - in production, this should be decrypted

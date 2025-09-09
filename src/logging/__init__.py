@@ -70,7 +70,6 @@ except ImportError as e:
 
     warnings.warn(f"Some logging components unavailable: {e}", ImportWarning)
 
-
 def configure_logging(
     app_name: str = "exam_grader",
     log_level: str = "INFO",
@@ -94,7 +93,6 @@ def configure_logging(
         )
     return None
 
-
 def get_comprehensive_logger(name: str = None):
     """Get a comprehensive logger instance.
 
@@ -110,7 +108,6 @@ def get_comprehensive_logger(name: str = None):
         return get_logger(name)
     return None
 
-
 def get_json_logger(name: str = None):
     """Get a structured JSON logger instance.
 
@@ -125,7 +122,6 @@ def get_json_logger(name: str = None):
     elif get_structured_logger:
         return get_structured_logger(name)
     return None
-
 
 __all__ = [
     # Core logging

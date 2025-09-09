@@ -4,15 +4,14 @@ Security utilities for the webapp.
 This module provides security validation and rate limiting functionality.
 """
 
-import secrets
 import time
 from collections import defaultdict, deque
-from html import escape
 from pathlib import Path
+import secrets
+from html import escape
 from typing import Dict, Optional, Tuple
 
 from utils.logger import logger
-
 
 class SecurityValidator:
     """Security validation utilities."""
@@ -159,7 +158,6 @@ class SecurityValidator:
         """
         return secrets.token_hex(length)
 
-
 class RateLimiter:
     """Simple rate limiter implementation."""
 
@@ -223,16 +221,13 @@ class RateLimiter:
             "total_tracked_requests": sum(len(reqs) for reqs in self.requests.values()),
         }
 
-
 # Global instances
 security_validator = SecurityValidator()
 rate_limiter = RateLimiter()
 
-
 def validate_filename(filename: str) -> Tuple[bool, Optional[str]]:
     """Validate filename using global validator."""
     return security_validator.validate_filename(filename)
-
 
 def validate_file_path(
     file_path: str, allowed_base_path: str
@@ -240,23 +235,19 @@ def validate_file_path(
     """Validate file path using global validator."""
     return security_validator.validate_file_path(file_path, allowed_base_path)
 
-
 def validate_file_size(
     size_bytes: int, file_type: str = "default"
 ) -> Tuple[bool, Optional[str]]:
     """Validate file size using global validator."""
     return security_validator.validate_file_size(size_bytes, file_type)
 
-
 def sanitize_input(input_str: str, max_length: int = 1000) -> str:
     """Sanitize input using global validator."""
     return security_validator.sanitize_input(input_str, max_length)
 
-
 def generate_secure_token(length: int = 32) -> str:
     """Generate secure token using global validator."""
     return security_validator.generate_secure_token(length)
-
 
 def check_rate_limit(
     identifier: str, max_requests: int = 100, window_seconds: int = 3600
@@ -264,13 +255,11 @@ def check_rate_limit(
     """Check rate limit using global rate limiter."""
     return rate_limiter.is_allowed(identifier, max_requests, window_seconds)
 
-
 def get_remaining_requests(
     identifier: str, max_requests: int = 100, window_seconds: int = 3600
 ) -> int:
     """Get remaining requests using global rate limiter."""
     return rate_limiter.get_remaining_requests(identifier, max_requests, window_seconds)
-
 
 def reset_rate_limit(identifier: str):
     """Reset rate limit using global rate limiter."""

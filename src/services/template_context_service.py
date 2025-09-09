@@ -19,16 +19,15 @@ from src.services.file_validation_service import file_validation_service
 from src.services.pagination_service import pagination_service
 from utils.logger import logger
 
-
 class TemplateContextService:
     """Service for providing comprehensive template context with user settings."""
-    
+
     def __init__(self):
         self.base_context = {
             'app_name': 'Exam Grader',
             'app_version': '1.0.0'
         }
-    
+
     def get_user_settings_context(self) -> Dict[str, Any]:
         """Get user settings for template context."""
         try:
@@ -40,7 +39,7 @@ class TemplateContextService:
         except Exception as e:
             logger.warning(f"Failed to get user settings for template context: {e}")
             return UserSettings.get_default_settings()
-    
+
     def get_theme_context(self) -> Dict[str, Any]:
         """Get theme-related context."""
         try:
@@ -61,7 +60,7 @@ class TemplateContextService:
                 'theme_variables': {},
                 'available_themes': [{'value': 'light', 'label': 'Light'}]
             }
-    
+
     def get_notification_context(self) -> Dict[str, Any]:
         """Get notification-related context."""
         try:
@@ -80,7 +79,7 @@ class TemplateContextService:
                 },
                 'notification_levels': [{'value': 'info', 'label': 'Info'}]
             }
-    
+
     def get_file_validation_context(self) -> Dict[str, Any]:
         """Get file validation context."""
         try:
@@ -101,7 +100,7 @@ class TemplateContextService:
                 'max_file_size_display': '100 MB',
                 'allowed_formats_display': '.pdf, .jpg, .png'
             }
-    
+
     def get_pagination_context(self) -> Dict[str, Any]:
         """Get pagination context."""
         try:
@@ -122,7 +121,7 @@ class TemplateContextService:
                 'default_per_page': 10,
                 'pagination_options': [{'value': 10, 'label': '10 per page'}]
             }
-    
+
     def get_ui_preferences_context(self) -> Dict[str, Any]:
         """Get UI preferences context."""
         try:
@@ -146,21 +145,21 @@ class TemplateContextService:
                 'language': 'en',
                 'available_languages': [{'value': 'en', 'label': 'English'}]
             }
-    
+
     def get_comprehensive_context(self) -> Dict[str, Any]:
         """Get comprehensive template context with all user settings integrated."""
         context = self.base_context.copy()
-        
+
         # Add all context sections
         context.update(self.get_theme_context())
         context.update(self.get_notification_context())
         context.update(self.get_file_validation_context())
         context.update(self.get_pagination_context())
         context.update(self.get_ui_preferences_context())
-        
+
         # Add user settings
         context['user_settings'] = self.get_user_settings_context()
-        
+
         # Add service availability
         try:
             from webapp.routes.main_routes import get_actual_service_status
@@ -172,9 +171,8 @@ class TemplateContextService:
                 'llm_status': False,
                 'ai_status': False
             }
-        
-        return context
 
+        return context
 
 # Global instance
 template_context_service = TemplateContextService()

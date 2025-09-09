@@ -6,20 +6,19 @@ log aggregation, performance metrics integration, and monitoring dashboards.
 """
 
 import json
+import time
+from collections import defaultdict, deque
+from datetime import datetime, timezone
+from pathlib import Path
 import logging
 import logging.handlers
 import threading
-import time
-from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from src.config.processing_config import ProcessingConfigManager
 from utils.logger import logger
-
 
 class LogLevel(Enum):
     """Enhanced log levels"""
@@ -30,7 +29,6 @@ class LogLevel(Enum):
     WARNING = 30
     ERROR = 40
     CRITICAL = 50
-
 
 class LogCategory(Enum):
     """Log categories for better organization"""
@@ -45,7 +43,6 @@ class LogCategory(Enum):
     CACHE = "cache"
     ERROR = "error"
     AUDIT = "audit"
-
 
 @dataclass
 class StructuredLogEntry:
@@ -85,7 +82,6 @@ class StructuredLogEntry:
         """Convert to JSON string"""
         return json.dumps(self.to_dict())
 
-
 @dataclass
 class LogMetrics:
     """Metrics for log analysis"""
@@ -97,7 +93,6 @@ class LogMetrics:
     error_rate: float = 0.0
     average_response_time: float = 0.0
     last_updated: datetime = field(default_factory=datetime.utcnow)
-
 
 class LogHandler:
     """Base class for log handlers"""
@@ -117,7 +112,6 @@ class LogHandler:
         # Default implementation - just return True to indicate processing
         # Subclasses should override this method with specific processing logic
         return True
-
 
 class FileLogHandler(LogHandler):
     """File-based log handler with rotation"""
@@ -179,7 +173,6 @@ class FileLogHandler(LogHandler):
             logger.error(f"Error in FileLogHandler: {e}")
             return False
 
-
 class MetricsLogHandler(LogHandler):
     """Handler for collecting log metrics"""
 
@@ -224,7 +217,6 @@ class MetricsLogHandler(LogHandler):
         """Get current metrics"""
         with self._lock:
             return self.metrics
-
 
 class EnhancedLoggingService:
     """Main enhanced logging service"""
@@ -431,7 +423,6 @@ class EnhancedLoggingService:
                 }
         return stats
 
-
 class OperationLogger:
     """Context manager for logging operations with timing"""
 
@@ -496,10 +487,8 @@ class OperationLogger:
                     stack_trace=str(exc_tb) if exc_tb else None,
                 )
 
-
 # Global instance
 enhanced_logging_service = EnhancedLoggingService()
-
 
 # Convenience functions
 def log_operation(

@@ -5,11 +5,11 @@ This module provides secure storage and handling of API keys and other
 sensitive configuration data using encryption and secure key derivation.
 """
 
-import base64
 import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+import base64
 from typing import Any, Dict, Optional, Union
 
 from cryptography.fernet import Fernet
@@ -22,7 +22,6 @@ except ImportError:
     import logging
 
     logger = logging.getLogger(__name__)
-
 
 class SecretsEncryption:
     """Handles encryption and decryption of secrets."""
@@ -71,7 +70,6 @@ class SecretsEncryption:
     def get_salt(self) -> bytes:
         """Get the salt used for key derivation."""
         return self.salt
-
 
 class SecretsManager:
     """
@@ -381,11 +379,9 @@ class SecretsManager:
 
         return validation_results
 
-
 # Global secrets manager instance
 secrets_file_path = Path(__file__).parent.parent.parent / "instance" / "secrets.enc"
 secrets_manager = SecretsManager(secrets_file=str(secrets_file_path))
-
 
 # Initialize with common API keys
 def initialize_secrets():

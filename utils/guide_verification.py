@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 
 from utils.logger import logger
 
-
 def is_guide_in_use(guide_id) -> bool:
     """
     Check if a marking guide is currently being used for processing.

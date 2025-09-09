@@ -2,17 +2,16 @@
 Enhanced input sanitization utilities for the Exam Grader application.
 """
 
+import re
+import urllib.parse
 import base64
 import html
-import re
 import unicodedata
-import urllib.parse
 from typing import Any, Dict, List, Optional, Tuple
 
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
-
 
 class InputSanitizer:
     """Comprehensive input sanitization for security and data integrity."""
@@ -325,7 +324,6 @@ class InputSanitizer:
 
         return attacks
 
-
 def sanitize_form_data(
     form_data: Dict[str, Any], field_rules: Optional[Dict[str, Dict]] = None
 ) -> Dict[str, Any]:
@@ -367,7 +365,6 @@ def sanitize_form_data(
             sanitized[field] = value
 
     return sanitized
-
 
 def validate_file_upload(
     file_data: bytes, filename: str, allowed_types: List[str] = None

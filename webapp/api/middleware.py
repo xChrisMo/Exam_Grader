@@ -6,8 +6,8 @@ and response enhancement for unified API endpoints.
 """
 
 import time
-import uuid
 from datetime import datetime, timezone
+import uuid
 from functools import wraps
 
 from flask import current_app, g, request
@@ -15,7 +15,6 @@ from flask import current_app, g, request
 from src.services.enhanced_logging_service import LogCategory, enhanced_logging_service
 from src.services.monitoring.monitoring_service import performance_monitor
 from utils.logger import logger
-
 
 class APIMiddleware:
     """Middleware for API request processing"""
@@ -146,7 +145,6 @@ class APIMiddleware:
                 },
             )
 
-
 def require_api_key(f):
     """Decorator to require API key for certain endpoints"""
 
@@ -164,7 +162,6 @@ def require_api_key(f):
 
         # Validate API key (implement your validation logic)
         if not validate_api_key(api_key):
-            from .error_handlers import api_error_handler
 
             response, status = api_error_handler.handle_authentication_error(
                 message="Invalid API key", request_id=getattr(g, "request_id", None)
@@ -175,14 +172,12 @@ def require_api_key(f):
 
     return decorated_function
 
-
 def validate_api_key(api_key: str) -> bool:
     """Validate API key (implement your validation logic)"""
     # This is a placeholder - implement your actual API key validation
     # You might check against a database, environment variable, etc.
     valid_keys = current_app.config.get("API_KEYS", [])
     return api_key in valid_keys
-
 
 def rate_limit(requests_per_minute: int = 60):
     """Decorator to implement rate limiting"""
@@ -197,7 +192,6 @@ def rate_limit(requests_per_minute: int = 60):
 
             # Check rate limit (implement your rate limiting logic)
             if not check_rate_limit(client_id, requests_per_minute):
-                from .error_handlers import api_error_handler
 
                 response, status = api_error_handler.handle_rate_limit_error(
                     retry_after=60, request_id=getattr(g, "request_id", None)
@@ -210,13 +204,11 @@ def rate_limit(requests_per_minute: int = 60):
 
     return decorator
 
-
 def check_rate_limit(client_id: str, requests_per_minute: int) -> bool:
     """Check if client is within rate limits"""
     # This is a placeholder - implement your actual rate limiting logic
     # You might use Redis, in-memory cache, or database to track requests
     return True  # For now, always allow requests
-
 
 def validate_json_request(required_fields: list = None):
     """Decorator to validate JSON request data"""
@@ -225,7 +217,6 @@ def validate_json_request(required_fields: list = None):
         @wraps(f)
         def decorated_function(*args, **kwargs):
             if not request.is_json:
-                from .error_handlers import api_error_handler
 
                 response, status = api_error_handler.create_error_response(
                     error=ValueError("Content-Type must be application/json"),
@@ -237,7 +228,6 @@ def validate_json_request(required_fields: list = None):
 
             data = request.get_json()
             if not data:
-                from .error_handlers import api_error_handler
 
                 response, status = api_error_handler.create_error_response(
                     error=ValueError("Empty JSON data"),
@@ -254,7 +244,6 @@ def validate_json_request(required_fields: list = None):
                         missing_fields.append(field)
 
                 if missing_fields:
-                    from .error_handlers import api_error_handler
 
                     response, status = api_error_handler.handle_validation_error(
                         {
@@ -270,7 +259,6 @@ def validate_json_request(required_fields: list = None):
         return decorated_function
 
     return decorator
-
 
 def log_api_usage(operation: str):
     """Decorator to log API usage for analytics"""
@@ -298,7 +286,6 @@ def log_api_usage(operation: str):
         return decorated_function
 
     return decorator
-
 
 # Global middleware instance
 api_middleware = APIMiddleware()

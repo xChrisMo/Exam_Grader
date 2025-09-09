@@ -9,16 +9,15 @@ This service consolidates all monitoring functionality from:
 - monitoring_service_manager.py
 """
 
-import threading
 import time
-from dataclasses import dataclass
 from datetime import datetime, timezone
+import threading
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
 from src.services.base_service import BaseService, ServiceStatus
 from utils.logger import logger
-
 
 class HealthStatus(Enum):
     """Health status levels"""
@@ -29,7 +28,6 @@ class HealthStatus(Enum):
     UNKNOWN = "unknown"
     MAINTENANCE = "maintenance"
 
-
 class AlertLevel(Enum):
     """Alert severity levels"""
 
@@ -37,7 +35,6 @@ class AlertLevel(Enum):
     WARNING = "warning"
     ERROR = "error"
     CRITICAL = "critical"
-
 
 @dataclass
 class ServiceHealthInfo:
@@ -52,7 +49,6 @@ class ServiceHealthInfo:
     uptime_seconds: float
     details: Dict[str, Any]
 
-
 @dataclass
 class PerformanceMetric:
     """Performance metric data"""
@@ -62,7 +58,6 @@ class PerformanceMetric:
     value: float
     timestamp: datetime
     metadata: Dict[str, Any]
-
 
 @dataclass
 class SystemAlert:
@@ -74,7 +69,6 @@ class SystemAlert:
     message: str
     timestamp: datetime
     resolved: bool = False
-
 
 class MonitoringService(BaseService):
     """Consolidated monitoring service with health, performance, and alerting"""
@@ -471,7 +465,6 @@ class MonitoringService(BaseService):
                 "registered_services": len(self.health_checks),
             },
         }
-
 
 # Global instances
 monitoring_service = MonitoringService()

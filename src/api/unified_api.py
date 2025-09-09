@@ -21,7 +21,6 @@ from utils.logger import logger
 # Create unified API blueprint
 api = Blueprint("core_api", __name__, url_prefix="/api/v1")
 
-
 def api_response(data: Any = None, message: str = None, status: int = 200) -> tuple:
     """Standardized API response format."""
     response = {
@@ -39,7 +38,6 @@ def api_response(data: Any = None, message: str = None, status: int = 200) -> tu
 
     return jsonify(response), status
 
-
 def handle_api_error(error):
     """Global API error handler."""
     logger.error(f"API Error: {error}")
@@ -53,13 +51,11 @@ def handle_api_error(error):
     else:
         return api_response(message="Internal server error", status=500)
 
-
 @api.before_request
 def before_request():
     """Set up request context."""
     g.request_id = f"req_{int(time.time())}_{id(request)}"
     g.start_time = time.time()
-
 
 @api.after_request
 def after_request(response):
@@ -70,11 +66,9 @@ def after_request(response):
     )
     return response
 
-
 # ============================================================================
 # MARKING GUIDES API
 # ============================================================================
-
 
 @api.route("/guides", methods=["GET"])
 @login_required
@@ -116,7 +110,6 @@ def get_guides():
         logger.error(f"Failed to get guides: {e}")
         return api_response(message="Failed to retrieve guides", status=500)
 
-
 @api.route("/guides/<guide_id>", methods=["GET"])
 @login_required
 def get_guide(guide_id):
@@ -143,7 +136,6 @@ def get_guide(guide_id):
     except Exception as e:
         logger.error(f"Failed to get guide {guide_id}: {e}")
         return api_response(message="Failed to retrieve guide", status=500)
-
 
 @api.route("/guides", methods=["POST"])
 @login_required
@@ -181,7 +173,6 @@ def create_guide():
         logger.error(f"Failed to create guide: {e}")
         db.session.rollback()
         return api_response(message="Failed to create guide", status=500)
-
 
 @api.route("/guides/<guide_id>", methods=["PUT"])
 @login_required
@@ -221,7 +212,6 @@ def update_guide(guide_id):
         db.session.rollback()
         return api_response(message="Failed to update guide", status=500)
 
-
 @api.route("/guides/<guide_id>", methods=["DELETE"])
 @login_required
 def delete_guide(guide_id):
@@ -243,7 +233,6 @@ def delete_guide(guide_id):
         logger.error(f"Failed to delete guide {guide_id}: {e}")
         db.session.rollback()
         return api_response(message="Failed to delete guide", status=500)
-
 
 @api.route("/delete-guide", methods=["POST"])
 @login_required
@@ -272,11 +261,9 @@ def delete_guide_post():
         db.session.rollback()
         return api_response(message="Failed to delete guide", status=500)
 
-
 # ============================================================================
 # SUBMISSIONS API
 # ============================================================================
-
 
 @api.route("/submissions", methods=["GET"])
 @login_required
@@ -316,7 +303,6 @@ def get_submissions():
         logger.error(f"Failed to get submissions: {e}")
         return api_response(message="Failed to retrieve submissions", status=500)
 
-
 @api.route("/submissions/<submission_id>", methods=["GET"])
 @login_required
 def get_submission(submission_id):
@@ -344,11 +330,9 @@ def get_submission(submission_id):
         logger.error(f"Failed to get submission {submission_id}: {e}")
         return api_response(message="Failed to retrieve submission", status=500)
 
-
 # ============================================================================
 # PROCESSING API
 # ============================================================================
-
 
 @api.route("/process", methods=["POST"])
 @login_required
@@ -409,11 +393,9 @@ def process_submission():
         logger.error(f"Processing failed: {e}")
         return api_response(message="Processing failed", status=500)
 
-
 # ============================================================================
 # RESULTS API
 # ============================================================================
-
 
 @api.route("/results", methods=["GET"])
 @login_required
@@ -459,7 +441,6 @@ def get_results():
         logger.error(f"Failed to get results: {e}")
         return api_response(message="Failed to retrieve results", status=500)
 
-
 @api.route("/results/<result_id>", methods=["GET"])
 @login_required
 def get_result(result_id):
@@ -495,11 +476,9 @@ def get_result(result_id):
         logger.error(f"Failed to get result {result_id}: {e}")
         return api_response(message="Failed to retrieve result", status=500)
 
-
 # ============================================================================
 # CACHE STATS API
 # ============================================================================
-
 
 @api.route("/cache/stats", methods=["GET"])
 @login_required
@@ -548,11 +527,9 @@ def get_cache_stats():
         logger.error(f"Error getting cache stats: {e}")
         return api_response(message="Failed to retrieve cache statistics", status=500)
 
-
 # ============================================================================
 # HEALTH CHECK API
 # ============================================================================
-
 
 @api.route("/health", methods=["GET"])
 def health_check():
@@ -578,7 +555,6 @@ def health_check():
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return api_response(message="Service unhealthy", status=503)
-
 
 # Register error handlers
 api.register_error_handler(400, handle_api_error)
