@@ -100,7 +100,8 @@ class ConsolidatedOCRService(BaseService):
         
         if self.api_key and ("your_" in self.api_key.lower() or "here" in self.api_key.lower()):
             logger.error(f"❌ PLACEHOLDER OCR API KEY DETECTED: {self.api_key}")
-            logger.error("❌ This means the HANDWRITING_OCR_API_KEY environment variable is not set correctly on Render.com!")
+            logger.error("❌ This means the HANDWRITING_OCR_API_KEY environment variable is not set correctly!")
+            logger.error("❌ Please set HANDWRITING_OCR_API_KEY environment variable with your actual API key.")
             # Set to None to force fallback methods
             self.api_key = None
         
