@@ -316,6 +316,15 @@ class SecretsManager:
         for var_name in env_vars:
             value = os.getenv(var_name)
             if value:
+                # Skip placeholder values
+                if ("your_" in value.lower() or 
+                    "here" in value.lower() or 
+                    "placeholder" in value.lower() or
+                    value == "your_deepseek_api_key_here" or
+                    value == "your_handwriting_ocr_api_key_here"):
+                    logger.debug(f"Skipping placeholder value for {var_name}")
+                    continue
+                    
                 if self.set_secret(
                     var_name, value, "Imported from environment variable"
                 ):

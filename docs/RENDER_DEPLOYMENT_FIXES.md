@@ -7,10 +7,12 @@ This document outlines the fixes applied to resolve deployment issues on Render.
 ### 1. LLM API Authentication Error (401)
 **Problem**: `Authentication Fails, Your api key: ****here is invalid`
 
+**Root Cause**: The application was using placeholder API keys from the encrypted secrets file instead of environment variables.
+
 **Solution**: 
-- Added `LLM_API_KEY` environment variable to complement `DEEPSEEK_API_KEY`
-- Updated environment configuration to support both variable names
-- The LLM service now checks for both `LLM_API_KEY` and `DEEPSEEK_API_KEY`
+- Fixed secrets manager to skip placeholder values and prioritize environment variables
+- Added automatic clearing of encrypted secrets file during deployment
+- The LLM service now properly loads API keys from environment variables
 - Added automatic skipping of LLM connectivity tests on Render.com
 - Enhanced error handling for authentication failures
 
@@ -20,6 +22,19 @@ DEEPSEEK_API_KEY=your_actual_deepseek_api_key_here
 LLM_API_KEY=your_actual_deepseek_api_key_here
 RENDER=true
 ```
+
+**How to Get a DeepSeek API Key**:
+1. Go to [DeepSeek Console](https://platform.deepseek.com/)
+2. Sign in or create an account
+3. Navigate to API Keys section
+4. Create a new API key
+5. Copy the key (format: `sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`)
+
+**Setting on Render.com**:
+1. Go to your service dashboard
+2. Click "Environment" tab
+3. Add `DEEPSEEK_API_KEY` with your actual API key
+4. Save and redeploy
 
 **Important**: Replace `your_actual_deepseek_api_key_here` with your real DeepSeek API key from https://platform.deepseek.com/
 
