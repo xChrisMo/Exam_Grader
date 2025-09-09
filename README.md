@@ -103,7 +103,7 @@ graph TB
 
 4. **Configure environment variables**
    ```bash
-   cp env.example .env
+   # Create your .env file with your environment variables
    # Edit .env with your API keys and configuration
    ```
 

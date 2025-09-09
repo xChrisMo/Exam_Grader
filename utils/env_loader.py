@@ -18,7 +18,8 @@ def load_environment(env_file: Optional[str] = None, project_root: Optional[Path
     This function loads environment variables in the following order:
     1. instance/.env (highest priority)
     2. .env (project root)
-    3. env.example (fallback)
+    
+    Note: env.example is never loaded to avoid placeholder values.
     
     Args:
         env_file: Specific .env file to load. If None, uses standard precedence.
@@ -34,11 +35,10 @@ def load_environment(env_file: Optional[str] = None, project_root: Optional[Path
         # Use specific file if provided
         env_files.append(env_file)
     else:
-        # Standard precedence order
+        # Standard precedence order (env.example excluded)
         env_files = [
             project_root / "instance" / ".env",  # Instance-specific (highest priority)
-            project_root / ".env",               # Project root
-            project_root / "env.example"         # Fallback
+            project_root / ".env"                # Project root
         ]
     
     # Debug logging
@@ -51,30 +51,9 @@ def load_environment(env_file: Optional[str] = None, project_root: Optional[Path
     for env_path in env_files:
         if env_path.exists():
             print(f"   Found env file: {env_path}")
-            # Skip env.example if we're in production or if key environment variables are already set
-            if env_path.name == "env.example":
-                # Check if we're in production or if key variables are already set
-                is_production = os.getenv("FLASK_ENV") == "production" or os.getenv("RENDER") == "true"
-                has_api_key = os.getenv("DEEPSEEK_API_KEY") and os.getenv("DEEPSEEK_API_KEY") != "your_deepseek_api_key_here"
-                
-                print(f"   is_production: {is_production}")
-                print(f"   has_api_key: {has_api_key}")
-                
-                # ALWAYS skip env.example on Render.com/Heroku
-                if is_production:
-                    print(f"⏭️  Skipping env.example (production mode - Render.com/Heroku)")
-                    continue
-                elif has_api_key:
-                    print(f"⏭️  Skipping env.example (API key already set)")
-                    continue
-                else:
-                    # Only load env.example in development if no API key is set
-                    load_dotenv(env_path, override=False)
-                    print(f"✅ Loaded environment from: {env_path} (development fallback)")
-            else:
-                # For .env files, override as usual
-                load_dotenv(env_path, override=True)
-                print(f"✅ Loaded environment from: {env_path}")
+            # Load .env files (env.example is never included in env_files)
+            load_dotenv(env_path, override=True)
+            print(f"✅ Loaded environment from: {env_path}")
             break
     else:
         print("⚠️  No .env file found, using system environment variables only")
@@ -84,31 +63,23 @@ def load_environment(env_file: Optional[str] = None, project_root: Optional[Path
 
 def ensure_env_file_exists(project_root: Optional[Path] = None) -> bool:
     """
-    Ensure a .env file exists, creating it from env.example if needed.
+    Ensure a .env file exists.
     
     Args:
         project_root: Project root directory. If None, auto-detects.
         
     Returns:
-        bool: True if .env file exists or was created, False otherwise.
+        bool: True if .env file exists, False otherwise.
     """
     if project_root is None:
         project_root = _get_project_root()
     
     env_file = project_root / ".env"
-    env_example = project_root / "env.example"
     
     if env_file.exists():
         return True
     
-    if env_example.exists():
-        # Copy env.example to .env
-        import shutil
-        shutil.copy2(env_example, env_file)
-        print(f"✅ Created .env file from env.example")
-        return True
-    
-    print("⚠️  No .env or env.example file found")
+    print("⚠️  No .env file found - please create one with your environment variables")
     return False
 
 def ensure_instance_folder(project_root: Optional[Path] = None) -> None:
