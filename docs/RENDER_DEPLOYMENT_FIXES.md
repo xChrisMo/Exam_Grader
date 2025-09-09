@@ -11,12 +11,17 @@ This document outlines the fixes applied to resolve deployment issues on Render.
 - Added `LLM_API_KEY` environment variable to complement `DEEPSEEK_API_KEY`
 - Updated environment configuration to support both variable names
 - The LLM service now checks for both `LLM_API_KEY` and `DEEPSEEK_API_KEY`
+- Added automatic skipping of LLM connectivity tests on Render.com
+- Enhanced error handling for authentication failures
 
 **Required Environment Variables on Render.com**:
 ```
 DEEPSEEK_API_KEY=your_actual_deepseek_api_key_here
 LLM_API_KEY=your_actual_deepseek_api_key_here
+RENDER=true
 ```
+
+**Important**: Replace `your_actual_deepseek_api_key_here` with your real DeepSeek API key from https://platform.deepseek.com/
 
 ### 2. Missing antiword Dependency
 **Problem**: `WARNING - Missing optional dependencies: antiword ([Errno 2] No such file or directory: 'antiword')`
@@ -99,9 +104,32 @@ The application will now gracefully handle missing optional dependencies:
 ## Troubleshooting
 
 ### If LLM API still fails:
-1. Verify your DeepSeek API key is valid and active
-2. Check that both `DEEPSEEK_API_KEY` and `LLM_API_KEY` are set to the same value
-3. Ensure your API key has sufficient credits/quota
+1. **Get a valid DeepSeek API key**:
+   - Go to https://platform.deepseek.com/
+   - Sign up or log in to your account
+   - Navigate to API Keys section
+   - Create a new API key
+   - Copy the API key (it starts with `sk-`)
+
+2. **Set the environment variables in Render.com**:
+   - Go to your Render.com dashboard
+   - Select your Exam Grader service
+   - Go to Environment tab
+   - Add these variables:
+     ```
+     DEEPSEEK_API_KEY=sk-your-actual-api-key-here
+     LLM_API_KEY=sk-your-actual-api-key-here
+     RENDER=true
+     ```
+
+3. **Verify the API key is working**:
+   - Test your API key at https://platform.deepseek.com/
+   - Ensure you have sufficient credits/quota
+   - Check that the API key is active and not expired
+
+4. **Redeploy your application**:
+   - After setting the environment variables, redeploy your service
+   - Check the logs to ensure the LLM service initializes without errors
 
 ### If CSRF errors persist:
 1. Clear browser cache and cookies

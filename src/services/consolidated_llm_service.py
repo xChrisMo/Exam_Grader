@@ -549,6 +549,8 @@ class ConsolidatedLLMService(BaseService):
             skip_test = (
                 os.getenv("SKIP_LLM_INIT_TEST", "False").lower() == "true"
                 or os.getenv("FAST_STARTUP", "False").lower() == "true"
+                or os.getenv("RENDER", "False").lower() == "true"  # Skip on Render.com
+                or os.getenv("DYNO", "False").lower() == "true"   # Skip on Heroku
             )
 
             if not skip_test:
@@ -579,12 +581,21 @@ class ConsolidatedLLMService(BaseService):
                         return False
 
                 except Exception as e:
-                    logger.warning(
-                        f"LLM connectivity test failed during initialization: {str(e)}"
-                    )
-                    # Still mark as available since client was created successfully
-                    self.status = ServiceStatus.DEGRADED
-                    return True
+                    error_msg = str(e)
+                    if "401" in error_msg or "authentication" in error_msg.lower():
+                        logger.error(
+                            f"LLM API authentication failed: {error_msg}. "
+                            f"Please check your DEEPSEEK_API_KEY environment variable."
+                        )
+                        self.status = ServiceStatus.UNHEALTHY
+                        return False
+                    else:
+                        logger.warning(
+                            f"LLM connectivity test failed during initialization: {error_msg}"
+                        )
+                        # Still mark as available since client was created successfully
+                        self.status = ServiceStatus.DEGRADED
+                        return True
             else:
                 # Skip test during fast startup
                 self.status = ServiceStatus.HEALTHY
