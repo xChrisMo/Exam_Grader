@@ -55,7 +55,10 @@ class SecurityConfig:
 
     def __post_init__(self):
         """Validate security configuration."""
-        if self.secret_key and len(self.secret_key) < 32:
+        # Only validate if secret_key is provided and not a placeholder
+        if (self.secret_key and 
+            len(self.secret_key) < 32 and 
+            self.secret_key != "your_secret_key_here"):
             raise ValueError("SECRET_KEY must be at least 32 characters long")
 
 @dataclass
@@ -475,7 +478,8 @@ class UnifiedConfig:
         """Get or generate a secure secret key."""
 
         secret_key = os.getenv("SECRET_KEY")
-        if not secret_key:
+        # Treat placeholder values as if no secret key was provided
+        if not secret_key or secret_key == "your_secret_key_here":
             if self.environment == "production":
                 raise ValueError("SECRET_KEY must be set in production environment")
             secret_key = secrets.token_hex(32)
