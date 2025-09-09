@@ -1176,10 +1176,21 @@ class FileProcessingService:
 
         # Check Python packages
         for dep_name, dep_info in dependencies.items():
-            if dep_info.get("type") == "system_command":
+            if dep_name == "antiword":
+                # Special handling for antiword - just check if command exists
+                try:
+                    result = subprocess.run(
+                        ["which", "antiword"], capture_output=True, timeout=5
+                    )
+                    if result.returncode == 0:
+                        dep_info["available"] = True
+                    else:
+                        dep_info["error"] = "antiword command not found in PATH"
+                except Exception as e:
+                    dep_info["error"] = str(e)
+            elif dep_info.get("type") == "system_command":
                 # Check system commands
                 try:
-
                     result = subprocess.run(
                         [dep_name, "--version"], capture_output=True, timeout=5
                     )

@@ -4,7 +4,7 @@ Environment Setup Script
 
 This script helps set up the development environment by:
 1. Creating the instance folder
-2. Creating .env file from env.example if needed
+2. Checking if .env file exists (no longer creates from env.example)
 3. Loading environment variables
 4. Testing the setup
 

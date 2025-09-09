@@ -212,11 +212,30 @@ class SecretsManager:
         try:
             env_value = os.getenv(key)
             if env_value:
-                return env_value
+                # Skip placeholder values even from environment
+                if ("your_" in env_value.lower() or 
+                    "here" in env_value.lower() or 
+                    "placeholder" in env_value.lower() or
+                    env_value == "your_deepseek_api_key_here" or
+                    env_value == "your_handwriting_ocr_api_key_here"):
+                    logger.debug(f"Skipping placeholder value for {key} from environment")
+                    # Don't return placeholder values, check encrypted secrets instead
+                else:
+                    return env_value
 
             # Then check encrypted secrets
             if key in self._secrets_cache:
-                return self._secrets_cache[key]["value"]
+                secret_value = self._secrets_cache[key]["value"]
+                # Skip placeholder values from encrypted secrets too
+                if ("your_" in secret_value.lower() or 
+                    "here" in secret_value.lower() or 
+                    "placeholder" in secret_value.lower() or
+                    secret_value == "your_deepseek_api_key_here" or
+                    secret_value == "your_handwriting_ocr_api_key_here"):
+                    logger.debug(f"Skipping placeholder value for {key} from encrypted secrets")
+                    return default
+                else:
+                    return secret_value
 
             return default
 
@@ -316,6 +335,15 @@ class SecretsManager:
         for var_name in env_vars:
             value = os.getenv(var_name)
             if value:
+                # Skip placeholder values
+                if ("your_" in value.lower() or 
+                    "here" in value.lower() or 
+                    "placeholder" in value.lower() or
+                    value == "your_deepseek_api_key_here" or
+                    value == "your_handwriting_ocr_api_key_here"):
+                    logger.debug(f"Skipping placeholder value for {var_name}")
+                    continue
+                    
                 if self.set_secret(
                     var_name, value, "Imported from environment variable"
                 ):

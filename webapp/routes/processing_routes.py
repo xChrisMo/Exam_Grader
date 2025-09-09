@@ -143,6 +143,15 @@ def unified_processing():
 def api_process_single():
     """Process single submission with marking guide (legacy endpoint)."""
     try:
+        # Check CSRF token first
+        from flask_wtf.csrf import validate_csrf
+        try:
+            csrf_token = request.headers.get('X-CSRFToken') or request.form.get('csrf_token')
+            validate_csrf(csrf_token)
+        except Exception as csrf_error:
+            logger.warning(f"CSRF validation failed for processing API: {csrf_error}")
+            return jsonify({'success': False, 'error': 'Security validation failed'}), 400
+
         data = request.get_json()
 
         guide_id = data.get("guide_id")

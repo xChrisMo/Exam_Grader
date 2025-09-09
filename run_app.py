@@ -123,6 +123,23 @@ def main():
     try:
         print(UI_STARTUP_MESSAGE)
 
+        # Run startup checks
+        try:
+            print("🔍 Running startup checks...")
+            import subprocess
+            result = subprocess.run([sys.executable, 'startup_check.py'], 
+                                  capture_output=True, text=True, timeout=30)
+            if result.returncode == 0:
+                print("✅ Startup checks passed")
+            else:
+                print("⚠️  Startup checks completed with warnings")
+                if result.stdout:
+                    print("Startup check output:")
+                    print(result.stdout)
+        except Exception as e:
+            print(f"⚠️  Startup check failed: {e}")
+            print("Continuing with application startup...")
+
         # Set up signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, lambda sig, frame: shutdown_handler())
         signal.signal(signal.SIGTERM, lambda sig, frame: shutdown_handler())

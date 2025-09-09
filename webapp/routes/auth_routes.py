@@ -22,6 +22,15 @@ def login():
 
     if request.method == "POST":
         try:
+            # Check CSRF token first
+            from flask_wtf.csrf import validate_csrf
+            try:
+                validate_csrf(request.form.get('csrf_token'))
+            except Exception as csrf_error:
+                logger.warning(f"CSRF validation failed for login: {csrf_error}")
+                flash("Security validation failed. Please refresh the page and try again.", "error")
+                return render_template("auth/login.html")
+
             username = request.form.get("username", "").strip()
             password = request.form.get("password", "")
             remember = bool(request.form.get("remember"))
@@ -97,6 +106,25 @@ def signup():
 
     if request.method == "POST":
         try:
+            # Check CSRF token first
+            from flask_wtf.csrf import validate_csrf
+            try:
+                validate_csrf(request.form.get('csrf_token'))
+            except Exception as csrf_error:
+                logger.warning(f"CSRF validation failed for signup: {csrf_error}")
+                flash("Security validation failed. Please refresh the page and try again.", "error")
+                return render_template("auth/signup.html")
+
+            # Check database connectivity
+            try:
+                # Test database connection
+                from sqlalchemy import text
+                db.session.execute(text('SELECT 1'))
+            except Exception as db_error:
+                logger.error(f"Database connection failed during signup: {db_error}")
+                flash("Database connection error. Please try again later.", "error")
+                return render_template("auth/signup.html")
+
             username = request.form.get("username", "").strip()
             email = request.form.get("email", "").strip()
             password = request.form.get("password", "")
@@ -127,22 +155,44 @@ def signup():
                 flash("Email already registered", "error")
                 return render_template("auth/signup.html")
 
-            # Create new user
+            # Create new user with proper ID generation
+            import uuid
+            user_id = str(uuid.uuid4())
+            
             user = User(
-                id=f"user_{username}_{int(time.time())}", username=username, email=email
+                id=user_id,
+                username=username, 
+                email=email
             )
             user.set_password(password)
 
             db.session.add(user)
             db.session.commit()
 
+            logger.info(f"User registered successfully: {username} ({user_id})")
             flash("Registration successful! Please log in.", "success")
             return redirect(url_for("auth.login"))
 
         except Exception as e:
-            logger.error(f"Registration error: {e}")
-            db.session.rollback()
-            flash("Registration failed. Please try again.", "error")
+            logger.error(f"Registration error: {e}", exc_info=True)
+            try:
+                db.session.rollback()
+            except Exception as rollback_error:
+                logger.error(f"Database rollback failed: {rollback_error}")
+            
+            # Provide more specific error messages
+            if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e).lower():
+                if "username" in str(e).lower():
+                    flash("Username already exists. Please choose a different username.", "error")
+                elif "email" in str(e).lower():
+                    flash("Email already registered. Please use a different email address.", "error")
+                else:
+                    flash("Username or email already exists. Please try different values.", "error")
+            elif "database" in str(e).lower() or "connection" in str(e).lower():
+                flash("Database connection error. Please try again later.", "error")
+            else:
+                flash("Registration failed. Please try again.", "error")
+            
             return render_template("auth/signup.html")
 
     return render_template("auth/signup.html")
@@ -174,6 +224,15 @@ def change_password():
     """Change user password."""
     if request.method == "POST":
         try:
+            # Check CSRF token first
+            from flask_wtf.csrf import validate_csrf
+            try:
+                validate_csrf(request.form.get('csrf_token'))
+            except Exception as csrf_error:
+                logger.warning(f"CSRF validation failed for change password: {csrf_error}")
+                flash("Security validation failed. Please refresh the page and try again.", "error")
+                return render_template("auth/change_password.html")
+
             current_password = request.form.get("current_password", "")
             new_password = request.form.get("new_password", "")
             confirm_password = request.form.get("confirm_password", "")

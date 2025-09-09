@@ -402,6 +402,15 @@ def upload_guide():
     if request.method == "POST":
         # Handle file upload
         try:
+            # Check CSRF token first
+            from flask_wtf.csrf import validate_csrf
+            try:
+                validate_csrf(request.form.get('csrf_token'))
+            except Exception as csrf_error:
+                logger.warning(f"CSRF validation failed for upload guide: {csrf_error}")
+                flash("Security validation failed. Please refresh the page and try again.", "error")
+                return redirect(request.url)
+
             logger.info(f"Upload guide request from user: {current_user.id}")
 
             if "guide_file" not in request.files:
@@ -614,11 +623,21 @@ def upload_guide():
 def upload_submission():
     """Upload submission page and handler."""
     if request.method == "POST":
+        # Check CSRF token first (skip for AJAX requests that handle it differently)
         is_ajax = request.headers.get(
             "X-Requested-With"
         ) == "XMLHttpRequest" or request.headers.get("Content-Type", "").startswith(
             "multipart/form-data"
         )
+
+        if not is_ajax:
+            from flask_wtf.csrf import validate_csrf
+            try:
+                validate_csrf(request.form.get('csrf_token'))
+            except Exception as csrf_error:
+                logger.warning(f"CSRF validation failed for upload submission: {csrf_error}")
+                flash("Security validation failed. Please refresh the page and try again.", "error")
+                return redirect(request.url)
 
         # Handle file upload
         try:
@@ -2621,6 +2640,14 @@ def settings():
         if request.method == "POST":
             # Handle settings form submission
             try:
+                # Check CSRF token first
+                from flask_wtf.csrf import validate_csrf
+                try:
+                    validate_csrf(request.form.get('csrf_token'))
+                except Exception as csrf_error:
+                    logger.warning(f"CSRF validation failed for settings: {csrf_error}")
+                    flash("Security validation failed. Please refresh the page and try again.", "error")
+                    return redirect(request.url)
                 # Get or create user settings
                 user_settings = UserSettings.get_or_create_for_user(current_user.id)
 

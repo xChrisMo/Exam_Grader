@@ -106,6 +106,14 @@ def upload_files():
     and prepares them for training session creation.
     """
     try:
+        # Check CSRF token first
+        from flask_wtf.csrf import validate_csrf
+        try:
+            validate_csrf(request.form.get('csrf_token'))
+        except Exception as csrf_error:
+            logger.warning(f"CSRF validation failed for training upload: {csrf_error}")
+            return jsonify({'error': 'Security validation failed'}), 400
+
         if 'files' not in request.files:
             return jsonify({'error': 'No files provided'}), 400
 

@@ -445,6 +445,18 @@ class ConsolidatedLLMService(BaseService):
         self.api_key = (api_key or
                        os.getenv("LLM_API_KEY") or
                        os.getenv("DEEPSEEK_API_KEY"))
+        
+        # Debug logging for API key loading
+        logger.info(f"🔍 API Key Loading Debug:")
+        logger.info(f"   api_key parameter: {api_key[:10] + '...' if api_key else 'None'}")
+        logger.info(f"   LLM_API_KEY env: {os.getenv('LLM_API_KEY', 'Not set')[:10] + '...' if os.getenv('LLM_API_KEY') else 'Not set'}")
+        logger.info(f"   DEEPSEEK_API_KEY env: {os.getenv('DEEPSEEK_API_KEY', 'Not set')[:10] + '...' if os.getenv('DEEPSEEK_API_KEY') else 'Not set'}")
+        logger.info(f"   Final API key: {self.api_key[:10] + '...' if self.api_key else 'None'}")
+        
+        if self.api_key and ("your_" in self.api_key.lower() or "here" in self.api_key.lower()):
+            logger.error(f"❌ PLACEHOLDER API KEY DETECTED: {self.api_key}")
+            logger.error("❌ This means the environment variable is not set correctly on Render.com!")
+        
         self.base_url = base_url or os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1")
         self.model = (model or
                      os.getenv("LLM_MODEL_NAME") or
@@ -549,6 +561,8 @@ class ConsolidatedLLMService(BaseService):
             skip_test = (
                 os.getenv("SKIP_LLM_INIT_TEST", "False").lower() == "true"
                 or os.getenv("FAST_STARTUP", "False").lower() == "true"
+                or os.getenv("RENDER", "False").lower() == "true"  # Skip on Render.com
+                or os.getenv("DYNO", "False").lower() == "true"   # Skip on Heroku
             )
 
             if not skip_test:
@@ -579,12 +593,21 @@ class ConsolidatedLLMService(BaseService):
                         return False
 
                 except Exception as e:
-                    logger.warning(
-                        f"LLM connectivity test failed during initialization: {str(e)}"
-                    )
-                    # Still mark as available since client was created successfully
-                    self.status = ServiceStatus.DEGRADED
-                    return True
+                    error_msg = str(e)
+                    if "401" in error_msg or "authentication" in error_msg.lower():
+                        logger.error(
+                            f"LLM API authentication failed: {error_msg}. "
+                            f"Please check your DEEPSEEK_API_KEY environment variable."
+                        )
+                        self.status = ServiceStatus.UNHEALTHY
+                        return False
+                    else:
+                        logger.warning(
+                            f"LLM connectivity test failed during initialization: {error_msg}"
+                        )
+                        # Still mark as available since client was created successfully
+                        self.status = ServiceStatus.DEGRADED
+                        return True
             else:
                 # Skip test during fast startup
                 self.status = ServiceStatus.HEALTHY

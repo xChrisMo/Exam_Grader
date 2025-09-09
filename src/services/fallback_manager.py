@@ -66,23 +66,25 @@ class FallbackManager:
         """Set up default fallback methods for common operations."""
 
         # OCR processing fallbacks
+        # Note: HandwritingOCR API is handled directly in ConsolidatedOCRService
+        # These are true fallback methods when the API fails
         self.register_fallback(
             "ocr_processing",
             "tesseract_ocr",
             self._tesseract_fallback,
-            FallbackPriority.PRIMARY,
+            FallbackPriority.SECONDARY,  # Changed from PRIMARY to SECONDARY
         )
         self.register_fallback(
             "ocr_processing",
             "easyocr_fallback",
             self._easyocr_fallback,
-            FallbackPriority.SECONDARY,
+            FallbackPriority.TERTIARY,  # Changed from SECONDARY to TERTIARY
         )
         self.register_fallback(
             "ocr_processing",
             "basic_text_extraction",
             self._basic_text_extraction,
-            FallbackPriority.TERTIARY,
+            FallbackPriority.EMERGENCY,  # Changed from TERTIARY to EMERGENCY
         )
 
         # LLM processing fallbacks - REMOVED: Only LLM extraction should be used
