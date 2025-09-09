@@ -247,6 +247,11 @@ def _setup_error_handlers(app: Flask) -> None:
 def _init_security(app: Flask) -> None:
     """Initialize security components."""
     try:
+        # Clear any existing secrets cache to ensure fresh loading
+        from src.security.secrets_manager import secrets_manager
+        secrets_manager._secrets_cache.clear()
+        logger.info("Cleared secrets cache")
+        
         initialize_secrets()
         logger.info("Security components initialized")
     except Exception as e:
