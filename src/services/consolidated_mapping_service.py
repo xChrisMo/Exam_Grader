@@ -18,7 +18,7 @@ class ConsolidatedMappingService(BaseService):
         self,
         llm_service=None,
         batch_size: int = 10,
-        cache_size: int = 500,
+        cache_size: int = None,  # No cache size limit
         cache_ttl: int = 1800,  # 30 minutes
     ):
         """Initialize the consolidated mapping service.
@@ -116,14 +116,8 @@ class ConsolidatedMappingService(BaseService):
         return None
 
     def _cache_result(self, cache_key: str, result: Any) -> None:
-        """Cache result with size limit."""
-        if len(self._mapping_cache) >= self.cache_size:
-            oldest_key = min(
-                self._cache_timestamps.keys(), key=lambda k: self._cache_timestamps[k]
-            )
-            del self._mapping_cache[oldest_key]
-            del self._cache_timestamps[oldest_key]
-
+        """Cache result with no size limit."""
+        # No cache size limit - always cache
         self._mapping_cache[cache_key] = result
         self._cache_timestamps[cache_key] = time.time()
 
@@ -558,10 +552,10 @@ Rules:
 """
 
             user_prompt = f"""MARKING GUIDE (Questions):
-{self._intelligent_truncate(guide_clean, 1500)}
+{guide_clean}
 
 STUDENT SUBMISSION (Answers):
-{self._intelligent_truncate(submission_clean, 2000)}
+{submission_clean}
 
 Return JSON format:
 {{
@@ -613,10 +607,10 @@ Rules:
 """
 
             user_prompt = f"""MARKING GUIDE (Model Answers):
-{guide_clean[:1500]}
+{guide_clean}
 
 STUDENT SUBMISSION (Student Answers):
-{submission_clean[:2000]}
+{submission_clean}
 
 Return JSON format:
 {{
@@ -645,7 +639,7 @@ Return JSON format:
         return {
             "mapping_cache_size": len(self._mapping_cache),
             "guide_type_cache_size": len(self._guide_type_cache),
-            "max_cache_size": self.cache_size,
+            "max_cache_size": "unlimited" if self.cache_size is None else self.cache_size,
             "cache_ttl": self.cache_ttl,
             "cache_hits": self.metrics.custom_metrics.get("cache_hits", 0),
             "cache_misses": self.metrics.custom_metrics.get("cache_misses", 0),
@@ -690,7 +684,7 @@ Return ONLY the cleaned text without explanations."""
 
                 user_prompt = f"""Clean and normalize this exam content while preserving all structural and numerical information:
 
-{content[:3000]}"""
+{content}"""
 
                 cleaned_content = self.llm_service.generate_response(
                     system_prompt=system_prompt,
@@ -825,10 +819,10 @@ OUTPUT FORMAT:
 }"""
 
             user_prompt = f"""MARKING GUIDE (Questions):
-{self._intelligent_truncate(guide_content, 2000)}
+{guide_content}
 
 STUDENT SUBMISSION (Answers):
-{self._intelligent_truncate(submission_content, 2500)}
+{submission_content}
 
 Expected number of questions: {num_questions}
 
@@ -919,10 +913,10 @@ OUTPUT FORMAT:
 }"""
 
             user_prompt = f"""MARKING GUIDE (Model Answers):
-{self._intelligent_truncate(guide_content, 2000)}
+{guide_content}
 
 STUDENT SUBMISSION (Student Answers):
-{self._intelligent_truncate(submission_content, 2500)}
+{submission_content}
 
 Expected number of answers: {num_questions}
 
