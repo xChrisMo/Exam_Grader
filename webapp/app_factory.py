@@ -285,9 +285,31 @@ def _cleanup_monitoring_services():
 
 def create_database_tables(app: Flask) -> None:
     """Create database tables if they don't exist."""
-    # Skip database initialization for faster startup
-    # Tables will be created on first database access
-    logger.info("Database initialization skipped for faster startup")
+    try:
+        with app.app_context():
+            # Create all tables
+            db.create_all()
+            logger.info("Database tables created successfully")
+            
+            # Initialize database optimizations for SQLite
+            database_url = app.config.get('DATABASE_URL', 'sqlite:///exam_grader.db')
+            if database_url.startswith('sqlite:///'):
+                from src.database.sqlite_optimizations import initialize_sqlite_optimizations
+                if initialize_sqlite_optimizations(database_url):
+                    logger.info("SQLite optimizations applied")
+                else:
+                    logger.warning("Failed to apply SQLite optimizations")
+            
+            # Create default admin user if needed
+            from src.database.utils import DatabaseUtils
+            if DatabaseUtils.create_default_user():
+                logger.info("Default admin user created or already exists")
+            else:
+                logger.warning("Failed to create default admin user")
+                
+    except Exception as e:
+        logger.error(f"Failed to create database tables: {e}", exc_info=True)
+        # Don't raise the exception - let the app start and handle DB errors gracefully
 
 def _init_timeout_middleware(app: Flask) -> None:
     """Initialize timeout middleware for AI operations."""

@@ -37,6 +37,16 @@ LLM_API_KEY=your_actual_deepseek_api_key_here
 - Improved error handling for CSRF validation failures
 - Enhanced CSRF token generation and validation
 
+### 4. Registration Failed Error
+**Problem**: `Registration failed. Please try again.` on Render.com
+
+**Solution**:
+- Fixed database table creation - tables are now properly created on startup
+- Improved user ID generation using UUID instead of timestamp-based IDs
+- Added database connectivity checks during registration
+- Enhanced error handling with specific error messages for different failure types
+- Added database initialization script for deployment platforms
+
 ## Environment Variables for Render.com
 
 Set these environment variables in your Render.com dashboard:
@@ -97,6 +107,13 @@ The application will now gracefully handle missing optional dependencies:
 1. Clear browser cache and cookies
 2. Check that the SECRET_KEY is properly set
 3. Verify the application is using HTTPS (required for secure cookies)
+
+### If registration still fails:
+1. Check the Render.com logs for database connection errors
+2. Verify that the `DATABASE_URL` environment variable is set correctly
+3. Ensure the database tables are created (check the release phase logs)
+4. Try running the database initialization script manually: `python init_db.py`
+5. Check for specific error messages in the registration form
 
 ### If file processing fails:
 1. Check the logs for specific error messages
