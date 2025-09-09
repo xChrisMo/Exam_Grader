@@ -7,9 +7,9 @@ database, external APIs, file system, and internal services.
 
 import os
 import time
-from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
+from dataclasses import asdict, dataclass
 from typing import Any, Dict
 
 import psutil
@@ -23,7 +23,6 @@ except ImportError:
 
     logger = logging.getLogger(__name__)
 
-
 @dataclass
 class HealthStatus:
     """Health status for a component."""
@@ -34,7 +33,6 @@ class HealthStatus:
     details: Dict[str, Any]
     response_time_ms: float
     last_checked: str
-
 
 class HealthChecker:
     """
@@ -369,20 +367,19 @@ class HealthChecker:
     def _get_cached_results(self) -> Dict[str, Any]:
         """Get cached health check results."""
         current_time = time.time()
-        
+
         # Check if cached results are still valid
-        if (hasattr(self, '_cached_results') and 
+        if (hasattr(self, '_cached_results') and
             hasattr(self, '_cache_timestamp') and
             (current_time - self._cache_timestamp) < self.cache_duration):
             return self._cached_results
-        
+
         return None
 
     def _cache_results(self, results: Dict[str, Any]):
         """Cache health check results."""
         self._cached_results = results
         self._cache_timestamp = time.time()
-
 
 # Global health checker instance
 health_checker = HealthChecker()

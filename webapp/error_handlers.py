@@ -8,7 +8,6 @@ from flask import jsonify, render_template, request
 
 from utils.logger import logger
 
-
 def handle_400(error):
     """Handle 400 Bad Request errors."""
     logger.warning(f"400 error: {error} - URL: {request.url}")
@@ -44,7 +43,6 @@ def handle_400(error):
     }
 
     return render_template("error.html", **context), 400
-
 
 def handle_403(error):
     """Handle 403 Forbidden errors."""
@@ -82,7 +80,6 @@ def handle_403(error):
 
     return render_template("error.html", **context), 403
 
-
 def handle_404(error):
     """Handle 404 Not Found errors."""
     logger.info(f"404 error: {error} - URL: {request.url}")
@@ -118,7 +115,6 @@ def handle_404(error):
     }
 
     return render_template("error.html", **context), 404
-
 
 def handle_413(error):
     """Handle 413 Request Entity Too Large errors."""
@@ -156,7 +152,6 @@ def handle_413(error):
 
     return render_template("error.html", **context), 413
 
-
 def handle_500(error):
     """Handle 500 Internal Server Error."""
     logger.error(f"500 error: {error} - URL: {request.url}")
@@ -192,7 +187,6 @@ def handle_500(error):
     }
 
     return render_template("error.html", **context), 500
-
 
 def handle_csrf_error(error):
     """Handle CSRF token errors."""

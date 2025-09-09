@@ -5,10 +5,10 @@ sandboxed processing, and malware detection capabilities.
 """
 
 import os
-import tempfile
-from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import tempfile
+from contextlib import contextmanager
 from typing import Any, BinaryIO, Dict, List, Optional, Tuple
 
 try:
@@ -30,7 +30,6 @@ except ImportError:
 
     def validate_file_upload(file_obj, filename):
         return True, None, {}
-
 
 class SecureFileStorage:
     """Secure file storage with isolation and cleanup."""
@@ -144,7 +143,6 @@ class SecureFileStorage:
             metadata = {}
             if metadata_path.exists():
                 with open(metadata_path, "r") as f:
-                    import json
 
                     metadata = json.load(f)
 
@@ -207,7 +205,6 @@ class SecureFileStorage:
         hash_prefix = file_hash[:16] if file_hash else "unknown"
 
         return f"{timestamp}_{hash_prefix}{extension}"
-
 
 class MalwareScanner:
     """Basic malware detection for uploaded files."""
@@ -324,7 +321,6 @@ class MalwareScanner:
                 entropy -= probability * (probability.bit_length() - 1)
 
         return entropy
-
 
 class SecureFileService:
     """Main secure file service."""
@@ -499,10 +495,8 @@ class SecureFileService:
             )
             return False
 
-
 # Global secure file service instance
 secure_file_service = None
-
 
 def init_secure_file_service(
     storage_path: str, enable_malware_scan: bool = True
@@ -519,7 +513,6 @@ def init_secure_file_service(
     global secure_file_service
     secure_file_service = SecureFileService(storage_path, enable_malware_scan)
     return secure_file_service
-
 
 def get_secure_file_service() -> Optional[SecureFileService]:
     """Get global secure file service instance.

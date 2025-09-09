@@ -5,17 +5,16 @@ This module provides proper service shutdown and resource release management,
 ensuring all services are gracefully terminated and resources are properly cleaned up.
 """
 
+import time
+from datetime import datetime
 import atexit
 import signal
 import threading
-import time
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
 from utils.logger import logger
-
 
 class ShutdownPhase(Enum):
     """Phases of shutdown process"""
@@ -27,7 +26,6 @@ class ShutdownPhase(Enum):
     COMPLETED = "completed"
     FAILED = "failed"
 
-
 class ServicePriority(Enum):
     """Priority levels for service shutdown order"""
 
@@ -36,7 +34,6 @@ class ServicePriority(Enum):
     MEDIUM = 3  # Shutdown third (e.g., caching services)
     LOW = 4  # Shutdown fourth (e.g., logging services)
     CLEANUP = 5  # Shutdown last (e.g., cleanup services)
-
 
 @dataclass
 class ServiceInfo:
@@ -50,7 +47,6 @@ class ServiceInfo:
     shutdown_time: Optional[float] = None
     shutdown_success: Optional[bool] = None
     shutdown_error: Optional[str] = None
-
 
 @dataclass
 class ShutdownResult:
@@ -75,7 +71,6 @@ class ShutdownResult:
             "errors": self.errors,
             "timestamp": self.timestamp.isoformat(),
         }
-
 
 class ServiceShutdownManager:
     """Manages graceful shutdown of services and resource cleanup"""
@@ -375,10 +370,8 @@ class ServiceShutdownManager:
                 "service_status": self.get_service_status(),
             }
 
-
 # Global instance
 service_shutdown_manager = ServiceShutdownManager()
-
 
 # Convenience functions
 def register_service_for_shutdown(
@@ -393,16 +386,13 @@ def register_service_for_shutdown(
         name, shutdown_callback, priority, timeout, dependencies
     )
 
-
 def register_shutdown_hook(hook: Callable[[], None]):
     """Register a shutdown hook"""
     service_shutdown_manager.register_shutdown_hook(hook)
 
-
 def register_cleanup_callback(callback: Callable[[], Dict[str, Any]]):
     """Register a cleanup callback"""
     service_shutdown_manager.register_cleanup_callback(callback)
-
 
 def shutdown_services(timeout: float = 60.0) -> ShutdownResult:
     """Initiate graceful shutdown"""

@@ -6,11 +6,11 @@ with configurable collection intervals and intelligent data aggregation.
 """
 
 import json
-import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+import threading
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
@@ -24,7 +24,6 @@ from src.services.monitoring.monitoring_service import (
 )
 from utils.logger import logger
 
-
 class MetricType(Enum):
     """Types of metrics"""
 
@@ -32,7 +31,6 @@ class MetricType(Enum):
     GAUGE = "gauge"
     HISTOGRAM = "histogram"
     TIMER = "timer"
-
 
 @dataclass
 class MetricPoint:
@@ -49,7 +47,6 @@ class MetricPoint:
             "value": self.value,
             "labels": self.labels,
         }
-
 
 @dataclass
 class MetricSeries:
@@ -110,7 +107,6 @@ class MetricSeries:
             return "decreasing"
         else:
             return "stable"
-
 
 class RealtimeMetricsCollector:
     """
@@ -548,7 +544,6 @@ class RealtimeMetricsCollector:
             return json.dumps(self.get_all_metrics(), indent=2)
         else:
             raise ValueError(f"Unsupported export format: {format}")
-
 
 # Global instance
 realtime_metrics_collector = RealtimeMetricsCollector()

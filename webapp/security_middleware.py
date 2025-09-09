@@ -1,7 +1,6 @@
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-
 def add_security_headers(app: Flask):
     """Add security headers to all responses"""
 

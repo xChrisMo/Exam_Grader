@@ -4,10 +4,10 @@ This module provides comprehensive user authentication, role-based access contro
 and session security management.
 """
 
+from datetime import datetime, timedelta, timezone
 import hashlib
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 from enum import Enum
 from functools import wraps
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -32,7 +32,6 @@ except ImportError:
     class AuthorizationError(Exception):
         pass
 
-
 try:
     from flask import g, request, session
 except ImportError:
@@ -43,7 +42,6 @@ except ImportError:
     request = None
     session = {}
     g = type("obj", (object,), {})()
-
 
 class UserRole(Enum):
     """User roles with hierarchical permissions."""
@@ -67,7 +65,6 @@ class UserRole(Enum):
         """Check if this role has required permission level."""
         hierarchy = self.get_hierarchy()
         return hierarchy.get(self.value, 0) >= hierarchy.get(required_role.value, 0)
-
 
 class Permission(Enum):
     """System permissions."""
@@ -94,7 +91,6 @@ class Permission(Enum):
     VIEW_LOGS = "view_logs"
     SYSTEM_CONFIG = "system_config"
     BACKUP_RESTORE = "backup_restore"
-
 
 @dataclass
 class UserSession:
@@ -130,7 +126,6 @@ class UserSession:
     def update_activity(self):
         """Update last activity timestamp."""
         self.last_activity = datetime.now(timezone.utc)
-
 
 class PasswordPolicy:
     """Password policy enforcement."""
@@ -204,7 +199,6 @@ class PasswordPolicy:
         }
         return password.lower() in common_passwords
 
-
 class PasswordHasher:
     """Secure password hashing using PBKDF2."""
 
@@ -268,7 +262,6 @@ class PasswordHasher:
             logger.error(f"Error verifying password: {str(e)}")
             return False
 
-
 class RolePermissionManager:
     """Manage role-based permissions."""
 
@@ -330,7 +323,6 @@ class RolePermissionManager:
         """
         role_permissions = cls.get_role_permissions(role)
         return permission in role_permissions
-
 
 class AuthenticationManager:
     """Manage user authentication and sessions."""
@@ -599,7 +591,6 @@ class AuthenticationManager:
         if username in self.failed_attempts:
             del self.failed_attempts[username]
 
-
 def require_auth(f):
     """Decorator to require authentication."""
 
@@ -624,7 +615,6 @@ def require_auth(f):
 
     return decorated_function
 
-
 def require_permission(permission: Permission):
     """Decorator to require specific permission."""
 
@@ -642,7 +632,6 @@ def require_permission(permission: Permission):
         return decorated_function
 
     return decorator
-
 
 def require_role(role: UserRole):
     """Decorator to require specific role or higher."""
@@ -662,10 +651,8 @@ def require_role(role: UserRole):
 
     return decorator
 
-
 # Global authentication manager instance
 auth_manager = None
-
 
 def init_auth_manager(
     session_timeout: int = 30, max_failed_attempts: int = 5, lockout_duration: int = 15
@@ -685,7 +672,6 @@ def init_auth_manager(
         session_timeout, max_failed_attempts, lockout_duration
     )
     return auth_manager
-
 
 def get_auth_manager() -> Optional[AuthenticationManager]:
     """Get global authentication manager instance.

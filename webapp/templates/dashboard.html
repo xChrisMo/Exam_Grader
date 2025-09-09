@@ -35,10 +35,10 @@
   <!-- Dashboard Statistics Cards -->
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
   <!-- Guide Status Card -->
-  <div class="bg-white overflow-hidden shadow rounded-lg" role="region" aria-labelledby="guide-status-heading">
+  <div class="bg-white overflow-hidden shadow rounded-lg transform transition duration-300 hover:scale-105 hover:shadow-xl" role="region" aria-labelledby="guide-status-heading">
     <div class="p-5 text-center">
       <div
-        class="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mx-auto mb-3"
+        class="w-14 h-14 bg-primary-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md"
       >
         <svg
           class="w-6 h-6 text-white"
@@ -66,7 +66,7 @@
         </dd>
       </dl>
     </div>
-    <div class="bg-gray-50 px-5 py-3 text-center">
+    <div class="bg-gray-100 px-5 py-3 text-center">
       <div class="text-sm">
         {% if guide_uploaded %}
         <span class="text-success-600 font-medium" data-i18n="ready_to_grade">Ready to grade</span>
@@ -82,10 +82,10 @@
   </div>
 
   <!-- Submissions Card -->
-  <div class="bg-white overflow-hidden shadow rounded-lg">
+  <div class="bg-white overflow-hidden shadow rounded-lg transform transition duration-300 hover:scale-105 hover:shadow-xl">
     <div class="p-5 text-center">
       <div
-        class="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mx-auto mb-3"
+        class="w-14 h-14 bg-primary-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md"
       >
         <svg
           class="w-6 h-6 text-white"
@@ -109,7 +109,7 @@
         </dd>
       </dl>
     </div>
-    <div class="bg-gray-50 px-5 py-3 text-center">
+    <div class="bg-gray-100 px-5 py-3 text-center">
       <div class="text-sm">
         <span class="text-gray-600 font-medium" id="processed-submissions-dashboard-count"
           >{{ processed_submissions }} <span data-i18n="processed">processed</span></span
@@ -119,10 +119,10 @@
   </div>
 
   <!-- Last Score Card -->
-  <div class="bg-white overflow-hidden shadow rounded-lg">
+  <div class="bg-white overflow-hidden shadow rounded-lg transform transition duration-300 hover:scale-105 hover:shadow-xl">
     <div class="p-5 text-center">
       <div
-        class="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mx-auto mb-3"
+        class="w-14 h-14 bg-primary-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md"
       >
         <svg
           class="w-6 h-6 text-white"
@@ -145,7 +145,7 @@
         </dd>
       </dl>
     </div>
-    <div class="bg-gray-50 px-5 py-3 text-center">
+    <div class="bg-gray-100 px-5 py-3 text-center">
       <div class="text-sm">
         <span class="text-gray-600 font-medium" id="last-score-status">
           {% if last_score and last_score > 0 %}
@@ -159,10 +159,10 @@
   </div>
 
   <!-- System Status Card -->
-  <div class="bg-white overflow-hidden shadow rounded-lg">
+  <div class="bg-white overflow-hidden shadow rounded-lg transform transition duration-300 hover:scale-105 hover:shadow-xl">
     <div class="p-5 text-center">
       <div
-        class="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mx-auto mb-3"
+        class="w-14 h-14 bg-primary-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md"
       >
         <svg
           class="w-6 h-6 text-white"
@@ -189,7 +189,7 @@
         </dd>
       </dl>
     </div>
-    <div class="bg-gray-50 px-5 py-3 text-center">
+    <div class="bg-gray-100 px-5 py-3 text-center">
       <div class="text-sm">
         {% if service_status.ocr_status and service_status.llm_status %}
         <span class="text-success-600 font-medium" data-i18n="all_services_ready">All services ready</span>
@@ -204,7 +204,7 @@
 <!-- Main Action Cards -->
 <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
   <!-- Upload Marking Guide Card -->
-  <div class="bg-white overflow-hidden shadow rounded-lg">
+  <div class="bg-white overflow-hidden shadow rounded-lg transform transition duration-300 hover:scale-105 hover:shadow-xl">
     <div class="px-4 py-5 sm:p-6">
       <div class="flex items-center">
         <div class="flex-shrink-0">

@@ -7,13 +7,12 @@ ensuring all required files, directories, and resources are available.
 
 import json
 import os
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from utils.logger import logger
-
 
 @dataclass
 class ValidationResult:
@@ -26,7 +25,6 @@ class ValidationResult:
     created: bool = False
     path: Optional[str] = None
 
-
 @dataclass
 class ResourceRequirement:
     """Definition of a required resource."""
@@ -38,7 +36,6 @@ class ResourceRequirement:
     description: str = ""
     default_content: Optional[str] = None
     permissions: Optional[str] = None
-
 
 class ResourceValidator:
     """
@@ -683,7 +680,6 @@ ERRORS:
             "logging": {"level": "INFO", "max_file_size": "10MB", "backup_count": 5},
         }
         return json.dumps(config, indent=2)
-
 
 # Global instance
 resource_validator = ResourceValidator()

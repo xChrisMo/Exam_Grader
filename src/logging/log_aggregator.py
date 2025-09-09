@@ -6,13 +6,12 @@ for the comprehensive logging system.
 
 import json
 import re
-import statistics
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import statistics
+from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any, Dict, List, Optional, Union
-
 
 @dataclass
 class LogMetrics:
@@ -95,7 +94,6 @@ class LogMetrics:
                 "suspicious_activities": self.suspicious_activities,
             },
         }
-
 
 class LogAggregator:
     """Log aggregation and metrics collection system."""
@@ -393,7 +391,6 @@ class LogAggregator:
         """Clear metrics cache."""
         with self._cache_lock:
             self.metrics_cache.clear()
-
 
 class LogAnalytics:
     """Advanced log analytics and insights."""

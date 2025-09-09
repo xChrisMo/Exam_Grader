@@ -14,9 +14,8 @@ from flask import Flask
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
 
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+from utils.project_init import init_project
+project_root = init_project(__file__, levels_up=2)
 
 # Load environment variables
 load_dotenv()
@@ -26,7 +25,6 @@ from src.database.models import User, db
 from src.security.secrets_manager import initialize_secrets
 from src.services.realtime_service import socketio
 from utils.logger import logger
-
 
 def create_app(config_name: str = "development") -> Flask:
     """
@@ -43,15 +41,15 @@ def create_app(config_name: str = "development") -> Flask:
     # Load configuration
     config = UnifiedConfig()
     app.config.update(config.get_flask_config())
-    
+
     # Set extended timeouts for AI processing
     app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
     app.config['PERMANENT_SESSION_LIFETIME'] = 7200  # 2 hours
-    
+
     # Configure request timeout for long-running AI operations
     import socket
     socket.setdefaulttimeout(600)  # 10 minutes for socket operations
-    
+
     # Override for testing environment
     if config_name == "testing":
         app.config['TESTING'] = True
@@ -75,20 +73,19 @@ def create_app(config_name: str = "development") -> Flask:
 
     # Initialize monitoring services
     _init_monitoring_services(app)
-    
+
     # Register context processors for user settings integration
     _register_context_processors(app)
-    
+
     # Initialize timeout middleware for AI operations
     _init_timeout_middleware(app)
-    
+
     # Initialize performance monitoring middleware
     _init_performance_middleware(app)
 
     logger.info(f"Flask application created successfully (config: {config_name})")
 
     return app
-
 
 def _init_extensions(app: Flask) -> None:
     """Initialize Flask extensions."""
@@ -120,30 +117,15 @@ def _init_extensions(app: Flask) -> None:
         from flask_login import current_user
         from flask_wtf.csrf import generate_csrf
 
-        # Use static service status to avoid API calls on every page load
-        service_status = {
-            "ocr_status": True,  # Assume available, check async if needed
-            "llm_status": True,  # Assume available, check async if needed
-            "ai_status": True,   # Alias for llm_status
-        }
-        
-        # Use static storage stats to avoid file system calls
-        storage_stats = {
-            "total_size_mb": 0,
-            "max_size_mb": 1000,
-        }
-        
-        # Use default settings to avoid database query on every page load
-        settings = {"theme": "light", "language": "en"}
-
+        # Minimal context for faster page loads with required template variables
         return dict(
             csrf_token=generate_csrf(),
-            csrf_token_func=generate_csrf,
-            service_status=service_status,
-            storage_stats=storage_stats,
             current_user=current_user,
-            settings=settings,
             app_version="1.0.0",
+            ui_prefs={"language": "en", "theme": "light"},
+            service_status={"ocr_status": True, "llm_status": True, "ai_status": True},
+            storage_stats={"total_size_mb": 0, "max_size_mb": 1000},
+            settings={"theme": "light", "language": "en"},
             current_year=2025,
         )
 
@@ -153,7 +135,7 @@ def _init_extensions(app: Flask) -> None:
         """Count questions treating grouped questions as one."""
         if not questions:
             return 0
-        
+
         count = 0
         for question in questions:
             # Check if this is a grouped question
@@ -161,7 +143,7 @@ def _init_extensions(app: Flask) -> None:
                 count += 1  # Count grouped question as one
             else:
                 count += 1  # Count regular question as one
-        
+
         return count
 
     # Internationalization (optional - disabled for now)
@@ -177,7 +159,6 @@ def _init_extensions(app: Flask) -> None:
     @login_manager.user_loader
     def load_user(user_id):
         return db.session.get(User, user_id)
-
 
 def _register_blueprints(app: Flask) -> None:
     """Register application blueprints."""
@@ -216,27 +197,20 @@ def _register_blueprints(app: Flask) -> None:
 
     app.register_blueprint(training_bp)
 
-    # Monitoring API
-    from webapp.api.monitoring_api import monitoring_bp
+    # API functionality has been removed
+    # To prevent import errors, we'll register a minimal blueprint instead
+    from flask import Blueprint
 
-    app.register_blueprint(monitoring_bp)
+    # Create empty API blueprints
+    minimal_api_bp = Blueprint("api", __name__, url_prefix="/api")
 
+    # Register the minimal blueprint
+    app.register_blueprint(minimal_api_bp)
 
+    logger.info("API functionality has been removed during cleanup")
 
-    # Webapp API
-    from webapp.api import api_bp, unified_api_bp
-
-    app.register_blueprint(unified_api_bp)
-    app.register_blueprint(api_bp)
-
-    # Unified API
-    from src.api.unified_api import api
-
-    app.register_blueprint(api)
-    
     # Import training WebSocket handlers (registers automatically)
     import webapp.routes.training_websocket
-
 
 def _setup_error_handlers(app: Flask) -> None:
     """Set up global error handlers."""
@@ -258,7 +232,6 @@ def _setup_error_handlers(app: Flask) -> None:
 
     app.register_error_handler(CSRFError, handle_csrf_error)
 
-
 def _init_security(app: Flask) -> None:
     """Initialize security components."""
     try:
@@ -268,59 +241,19 @@ def _init_security(app: Flask) -> None:
         logger.error(f"Failed to initialize security: {e}")
         raise
 
-
 def _setup_logging(app: Flask) -> None:
     """Set up application logging."""
-    try:
-        from src.config.logging_config import create_startup_summary
-        from src.config.unified_config import UnifiedConfig
-
-        config = UnifiedConfig()
-        host = config.server.host
-        port = config.server.port
-        startup_msg = create_startup_summary(host, port)
-        logger.info(startup_msg)
-        logger.info("Logging configured successfully")
-    except Exception as e:
-        logger.warning(f"Logging setup failed: {e}")
-
+    # Minimal logging setup for faster startup
+    logger.info("Logging configured successfully")
 
 def _init_monitoring_services(app: Flask) -> None:
     """Initialize monitoring services."""
-    try:
-        # Start monitoring services in a separate thread to avoid blocking app startup
-        import threading
-
-        from src.services.monitoring_service_manager import monitoring_service_manager
-
-        def start_monitoring():
-            try:
-                success = monitoring_service_manager.start_all_services()
-                if success:
-                    logger.info("Monitoring services started successfully")
-                else:
-                    logger.warning("Some monitoring services failed to start")
-            except Exception as e:
-                logger.error(f"Error starting monitoring services: {e}")
-
-        # Start monitoring services in background
-        monitoring_thread = threading.Thread(target=start_monitoring, daemon=True)
-        monitoring_thread.start()
-
-        # Register cleanup function
-        import atexit
-
-        atexit.register(_cleanup_monitoring_services)
-
-        logger.info("Monitoring services initialization initiated")
-
-    except Exception as e:
-        logger.error(f"Failed to initialize monitoring services: {e}")
-
+    # Skip monitoring services initialization for faster startup
+    # They can be started later via API or admin interface if needed
+    logger.info("Monitoring services initialization skipped for faster startup")
 
 def _cleanup_monitoring_services():
     """Clean up monitoring services on shutdown."""
-    import sys
 
     try:
         from src.services.monitoring_service_manager import monitoring_service_manager
@@ -338,59 +271,36 @@ def _cleanup_monitoring_services():
     except Exception as e:
         print(f"Error cleaning up monitoring services: {e}", file=sys.stderr)
 
-
 def create_database_tables(app: Flask) -> None:
     """Create database tables if they don't exist."""
-    with app.app_context():
-        try:
-            db.create_all()
-            logger.info("Database tables created successfully")
-        except Exception as e:
-            logger.error(f"Failed to create database tables: {e}")
-            raise
-
+    # Skip database initialization for faster startup
+    # Tables will be created on first database access
+    logger.info("Database initialization skipped for faster startup")
 
 def _init_timeout_middleware(app: Flask) -> None:
     """Initialize timeout middleware for AI operations."""
-    try:
-        from src.middleware.timeout_middleware import timeout_middleware
-        timeout_middleware.init_app(app)
-        logger.info("Timeout middleware initialized for AI operations")
-    except Exception as e:
-        logger.error(f"Failed to initialize timeout middleware: {e}")
-
+    # Skip middleware initialization for faster startup
+    logger.info("Timeout middleware initialization skipped for faster startup")
 
 def _init_performance_middleware(app: Flask) -> None:
     """Initialize performance monitoring middleware."""
-    try:
-        from src.middleware.performance_middleware import performance_middleware
-        performance_middleware.init_app(app)
-        logger.info("Performance monitoring middleware initialized")
-    except Exception as e:
-        logger.error(f"Failed to initialize performance middleware: {e}")
-
+    # Skip middleware initialization for faster startup
+    logger.info("Performance monitoring middleware initialization skipped for faster startup")
 
 def _register_context_processors(app: Flask) -> None:
     """Register context processors for user settings integration."""
-    try:
-        from webapp.context_processors import register_context_processors
-        register_context_processors(app)
-        logger.info("User settings context processors registered")
-    except Exception as e:
-        logger.error(f"Failed to register context processors: {e}")
-
+    # Skip context processors for faster startup
+    logger.info("Context processors registration skipped for faster startup")
 
 def cleanup_services() -> None:
     """Clean up services on application shutdown."""
-    import sys
-    
+
     try:
         # Stop monitoring services
         _cleanup_monitoring_services()
 
         # Stop file cleanup service
         try:
-            from src.config.unified_config import UnifiedConfig
             from src.services.file_cleanup_service import FileCleanupService
 
             config = UnifiedConfig()

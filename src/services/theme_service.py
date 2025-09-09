@@ -13,10 +13,9 @@ from flask_login import current_user
 from src.database.models import UserSettings
 from utils.logger import logger
 
-
 class ThemeService:
     """Service for handling UI themes based on user settings."""
-    
+
     def __init__(self):
         self.available_themes = {
             'light': {
@@ -41,7 +40,7 @@ class ThemeService:
                 'text_color': 'var(--text-color)'
             }
         }
-    
+
     def get_user_theme(self) -> str:
         """Get current user's theme setting."""
         try:
@@ -53,19 +52,19 @@ class ThemeService:
         except Exception as e:
             logger.warning(f"Failed to get user theme: {e}")
             return 'light'
-    
+
     def get_theme_config(self, theme_name: str = None) -> Dict[str, Any]:
         """Get theme configuration."""
         if theme_name is None:
             theme_name = self.get_user_theme()
-        
+
         return self.available_themes.get(theme_name, self.available_themes['light'])
-    
+
     def get_body_classes(self) -> str:
         """Get CSS classes for the body element."""
         theme_config = self.get_theme_config()
         return theme_config.get('css_classes', '')
-    
+
     def get_theme_variables(self) -> Dict[str, str]:
         """Get CSS variables for the current theme."""
         theme_config = self.get_theme_config()
@@ -74,14 +73,13 @@ class ThemeService:
             '--bg-color': theme_config.get('background_color', '#ffffff'),
             '--text-color': theme_config.get('text_color', '#1f2937')
         }
-    
+
     def get_available_themes(self) -> List[Dict[str, str]]:
         """Get list of available themes for settings dropdown."""
         return [
             {'value': key, 'label': config['name']}
             for key, config in self.available_themes.items()
         ]
-
 
 # Global instance
 theme_service = ThemeService()

@@ -1,12 +1,11 @@
 """Configuration utilities for the Exam Grader application."""
 
 import os
-import shutil
 from pathlib import Path
+import shutil
 from typing import Dict, List, Tuple
 
 from .unified_config import UnifiedConfig
-
 
 class ConfigurationUtils:
     """Utility functions for configuration management."""
@@ -251,7 +250,6 @@ class ConfigurationUtils:
             health["overall_status"] = "warning"
 
         return health
-
 
 class ConfigurationMigrationTool:
     """Tool for migrating configuration between versions."""

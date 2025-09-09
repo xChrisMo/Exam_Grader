@@ -5,10 +5,10 @@ with different verbosity levels for development and production.
 Now integrates with the comprehensive logging system.
 """
 
-import logging
 import os
 import sys
 from pathlib import Path
+import logging
 from typing import Dict, Optional
 
 # Import comprehensive logging system
@@ -27,7 +27,6 @@ except ImportError:
     get_comprehensive_logger = None
     get_json_logger = None
     LoggingConfiguration = None
-
 
 class LoggingConfig:
     """
@@ -192,10 +191,8 @@ Press Ctrl+C to stop the server
             "database_echo": os.getenv("DATABASE_ECHO", "False").lower() == "true",
         }
 
-
 # Global logging configuration instance
 _logging_config = None
-
 
 def setup_application_logging(
     log_level: str = None,
@@ -247,7 +244,6 @@ def setup_application_logging(
 
             return comprehensive_config
         except Exception as e:
-            import logging
 
             logging.warning(
                 f"Comprehensive logging failed, falling back to traditional: {e}"
@@ -259,7 +255,6 @@ def setup_application_logging(
     _logging_config.configure_third_party_loggers(quiet_third_party)
 
     return _logging_config
-
 
 def get_logger(name: str, use_comprehensive: bool = True) -> logging.Logger:
     """Get a logger for the specified component.
@@ -288,7 +283,6 @@ def get_logger(name: str, use_comprehensive: bool = True) -> logging.Logger:
 
     return _logging_config.get_logger(name)
 
-
 def log_startup_summary(
     host: str = "127.0.0.1", port: int = 5000, debug: bool = True
 ) -> None:
@@ -316,7 +310,6 @@ Press Ctrl+C to stop the server
 
     logger.info(summary)
 
-
 def _configure_third_party_loggers_quiet():
     """Configure third-party loggers to reduce noise."""
     # Reduce SQLAlchemy verbosity
@@ -336,7 +329,6 @@ def _configure_third_party_loggers_quiet():
     logging.getLogger("PIL").setLevel(logging.WARNING)
     logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
-
 def get_structured_logger(name: str):
     """Get a structured JSON logger if available.
 
@@ -352,7 +344,6 @@ def get_structured_logger(name: str):
         except Exception:
             pass
     return None
-
 
 def create_startup_summary(
     host: str = "127.0.0.1", port: int = 5000, debug: bool = True

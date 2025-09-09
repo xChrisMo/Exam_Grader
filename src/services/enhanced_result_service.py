@@ -7,12 +7,11 @@ analytics, formatting, and metadata for improved user experience.
 """
 
 import json
-import statistics
 from datetime import datetime
+import statistics
 from typing import Any, Dict, List, Optional
 
 from utils.logger import logger
-
 
 class EnhancedResultService:
     """Service for enhancing and formatting grading results for detailed display."""
@@ -138,14 +137,14 @@ class EnhancedResultService:
             # Ensure required fields with safe type conversion
             enhanced_grade["question_number"] = i + 1
             enhanced_grade["question_id"] = grade.get("question_id", f"Q{i + 1}")
-            
+
             # Safe conversion of score and max_score
             try:
                 score = grade.get("score", 0)
                 enhanced_grade["score"] = float(score) if score is not None else 0.0
             except (TypeError, ValueError):
                 enhanced_grade["score"] = 0.0
-                
+
             try:
                 max_score = grade.get("max_score")
                 if max_score is None:
@@ -154,7 +153,7 @@ class EnhancedResultService:
                 enhanced_grade["max_score"] = float(max_score)
             except (TypeError, ValueError):
                 enhanced_grade["max_score"] = 0.0  # Use 0 to indicate missing score
-                
+
             enhanced_grade["feedback"] = grade.get("feedback", "No feedback provided")
 
             # Calculate percentage for this question
@@ -213,14 +212,14 @@ class EnhancedResultService:
         # Safe conversion of scores and max_scores
         scores = []
         max_scores = []
-        
+
         for grade in detailed_grades:
             try:
                 score = grade.get("score", 0)
                 scores.append(float(score) if score is not None else 0.0)
             except (TypeError, ValueError):
                 scores.append(0.0)
-                
+
             try:
                 max_score = grade.get("max_score")
                 if max_score is None:
@@ -229,7 +228,7 @@ class EnhancedResultService:
                 max_scores.append(float(max_score))
             except (TypeError, ValueError):
                 max_scores.append(0.0)  # Use 0 to indicate missing score
-        
+
         percentages = [
             (score / max_score * 100) if max_score > 0 else 0
             for score, max_score in zip(scores, max_scores)
@@ -275,14 +274,14 @@ class EnhancedResultService:
         # Handle None or invalid confidence values
         if confidence is None:
             confidence = 0.0
-        
+
         # Ensure confidence is a float and within valid range
         try:
             confidence = float(confidence) if confidence is not None else 0.0
             confidence = max(0.0, min(1.0, confidence))  # Clamp between 0 and 1
         except (TypeError, ValueError):
             confidence = 0.0
-            
+
         if confidence >= self.confidence_thresholds["high"]:
             level = "high"
             interpretation = "High confidence - results are very reliable"
@@ -325,7 +324,7 @@ class EnhancedResultService:
             overall_percentage = max(0.0, min(100.0, overall_percentage))  # Clamp between 0 and 100
         except (TypeError, ValueError):
             overall_percentage = 0.0
-        
+
         # Overall performance insight
         if overall_percentage >= 90:
             insights.append(
@@ -599,7 +598,7 @@ class EnhancedResultService:
             confidence = float(confidence) if confidence is not None else 0.0
         except (TypeError, ValueError):
             confidence = 0.0
-            
+
         if (
             quality["has_detailed_feedback"]
             and quality["feedback_completeness"] > 50
@@ -755,7 +754,6 @@ class EnhancedResultService:
             return 0.7
         else:
             return 0.0
-
 
 # Global instance
 enhanced_result_service = EnhancedResultService()

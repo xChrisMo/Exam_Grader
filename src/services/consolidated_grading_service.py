@@ -12,7 +12,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from src.services.base_service import BaseService, ServiceStatus
 from utils.logger import logger
 
-
 class ConsolidatedGradingService(BaseService):
     """Consolidated grading service with enhanced functionality and base service integration."""
 
@@ -271,31 +270,30 @@ class ConsolidatedGradingService(BaseService):
 
             # Add timeout handling for LLM requests
             import signal
-            import time
-            
+
             def timeout_handler(signum, frame):
                 raise TimeoutError("LLM grading request timed out")
-            
+
             # Set timeout for LLM request (5 minutes)
             old_handler = signal.signal(signal.SIGALRM, timeout_handler)
             signal.alarm(300)  # 5 minutes timeout
-            
+
             try:
                 logger.info(f"Starting LLM grading for {len(qa_pairs)} questions...")
                 start_time = time.time()
-                
+
                 response = self.llm_service.generate_response(
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
                     temperature=0.0,  # Fully deterministic for consistency
                     use_cache=True    # Enable caching for identical inputs
                 )
-                
+
                 elapsed_time = time.time() - start_time
                 logger.info(f"LLM grading completed in {elapsed_time:.2f} seconds")
-                
+
                 return self._parse_grading_response(response, qa_pairs)
-                
+
             finally:
                 # Reset alarm
                 signal.alarm(0)
@@ -565,7 +563,7 @@ Marking Guide: {marking_guide[:500]}"""
                 logger.warning("Grade missing max_score in final results calculation")
                 grade_max_score = 0.0  # Use 0 instead of defaulting to 10
             max_possible += float(grade_max_score)
-        
+
         percentage = (total_score / max_possible * 100) if max_possible > 0 else 0
 
         return {
@@ -667,7 +665,6 @@ Marking Guide: {marking_guide[:500]}"""
         self._grading_cache.clear()
         self._cache_timestamps.clear()
         logger.info("Grading service caches cleared")
-
 
 # Backward compatibility aliases
 GradingService = ConsolidatedGradingService

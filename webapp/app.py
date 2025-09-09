@@ -5,11 +5,11 @@ This is the new, streamlined main application file that replaces the
 monolithic exam_grader_app.py with a clean, maintainable structure.
 """
 
-import atexit
 import os
-import signal
 import sys
 from pathlib import Path
+import atexit
+import signal
 
 # Fix DATABASE_URL for Heroku PostgreSQL compatibility
 from src.config.database_url_fix import fix_database_url
@@ -17,6 +17,7 @@ fix_database_url()
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+
 
 from src.constants import (
     DEFAULT_DEBUG,
@@ -30,7 +31,6 @@ from src.constants import (
 from utils.logger import logger
 from webapp.app_factory import cleanup_services, create_app, create_database_tables
 
-
 def setup_signal_handlers(app):
     """Set up signal handlers for graceful shutdown."""
 
@@ -41,7 +41,6 @@ def setup_signal_handlers(app):
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-
 
 def main():
     """Main application entry point."""
@@ -65,7 +64,6 @@ def main():
     except Exception as e:
         logger.error(f"Failed to start application: {e}")
         raise
-
 
 # Create application instance
 app = main()

@@ -6,10 +6,10 @@ multiple notification channels, and intelligent alert management.
 """
 
 import json
-import threading
 import time
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+import threading
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -25,7 +25,6 @@ from src.services.monitoring_dashboard import (
 )
 from utils.logger import logger
 
-
 class AlertChannel(Enum):
     """Alert notification channels"""
 
@@ -34,7 +33,6 @@ class AlertChannel(Enum):
     WEBHOOK = "webhook"
     SLACK = "slack"
     CONSOLE = "console"
-
 
 class AlertRule(Enum):
     """Predefined alert rules"""
@@ -45,7 +43,6 @@ class AlertRule(Enum):
     RESOURCE_EXHAUSTION = "resource_exhaustion"
     CACHE_MISS_RATE = "cache_miss_rate"
     PROCESSING_FAILURE = "processing_failure"
-
 
 @dataclass
 class AlertThreshold:
@@ -77,7 +74,6 @@ class AlertThreshold:
 
         return None
 
-
 @dataclass
 class AlertNotificationConfig:
     """Alert notification configuration"""
@@ -88,7 +84,6 @@ class AlertNotificationConfig:
     slack_webhook_url: Optional[str] = None
     cooldown_minutes: int = 15
     escalation_minutes: int = 60
-
 
 @dataclass
 class AlertState:
@@ -101,7 +96,6 @@ class AlertState:
     count: int = 1
     current_severity: AlertSeverity = AlertSeverity.LOW
     escalated: bool = False
-
 
 class EnhancedAlertingSystem:
     """
@@ -605,7 +599,6 @@ class EnhancedAlertingSystem:
         """Update alert threshold for a rule"""
         self._thresholds[rule] = threshold
         logger.info(f"Updated threshold for rule {rule.value}")
-
 
 # Global instance
 enhanced_alerting_system = EnhancedAlertingSystem()

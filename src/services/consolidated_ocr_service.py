@@ -1,12 +1,12 @@
 """Consolidated OCR Service with unified functionality, caching, and base service integration."""
 
-import asyncio
-import hashlib
 import json
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+import asyncio
+import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, BinaryIO, Dict, List, Optional, Tuple, Union
 
 import requests
@@ -39,7 +39,6 @@ except ImportError:
     TESSERACT_SUPPORT = False
     logger.info("pytesseract not available - fallback OCR will be limited")
 
-
 class OCRServiceError(Exception):
     """Exception raised for errors in the OCR service."""
 
@@ -63,7 +62,6 @@ class OCRServiceError(Exception):
         if self.error_code:
             return f"[{self.error_code}] {self.message}"
         return self.message
-
 
 class ConsolidatedOCRService(BaseService):
     """Consolidated OCR service with unified functionality, caching, and performance optimization."""
@@ -910,7 +908,6 @@ class ConsolidatedOCRService(BaseService):
             "max_file_size_mb": 20,
             "max_workers": self.max_workers,
         }
-
 
 # Backward compatibility aliases
 OCRService = ConsolidatedOCRService

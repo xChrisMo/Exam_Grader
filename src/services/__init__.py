@@ -16,13 +16,13 @@ GradingService = ConsolidatedGradingService
 
 __all__ = [
     "OCRService",
-    "OCRServiceError", 
+    "OCRServiceError",
     "LLMService",
     "LLMServiceError",
     "MappingService",
     "GradingService",
     "ConsolidatedOCRService",
-    "ConsolidatedLLMService", 
+    "ConsolidatedLLMService",
     "ConsolidatedMappingService",
     "ConsolidatedGradingService",
 ]

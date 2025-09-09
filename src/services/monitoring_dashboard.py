@@ -6,12 +6,12 @@ for system health, performance metrics, and operational insights.
 """
 
 import time
+from datetime import datetime, timezone, timedelta
+import json
 import threading
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
 from enum import Enum
-import json
 
 from utils.logger import logger
 
@@ -68,7 +68,7 @@ class MonitoringAlert:
     resolved: bool = False
     resolved_at: Optional[datetime] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
@@ -85,19 +85,19 @@ class MonitoringAlert:
 
 class DataCollector:
     """Base class for data collectors"""
-    
+
     def __init__(self, name: str, collection_interval: int = 30):
         self.name = name
         self.collection_interval = collection_interval
         self.enabled = True
         self._last_collection = 0
-    
+
     def should_collect(self) -> bool:
         """Check if data should be collected"""
         current_time = time.time()
-        return (self.enabled and 
+        return (self.enabled and
                 current_time - self._last_collection >= self.collection_interval)
-    
+
     def collect_data(self) -> Dict[str, Any]:
         """Collect data - to be implemented by subclasses"""
         # Default implementation returns empty data
@@ -108,7 +108,7 @@ class DataCollector:
             'data': {},
             'status': 'no_implementation'
         }
-    
+
     def get_data(self) -> Optional[Dict[str, Any]]:
         """Get data if collection interval has passed"""
         if self.should_collect():
@@ -122,25 +122,25 @@ class DataCollector:
 
 class SystemHealthCollector(DataCollector):
     """Collector for system health metrics"""
-    
+
     def __init__(self):
         super().__init__("system_health", 30)
-    
+
     def collect_data(self) -> Dict[str, Any]:
         """Collect system health data"""
         try:
             # Get system resource usage
             from src.services.resource_optimizer import resource_optimizer
             resources = resource_optimizer.get_system_resources()
-            
+
             # Get service health status
             from src.services.monitoring.monitoring_service import health_monitor
             health_status = health_monitor.get_overall_health()
-            
+
             # Get cache statistics
             from src.services.cache_manager import cache_manager
             cache_stats = cache_manager.get_stats()
-            
+
             return {
             'timestamp': datetime.now(timezone.utc).isoformat(),
                 'system_resources': {k: v.to_dict() for k, v in resources.items()},
@@ -150,7 +150,7 @@ class SystemHealthCollector(DataCollector):
                     r.usage_percentage < 90 for r in resources.values()
                 ) else 'warning'
             }
-            
+
         except Exception as e:
             logger.error(f"Error collecting system health data: {e}")
             return {
@@ -161,24 +161,24 @@ class SystemHealthCollector(DataCollector):
 
 class PerformanceCollector(DataCollector):
     """Collector for performance metrics"""
-    
+
     def __init__(self):
         super().__init__("performance", 15)
-    
+
     def collect_data(self) -> Dict[str, Any]:
         """Collect performance data"""
         try:
             # Get performance metrics
             from src.services.monitoring.monitoring_service import performance_monitor
             summary = performance_monitor.get_performance_summary()
-            
+
             # Get recent operation stats
             all_stats = performance_monitor.get_all_operation_stats()
-            
+
             # Calculate aggregate metrics
             total_requests = sum(stats['total_requests'] for stats in all_stats.values())
             avg_success_rate = sum(stats['success_rate'] for stats in all_stats.values()) / max(1, len(all_stats))
-            
+
             return {
             'timestamp': datetime.now(timezone.utc).isoformat(),
                 'summary': summary,
@@ -189,7 +189,7 @@ class PerformanceCollector(DataCollector):
                     'active_operations': len(all_stats)
                 }
             }
-            
+
         except Exception as e:
             logger.error(f"Error collecting performance data: {e}")
             return {
@@ -199,21 +199,20 @@ class PerformanceCollector(DataCollector):
 
 class ErrorTrackingCollector(DataCollector):
     """Collector for error tracking metrics"""
-    
+
     def __init__(self):
         super().__init__("error_tracking", 60)
-    
+
     def collect_data(self) -> Dict[str, Any]:
         """Collect error tracking data"""
         try:
             # Get logging metrics
             from src.services.enhanced_logging_service import enhanced_logging_service
             log_metrics = enhanced_logging_service.get_metrics()
-            
+
             # Get recent alerts
-            from src.services.monitoring.monitoring_service import performance_monitor
             recent_alerts = performance_monitor.get_alerts(limit=50)
-            
+
             return {
             'timestamp': datetime.now(timezone.utc).isoformat(),
                 'log_metrics': log_metrics.__dict__ if log_metrics else None,
@@ -224,7 +223,7 @@ class ErrorTrackingCollector(DataCollector):
                     'error_rate': log_metrics.error_rate if log_metrics else 0.0
                 }
             }
-            
+
         except Exception as e:
             logger.error(f"Error collecting error tracking data: {e}")
             return {
@@ -234,28 +233,28 @@ class ErrorTrackingCollector(DataCollector):
 
 class MonitoringDashboardService:
     """Main monitoring dashboard service"""
-    
+
     def __init__(self):
         self.dashboards: Dict[str, Dashboard] = {}
         self.data_collectors: Dict[str, DataCollector] = {}
         self.alerts: List[MonitoringAlert] = []
         self.alert_handlers: List[Callable[[MonitoringAlert], None]] = []
-        
+
         self._monitoring_thread: Optional[threading.Thread] = None
         self._running = False
         self._data_cache: Dict[str, Any] = {}
         self._cache_lock = threading.RLock()
-        
+
         # Setup default collectors and dashboards
         self._setup_default_collectors()
         self._setup_default_dashboards()
-    
+
     def _setup_default_collectors(self):
         """Setup default data collectors"""
         self.add_data_collector(SystemHealthCollector())
         self.add_data_collector(PerformanceCollector())
         self.add_data_collector(ErrorTrackingCollector())
-    
+
     def _setup_default_dashboards(self):
         """Setup default dashboards"""
         # System Health Dashboard
@@ -265,7 +264,7 @@ class MonitoringDashboardService:
             description="Overall system health and resource usage",
             dashboard_type=DashboardType.SYSTEM_HEALTH
         )
-        
+
         system_dashboard.widgets = [
             DashboardWidget(
                 id="cpu_usage",
@@ -296,9 +295,9 @@ class MonitoringDashboardService:
                 position={"x": 0, "y": 3, "width": 12, "height": 4}
             )
         ]
-        
+
         self.add_dashboard(system_dashboard)
-        
+
         # Performance Dashboard
         performance_dashboard = Dashboard(
             id="performance",
@@ -306,7 +305,7 @@ class MonitoringDashboardService:
             description="Application performance and operation metrics",
             dashboard_type=DashboardType.PERFORMANCE
         )
-        
+
         performance_dashboard.widgets = [
             DashboardWidget(
                 id="request_rate",
@@ -330,9 +329,9 @@ class MonitoringDashboardService:
                 position={"x": 0, "y": 4, "width": 12, "height": 4}
             )
         ]
-        
+
         self.add_dashboard(performance_dashboard)
-        
+
         # Error Tracking Dashboard
         error_dashboard = Dashboard(
             id="error_tracking",
@@ -340,7 +339,7 @@ class MonitoringDashboardService:
             description="Error monitoring and alert management",
             dashboard_type=DashboardType.ERROR_TRACKING
         )
-        
+
         error_dashboard.widgets = [
             DashboardWidget(
                 id="error_rate",
@@ -364,14 +363,14 @@ class MonitoringDashboardService:
                 position={"x": 0, "y": 4, "width": 12, "height": 4}
             )
         ]
-        
+
         self.add_dashboard(error_dashboard)
-    
+
     def add_dashboard(self, dashboard: Dashboard):
         """Add a dashboard"""
         self.dashboards[dashboard.id] = dashboard
         logger.info(f"Added dashboard: {dashboard.name}")
-    
+
     def remove_dashboard(self, dashboard_id: str) -> bool:
         """Remove a dashboard"""
         if dashboard_id in self.dashboards:
@@ -379,11 +378,11 @@ class MonitoringDashboardService:
             logger.info(f"Removed dashboard: {dashboard_id}")
             return True
         return False
-    
+
     def get_dashboard(self, dashboard_id: str) -> Optional[Dashboard]:
         """Get a dashboard by ID"""
         return self.dashboards.get(dashboard_id)
-    
+
     def list_dashboards(self) -> List[Dict[str, Any]]:
         """List all dashboards"""
         return [
@@ -397,12 +396,12 @@ class MonitoringDashboardService:
             }
             for dashboard in self.dashboards.values()
         ]
-    
+
     def add_data_collector(self, collector: DataCollector):
         """Add a data collector"""
         self.data_collectors[collector.name] = collector
         logger.info(f"Added data collector: {collector.name}")
-    
+
     def remove_data_collector(self, name: str) -> bool:
         """Remove a data collector"""
         if name in self.data_collectors:
@@ -410,13 +409,13 @@ class MonitoringDashboardService:
             logger.info(f"Removed data collector: {name}")
             return True
         return False
-    
+
     def get_dashboard_data(self, dashboard_id: str) -> Optional[Dict[str, Any]]:
         """Get data for a specific dashboard"""
         dashboard = self.get_dashboard(dashboard_id)
         if not dashboard:
             return None
-        
+
         dashboard_data = {
             'dashboard': {
                 'id': dashboard.id,
@@ -428,7 +427,7 @@ class MonitoringDashboardService:
             'widgets': [],
             'data': {}
         }
-        
+
         with self._cache_lock:
             for widget in dashboard.widgets:
                 widget_data = {
@@ -438,15 +437,15 @@ class MonitoringDashboardService:
                     'position': widget.position,
                     'config': widget.config
                 }
-                
+
                 data_path = widget.data_source.split('.')
                 data_value = self._get_nested_data(self._data_cache, data_path)
                 widget_data['data'] = data_value
-                
+
                 dashboard_data['widgets'].append(widget_data)
-        
+
         return dashboard_data
-    
+
     def _get_nested_data(self, data: Dict[str, Any], path: List[str]) -> Any:
         """Get nested data using dot notation path"""
         current = data
@@ -456,24 +455,24 @@ class MonitoringDashboardService:
             else:
                 return None
         return current
-    
+
     def create_alert(self, title: str, message: str, severity: AlertSeverity,
                     source: str, metadata: Optional[Dict[str, Any]] = None) -> str:
         """Create a new alert with cooldown logic"""
         current_time = datetime.now(timezone.utc)
-        
+
         cooldown_period = timedelta(minutes=5)
         for existing_alert in reversed(self.alerts[-10:]):  # Check last 10 alerts
-            if (existing_alert.title == title and 
+            if (existing_alert.title == title and
                 existing_alert.source == source and
                 not existing_alert.resolved and
                 current_time - existing_alert.timestamp < cooldown_period):
                 # Alert is in cooldown period, don't create duplicate
                 logger.debug(f"Alert '{title}' is in cooldown period, skipping")
                 return existing_alert.id
-        
+
         alert_id = f"alert_{int(time.time())}_{len(self.alerts)}"
-        
+
         alert = MonitoringAlert(
             id=alert_id,
             title=title,
@@ -483,19 +482,19 @@ class MonitoringDashboardService:
             timestamp=current_time,
             metadata=metadata or {}
         )
-        
+
         self.alerts.append(alert)
-        
+
         # Call alert handlers
         for handler in self.alert_handlers:
             try:
                 handler(alert)
             except Exception as e:
                 logger.error(f"Error in alert handler: {e}")
-        
+
         logger.warning(f"Alert created: {title} ({severity.value})")
         return alert_id
-    
+
     def resolve_alert(self, alert_id: str) -> bool:
         """Resolve an alert"""
         for alert in self.alerts:
@@ -505,37 +504,37 @@ class MonitoringDashboardService:
                 logger.info(f"Alert resolved: {alert_id}")
                 return True
         return False
-    
+
     def get_alerts(self, severity: Optional[AlertSeverity] = None,
                   resolved: Optional[bool] = None, limit: int = 100) -> List[Dict[str, Any]]:
         """Get alerts with optional filtering"""
         filtered_alerts = []
-        
+
         for alert in reversed(self.alerts[-limit:]):  # Most recent first
             if severity and alert.severity != severity:
                 continue
             if resolved is not None and alert.resolved != resolved:
                 continue
-            
+
             filtered_alerts.append(alert.to_dict())
-        
+
         return filtered_alerts
-    
+
     def add_alert_handler(self, handler: Callable[[MonitoringAlert], None]):
         """Add an alert handler"""
         self.alert_handlers.append(handler)
         logger.info("Added alert handler")
-    
+
     def start_monitoring(self):
         """Start background monitoring"""
         if self._monitoring_thread and self._monitoring_thread.is_alive():
             return
-        
+
         self._running = True
         self._monitoring_thread = threading.Thread(target=self._monitoring_worker, daemon=True)
         self._monitoring_thread.start()
         logger.info("Started monitoring dashboard service")
-    
+
     def stop_monitoring(self):
         """Stop background monitoring"""
         self._running = False
@@ -546,7 +545,7 @@ class MonitoringDashboardService:
         except Exception:
             # Ignore logging errors during shutdown
             pass
-    
+
     def _monitoring_worker(self):
         """Background monitoring worker"""
         while self._running:
@@ -556,15 +555,15 @@ class MonitoringDashboardService:
                         data = collector.get_data()
                         if data:
                             self._data_cache[name] = data
-                
+
                 self._check_alert_conditions()
-                
+
                 time.sleep(10)  # Check every 10 seconds
-                
+
             except Exception as e:
                 logger.error(f"Error in monitoring worker: {e}")
                 time.sleep(30)  # Wait longer on error
-    
+
     def _check_alert_conditions(self):
         """Check for conditions that should trigger alerts"""
         try:
@@ -578,7 +577,7 @@ class MonitoringDashboardService:
                     "system_health",
                     {'system_data': system_data}
                 )
-            
+
             # Check error rates
             error_data = self._data_cache.get('error_tracking', {})
             error_summary = error_data.get('error_summary', {})
@@ -590,10 +589,10 @@ class MonitoringDashboardService:
                     "error_tracking",
                     {'error_data': error_summary}
                 )
-            
+
         except Exception as e:
             logger.error(f"Error checking alert conditions: {e}")
-    
+
     def get_monitoring_stats(self) -> Dict[str, Any]:
         """Get monitoring service statistics"""
         return {

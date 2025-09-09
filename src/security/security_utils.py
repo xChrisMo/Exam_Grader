@@ -10,13 +10,12 @@ This module provides security-related utilities including:
 
 import os
 import re
+from pathlib import Path
 import secrets
 import string
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from utils.logger import logger
-
 
 class SecurityUtils:
     """Utility class for security-related operations."""
@@ -318,7 +317,6 @@ class SecurityUtils:
         )
 
         return report
-
 
 def generate_secure_config_template() -> str:
     """Generate a secure configuration template.

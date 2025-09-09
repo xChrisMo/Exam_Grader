@@ -11,15 +11,14 @@ This service consolidates all error handling functionality from:
 """
 
 import time
+from datetime import datetime, timezone
 import traceback
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
 from src.services.base_service import BaseService, ServiceStatus
 from utils.logger import logger
-
 
 class ErrorSeverity(Enum):
     """Error severity levels"""
@@ -29,7 +28,6 @@ class ErrorSeverity(Enum):
     MEDIUM = "medium"
     LOW = "low"
     INFO = "info"
-
 
 class ErrorCategory(Enum):
     """Error categories for classification"""
@@ -45,7 +43,6 @@ class ErrorCategory(Enum):
     PERMISSION = "permission"
     UNKNOWN = "unknown"
 
-
 @dataclass
 class ErrorContext:
     """Context information for errors"""
@@ -56,7 +53,6 @@ class ErrorContext:
     user_id: Optional[str]
     request_id: str
     additional_data: Dict[str, Any]
-
 
 @dataclass
 class ErrorResponse:
@@ -76,7 +72,6 @@ class ErrorResponse:
     def __post_init__(self):
         if self.suggestions is None:
             self.suggestions = []
-
 
 class ProcessingError(Exception):
     """Custom exception for processing operations"""
@@ -108,7 +103,6 @@ class ProcessingError(Exception):
             "details": self.details,
             "timestamp": self.timestamp.isoformat(),
         }
-
 
 class ErrorService(BaseService):
     """Consolidated error handling service"""
@@ -594,18 +588,17 @@ class ErrorService(BaseService):
             "recent_errors": self.error_history[-10:] if self.error_history else [],
         }
 
-
 class RetryManager:
     """Retry manager for operations that can be retried"""
-    
+
     def __init__(self, max_retries: int = 3, base_delay: float = 1.0):
         self.max_retries = max_retries
         self.base_delay = base_delay
-        
+
     def execute_with_retry(self, func: Callable, *args, **kwargs) -> Any:
         """Execute function with retry logic"""
         last_error = None
-        
+
         for attempt in range(self.max_retries + 1):
             try:
                 return func(*args, **kwargs)
@@ -617,9 +610,8 @@ class RetryManager:
                     logger.warning(f"Retry attempt {attempt + 1} after {delay}s delay: {str(e)}")
                 else:
                     logger.error(f"All retry attempts failed: {str(e)}")
-                    
-        raise last_error
 
+        raise last_error
 
 # Global instances
 error_service = ErrorService()

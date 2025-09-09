@@ -8,7 +8,6 @@ from src.database.models import Session as SessionModel, db
 from src.security.session_manager import SecureSessionManager
 from utils.logger import logger
 
-
 class SecureFlaskSession(CallbackDict, SessionMixin):
     def __init__(self, initial=None, sid=None, new=False):
         super().__init__(initial)
@@ -23,7 +22,6 @@ class SecureFlaskSession(CallbackDict, SessionMixin):
     def __delitem__(self, key):
         super().__delitem__(key)
         self.modified = True
-
 
 class SecureSessionInterface(SessionInterface):
     def __init__(self, session_manager: SecureSessionManager, app_secret_key: str):
@@ -122,7 +120,6 @@ class SecureSessionInterface(SessionInterface):
             self.session_manager.update_session_last_accessed(session.sid)
             logger.debug(f"Session {session.sid} last_accessed updated in DB.")
 
-
 # Add update_session and update_session_last_accessed to SecureSessionManager
 def _update_session(self, sid: str, session_data: Dict[str, Any]):
     try:
@@ -142,7 +139,6 @@ def _update_session(self, sid: str, session_data: Dict[str, Any]):
         logger.error(f"Failed to update session {sid}: {str(e)}")
         db.session.rollback()
 
-
 def _update_session_last_accessed(self, sid: str):
     try:
         session_record = SessionModel.query.filter_by(id=sid).first()
@@ -160,7 +156,6 @@ def _update_session_last_accessed(self, sid: str):
     except Exception as e:
         logger.error(f"Failed to update session last_accessed {sid}: {str(e)}")
         db.session.rollback()
-
 
 SecureSessionManager.update_session = _update_session
 SecureSessionManager.update_session_last_accessed = _update_session_last_accessed

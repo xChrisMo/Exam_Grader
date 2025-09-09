@@ -14,7 +14,6 @@ from utils.logger import logger
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
-
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     """User login."""
@@ -85,12 +84,10 @@ def login():
 
     return render_template("auth/login.html")
 
-
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
     """User registration."""
     return signup()
-
 
 @auth_bp.route("/signup", methods=["GET", "POST"])
 def signup():
@@ -150,7 +147,6 @@ def signup():
 
     return render_template("auth/signup.html")
 
-
 @auth_bp.route("/logout")
 @login_required
 def logout():
@@ -166,13 +162,11 @@ def logout():
 
     return redirect(url_for("main.index"))
 
-
 @auth_bp.route("/profile")
 @login_required
 def profile():
     """User profile page."""
     return render_template("auth/profile.html")
-
 
 @auth_bp.route("/change-password", methods=["GET", "POST"])
 @login_required

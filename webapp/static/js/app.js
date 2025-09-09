@@ -3,19 +3,59 @@
  * Common functionality and utilities
  */
 
-// Global error handler
+// Centralized Global Error Handler - Single source of truth for error handling
 window.addEventListener('error', function (event) {
   console.error('Global JavaScript Error:', event.error);
-  if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
-    ExamGrader.notificationManager.notify('An unexpected error occurred', 'error');
+  
+  // Skip settings page - it has its own specialized error handling
+  if (window.location.pathname === '/settings') {
+    return;
+  }
+  
+  // Skip extension-related errors and other noise
+  const errorMessage = String(event.error?.message || '').toLowerCase();
+  const errorSource = String(event.filename || '').toLowerCase();
+  
+  if (errorSource.includes('extension') || 
+      errorSource.includes('chrome-extension') || 
+      errorSource.includes('moz-extension') ||
+      errorMessage.includes('extension') ||
+      errorMessage.includes('runtime.lasterror')) {
+    return;
+  }
+  
+  // Only show notifications for critical application errors
+  if (event.error && (event.error.name === 'TypeError' || event.error.name === 'ReferenceError')) {
+    if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+      ExamGrader.notificationManager.notify('A JavaScript error occurred', 'error');
+    }
   }
 });
 
-// Unhandled promise rejection handler
+// Centralized Promise Rejection Handler
 window.addEventListener('unhandledrejection', function (event) {
   console.error('Unhandled Promise Rejection:', event.reason);
-  if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
-    ExamGrader.notificationManager.notify('An unexpected error occurred', 'error');
+  
+  // Skip settings page - it has its own specialized error handling
+  if (window.location.pathname === '/settings') {
+    return;
+  }
+  
+  // Skip extension-related rejections
+  const reasonMessage = String(event.reason?.message || event.reason || '').toLowerCase();
+  
+  if (reasonMessage.includes('extension') || 
+      reasonMessage.includes('runtime.lasterror') ||
+      reasonMessage.includes('message port closed')) {
+    event.preventDefault(); // Prevent console spam
+    return;
+  }
+  
+  // Only show notifications for network errors or critical failures
+  if (event.reason && (event.reason.name === 'NetworkError' || reasonMessage.includes('fetch'))) {
+    if (typeof ExamGrader !== 'undefined' && ExamGrader.notificationManager) {
+      ExamGrader.notificationManager.notify('A network error occurred', 'error');
+    }
   }
 });
 
@@ -1656,7 +1696,7 @@ ExamGrader.dashboard = {
       .then(data => {
         if (data.success) {
           // Update last score card
-          const lastScoreElement = document.querySelector('[data-i18n="last_score"]').parentElement.querySelector('.text-lg.font-medium.text-gray-900');
+          const lastScoreElement = document.getElementById('last-score-value');
           if (lastScoreElement && data.stats.last_score !== undefined) {
             lastScoreElement.textContent = data.stats.last_score > 0 ? `${data.stats.last_score}%` : '--';
           }
@@ -1685,19 +1725,30 @@ ExamGrader.dashboard = {
         }
       })
       .catch(error => {
-        console.error('Error updating dashboard stats:', error);
+        // Silently handle errors - dashboard stats API may be disabled for performance
+        return;
       });
   },
 
   // Initialize auto-refresh for dashboard
-  initAutoRefresh: function (intervalSeconds = 30) {
-    // Update immediately
-    this.updateStats();
-
-    // Set up periodic updates
-    setInterval(() => {
-      this.updateStats();
-    }, intervalSeconds * 1000);
+  initAutoRefresh: async function (intervalSeconds = 30) {
+    // Check if dashboard stats API is available before setting up auto-refresh
+    try {
+      const response = await fetch('/api/dashboard-stats', {
+        method: 'GET',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      
+      if (response.ok) {
+        // API is available, update immediately and set up periodic updates
+        this.updateStats();
+        setInterval(() => {
+          this.updateStats();
+        }, intervalSeconds * 1000);
+      }
+    } catch (error) {
+      // Dashboard stats API not available, skip auto-refresh
+    }
   }
 };
 
@@ -1814,7 +1865,7 @@ ExamGrader.progressBar = {
 document.addEventListener('DOMContentLoaded', function () {
   // Check if we're on the dashboard page
   if (window.location.pathname === '/dashboard' || window.location.pathname.endsWith('/dashboard')) {
-    ExamGrader.dashboard.initAutoRefresh(120); // Refresh every 2 minutes (reduced frequency)
+    ExamGrader.dashboard.initAutoRefresh(30); // Refresh every 30 seconds
   }
 
   // Check if we're on the submissions page

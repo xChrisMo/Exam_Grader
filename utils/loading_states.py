@@ -2,8 +2,8 @@
 Loading states and progress management for the Exam Grader application.
 """
 
-import threading
 import time
+import threading
 from dataclasses import asdict, dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
-
 
 class LoadingState(Enum):
     """Enumeration of loading states."""
@@ -27,7 +26,6 @@ class LoadingState(Enum):
     COMPLETE = "complete"
     ERROR = "error"
     CANCELLED = "cancelled"
-
 
 @dataclass
 class ProgressInfo:
@@ -52,7 +50,6 @@ class ProgressInfo:
         result["state"] = self.state.value
         result["sub_operations"] = self.sub_operations or []
         return result
-
 
 class LoadingManager:
     """Manages loading states and progress for multiple operations."""
@@ -332,10 +329,8 @@ class LoadingManager:
         if current_time - self._last_cleanup > self._cleanup_interval:
             self.cleanup_old_operations()
 
-
 # Global loading manager instance
 loading_manager = LoadingManager()
-
 
 def create_loading_response(
     operation_id: str, message: str = "Processing...", include_progress: bool = True
@@ -359,7 +354,6 @@ def create_loading_response(
             response["progress"] = progress.to_dict()
 
     return response
-
 
 def get_loading_state_for_template(operation_ids: List[str] = None) -> Dict[str, Any]:
     """

@@ -1,7 +1,7 @@
 """Enhanced error handler that integrates all error handling components."""
 
-import logging
 from datetime import datetime
+import logging
 from typing import Any, Dict, List, Optional, Union
 
 from flask import flash, request, session
@@ -18,7 +18,6 @@ from .error_mapper import (
 from .error_tracker import ErrorAnalytics, ErrorTracker
 
 logger = logging.getLogger(__name__)
-
 
 class EnhancedErrorHandler:
     """Enhanced error handler with standardized error management."""
@@ -461,10 +460,8 @@ class EnhancedErrorHandler:
 
         return status_code_mapping.get(error_code, 500)
 
-
 # Global instance
 enhanced_error_handler = EnhancedErrorHandler()
-
 
 def handle_error(
     error: Union[Exception, ApplicationError],
@@ -483,7 +480,6 @@ def handle_error(
     enhanced_error_handler.handle_error(
         error=error, context=context, user_id=user_id, flash_message=flash_message
     )
-
 
 def handle_api_error(
     error: Union[Exception, ApplicationError],
@@ -508,7 +504,6 @@ def handle_api_error(
         return_response=True,
     )
 
-
 def get_error_metrics() -> Dict[str, Any]:
     """Get error metrics.
 
@@ -516,7 +511,6 @@ def get_error_metrics() -> Dict[str, Any]:
         Error metrics dictionary
     """
     return enhanced_error_handler.get_error_metrics()
-
 
 def get_error_report() -> Dict[str, Any]:
     """Get error report.

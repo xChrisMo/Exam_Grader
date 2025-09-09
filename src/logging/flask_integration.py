@@ -39,7 +39,6 @@ except ImportError:
     get_structured_logger = None
     ApplicationError = Exception
 
-
 class FlaskLoggingIntegration:
     """Flask logging integration with comprehensive logging system."""
 
@@ -584,7 +583,6 @@ class FlaskLoggingIntegration:
             "longest_running_request": longest_request,
         }
 
-
 def log_route(
     logger_name: Optional[str] = None, log_args: bool = True, log_result: bool = True
 ):
@@ -673,7 +671,6 @@ def log_route(
         return wrapper
 
     return decorator
-
 
 def log_performance(operation_name: Optional[str] = None):
     """Decorator for logging performance metrics.
@@ -766,7 +763,6 @@ def log_performance(operation_name: Optional[str] = None):
         return wrapper
 
     return decorator
-
 
 def setup_flask_logging(
     app: Flask,

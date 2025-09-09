@@ -5,18 +5,17 @@ This module provides sophisticated retry mechanisms with exponential backoff,
 jitter, and circuit breaker patterns for handling transient failures in processing operations.
 """
 
+import time
+from datetime import datetime, timedelta, timezone
 import asyncio
 import random
-import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 
 from src.config.processing_config import ProcessingConfigManager
 from utils.logger import logger
-
 
 @dataclass
 class RetryConfig:
@@ -28,7 +27,6 @@ class RetryConfig:
     jitter: bool = True
     backoff_multiplier: float = 1.5
 
-
 class RetryStrategy(Enum):
     """Available retry strategies."""
 
@@ -37,14 +35,12 @@ class RetryStrategy(Enum):
     LINEAR_BACKOFF = "linear_backoff"
     FIBONACCI_BACKOFF = "fibonacci_backoff"
 
-
 class RetryDecision(Enum):
     """Retry decision outcomes."""
 
     RETRY = "retry"
     STOP = "stop"
     FALLBACK = "fallback"
-
 
 @dataclass
 class RetryAttempt:
@@ -57,7 +53,6 @@ class RetryAttempt:
     success: bool = False
     execution_time: float = 0.0
 
-
 @dataclass
 class RetryResult:
     """Result of a retry operation."""
@@ -69,7 +64,6 @@ class RetryResult:
     attempts: List[RetryAttempt] = None
     final_error: Optional[str] = None
     strategy_used: Optional[RetryStrategy] = None
-
 
 class RetryManager:
     """
@@ -805,7 +799,6 @@ class RetryManager:
             return wrapper
 
         return decorator
-
 
 # Global instance
 retry_manager = RetryManager()

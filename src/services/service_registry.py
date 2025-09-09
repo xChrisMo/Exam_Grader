@@ -5,15 +5,14 @@ This module provides centralized registration and management of all processing s
 with dependency tracking, lifecycle management, and service discovery.
 """
 
+from datetime import datetime, timezone
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from src.services.base_service import ServiceStatus
 from utils.logger import logger
-
 
 class ServiceState(Enum):
     """Service lifecycle states."""
@@ -24,7 +23,6 @@ class ServiceState(Enum):
     STOPPING = "stopping"
     STOPPED = "stopped"
     FAILED = "failed"
-
 
 @dataclass
 class ServiceInfo:
@@ -41,7 +39,6 @@ class ServiceInfo:
     metadata: Dict[str, Any]
     initialization_attempts: int
     max_initialization_attempts: int
-
 
 class ServiceRegistry:
     """
@@ -341,9 +338,34 @@ class ServiceRegistry:
             )
 
             if hasattr(service, "initialize"):
-                success = service.initialize()
-                if not success:
-                    raise Exception("Service initialization returned False")
+                import inspect
+                if inspect.iscoroutinefunction(service.initialize):
+                    # For async initialize methods, we need to handle them properly
+                    import asyncio
+                    try:
+                        # Try to get the current event loop
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            # If we're in an async context, create a task
+                            task = asyncio.create_task(service.initialize())
+                            # Wait for completion with timeout
+                            success = asyncio.wait_for(task, timeout=self.dependency_timeout)
+                        else:
+                            # If no loop is running, run the async function
+                            success = loop.run_until_complete(
+                                asyncio.wait_for(service.initialize(), timeout=self.dependency_timeout)
+                            )
+                    except RuntimeError:
+                        # No event loop available, create a new one
+                        success = asyncio.run(
+                            asyncio.wait_for(service.initialize(), timeout=self.dependency_timeout)
+                        )
+                    except asyncio.TimeoutError:
+                        raise Exception(f"Service initialization timed out after {self.dependency_timeout} seconds")
+                else:
+                    success = service.initialize()
+                    if not success:
+                        raise Exception("Service initialization returned False")
 
             service_info.state = ServiceState.RUNNING
             service_info.health_status = ServiceStatus.HEALTHY
@@ -406,7 +428,6 @@ class ServiceRegistry:
                 handler(service_info)
             except Exception as e:
                 logger.error(f"Event handler failed for {event_type}: {e}")
-
 
 # Global instance
 service_registry = ServiceRegistry()

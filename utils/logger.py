@@ -5,19 +5,18 @@ This module provides a standardized logging interface that integrates with
 the comprehensive logging system when available, with fallback to basic logging.
 """
 
-import logging
 import os
 import sys
 from datetime import datetime, timezone
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
+import logging
+from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, Optional
 
 # Disable comprehensive logging to avoid conflicts with standard logging module
 COMPREHENSIVE_LOGGING_AVAILABLE = False
 ComprehensiveLogger = None
 LogLevel = None
-
 
 def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
     """
@@ -115,7 +114,6 @@ def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
         logger.propagate = False
 
     return logger
-
 
 class Logger:
     """Enhanced logger with additional features."""
@@ -348,7 +346,6 @@ class Logger:
         else:
             self.log_metric("errors")
             self.logger.error(f"OCR failed on {file_path}")
-
 
 # Create default logger instance
 logger = Logger()

@@ -30,6 +30,7 @@ class TrainingDashboard {
     
     init() {
         this.bindEvents();
+        this.bindKeyboardShortcuts();
         this.updateUI();
     }
     
@@ -75,6 +76,38 @@ class TrainingDashboard {
         if (clearFilesBtn) {
             clearFilesBtn.addEventListener('click', () => this.clearAllFiles());
         }
+        
+        // Stop training button
+        const stopTrainingBtn = document.getElementById('stop-training');
+        if (stopTrainingBtn) {
+            stopTrainingBtn.addEventListener('click', () => this.stopTraining());
+        }
+    }
+    
+    bindKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+U or Cmd+U to trigger file upload
+            if ((e.ctrlKey || e.metaKey) && e.key === 'u') {
+                e.preventDefault();
+                this.triggerFileInput();
+            }
+            
+            // Ctrl+Enter or Cmd+Enter to start training
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                const startBtn = document.getElementById('start-training');
+                if (startBtn && !startBtn.disabled) {
+                    this.startTraining();
+                }
+            }
+            
+            // Escape to clear files
+            if (e.key === 'Escape' && this.uploadedFiles.length > 0) {
+                if (confirm('Clear all uploaded files?')) {
+                    this.clearAllFiles();
+                }
+            }
+        });
     }
     
     triggerFileInput() {
@@ -126,7 +159,7 @@ class TrainingDashboard {
     }
     
     validateFile(file) {
-        const maxSize = Infinity; // No file size limit
+        const maxSize = 50 * 1024 * 1024; // 50MB limit to match backend
         const extension = file.name.split('.').pop().toLowerCase();
         
         if (file.size > maxSize) {
@@ -174,6 +207,19 @@ class TrainingDashboard {
         fileItem.querySelector('.file-name').textContent = file.name;
         fileItem.querySelector('.file-info').textContent = 
             `${(file.size / 1024 / 1024).toFixed(2)} MB • ${file.name.split('.').pop().toUpperCase()}`;
+        
+        // Update file icon based on type
+        const extension = file.name.split('.').pop().toLowerCase();
+        const iconSvg = fileItem.querySelector('svg');
+        if (iconSvg) {
+            if (['pdf'].includes(extension)) {
+                iconSvg.classList.add('text-red-500');
+            } else if (['docx', 'doc'].includes(extension)) {
+                iconSvg.classList.add('text-blue-500');
+            } else if (['jpg', 'jpeg', 'png', 'tiff', 'bmp', 'gif'].includes(extension)) {
+                iconSvg.classList.add('text-green-500');
+            }
+        }
         
         const categorySpan = fileItem.querySelector('.file-category');
         categorySpan.textContent = fileType.label;
@@ -266,6 +312,21 @@ class TrainingDashboard {
         const sessionNameInput = document.getElementById('session-name');
         if (!sessionNameInput || !sessionNameInput.value.trim()) {
             this.showError('Please enter a session name.');
+            sessionNameInput?.focus();
+            return;
+        }
+        
+        // Validate session name length
+        const sessionName = sessionNameInput.value.trim();
+        if (sessionName.length < 3) {
+            this.showError('Session name must be at least 3 characters long.');
+            sessionNameInput?.focus();
+            return;
+        }
+        
+        if (sessionName.length > 100) {
+            this.showError('Session name must be less than 100 characters.');
+            sessionNameInput?.focus();
             return;
         }
         
@@ -274,26 +335,53 @@ class TrainingDashboard {
         this.showProgressPanel();
         
         try {
+            // Update progress
+            this.updateProgressDisplay({
+                percentage: 10,
+                current_step: 'Uploading files...'
+            });
+            
             // Collect training configuration
             const config = this.getTrainingConfig();
             
             // Upload files first
             const uploadedFileData = await this.uploadFiles();
             
+            // Update progress
+            this.updateProgressDisplay({
+                percentage: 30,
+                current_step: 'Creating training session...'
+            });
+            
             // Create training session
             const sessionData = await this.createTrainingSession(config, uploadedFileData);
             this.currentSessionId = sessionData.session_id;
             
+            // Update progress
+            this.updateProgressDisplay({
+                percentage: 50,
+                current_step: 'Starting training...'
+            });
+            
             // Start training
             await this.initiateTraining(this.currentSessionId);
             
-            // Monitor progress
+            // Update progress
+            this.updateProgressDisplay({
+                percentage: 60,
+                current_step: 'Training in progress...'
+            });
+            
+            // Show stop button and monitor progress
+            this.showStopTrainingButton();
             this.monitorTrainingProgress();
             
         } catch (error) {
+            console.error('Training error:', error);
             this.showError(`Training failed: ${error.message}`);
             this.isTraining = false;
             this.updateTrainingButtonState(false);
+            this.hideStopTrainingButton();
             this.hideProgressPanel();
         }
     }
@@ -327,8 +415,18 @@ class TrainingDashboard {
         });
         
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'File upload failed');
+            let errorMessage = 'File upload failed';
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorMessage;
+                if (errorData.details && Array.isArray(errorData.details)) {
+                    errorMessage += ': ' + errorData.details.join(', ');
+                }
+            } catch (e) {
+                // If response is not JSON, use status text
+                errorMessage = `File upload failed: ${response.status} ${response.statusText}`;
+            }
+            throw new Error(errorMessage);
         }
         
         return await response.json();
@@ -380,9 +478,23 @@ class TrainingDashboard {
         
         const checkProgress = async () => {
             try {
-                const response = await fetch(`/training/progress/${this.currentSessionId}`);
+                const response = await fetch(`/training/session/${this.currentSessionId}/progress`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
                 if (response.ok) {
-                    const progress = await response.json();
+                    let progress;
+                    try {
+                        const responseText = await response.text();
+                        progress = JSON.parse(responseText);
+                    } catch (jsonError) {
+                        console.error(`JSON parsing error for training progress:`, jsonError);
+                        console.error('Response text:', await response.text());
+                        setTimeout(checkProgress, 5000); // Retry after longer delay
+                        return;
+                    }
+                    
                     this.updateProgressDisplay(progress);
                     
                     if (progress.status === 'completed') {
@@ -395,6 +507,7 @@ class TrainingDashboard {
                     }
                 }
             } catch (error) {
+                console.error('Error checking training progress:', error);
                 setTimeout(checkProgress, 5000); // Retry after longer delay
             }
         };
@@ -423,6 +536,7 @@ class TrainingDashboard {
     onTrainingComplete() {
         this.isTraining = false;
         this.updateTrainingButtonState(false);
+        this.hideStopTrainingButton();
         
         const progressDetails = document.getElementById('progress-details');
         if (progressDetails) {
@@ -440,10 +554,69 @@ class TrainingDashboard {
         this.showSuccess('Training completed successfully!');
     }
     
+    async stopTraining() {
+        if (!this.currentSessionId) {
+            this.showError('No active training session to stop.');
+            return;
+        }
+        
+        if (!confirm('Are you sure you want to stop the current training session? This action cannot be undone.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/training/session/${this.currentSessionId}/stop`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || ''
+                }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                this.isTraining = false;
+                this.updateTrainingButtonState(false);
+                this.hideStopTrainingButton();
+                
+                const progressDetails = document.getElementById('progress-details');
+                if (progressDetails) {
+                    progressDetails.innerHTML = `
+                        <p class="text-orange-600 font-medium">Training stopped by user</p>
+                        <p class="text-sm text-gray-600 mt-1">The training session has been cancelled.</p>
+                    `;
+                }
+                
+                this.showSuccess('Training session stopped successfully.');
+            } else {
+                const errorData = await response.json();
+                this.showError(`Failed to stop training: ${errorData.error || 'Unknown error'}`);
+            }
+        } catch (error) {
+            console.error('Error stopping training:', error);
+            this.showError(`Failed to stop training: ${error.message}`);
+        }
+    }
+    
     onTrainingFailed(error) {
         this.isTraining = false;
         this.updateTrainingButtonState(false);
+        this.hideStopTrainingButton();
         this.showError(`Training failed: ${error || 'Unknown error'}`);
+    }
+    
+    showStopTrainingButton() {
+        const stopBtn = document.getElementById('stop-training');
+        if (stopBtn) {
+            stopBtn.style.display = 'inline-flex';
+        }
+    }
+    
+    hideStopTrainingButton() {
+        const stopBtn = document.getElementById('stop-training');
+        if (stopBtn) {
+            stopBtn.style.display = 'none';
+        }
     }
     
     updateTrainingButtonState(isTraining) {

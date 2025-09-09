@@ -1,6 +1,6 @@
 import os
-from dataclasses import dataclass
 from pathlib import Path
+from dataclasses import dataclass
 from typing import List
 
 from dotenv import load_dotenv
@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
-
 
 @dataclass
 class Config:
@@ -43,6 +42,22 @@ class Config:
                 "HandwritingOCR API key not configured - OCR service will be disabled"
             )
 
+    @property
+    def ocr(self):
+        """Get OCR configuration object with enabled property."""
+        class OCRConfig:
+            def __init__(self, config):
+                self.api_key = config.handwriting_ocr_api_key
+                self.confidence_threshold = config.ocr_confidence_threshold
+                self.language = config.ocr_language
+                self.delete_after = config.handwriting_ocr_delete_after
+            
+            @property
+            def enabled(self):
+                """Check if OCR is enabled (has API key)."""
+                return bool(self.api_key and self.api_key.strip())
+        
+        return OCRConfig(self)
 
 class ConfigManager:
     """Manages application configuration."""

@@ -19,7 +19,6 @@ else:
 # Initialize SocketIO
 socketio = SocketIO(cors_allowed_origins="*", async_mode="threading")
 
-
 class RealtimeService:
     """Real-time service for WebSocket communication and live updates."""
 
@@ -324,10 +323,8 @@ class RealtimeService:
         if self.websocket_manager:
             self.websocket_manager.disconnect_user(user_id, reason)
 
-
 # Global instance
 realtime_service = RealtimeService()
-
 
 def init_realtime_service(app):
     """Initialize the realtime service with Flask app.

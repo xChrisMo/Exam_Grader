@@ -6,12 +6,12 @@ troubleshooting and system analysis.
 """
 
 import os
-import platform
 import sys
-import threading
-from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+import platform
+import threading
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, List
 
 import psutil
@@ -19,7 +19,6 @@ import psutil
 from src.services.monitoring.monitoring_service import health_monitor
 from src.services.service_registry import service_registry
 from utils.logger import logger
-
 
 @dataclass
 class SystemInfo:
@@ -35,7 +34,6 @@ class SystemInfo:
     disk_total_gb: float
     uptime_seconds: float
 
-
 @dataclass
 class ProcessInfo:
     """Process information structure."""
@@ -48,7 +46,6 @@ class ProcessInfo:
     threads: int
     status: str
     create_time: datetime
-
 
 @dataclass
 class DiagnosticReport:
@@ -63,7 +60,6 @@ class DiagnosticReport:
     performance_metrics: Dict[str, Any]
     configuration_info: Dict[str, Any]
     recommendations: List[str]
-
 
 class DiagnosticCollector:
     """
@@ -517,7 +513,6 @@ class DiagnosticCollector:
         with self.lock:
             self.collection_history.clear()
         logger.info("Diagnostic history cleared")
-
 
 # Global instance
 diagnostic_collector = DiagnosticCollector()

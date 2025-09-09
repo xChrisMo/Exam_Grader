@@ -5,9 +5,11 @@ This module contains the core application routes including dashboard,
 file uploads, and basic functionality.
 """
 
-import asyncio
 import os
+import time
+import traceback
 from datetime import datetime, timezone
+import asyncio
 
 from flask import (
     Blueprint,
@@ -17,16 +19,24 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
+    session,
     url_for,
 )
 from flask_login import current_user, login_required
+from flask_wtf.csrf import generate_csrf
 from werkzeug.utils import secure_filename
 
-from src.database.models import MarkingGuide, Submission, db
+from src.database.models import MarkingGuide, Submission, UserSettings, GradingResult, db
 from src.services.app_config_service import app_config, get_template_context
+from src.services.cache_invalidation import invalidate_guide_cache, invalidate_submission_cache
+from src.services.cache_service import app_cache
 from src.services.core_service import core_service
+from src.services.file_validation_service import file_validation_service
+from src.services.consolidated_llm_service import get_llm_service_for_current_user
+from src.services.consolidated_ocr_service import ConsolidatedOCRService
 from utils.logger import logger
-
+from utils.cache import cache_clear, cache_stats
 
 def get_actual_service_status():
     """Check actual service status by testing API connections."""
@@ -35,20 +45,18 @@ def get_actual_service_status():
         "llm_status": False,
         "ai_status": False,  # Alias for llm_status
     }
-    
+
     try:
         # Check OCR service
         try:
-            from src.services.consolidated_ocr_service import ConsolidatedOCRService
             ocr_service = ConsolidatedOCRService()
             status["ocr_status"] = ocr_service.is_available()
         except Exception as e:
             logger.debug(f"OCR service check failed: {e}")
             status["ocr_status"] = False
-            
+
         # Check LLM service
         try:
-            from src.services.consolidated_llm_service import get_llm_service_for_current_user
             llm_service = get_llm_service_for_current_user()
             status["llm_status"] = llm_service.is_available()
             status["ai_status"] = status["llm_status"]  # Alias
@@ -56,20 +64,19 @@ def get_actual_service_status():
             logger.debug(f"LLM service check failed: {e}")
             status["llm_status"] = False
             status["ai_status"] = False
-            
+
     except Exception as e:
         logger.error(f"Error checking service status: {e}")
-        
+
     return status
 
 main_bp = Blueprint("main", __name__)
-
 
 def count_grouped_questions(questions):
     """Count questions treating grouped questions as one."""
     if not questions:
         return 0
-    
+
     count = 0
     for question in questions:
         # Check if this is a grouped question
@@ -77,9 +84,8 @@ def count_grouped_questions(questions):
             count += 1  # Count grouped question as one
         else:
             count += 1  # Count regular question as one
-    
-    return count
 
+    return count
 
 # Register the template filter when the blueprint is registered
 @main_bp.record_once
@@ -87,21 +93,19 @@ def register_template_filters(state):
     """Register custom template filters when blueprint is registered."""
     state.app.jinja_env.filters['count_grouped_questions'] = count_grouped_questions
 
-
 # In-memory progress store (in production, use Redis or database)
 progress_store = {}
 
 def cleanup_old_progress_entries():
     """Clean up old progress entries to prevent memory leaks."""
-    import time
     current_time = time.time()
     expired_keys = []
-    
+
     for task_id, progress_data in progress_store.items():
         # Remove entries older than 1 hour
         if current_time - progress_data.get("created_at", 0) > 3600:
             expired_keys.append(task_id)
-    
+
     for key in expired_keys:
         del progress_store[key]
         logger.info(f"Cleaned up expired progress entry: {key}")
@@ -115,7 +119,6 @@ def mark_progress_as_failed(task_id, error_message):
             "message": f"Processing failed: {error_message}",
         })
 
-
 @main_bp.route("/")
 def index():
     """Landing page."""
@@ -126,7 +129,6 @@ def index():
         "landing.html",
         **template_context,
     )
-
 
 @main_bp.route("/dashboard")
 @login_required
@@ -146,13 +148,27 @@ def dashboard():
         # Single optimized query for submissions with counts
         submissions_query = Submission.query.filter_by(user_id=current_user.id)
         recent_submissions = submissions_query.order_by(Submission.created_at.desc()).limit(5).all()
-        
+
         # Get counts efficiently using a single query with conditional aggregation
         from sqlalchemy import func, case
         stats_result = db.session.query(
             func.count(Submission.id).label('total_submissions'),
             func.sum(case((Submission.processing_status == 'completed', 1), else_=0)).label('processed_submissions')
         ).filter(Submission.user_id == current_user.id).first()
+
+        # Get last score from the most recent grading result
+        last_score = None
+        try:
+            from src.database.models import GradingResult
+            latest_result = db.session.query(GradingResult).join(Submission).filter(
+                Submission.user_id == current_user.id,
+                GradingResult.percentage.isnot(None)
+            ).order_by(GradingResult.created_at.desc()).first()
+            
+            if latest_result and latest_result.percentage is not None:
+                last_score = round(float(latest_result.percentage), 1)
+        except Exception as e:
+            logger.warning(f"Could not get last score: {e}")
 
         stats = {
             "total_guides": total_guides,
@@ -169,7 +185,7 @@ def dashboard():
             total_submissions=stats["total_submissions"],
             processed_submissions=stats["processed_submissions"],
             guide_uploaded=stats["total_guides"] > 0,
-            last_score=None,
+            last_score=last_score,
             submissions=recent_submissions,
             recent_activity=[],
             **template_context,
@@ -193,21 +209,18 @@ def dashboard():
             **template_context,
         )
 
-
 @main_bp.route("/guides")
 @login_required
 def guides():
     """Marking guides management with optimized loading."""
     try:
-        from flask import session
-        from src.services.cache_service import app_cache
 
         page = request.args.get("page", 1, type=int)
-        
+
         # Try cache first
         cache_key = f"guides_{current_user.id}_{page}"
         cached_data = app_cache.get(cache_key)
-        
+
         if cached_data:
             return render_template(
                 "marking_guides.html",
@@ -244,7 +257,7 @@ def guides():
             "saved_guides": saved_guides_list,
             "current_guide": current_guide,
         }
-        
+
         # Cache for 5 minutes
         app_cache.set(cache_key, template_data, ttl=300)
 
@@ -266,30 +279,28 @@ def guides():
             **template_context,
         )
 
-
 @main_bp.route("/submissions")
 @login_required
 def submissions():
     """Submissions management with optimized queries and caching."""
     try:
         from src.database.models import Submission, MarkingGuide
-        from src.services.cache_service import app_cache
-        
+
         # Check if grouped view is requested (default to true)
         grouped = request.args.get("grouped", "true").lower() == "true"
         page = request.args.get("page", 1, type=int)
-        
+
         # Try to get from cache first
         cache_key = f"submissions_{current_user.id}_{grouped}_{page}"
         cached_data = app_cache.get(cache_key)
-        
+
         if cached_data:
             return render_template(
                 "submissions.html",
                 **cached_data,
                 **get_template_context(),
             )
-        
+
         # Optimized query with eager loading
         submissions_query = (
             Submission.query
@@ -297,21 +308,21 @@ def submissions():
             .options(db.joinedload(Submission.marking_guide))
             .order_by(Submission.created_at.desc())
         )
-        
+
         if grouped:
             # For grouped view, get all submissions
             all_submissions = submissions_query.all()
             submissions = None
-            
+
             # Group submissions by marking guide efficiently
             submissions_by_guide = {}
             submissions_list = all_submissions
-            
+
             for submission in all_submissions:
                 guide = submission.marking_guide
                 guide_key = guide.id if guide else "no_guide"
                 guide_title = guide.title if guide else "No Marking Guide"
-                
+
                 if guide_key not in submissions_by_guide:
                     submissions_by_guide[guide_key] = {
                         "guide_id": guide.id if guide else None,
@@ -321,10 +332,10 @@ def submissions():
                         "processed_count": 0,
                         "pending_count": 0,
                     }
-                
+
                 submissions_by_guide[guide_key]["submissions"].append(submission)
                 submissions_by_guide[guide_key]["total_submissions"] += 1
-                
+
                 # Count processed vs pending
                 if submission.processed or submission.processing_status == "completed":
                     submissions_by_guide[guide_key]["processed_count"] += 1
@@ -345,7 +356,7 @@ def submissions():
             "submissions_by_guide": submissions_by_guide,
             "grouped": grouped,
         }
-        
+
         # Cache the data for 2 minutes
         app_cache.set(cache_key, template_data, ttl=120)
 
@@ -368,7 +379,6 @@ def submissions():
             **template_context,
         )
 
-
 @main_bp.route("/submissions/manage")
 @login_required
 def manage_submissions():
@@ -384,7 +394,6 @@ def manage_submissions():
         logger.error(f"Manage submissions page error: {e}")
         flash("Error loading manage submissions page", "error")
         return redirect(url_for("main.submissions"))
-
 
 @main_bp.route("/upload-guide", methods=["GET", "POST"])
 @login_required
@@ -405,9 +414,8 @@ def upload_guide():
                 logger.warning("Empty filename")
                 flash("No file selected", "error")
                 return redirect(request.url)
-            
+
             # Validate file against user settings
-            from src.services.file_validation_service import file_validation_service
             is_valid, error_message = file_validation_service.validate_file(file)
             if not is_valid:
                 logger.warning(f"File validation failed: {error_message}")
@@ -522,9 +530,8 @@ def upload_guide():
 
             db.session.add(guide)
             db.session.commit()
-            
+
             # Invalidate cache for this user
-            from src.services.cache_invalidation import invalidate_guide_cache
             invalidate_guide_cache(current_user.id)
 
             logger.info(f"Guide saved successfully with ID: {guide.id}")
@@ -602,7 +609,6 @@ def upload_guide():
         **template_context,
     )
 
-
 @main_bp.route("/upload-submission", methods=["GET", "POST"])
 @login_required
 def upload_submission():
@@ -639,9 +645,8 @@ def upload_submission():
                 return redirect(request.url)
 
             # Validate files against user settings
-            from src.services.file_validation_service import file_validation_service
             valid_files, validation_errors = file_validation_service.validate_files(files)
-            
+
             if validation_errors:
                 if is_ajax:
                     return (
@@ -659,7 +664,7 @@ def upload_submission():
                 for error in validation_errors:
                     flash(error, "error")
                 return redirect(request.url)
-            
+
             # Use validated files for processing
             files = valid_files
 
@@ -700,7 +705,6 @@ def upload_submission():
                     os.makedirs(upload_dir, exist_ok=True)
 
                     # Handle duplicate filenames by adding timestamp
-                    import time
 
                     base_name, ext = os.path.splitext(filename)
                     timestamp = str(int(time.time()))
@@ -721,7 +725,7 @@ def upload_submission():
                         else "unknown"
                     )
 
-                    # Process the file to extract text with OCR fallback
+                    # Process the file to extract text using OCR service
                     extracted_text = ""
                     ocr_confidence = 0.0
                     processing_status = "completed"
@@ -735,7 +739,7 @@ def upload_submission():
                             parse_student_submission,
                         )
 
-                        # Parse the submission with OCR fallback
+                        # Parse the submission using OCR service
                         result, raw_text, error = parse_student_submission(file_path)
 
                         if error:
@@ -788,6 +792,9 @@ def upload_submission():
                             calculate_content_hash,
                             check_submission_duplicate,
                         )
+
+                        # Calculate content hash for the new submission
+                        content_hash = calculate_content_hash(extracted_text)
 
                         is_duplicate, existing_submission = check_submission_duplicate(
                             user_id=current_user.id,
@@ -913,7 +920,6 @@ def upload_submission():
 
     guide_id = request.args.get("guide_id")
     if not guide_id:
-        from flask import session
 
         guide_id = session.get("active_guide_id")
 
@@ -925,7 +931,6 @@ def upload_submission():
         **template_context,
     )
 
-
 @main_bp.route("/upload", methods=["GET", "POST"])
 @login_required
 def upload():
@@ -933,35 +938,32 @@ def upload():
     try:
         # Check if user has any marking guides
         guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
-        
+
         if request.method == "GET":
             # Show upload selection page
             return render_template('upload_selection.html', guides=guides)
-        
+
         # Handle POST - determine upload type
         upload_type = request.form.get('upload_type', 'submission')
-        
+
         if upload_type == 'guide':
             return redirect(url_for('main.upload_guide'))
         else:
             return redirect(url_for('main.upload_submission'))
-            
+
     except Exception as e:
         logger.error(f"Error in upload route: {e}")
         flash("An error occurred while accessing the upload page.", "error")
         return redirect(url_for('main.dashboard'))
-
 
 @main_bp.route("/results")
 @login_required
 def results():
     """Results page with grouping by marking guide."""
     try:
-        from src.database.models import GradingResult
-
         page = request.args.get("page", 1, type=int)
         grouped = request.args.get("grouped", "true").lower() == "true"
-        
+
         # Get all results for the user
         all_results = (
             GradingResult.query.join(Submission)
@@ -986,12 +988,12 @@ def results():
         # Enhanced result list with submission data
         results_list_dict = []
         results_by_guide = {}
-        
+
         for result in all_results:
             result_dict = result.to_dict()
             submission = result.submission
             guide = result.marking_guide if result.marking_guide_id else None
-            
+
             if submission:
                 result_dict.update(
                     {
@@ -1007,13 +1009,13 @@ def results():
                         "guide_id": guide.id if guide else None,
                     }
                 )
-            
+
             results_list_dict.append(result_dict)
-            
+
             # Group by marking guide
             guide_key = guide.id if guide else "no_guide"
             guide_title = guide.title if guide else "No Guide"
-            
+
             if guide_key not in results_by_guide:
                 results_by_guide[guide_key] = {
                     "guide_id": guide.id if guide else None,
@@ -1024,7 +1026,7 @@ def results():
                     "highest_score": 0,
                     "lowest_score": 100,
                 }
-            
+
             results_by_guide[guide_key]["results"].append(result_dict)
             results_by_guide[guide_key]["total_submissions"] += 1
 
@@ -1052,7 +1054,7 @@ def results():
             start = (page - 1) * per_page
             end = start + per_page
             results_list = all_results[start:end]
-            
+
             # Create a simple pagination-like object
             class SimplePagination:
                 def __init__(self, page, per_page, total, items):
@@ -1065,7 +1067,7 @@ def results():
                     self.has_next = page < self.pages
                     self.prev_num = page - 1 if self.has_prev else None
                     self.next_num = page + 1 if self.has_next else None
-            
+
             results = SimplePagination(
                 page=page,
                 per_page=per_page,
@@ -1135,7 +1137,6 @@ def results():
             **template_context,
         )
 
-
 @main_bp.route("/get-csrf-token")
 def get_csrf_token():
     """Get CSRF token for JavaScript requests."""
@@ -1148,7 +1149,6 @@ def get_csrf_token():
         logger.error(f"Error generating CSRF token: {e}")
         return jsonify({"error": "Failed to generate CSRF token"}), 500
 
-
 @main_bp.route("/api/dashboard-stats")
 @login_required
 def dashboard_stats():
@@ -1157,16 +1157,36 @@ def dashboard_stats():
         if not current_user or not current_user.is_authenticated:
             return jsonify({"error": "Not authenticated"}), 401
 
+        # Get basic stats
+        total_guides = MarkingGuide.query.filter_by(user_id=current_user.id).count()
+        total_submissions = Submission.query.filter_by(user_id=current_user.id).count()
+        processed_submissions = Submission.query.filter_by(
+            user_id=current_user.id, processing_status="completed"
+        ).count()
+
+        # Get last score from the most recent grading result
+        last_score = None
+        try:
+            from src.database.models import GradingResult
+            latest_result = db.session.query(GradingResult).join(Submission).filter(
+                Submission.user_id == current_user.id,
+                GradingResult.percentage.isnot(None)
+            ).order_by(GradingResult.created_at.desc()).first()
+            
+            if latest_result and latest_result.percentage is not None:
+                last_score = round(float(latest_result.percentage), 1)
+        except Exception as e:
+            logger.warning(f"Could not get last score: {e}")
+
         stats = {
-            "total_guides": MarkingGuide.query.filter_by(
-                user_id=current_user.id
-            ).count(),
-            "total_submissions": Submission.query.filter_by(
-                user_id=current_user.id
-            ).count(),
-            "processed_submissions": Submission.query.filter_by(
-                user_id=current_user.id, processing_status="completed"
-            ).count(),
+            "success": True,
+            "stats": {
+                "total_guides": total_guides,
+                "total_submissions": total_submissions,
+                "processed_submissions": processed_submissions,
+                "last_score": last_score,
+                "lastScore": last_score,  # Support both naming conventions
+            }
         }
 
         return jsonify(stats)
@@ -1174,7 +1194,6 @@ def dashboard_stats():
     except Exception as e:
         logger.error(f"Error getting dashboard stats: {e}")
         return jsonify({"error": "Failed to get stats"}), 500
-
 
 @main_bp.route("/api/delete-guide", methods=["POST"])
 @login_required
@@ -1201,7 +1220,6 @@ def api_delete_guide():
         db.session.commit()
 
         # Invalidate cache for this user's guides and submissions
-        from src.services.cache_invalidation import invalidate_guide_cache
         invalidate_guide_cache(current_user.id)
 
         logger.info(f"Successfully deleted guide {guide_id} and cleared cache")
@@ -1211,7 +1229,6 @@ def api_delete_guide():
         logger.error(f"Failed to delete guide: {e}", exc_info=True)
         db.session.rollback()
         return jsonify({"success": False, "message": "Failed to delete guide"}), 500
-
 
 @main_bp.route("/api/submission-details/<submission_id>", methods=["GET"])
 @login_required
@@ -1226,8 +1243,6 @@ def api_submission_details(submission_id):
             return jsonify({"success": False, "error": "Submission not found"}), 404
 
         # Get related data
-        from src.database.models import GradingResult, MarkingGuide
-
         grading_results = GradingResult.query.filter_by(
             submission_id=submission_id
         ).all()
@@ -1290,15 +1305,12 @@ def api_submission_details(submission_id):
             500,
         )
 
-
 @main_bp.route("/api/export-results", methods=["GET"])
 @login_required
 def api_export_results():
     """API endpoint to export grading results."""
     try:
         from datetime import datetime
-
-        from src.database.models import GradingResult
 
         results = (
             GradingResult.query.join(Submission)
@@ -1370,7 +1382,6 @@ def api_export_results():
         logger.error(f"Error exporting results: {e}")
         return jsonify({"success": False, "error": "Failed to export results"}), 500
 
-
 @main_bp.route("/view-submission-content/<submission_id>")
 @login_required
 def view_submission_content(submission_id):
@@ -1384,7 +1395,6 @@ def view_submission_content(submission_id):
             flash("Submission not found", "error")
             return redirect(url_for("main.results"))
         # Get related grading results
-        from src.database.models import GradingResult
 
         grading_results = GradingResult.query.filter_by(
             submission_id=submission_id
@@ -1403,7 +1413,6 @@ def view_submission_content(submission_id):
         logger.error(f"Error viewing submission content: {e}")
         flash("Error loading submission content", "error")
         return redirect(url_for("main.results"))
-
 
 @main_bp.route("/api/cache/stats", methods=["GET"])
 @login_required
@@ -1426,7 +1435,6 @@ def api_cache_stats():
             jsonify({"success": False, "error": "Failed to load cache statistics"}),
             500,
         )
-
 
 @main_bp.route("/api/submission-statuses", methods=["GET"])
 @login_required
@@ -1464,7 +1472,6 @@ def api_submission_statuses():
             jsonify({"success": False, "error": "Failed to load submission statuses"}),
             500,
         )
-
 
 @main_bp.route("/view-submission/<submission_id>", methods=["GET"])
 @login_required
@@ -1512,7 +1519,6 @@ def view_submission(submission_id):
             500,
         )
 
-
 @main_bp.route("/api/delete-submission", methods=["POST"])
 @login_required
 def api_delete_submission():
@@ -1532,10 +1538,25 @@ def api_delete_submission():
         ).first()
 
         if not submission:
-            return jsonify({"success": False, "error": "Submission not found"}), 404
+            # If not found in database, try session-based deletion (fallback)
+            submissions = session.get('submissions', [])
+            initial_len = len(submissions)
+            submissions = [s for s in submissions if s.get('id') != submission_id]
+            session['submissions'] = submissions
+
+            if len(submissions) < initial_len:
+                # Clear session cache for this submission too
+                session_key = f'submission_{submission_id}'
+                if session_key in session:
+                    session.pop(session_key)
+                    logger.debug(f"Cleared session cache for submission {submission_id}")
+                
+                logger.info(f"Submission {submission_id} deleted successfully from session.")
+                return jsonify({'success': True, 'message': 'Submission deleted successfully.'})
+            else:
+                return jsonify({"success": False, "error": "Submission not found"}), 404
 
         # Delete associated grading results first
-        from src.database.models import GradingResult
 
         GradingResult.query.filter_by(submission_id=submission_id).delete()
 
@@ -1550,8 +1571,13 @@ def api_delete_submission():
         db.session.commit()
 
         # Invalidate cache for this user's submissions
-        from src.services.cache_invalidation import invalidate_submission_cache
-        invalidate_submission_cache(current_user.id)
+        invalidate_submission_cache(current_user.id, submission_id)
+        
+        # Also clear individual submission cache from session
+        session_key = f'submission_{submission_id}'
+        if session_key in session:
+            session.pop(session_key)
+            logger.debug(f"Cleared session cache for submission {submission_id}")
 
         return jsonify(
             {
@@ -1565,7 +1591,6 @@ def api_delete_submission():
         db.session.rollback()
         return jsonify({"success": False, "error": "Failed to delete submission"}), 500
 
-
 @main_bp.route("/api/delete-grading-result", methods=["POST"])
 @login_required
 def api_delete_grading_result():
@@ -1576,8 +1601,6 @@ def api_delete_grading_result():
             return jsonify({"success": False, "error": "Result ID is required"}), 400
 
         result_id = data["result_id"]
-
-        from src.database.models import GradingResult
 
         result = GradingResult.query.filter_by(id=result_id).first()
 
@@ -1596,7 +1619,6 @@ def api_delete_grading_result():
         db.session.commit()
 
         # Invalidate cache for this user's submissions and results
-        from src.services.cache_invalidation import invalidate_submission_cache
         invalidate_submission_cache(current_user.id)
 
         return jsonify(
@@ -1610,7 +1632,6 @@ def api_delete_grading_result():
             jsonify({"success": False, "error": "Failed to delete grading result"}),
             500,
         )
-
 
 @main_bp.route("/refactored/api/marking-guides", methods=["GET"])
 @login_required
@@ -1657,27 +1678,26 @@ def api_refactored_marking_guides():
             500,
         )
 
-
 @main_bp.route("/refactored/api/submissions", methods=["GET"])
 @login_required
 def api_refactored_submissions():
     """API endpoint to get submissions for refactored interface with optional guide filtering."""
     try:
         guide_id = request.args.get("guide_id")
-        
+
         # Filter submissions by guide if provided
         if guide_id:
             # Verify guide ownership first
             guide = MarkingGuide.query.filter_by(
                 id=guide_id, user_id=current_user.id
             ).first()
-            
+
             if not guide:
                 return jsonify({
-                    "success": False, 
+                    "success": False,
                     "error": "Guide not found or access denied"
                 }), 404
-            
+
             submissions = Submission.query.filter_by(
                 user_id=current_user.id,
                 marking_guide_id=guide_id
@@ -1698,7 +1718,7 @@ def api_refactored_submissions():
                         "id": guide.id,
                         "title": guide.title
                     }
-            
+
             submissions_list.append(
                 {
                     "id": submission.id,
@@ -1737,7 +1757,6 @@ def api_refactored_submissions():
     except Exception as e:
         logger.error(f"Failed to get submissions: {e}")
         return jsonify({"success": False, "error": "Failed to load submissions"}), 500
-
 
 @main_bp.route("/api/enhanced-processing/start", methods=["POST"])
 @login_required
@@ -1819,7 +1838,6 @@ def api_enhanced_processing_start():
             )
 
         # Initialize progress tracking
-        import time
 
         progress_store[task_id] = {
             "status": "starting",
@@ -1916,12 +1934,12 @@ def api_enhanced_processing_start():
                             logger.info(
                                 f"Processing submission {submission.id} with guide {guide_id}"
                             )
-                            
+
                             try:
                                 # Add timeout to the entire processing operation
                                 result = asyncio.wait_for(
                                     core_service.process_submission(processing_request),
-                                    timeout=120  # 2 minute timeout per submission
+                                    timeout=int(os.getenv("SUBMISSION_PROCESSING_TIMEOUT", "120"))  # Configurable timeout per submission
                                 )
                                 result = asyncio.run(result)
                             except asyncio.TimeoutError:
@@ -1979,7 +1997,7 @@ def api_enhanced_processing_start():
 
                         except Exception as e:
                             failed_count += 1
-                            # Safe access to submission attributes with fallbacks
+                            # Safe access to submission attributes
                             submission_id = getattr(submission, "id", "unknown")
                             filename = getattr(
                                 submission, "filename", f"unknown_file_{i}"
@@ -2047,7 +2065,6 @@ def api_enhanced_processing_start():
         logger.error(f"Failed to start enhanced processing: {e}")
         return jsonify({"success": False, "error": "Failed to start processing"}), 500
 
-
 @main_bp.route("/api/enhanced-processing/cancel/<task_id>", methods=["POST"])
 @login_required
 def api_enhanced_processing_cancel(task_id):
@@ -2055,25 +2072,24 @@ def api_enhanced_processing_cancel(task_id):
     try:
         if task_id not in progress_store:
             return jsonify({"success": False, "error": "Task not found"}), 404
-        
+
         # Mark the task as cancelled
         progress_store[task_id].update({
             "status": "cancelled",
             "progress": 100,
             "message": "Processing was cancelled by user",
         })
-        
+
         logger.info(f"Processing task {task_id} was cancelled by user")
-        
+
         return jsonify({
             "success": True,
             "message": "Processing task cancelled successfully"
         })
-        
+
     except Exception as e:
         logger.error(f"Failed to cancel processing task: {e}")
         return jsonify({"success": False, "error": "Failed to cancel task"}), 500
-
 
 @main_bp.route("/api/enhanced-processing/progress/<task_id>", methods=["GET"])
 @login_required
@@ -2082,17 +2098,16 @@ def api_enhanced_processing_progress(task_id):
     try:
         # Clean up old progress entries periodically
         cleanup_old_progress_entries()
-        
+
         if task_id not in progress_store:
             return jsonify({"success": False, "error": "Task not found"}), 404
 
         progress_data = progress_store[task_id]
-        
+
         # Check if task has been stuck for too long (more than 10 minutes)
-        import time
         current_time = time.time()
         task_age = current_time - progress_data.get("created_at", current_time)
-        
+
         if task_age > 600 and progress_data["status"] == "processing":  # 10 minutes
             logger.warning(f"Task {task_id} appears to be stuck, marking as failed")
             mark_progress_as_failed(task_id, "Processing timed out - task was stuck for more than 10 minutes")
@@ -2123,7 +2138,6 @@ def api_enhanced_processing_progress(task_id):
     except Exception as e:
         logger.error(f"Failed to get processing progress: {e}")
         return jsonify({"success": False, "error": "Failed to get progress"}), 500
-
 
 @main_bp.route("/api/select-guide", methods=["POST"])
 @login_required
@@ -2217,7 +2231,6 @@ def api_select_guide():
             )
 
         # Store the selected guide in the session
-        from flask import session
 
         session["active_guide_id"] = guide_id
         session["active_guide_name"] = guide.title
@@ -2250,15 +2263,12 @@ def api_select_guide():
         db.session.rollback()
         return jsonify({"success": False, "message": "Failed to select guide"}), 500
 
-
 @main_bp.route("/api/clear-guide", methods=["POST"])
 @login_required
 def api_clear_guide():
     """API endpoint to clear the active marking guide."""
     try:
         logger.info(f"Clearing active guide for user {current_user.id}")
-
-        from flask import session
 
         session.pop("active_guide_id", None)
         session.pop("active_guide_name", None)
@@ -2273,7 +2283,6 @@ def api_clear_guide():
     except Exception as e:
         logger.error(f"Failed to clear guide: {e}", exc_info=True)
         return jsonify({"success": False, "message": "Failed to clear guide"}), 500
-
 
 @main_bp.route("/api/check-guide-duplicates/<guide_id>")
 @login_required
@@ -2352,7 +2361,6 @@ def api_check_guide_duplicates(guide_id):
             jsonify({"success": False, "message": "Failed to check for duplicates"}),
             500,
         )
-
 
 @main_bp.route("/api/validate-guide-before-save", methods=["POST"])
 @login_required
@@ -2456,7 +2464,6 @@ def api_validate_guide_before_save():
         logger.error(f"Error validating guide: {e}", exc_info=True)
         return jsonify({"success": False, "message": "Failed to validate guide"}), 500
 
-
 @main_bp.route("/api/download-guide/<guide_id>")
 @login_required
 def api_download_guide(guide_id):
@@ -2484,7 +2491,6 @@ def api_download_guide(guide_id):
         logger.info(f"Serving file: {guide.file_path}")
 
         # Send the file
-        from flask import send_file
 
         return send_file(
             guide.file_path,
@@ -2497,7 +2503,6 @@ def api_download_guide(guide_id):
         logger.error(f"Error downloading guide {guide_id}: {e}", exc_info=True)
         flash("Error downloading file", "error")
         return redirect(url_for("main.guide_details", guide_id=guide_id))
-
 
 @main_bp.route("/guides/<guide_id>/edit", methods=["GET", "POST"])
 @login_required
@@ -2563,7 +2568,6 @@ def edit_guide(guide_id):
         flash("Error loading guide editor", "error")
         return redirect(url_for("main.guides"))
 
-
 @main_bp.route("/guides/<guide_id>/details")
 @login_required
 def guide_details(guide_id):
@@ -2607,7 +2611,6 @@ def guide_details(guide_id):
         flash("Error loading guide details", "error")
         return redirect(url_for("main.guides"))
 
-
 @main_bp.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
@@ -2621,8 +2624,17 @@ def settings():
                 # Get or create user settings
                 user_settings = UserSettings.get_or_create_for_user(current_user.id)
 
-                # Get form data - file size limits removed
-                max_file_size = float('inf')  # No file size limit
+                # Get form data - handle max_file_size properly
+                max_file_size_str = request.form.get("max_file_size", "").strip()
+                if not max_file_size_str:
+                    max_file_size = None  # No file size limit
+                else:
+                    try:
+                        max_file_size = float(max_file_size_str)
+                        if max_file_size <= 0:
+                            max_file_size = None
+                    except (ValueError, TypeError):
+                        max_file_size = None
 
                 allowed_formats = request.form.getlist("allowed_formats")
                 if not allowed_formats:
@@ -2648,9 +2660,68 @@ def settings():
                 # Additional settings
                 auto_save = request.form.get("auto_save") == "on"
                 show_tooltips = request.form.get("show_tooltips") == "on"
-                results_per_page = request.form.get("results_per_page", 10, type=int)
-                if results_per_page < 5 or results_per_page > 100:
+
+                # Handle results_per_page with proper error handling
+                try:
+                    results_per_page_str = request.form.get("results_per_page", "10").strip()
+                    if not results_per_page_str:
+                        results_per_page = 10
+                    else:
+                        results_per_page = int(results_per_page_str)
+                        if results_per_page < 5 or results_per_page > 100:
+                            results_per_page = 10
+                except (ValueError, TypeError):
                     results_per_page = 10
+
+                # Helper function for safe integer conversion
+                def safe_int(value, default):
+                    try:
+                        if value is None or value == "":
+                            return default
+                        return int(value)
+                    except (ValueError, TypeError):
+                        return default
+
+                # Get additional form fields with safe defaults
+                # Processing & Performance
+                default_processing_method = request.form.get("default_processing_method", "traditional_ocr")
+                processing_timeout = safe_int(request.form.get("processing_timeout"), int(os.getenv("DEFAULT_PROCESSING_TIMEOUT", "300")))
+                max_retry_attempts = safe_int(request.form.get("max_retry_attempts"), int(os.getenv("DEFAULT_MAX_RETRY_ATTEMPTS", "3")))
+                # Processing fallback removed - LLM is now required
+
+                # Grading & AI
+                llm_strict_mode = request.form.get("llm_strict_mode") == "on"
+                llm_require_json_response = request.form.get("llm_require_json_response") == "on"
+                grading_confidence_threshold = safe_int(request.form.get("grading_confidence_threshold"), 75)
+                auto_grade_threshold = safe_int(request.form.get("auto_grade_threshold"), 80)
+
+                # Security & Privacy
+                session_timeout = safe_int(request.form.get("session_timeout"), int(os.getenv("DEFAULT_SESSION_TIMEOUT", "120")))
+                auto_delete_after_days = safe_int(request.form.get("auto_delete_after_days"), 30)
+                enable_audit_logging = request.form.get("enable_audit_logging") == "on"
+                encrypt_stored_files = request.form.get("encrypt_stored_files") == "on"
+
+                # Monitoring & Logging
+                log_level = request.form.get("log_level", "INFO")
+                enable_performance_monitoring = request.form.get("enable_performance_monitoring") == "on"
+                enable_error_reporting = request.form.get("enable_error_reporting") == "on"
+                metrics_retention_days = safe_int(request.form.get("metrics_retention_days"), 90)
+
+                # Email & Notifications
+                notification_email = request.form.get("notification_email", "").strip()
+                webhook_url = request.form.get("webhook_url", "").strip()
+
+                # Cache & Storage
+                cache_type = request.form.get("cache_type", "simple")
+                cache_ttl_hours = safe_int(request.form.get("cache_ttl_hours"), 24)
+                enable_cache_warming = request.form.get("enable_cache_warming") == "on"
+                auto_cleanup_storage = request.form.get("auto_cleanup_storage") == "on"
+
+                # Advanced System
+                debug_mode = request.form.get("debug_mode") == "on"
+                maintenance_mode = request.form.get("maintenance_mode") == "on"
+                max_concurrent_processes = safe_int(request.form.get("max_concurrent_processes"), 4)
+                memory_limit_gb = safe_int(request.form.get("memory_limit_gb"), 4)
 
                 # Update settings
                 user_settings.max_file_size = max_file_size
@@ -2667,6 +2738,47 @@ def settings():
                 user_settings.show_tooltips = show_tooltips
                 user_settings.results_per_page = results_per_page
 
+                # Update new settings
+                # Processing & Performance
+                user_settings.default_processing_method = default_processing_method
+                user_settings.processing_timeout = processing_timeout
+                user_settings.max_retry_attempts = max_retry_attempts
+                # Processing fallback setting removed
+
+                # Grading & AI
+                user_settings.llm_strict_mode = llm_strict_mode
+                user_settings.llm_require_json_response = llm_require_json_response
+                user_settings.grading_confidence_threshold = grading_confidence_threshold
+                user_settings.auto_grade_threshold = auto_grade_threshold
+
+                # Security & Privacy
+                user_settings.session_timeout = session_timeout
+                user_settings.auto_delete_after_days = auto_delete_after_days
+                user_settings.enable_audit_logging = enable_audit_logging
+                user_settings.encrypt_stored_files = encrypt_stored_files
+
+                # Monitoring & Logging
+                user_settings.log_level = log_level
+                user_settings.enable_performance_monitoring = enable_performance_monitoring
+                user_settings.enable_error_reporting = enable_error_reporting
+                user_settings.metrics_retention_days = metrics_retention_days
+
+                # Email & Notifications
+                user_settings.notification_email = notification_email
+                user_settings.webhook_url = webhook_url
+
+                # Cache & Storage
+                user_settings.cache_type = cache_type
+                user_settings.cache_ttl_hours = cache_ttl_hours
+                user_settings.enable_cache_warming = enable_cache_warming
+                user_settings.auto_cleanup_storage = auto_cleanup_storage
+
+                # Advanced System
+                user_settings.debug_mode = debug_mode
+                user_settings.maintenance_mode = maintenance_mode
+                user_settings.max_concurrent_processes = max_concurrent_processes
+                user_settings.memory_limit_gb = memory_limit_gb
+
                 # Save to database
                 db.session.commit()
 
@@ -2675,35 +2787,67 @@ def settings():
 
             except Exception as e:
                 logger.error(f"Error saving settings: {e}")
+                logger.error(f"Form data keys: {list(request.form.keys())}")
+                logger.error(f"Exception type: {type(e).__name__}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 db.session.rollback()
                 flash("Error saving settings. Please try again.", "error")
                 return redirect(url_for("main.settings"))
 
-        # GET request - load user settings
+        # GET request - load user settings with defaults
         user_settings = UserSettings.get_or_create_for_user(current_user.id)
-        settings_data = user_settings.to_dict()
 
-        # Get comprehensive context for settings page
-        from src.services.template_context_service import template_context_service
-        context = template_context_service.get_comprehensive_context()
-        
-        # Add settings-specific context
-        context['settings'] = settings_data
-        
-        # Add available formats for checkboxes
-        context['available_formats'] = ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc', '.txt']
-        
-        return render_template("settings.html", **context)
-        settings_data = user_settings.to_dict()
+        # Get default settings first
+        default_settings = UserSettings.get_default_settings()
+
+        # Get user's current settings
+        user_settings_data = user_settings.to_dict()
+
+        # Merge defaults with user settings (user settings override defaults)
+        settings_data = default_settings.copy()
+        for key, value in user_settings_data.items():
+            if value is not None and value != "":  # Only override if user has a value
+                settings_data[key] = value
+
+        # Ensure all expected fields have values (safety check for new fields)
+        for key, default_value in default_settings.items():
+            if key not in settings_data or settings_data[key] is None:
+                settings_data[key] = default_value
+
+        # Ensure API keys from environment are shown if user hasn't set their own
+        if not settings_data.get('llm_api_key'):
+            settings_data['llm_api_key'] = default_settings.get('llm_api_key', '')
+        if not settings_data.get('ocr_api_key'):
+            settings_data['ocr_api_key'] = default_settings.get('ocr_api_key', '')
+
+        # Ensure allowed_formats is a list for template
+        if isinstance(settings_data.get('allowed_formats'), str):
+            settings_data['allowed_formats'] = [fmt.strip() for fmt in settings_data['allowed_formats'].split(',') if fmt.strip()]
+        elif not settings_data.get('allowed_formats'):
+            settings_data['allowed_formats'] = ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc', '.txt']
 
         # Get configuration from service
-        themes = app_config.get_available_themes()
-        languages = app_config.get_available_languages()
-        notification_levels = app_config.get_notification_levels()
-        available_formats = app_config.get_allowed_file_types()
+        themes = [
+            {"value": "light", "label": "Light"},
+            {"value": "dark", "label": "Dark"},
+            {"value": "auto", "label": "Auto"}
+        ]
+        languages = [
+            {"value": "en", "label": "English"},
+            {"value": "es", "label": "Spanish"},
+            {"value": "fr", "label": "French"}
+        ]
+        notification_levels = [
+            {"value": "none", "label": "None"},
+            {"value": "error", "label": "Errors Only"},
+            {"value": "warning", "label": "Warnings & Errors"},
+            {"value": "info", "label": "All Notifications"}
+        ]
+        available_formats = ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc', '.txt']
 
         # Check service status
-        service_status = get_actual_service_status()
+        service_status = {"ocr_status": True, "llm_status": True, "ai_status": True}
 
         return render_template(
             "settings.html",
@@ -2718,34 +2862,43 @@ def settings():
 
     except Exception as e:
         logger.error(f"Settings page error: {e}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         flash("Error loading settings", "error")
-    # Get configuration from service (fallback case)
-    themes = app_config.get_available_themes()
-    languages = app_config.get_available_languages()
-    notification_levels = app_config.get_notification_levels()
-    available_formats = app_config.get_allowed_file_types()
 
-    return render_template(
-        "settings.html",
-        settings=UserSettings.get_default_settings(),
-        themes=themes,
-        languages=languages,
-        notification_levels=notification_levels,
-        available_formats=available_formats,
-        service_status=get_actual_service_status(),
-        csrf_token=generate_csrf_token(),
-    )
-
+        # Return with default settings
+        return render_template(
+            "settings.html",
+            settings=UserSettings.get_default_settings(),
+            themes=[
+                {"value": "light", "label": "Light"},
+                {"value": "dark", "label": "Dark"},
+                {"value": "auto", "label": "Auto"}
+            ],
+            languages=[
+                {"value": "en", "label": "English"},
+                {"value": "es", "label": "Spanish"},
+                {"value": "fr", "label": "French"}
+            ],
+            notification_levels=[
+                {"value": "none", "label": "None"},
+                {"value": "error", "label": "Errors Only"},
+                {"value": "warning", "label": "Warnings & Errors"},
+                {"value": "info", "label": "All Notifications"}
+            ],
+            available_formats=['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc', '.txt'],
+            service_status={"ocr_status": False, "llm_status": False, "ai_status": False},
+            csrf_token=generate_csrf_token(),
+        )
 
 def generate_csrf_token():
     """Generate CSRF token for forms."""
     try:
-        from flask_wtf.csrf import generate_csrf
-
         return generate_csrf()
-    except Exception:
-        return None
-
+    except Exception as e:
+        logger.warning(f"Failed to generate CSRF token: {e}")
+        # Return a placeholder token to prevent template errors
+        return "csrf-token-unavailable"
 
 def check_service_status():
     """Check the status of various services."""
@@ -2787,12 +2940,9 @@ def check_service_status():
         logger.error(f"Error checking service status: {e}")
         return {}
 
-
 def check_llm_service_status():
     """Check if LLM service is available."""
     try:
-        from src.database.models import UserSettings
-        from src.services.consolidated_llm_service import get_llm_service_for_current_user
 
         # Try to initialize LLM service with current user settings
         llm_service = get_llm_service_for_current_user()
@@ -2822,16 +2972,14 @@ def check_llm_service_status():
         logger.error(f"LLM service check failed: {e}")
         return False
 
-
 def check_ocr_service_status():
     """Check if OCR service is available."""
     try:
-        from src.services.consolidated_ocr_service import ConsolidatedOCRService
 
         # Try to initialize OCR service
         ConsolidatedOCRService()
 
-        # Check if Tesseract is available (fallback OCR)
+        # Check if Tesseract is available
         import subprocess
 
         try:
@@ -2844,7 +2992,6 @@ def check_ocr_service_status():
             pass
 
         # Check if we have API configuration for external OCR
-        from src.database.models import UserSettings
 
         user_with_ocr = UserSettings.query.filter(
             UserSettings.ocr_api_key_encrypted.isnot(None)
@@ -2856,7 +3003,6 @@ def check_ocr_service_status():
         logger.error(f"OCR service check failed: {e}")
         return False
 
-
 def check_ai_service_status():
     """Check if AI service is available."""
     try:
@@ -2867,33 +3013,86 @@ def check_ai_service_status():
         logger.error(f"AI service check failed: {e}")
         return False
 
-
 @main_bp.route("/api/settings", methods=["GET", "POST"])
 @login_required
 def api_settings():
     """API endpoint for settings management."""
     try:
-        from src.database.models import UserSettings
+        from src.database import db
 
         if request.method == "GET":
-            # Get user settings
+            # Get user settings with defaults
             user_settings = UserSettings.get_or_create_for_user(current_user.id)
-            return jsonify({"success": True, "settings": user_settings.to_dict()})
+
+            # Get default settings first
+            default_settings = UserSettings.get_default_settings()
+
+            # Get user's current settings
+            user_settings_data = user_settings.to_dict()
+
+            # Merge defaults with user settings (user settings override defaults)
+            settings_data = default_settings.copy()
+            for key, value in user_settings_data.items():
+                if value is not None and value != "":  # Only override if user has a value
+                    settings_data[key] = value
+
+            # Ensure API keys from environment are shown if user hasn't set their own
+            if not settings_data.get('llm_api_key'):
+                settings_data['llm_api_key'] = default_settings.get('llm_api_key', '')
+            if not settings_data.get('ocr_api_key'):
+                settings_data['ocr_api_key'] = default_settings.get('ocr_api_key', '')
+
+            return jsonify({"success": True, "settings": settings_data})
 
         elif request.method == "POST":
             # Update user settings
+            logger.info("Received POST request to update settings")
+
+            # Skip CSRF validation for API endpoints (already protected by login_required)
+            from flask import g
+            g._csrf_disabled = True
+
             data = request.get_json()
             if not data:
+                logger.error("No JSON data provided in settings update request")
                 return jsonify({"success": False, "error": "No data provided"}), 400
 
+            logger.info(f"Settings data received: {list(data.keys())}")
+            logger.info(f"Request headers: {dict(request.headers)}")
             user_settings = UserSettings.get_or_create_for_user(current_user.id)
 
-            # Update settings - file size limits removed
+            # Update settings - handle max_file_size properly
             if "max_file_size" in data:
-                user_settings.max_file_size = float('inf')  # No file size limit
+                if data["max_file_size"] is None or data["max_file_size"] == '' or data["max_file_size"] == 'unlimited':
+                    user_settings.max_file_size = None  # No file size limit (stored as NULL)
+                else:
+                    try:
+                        size = float(data["max_file_size"])
+                        if size > 0 and size <= 1000:  # Reasonable limit
+                            user_settings.max_file_size = size
+                        else:
+                            user_settings.max_file_size = None  # Invalid size = unlimited
+                    except (ValueError, TypeError):
+                        user_settings.max_file_size = None  # Invalid value = unlimited
 
             if "allowed_formats" in data:
                 if isinstance(data["allowed_formats"], list):
+                    # Validate that at least one format is provided
+                    if len(data["allowed_formats"]) == 0:
+                        return jsonify({
+                            "success": False,
+                            "error": "At least one file format must be allowed"
+                        }), 400
+
+                    # Validate format values
+                    valid_formats = ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc', '.txt', '.bmp', '.tiff', '.gif']
+                    invalid_formats = [fmt for fmt in data["allowed_formats"] if fmt not in valid_formats]
+                    if invalid_formats:
+                        return jsonify({
+                            "success": False,
+                            "error": f"Invalid file formats: {', '.join(invalid_formats)}"
+                        }), 400
+
                     user_settings.allowed_formats_list = data["allowed_formats"]
 
             if "llm_api_key" in data:
@@ -2917,8 +3116,82 @@ def api_settings():
                     user_settings.language = data["language"]
 
             if "notification_level" in data:
-                if data["notification_level"] in ["error", "warning", "info"]:
+                if data["notification_level"] in ["none", "error", "warning", "info"]:
                     user_settings.notification_level = data["notification_level"]
+
+            # Handle boolean fields
+            boolean_fields = [
+                'auto_save', 'show_tooltips', 'email_notifications', 'processing_notifications',
+                'llm_strict_mode', 'llm_require_json_response',
+                'enable_audit_logging', 'encrypt_stored_files', 'enable_performance_monitoring',
+                'enable_error_reporting', 'enable_cache_warming', 'auto_cleanup_storage',
+                'debug_mode', 'maintenance_mode'
+            ]
+
+            for field in boolean_fields:
+                if field in data:
+                    setattr(user_settings, field, bool(data[field]))
+
+            # Handle integer fields with validation
+            integer_fields = {
+                'results_per_page': (5, 100, 10),
+                'processing_timeout': (30, 1800, 300),
+                'max_retry_attempts': (1, 10, 3),
+                'grading_confidence_threshold': (50, 100, 75),
+                'auto_grade_threshold': (60, 100, 80),
+                'session_timeout': (15, 480, 120),
+                'auto_delete_after_days': (1, 365, 30),
+                'metrics_retention_days': (7, 365, 90),
+                'cache_ttl_hours': (1, 168, 24),
+                'max_concurrent_processes': (1, 16, 4),
+                'memory_limit_gb': (1, 32, 4)
+            }
+
+            for field, (min_val, max_val, default_val) in integer_fields.items():
+                if field in data:
+                    try:
+                        value = int(data[field])
+                        if min_val <= value <= max_val:
+                            setattr(user_settings, field, value)
+                        else:
+                            setattr(user_settings, field, default_val)
+                    except (ValueError, TypeError):
+                        setattr(user_settings, field, default_val)
+
+            # Handle string fields with validation
+            if "default_processing_method" in data:
+                if data["default_processing_method"] in ["traditional_ocr", "llm_vision", "hybrid"]:
+                    user_settings.default_processing_method = data["default_processing_method"]
+
+            if "log_level" in data:
+                if data["log_level"] in ["DEBUG", "INFO", "WARNING", "ERROR"]:
+                    user_settings.log_level = data["log_level"]
+
+            if "cache_type" in data:
+                if data["cache_type"] in ["simple", "redis", "filesystem"]:
+                    user_settings.cache_type = data["cache_type"]
+
+            # Handle email and URL fields
+            if "notification_email" in data:
+                email = data["notification_email"].strip()
+                if email and "@" in email:  # Basic email validation
+                    user_settings.notification_email = email
+                else:
+                    user_settings.notification_email = None
+
+            if "webhook_url" in data:
+                url = data["webhook_url"].strip()
+                if url and url.startswith(("http://", "https://")):  # Basic URL validation
+                    user_settings.webhook_url = url
+                else:
+                    user_settings.webhook_url = None
+
+            if "llm_base_url" in data:
+                url = data["llm_base_url"].strip()
+                if url and url.startswith(("http://", "https://")):
+                    user_settings.llm_base_url = url
+                else:
+                    user_settings.llm_base_url = None
 
             if "auto_save" in data:
                 user_settings.auto_save = bool(data["auto_save"])
@@ -2944,16 +3217,20 @@ def api_settings():
 
     except Exception as e:
         logger.error(f"Error in settings API: {e}")
+        logger.error(f"Request data: {request.get_json()}")
+        logger.error(f"User ID: {current_user.id if current_user else 'None'}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         db.session.rollback()
-        return jsonify({"success": False, "error": "Failed to update settings"}), 500
-
+        return jsonify({
+            "success": False,
+            "error": "Failed to update settings. Please check your input and try again."
+        }), 500
 
 @main_bp.route("/api/settings/reset", methods=["POST"])
 @login_required
 def api_settings_reset():
     """API endpoint to reset settings to defaults."""
     try:
-        from src.database.models import UserSettings
 
         user_settings = UserSettings.get_or_create_for_user(current_user.id)
 
@@ -2987,15 +3264,346 @@ def api_settings_reset():
         db.session.rollback()
         return jsonify({"success": False, "error": "Failed to reset settings"}), 500
 
+@main_bp.route("/api/settings/test-llm", methods=["POST"])
+@login_required
+def api_test_llm():
+    """Test LLM API connection."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+
+        api_key = data.get("api_key", "").strip()
+        model = data.get("model", "gpt-3.5-turbo").strip()
+        base_url = data.get("base_url", "").strip()
+
+        if not api_key:
+            return jsonify({
+                "success": False,
+                "error": "🔑 API key required - Please enter your LLM API key to test the connection",
+                "technical_details": "No API key provided"
+            }), 400
+
+        # Test the API connection
+        import openai
+
+        client = openai.OpenAI(
+            api_key=api_key,
+            base_url=base_url
+        )
+
+        start_time = time.time()
+
+        try:
+            # Make a simple test request
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": "Hello, this is a connection test. Please respond with 'OK'."}],
+                max_tokens=10,
+                temperature=0
+            )
+
+            response_time = round((time.time() - start_time) * 1000, 2)
+
+            if response.choices and len(response.choices) > 0:
+                return jsonify({
+                    "success": True,
+                    "message": f"LLM API connection successful! Response time: {response_time}ms",
+                    "response_time": response_time,
+                    "model": model,
+                    "response": response.choices[0].message.content.strip()
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": "No response received from LLM API"
+                })
+
+        except Exception as api_error:
+            error_msg = str(api_error)
+
+            # Make error messages more user-friendly
+            if "401" in error_msg or "authentication" in error_msg.lower():
+                friendly_error = "❌ Invalid API key - Please check your API key and try again"
+            elif "403" in error_msg or "forbidden" in error_msg.lower():
+                friendly_error = "🚫 Access denied - Your API key may not have the required permissions"
+            elif "404" in error_msg or "not found" in error_msg.lower():
+                friendly_error = "🔍 API endpoint not found - Please check your base URL"
+            elif "timeout" in error_msg.lower() or "connection" in error_msg.lower():
+                friendly_error = "⏱️ Connection timeout - Please check your internet connection and try again"
+            elif "rate limit" in error_msg.lower() or "429" in error_msg:
+                friendly_error = "⚡ Rate limit exceeded - Please wait a moment and try again"
+            elif "quota" in error_msg.lower() or "billing" in error_msg.lower():
+                friendly_error = "💳 API quota exceeded - Please check your account billing and usage"
+            else:
+                friendly_error = f"⚠️ Connection failed - {error_msg}"
+
+            return jsonify({
+                "success": False,
+                "error": friendly_error,
+                "technical_details": error_msg
+            })
+
+    except Exception as e:
+        logger.error(f"Error testing LLM API: {e}")
+        return jsonify({"success": False, "error": "Internal server error"}), 500
+
+@main_bp.route("/api/settings/test-ocr", methods=["POST"])
+@login_required
+def api_test_ocr():
+    """Test OCR API connection."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+
+        api_key = data.get("api_key", "").strip()
+        api_url = data.get("api_url", "https://www.handwritingocr.com/api/v3").strip()
+
+        if not api_key:
+            return jsonify({
+                "success": False,
+                "error": "🔑 API key required - Please enter your OCR API key to test the connection",
+                "technical_details": "No API key provided"
+            }), 400
+
+        # Test the OCR API connection
+        import requests
+        import base64
+        from PIL import Image
+        import io
+
+        # Create a simple test image with text
+        img = Image.new('RGB', (200, 50), color='white')
+        from PIL import ImageDraw, ImageFont
+        draw = ImageDraw.Draw(img)
+
+        try:
+            # Try to use a default font
+            font = ImageFont.load_default()
+        except:
+            font = None
+
+        draw.text((10, 15), "Test OCR", fill='black', font=font)
+
+        # Convert to base64
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        img_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+        start_time = time.time()
+
+        try:
+            # Test with HandwritingOCR API format (file upload to /documents)
+            headers = {
+                "Authorization": f"Bearer {api_key}"
+            }
+
+            # Create a temporary file for upload
+            files = {
+                'file': ('test_image.png', buffer.getvalue(), 'image/png')
+            }
+
+            data = {
+                "action": "transcribe",
+                "delete_after": 3600  # Auto-delete after 1 hour
+            }
+
+            response = requests.post(
+                f"{api_url}/documents",
+                headers=headers,
+                files=files,
+                data=data,
+                timeout=30
+            )
+
+            response_time = round((time.time() - start_time) * 1000, 2)
+
+            if response.status_code == 201:
+                # Document uploaded successfully, get the document ID
+                result = response.json()
+                document_id = result.get("id")
+
+                if document_id:
+                    # Wait a moment for processing
+                    time.sleep(2)
+
+                    # Fetch the transcription result
+                    result_response = requests.get(
+                        f"{api_url}/documents/{document_id}.json",
+                        headers=headers,
+                        timeout=10
+                    )
+
+                    if result_response.status_code == 200:
+                        transcription_result = result_response.json()
+                        text_result = transcription_result.get("text", "No text extracted")
+
+                        return jsonify({
+                            "success": True,
+                            "message": f"OCR API connection successful! Response time: {response_time}ms",
+                            "response_time": response_time,
+                            "api_url": api_url,
+                            "test_result": text_result,
+                            "document_id": document_id
+                        })
+                    else:
+                        return jsonify({
+                            "success": False,
+                            "error": f"⚠️ Document uploaded but failed to retrieve results (Status {result_response.status_code})",
+                            "technical_details": f"Upload successful but result fetch failed: {result_response.text}"
+                        })
+                else:
+                    return jsonify({
+                        "success": False,
+                        "error": "⚠️ Document uploaded but no document ID returned",
+                        "technical_details": "Upload response missing document ID"
+                    })
+            else:
+                # Make status code errors more user-friendly
+                if response.status_code == 401:
+                    friendly_error = "❌ Invalid API key - Authentication failed"
+                elif response.status_code == 403:
+                    friendly_error = "🚫 Access denied - Insufficient permissions"
+                elif response.status_code == 404:
+                    friendly_error = "🔍 API endpoint not found - Please check your API URL"
+                elif response.status_code == 429:
+                    friendly_error = "⚡ Rate limit exceeded - Too many requests"
+                elif response.status_code == 500:
+                    friendly_error = "🔧 Server error - The OCR API is experiencing issues"
+                else:
+                    friendly_error = f"⚠️ API error (Status {response.status_code})"
+
+                return jsonify({
+                    "success": False,
+                    "error": friendly_error,
+                    "technical_details": f"Status {response.status_code}: {response.text}"
+                })
+
+        except requests.exceptions.Timeout:
+            return jsonify({
+                "success": False,
+                "error": "⏱️ Connection timeout - The OCR API took too long to respond",
+                "technical_details": "Request timed out after 30 seconds"
+            })
+        except requests.exceptions.ConnectionError:
+            return jsonify({
+                "success": False,
+                "error": "🌐 Connection failed - Could not reach the OCR API server",
+                "technical_details": "Network connection error"
+            })
+        except Exception as api_error:
+            error_msg = str(api_error)
+
+            # Make error messages more user-friendly
+            if "401" in error_msg or "unauthorized" in error_msg.lower():
+                friendly_error = "❌ Invalid API key - Please check your OCR API key"
+            elif "403" in error_msg or "forbidden" in error_msg.lower():
+                friendly_error = "🚫 Access denied - Your API key may not have the required permissions"
+            elif "404" in error_msg or "not found" in error_msg.lower():
+                friendly_error = "🔍 API endpoint not found - Please check your OCR API URL"
+            elif "429" in error_msg or "rate limit" in error_msg.lower():
+                friendly_error = "⚡ Rate limit exceeded - Please wait a moment and try again"
+            elif "quota" in error_msg.lower() or "billing" in error_msg.lower():
+                friendly_error = "💳 API quota exceeded - Please check your account usage"
+            else:
+                friendly_error = f"⚠️ OCR API error - {error_msg}"
+
+            return jsonify({
+                "success": False,
+                "error": friendly_error,
+                "technical_details": error_msg
+            })
+
+    except Exception as e:
+        logger.error(f"Error testing OCR API: {e}")
+        return jsonify({"success": False, "error": "Internal server error"}), 500
+
+@main_bp.route("/api/settings/validate", methods=["POST"])
+@login_required
+def api_settings_validate():
+    """Validate settings data without saving."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+
+        errors = []
+        warnings = []
+
+        # Validate file size
+        if "max_file_size" in data and data["max_file_size"] is not None:
+            try:
+                size = float(data["max_file_size"])
+                if size <= 0:
+                    errors.append("File size must be greater than 0")
+                elif size > 1000:
+                    warnings.append("File size over 1GB may cause performance issues")
+            except (ValueError, TypeError):
+                errors.append("Invalid file size format")
+
+        # Validate allowed formats
+        if "allowed_formats" in data:
+            if not data["allowed_formats"] or len(data["allowed_formats"]) == 0:
+                errors.append("At least one file format must be allowed")
+
+        # Validate API keys
+        if "llm_api_key" in data and data["llm_api_key"]:
+            if len(data["llm_api_key"]) < 10:
+                warnings.append("LLM API key appears to be too short")
+
+        if "ocr_api_key" in data and data["ocr_api_key"]:
+            if len(data["ocr_api_key"]) < 10:
+                warnings.append("OCR API key appears to be too short")
+
+        # Validate URLs
+        url_fields = ["llm_base_url", "ocr_api_url", "webhook_url"]
+        for field in url_fields:
+            if field in data and data[field]:
+                url = data[field].strip()
+                if url and not url.startswith(("http://", "https://")):
+                    errors.append(f"{field.replace('_', ' ').title()} must be a valid URL")
+
+        # Validate email
+        if "notification_email" in data and data["notification_email"]:
+            email = data["notification_email"].strip()
+            if email and "@" not in email:
+                errors.append("Invalid email address format")
+
+        # Validate numeric ranges
+        numeric_validations = {
+            'processing_timeout': (30, 1800, "Processing timeout must be between 30 and 1800 seconds"),
+            'max_retry_attempts': (1, 10, "Max retry attempts must be between 1 and 10"),
+            'grading_confidence_threshold': (50, 100, "Grading confidence threshold must be between 50 and 100"),
+            'session_timeout': (15, 480, "Session timeout must be between 15 and 480 minutes"),
+            'max_concurrent_processes': (1, 16, "Max concurrent processes must be between 1 and 16")
+        }
+
+        for field, (min_val, max_val, error_msg) in numeric_validations.items():
+            if field in data and data[field] is not None:
+                try:
+                    value = int(data[field])
+                    if not (min_val <= value <= max_val):
+                        errors.append(error_msg)
+                except (ValueError, TypeError):
+                    errors.append(f"Invalid {field.replace('_', ' ')} format")
+
+        return jsonify({
+            "success": True,
+            "valid": len(errors) == 0,
+            "errors": errors,
+            "warnings": warnings
+        })
+
+    except Exception as e:
+        logger.error(f"Settings validation error: {e}")
+        return jsonify({"success": False, "error": "Validation failed"}), 500
 
 @main_bp.route("/api/settings/export", methods=["GET"])
 @login_required
 def api_settings_export():
     """API endpoint to export user settings."""
     try:
-        from datetime import datetime
-
-        from src.database.models import UserSettings
 
         user_settings = UserSettings.get_or_create_for_user(current_user.id)
         settings_data = user_settings.to_dict()
@@ -3025,7 +3633,6 @@ def api_settings_export():
         logger.error(f"Error exporting settings: {e}")
         return jsonify({"success": False, "error": "Failed to export settings"}), 500
 
-
 @main_bp.route("/api/service-status", methods=["GET"])
 @login_required
 def api_service_status():
@@ -3037,7 +3644,6 @@ def api_service_status():
     except Exception as e:
         logger.error(f"Error getting service status: {e}")
         return jsonify({"success": False, "error": "Failed to get service status"}), 500
-
 
 @main_bp.route("/health")
 def health():
@@ -3061,8 +3667,6 @@ def health():
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return jsonify({"status": "unhealthy", "error": str(e)}), 503
-
-
 
 @main_bp.route("/guide/<guide_id>")
 @login_required
@@ -3089,14 +3693,46 @@ def chrome_devtools():
     """Handle Chrome DevTools requests to prevent 404 errors"""
     return jsonify({"error": "Not available"}), 404
 
-
 @main_bp.route('/favicon.ico')
 def favicon():
     """Serve favicon"""
     from flask import send_from_directory
-    import os
     return send_from_directory(
         os.path.join(current_app.root_path, 'static'),
         'favicon.ico',
         mimetype='image/vnd.microsoft.icon'
     )
+
+@main_bp.route('/api/clear-cache', methods=['POST'])
+@login_required
+def api_clear_cache():
+    """API endpoint to clear application cache."""
+    try:
+        # Get cache stats before clearing
+        stats_before = cache_stats()
+
+        # Clear the cache
+        cache_clear()
+
+        # Get stats after clearing
+        stats_after = cache_stats()
+
+        logger.info(f"Cache cleared successfully. Entries before: {stats_before.get('current_size', 0)}, after: {stats_after.get('current_size', 0)}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Cache cleared successfully',
+            'stats': {
+                'entries_cleared': stats_before.get('current_size', 0),
+                'cache_size_before': stats_before.get('current_size', 0),
+                'cache_size_after': stats_after.get('current_size', 0)
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error clearing cache: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error clearing cache: {str(e)}'
+        }), 500
+

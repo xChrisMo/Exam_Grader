@@ -14,9 +14,9 @@ try:
 except ImportError:
     magic = None
     MAGIC_AVAILABLE = False
+from pathlib import Path
 import hashlib
 from dataclasses import dataclass
-from pathlib import Path
 
 try:
     from utils.logger import logger
@@ -24,7 +24,6 @@ except ImportError:
     import logging
 
     logger = logging.getLogger(__name__)
-
 
 @dataclass
 class ValidationResult:
@@ -34,7 +33,6 @@ class ValidationResult:
     message: str
     details: Dict[str, any] = None
     risk_level: str = "low"  # low, medium, high, critical
-
 
 class InputValidator:
     """
@@ -465,7 +463,6 @@ class InputValidator:
         except Exception as e:
             logger.error(f"Hash calculation error: {str(e)}")
             return "unknown"
-
 
 # Global validator instance
 input_validator = InputValidator()

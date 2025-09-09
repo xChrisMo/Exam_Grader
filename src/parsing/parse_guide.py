@@ -12,7 +12,6 @@ from typing import Optional, Tuple
 from src.parsing.parse_submission import DocumentParser
 from utils.logger import logger
 
-
 @dataclass
 class MarkingGuide:
     """Class representing a parsed marking guide."""
@@ -22,7 +21,6 @@ class MarkingGuide:
     file_type: str
     title: Optional[str] = None
     extraction_method: Optional[str] = None
-
 
 def parse_marking_guide(file_path: str) -> Tuple[Optional[MarkingGuide], Optional[str]]:
     """Parse a marking guide from a file.

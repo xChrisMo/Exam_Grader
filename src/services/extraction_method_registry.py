@@ -6,15 +6,16 @@ for different file types, allowing dynamic registration and selection of
 the best extraction method based on file characteristics and success rates.
 """
 
+import os
+import subprocess
 import time
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from pathlib import Path
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from utils.logger import logger
-
 
 class ExtractionPriority(Enum):
     """Priority levels for extraction methods"""
@@ -24,7 +25,6 @@ class ExtractionPriority(Enum):
     MEDIUM = 3
     LOW = 4
     LOWEST = 5
-
 
 @dataclass
 class ExtractionMethodInfo:
@@ -49,7 +49,6 @@ class ExtractionMethodInfo:
     last_availability_check: Optional[datetime] = None
     availability_error: Optional[str] = None
 
-
 @dataclass
 class ExtractionResult:
     """Result of an extraction attempt"""
@@ -60,7 +59,6 @@ class ExtractionResult:
     method_name: str
     processing_time: float
     error: Optional[str] = None
-
 
 class ExtractionMethodRegistry:
     """Registry for managing file extraction methods"""
@@ -577,7 +575,7 @@ class ExtractionMethodRegistry:
         import subprocess
 
         result = subprocess.run(
-            ["antiword", file_path], capture_output=True, text=True, timeout=30
+            ["antiword", file_path], capture_output=True, text=True, timeout=int(os.getenv("TIMEOUT_ANTIWORD", "30"))
         )
 
         if result.returncode != 0:
@@ -650,7 +648,6 @@ class ExtractionMethodRegistry:
         self, file_path: str, context: Dict[str, Any]
     ) -> Tuple[str, Dict[str, Any]]:
         """Extract HTML using regex (fallback)"""
-        import re
 
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             html_content = f.read()
@@ -704,7 +701,6 @@ class ExtractionMethodRegistry:
         self, file_path: str, context: Dict[str, Any]
     ) -> Tuple[str, Dict[str, Any]]:
         """Fallback text extraction for any file type"""
-        import re
 
         encodings = ["utf-8", "latin-1", "cp1252", "iso-8859-1"]
 
@@ -729,7 +725,6 @@ class ExtractionMethodRegistry:
                 continue
 
         raise ValueError("Could not extract text using any encoding")
-
 
 # Global instance
 extraction_method_registry = ExtractionMethodRegistry()

@@ -2,13 +2,12 @@
 File processing utilities for the Exam Grader application.
 """
 
-import logging
 import os
 from pathlib import Path
+import logging
 from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
-
 
 class FileProcessor:
     """File processing utility class."""
@@ -74,7 +73,6 @@ class FileProcessor:
             logger.error(f"Error removing file {file_path}: {str(e)}")
             return False
 
-
 class MemoryEfficientFileHandler:
     """Memory-efficient file handling for large files."""
 
@@ -139,7 +137,6 @@ class MemoryEfficientFileHandler:
         """Clear the file content cache."""
         self._file_cache.clear()
 
-
 def get_file_type(filename: str) -> str:
     """Get file type from filename."""
     if not filename:
@@ -159,20 +156,17 @@ def get_file_type(filename: str) -> str:
 
     return type_mapping.get(ext, "unknown")
 
-
 def is_text_file(filename: str) -> bool:
     """Check if file is a text file."""
     text_extensions = {".txt", ".md", ".csv", ".json", ".xml", ".html"}
     ext = Path(filename).suffix.lower()
     return ext in text_extensions
 
-
 def is_image_file(filename: str) -> bool:
     """Check if file is an image file."""
     image_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".gif"}
     ext = Path(filename).suffix.lower()
     return ext in image_extensions
-
 
 def is_document_file(filename: str) -> bool:
     """Check if file is a document file."""

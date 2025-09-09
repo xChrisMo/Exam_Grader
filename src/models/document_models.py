@@ -2,11 +2,10 @@
 Document models for the application.
 """
 
-from dataclasses import dataclass
 from datetime import datetime
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
-
 
 class DocumentType(Enum):
     """Document type enumeration."""
@@ -14,14 +13,12 @@ class DocumentType(Enum):
     SUBMISSION = "submission"
     GENERAL = "general"
 
-
 class DocumentStatus(Enum):
     """Document processing status."""
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
-
 
 @dataclass
 class DocumentMetadata:
@@ -33,7 +30,6 @@ class DocumentMetadata:
     user_id: str
     document_type: DocumentType = DocumentType.GENERAL
 
-
 @dataclass
 class ProcessedDocument:
     """Processed document structure."""
@@ -44,7 +40,6 @@ class ProcessedDocument:
     processing_time: Optional[float] = None
     error_message: Optional[str] = None
 
-
 @dataclass
 class DocumentProcessingResult:
     """Result of document processing."""
@@ -53,7 +48,6 @@ class DocumentProcessingResult:
     error_message: Optional[str] = None
     processing_time: Optional[float] = None
 
-
 @dataclass
 class FileUpload:
     """File upload structure."""
@@ -61,7 +55,6 @@ class FileUpload:
     content: bytes
     mime_type: str
     size: int
-
 
 @dataclass
 class Dataset:

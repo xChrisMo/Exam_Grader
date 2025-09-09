@@ -5,8 +5,8 @@ This module provides a circuit breaker to prevent cascading failures
 when external services (LLM, OCR) are unavailable or slow.
 """
 
-import threading
 import time
+import threading
 from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
@@ -19,14 +19,12 @@ except ImportError:
 
     logger = logging.getLogger(__name__)
 
-
 class CircuitState(Enum):
     """Circuit breaker states."""
 
     CLOSED = "closed"  # Normal operation
     OPEN = "open"  # Circuit is open, calls fail fast
     HALF_OPEN = "half_open"  # Testing if service is back
-
 
 @dataclass
 class CircuitBreakerConfig:
@@ -37,10 +35,8 @@ class CircuitBreakerConfig:
     success_threshold: int = 3  # Successes needed to close from half-open
     timeout: float = 30.0  # Request timeout in seconds
 
-
 class CircuitBreakerError(Exception):
     """Exception raised when circuit breaker is open."""
-
 
 class CircuitBreaker:
     """
@@ -192,7 +188,6 @@ class CircuitBreaker:
             self.last_failure_time = 0
             logger.info(f"Circuit breaker '{self.name}' manually reset to CLOSED")
 
-
 def circuit_breaker(name: str, config: CircuitBreakerConfig = None):
     """
     Decorator for applying circuit breaker to functions.
@@ -216,7 +211,6 @@ def circuit_breaker(name: str, config: CircuitBreakerConfig = None):
 
     return decorator
 
-
 llm_circuit_breaker = CircuitBreaker(
     "llm_service",
     CircuitBreakerConfig(
@@ -230,7 +224,6 @@ ocr_circuit_breaker = CircuitBreaker(
         failure_threshold=5, recovery_timeout=60, success_threshold=3, timeout=60.0
     ),
 )
-
 
 def get_all_circuit_breakers() -> dict:
     """Get status of all circuit breakers."""

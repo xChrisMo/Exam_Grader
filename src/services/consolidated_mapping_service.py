@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from src.services.base_service import BaseService, ServiceStatus
 from utils.logger import logger
 
-
 class ConsolidatedMappingService(BaseService):
     """Consolidated mapping service with enhanced functionality and base service integration."""
 
@@ -460,7 +459,6 @@ Output JSON format:
 
     def _fix_common_json_issues(self, text: str) -> Optional[str]:
         """Attempt to fix common JSON formatting issues."""
-        import re
 
         # Extract potential JSON content
         json_match = re.search(r"\{.*\}", text, re.DOTALL)
@@ -713,47 +711,46 @@ Return ONLY the cleaned text without explanations."""
 
     def _basic_exam_preprocessing(self, content: str) -> str:
         """Basic preprocessing for exam content when LLM is not available."""
-        import re
-        
+
         if not content:
             return ""
-        
+
         # Basic OCR error corrections
         corrections = [
             # Question number fixes
             (r'\bQl\b', 'Q1'),
             (r'\bQ(\d)', r'Q\1'),
             (r'\b0(\d+)\b', r'\1'),  # Fix leading zeros in question numbers
-            
+
             # Common OCR character fixes
             (r'\bl\b', '1'),  # Standalone 'l' likely means '1'
             (r'\bO\b', '0'),  # Standalone 'O' likely means '0'
-            
+
             # Spacing fixes
             (r'([Qq]uestion)(\d)', r'\1 \2'),
             (r'([Pp]art)([A-Za-z])', r'\1 \2'),
             (r'(\d+)([a-z])\b', r'\1\2'),  # Keep 1a, 2b format
-            
+
             # Mark allocation fixes
             (r'\[(\d+)\s*marks?\]', r'[\1 marks]'),
             (r'\((\d+)\s*points?\)', r'(\1 points)'),
         ]
-        
+
         cleaned = content
         for pattern, replacement in corrections:
             cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
-        
+
         # Normalize whitespace
         cleaned = re.sub(r'\s+', ' ', cleaned)
         cleaned = re.sub(r'\n\s*\n', '\n\n', cleaned)
-        
+
         return cleaned.strip()
 
     def _enhanced_exam_mapping(
-        self, 
-        guide_content: str, 
-        submission_content: str, 
-        guide_type: str, 
+        self,
+        guide_content: str,
+        submission_content: str,
+        guide_type: str,
         num_questions: int
     ) -> Dict[str, Any]:
         """Enhanced mapping specifically designed for student exam scenarios."""
@@ -772,9 +769,9 @@ Return ONLY the cleaned text without explanations."""
             return {"mappings": [], "error": str(e)}
 
     def _map_exam_questions_to_answers(
-        self, 
-        guide_content: str, 
-        submission_content: str, 
+        self,
+        guide_content: str,
+        submission_content: str,
         num_questions: int
     ) -> Dict[str, Any]:
         """Map exam questions to student answers with enhanced intelligence for exam scenarios."""
@@ -844,7 +841,7 @@ Map each student answer to its corresponding question, handling all the complexi
             )
 
             result = self._parse_json_response(response_text)
-            
+
             # Ensure we have the expected structure
             if "mappings" not in result:
                 result["mappings"] = []
@@ -863,9 +860,9 @@ Map each student answer to its corresponding question, handling all the complexi
             return {"mappings": [], "error": str(e)}
 
     def _map_exam_answers_to_answers(
-        self, 
-        guide_content: str, 
-        submission_content: str, 
+        self,
+        guide_content: str,
+        submission_content: str,
         num_questions: int
     ) -> Dict[str, Any]:
         """Map model answers to student answers with enhanced intelligence for exam scenarios."""
@@ -938,7 +935,7 @@ Map each student answer to the most relevant model answer, focusing on conceptua
             )
 
             result = self._parse_json_response(response_text)
-            
+
             # Ensure we have the expected structure
             if "mappings" not in result:
                 result["mappings"] = []
@@ -958,9 +955,9 @@ Map each student answer to the most relevant model answer, focusing on conceptua
             return {"mappings": [], "error": str(e)}
 
     def _validate_and_enhance_mappings(
-        self, 
-        result: Dict[str, Any], 
-        guide_content: str, 
+        self,
+        result: Dict[str, Any],
+        guide_content: str,
         submission_content: str
     ) -> Dict[str, Any]:
         """Validate and enhance mapping results with additional quality checks."""
@@ -983,7 +980,7 @@ Map each student answer to the most relevant model answer, focusing on conceptua
 
                 # Add quality indicators
                 mapping["quality_indicators"] = self._assess_mapping_quality(mapping)
-                
+
                 # Add suggestions for low-confidence mappings
                 if confidence < 0.6:
                     mapping["improvement_suggestions"] = self._generate_improvement_suggestions(mapping)
@@ -991,10 +988,10 @@ Map each student answer to the most relevant model answer, focusing on conceptua
                 enhanced_mappings.append(mapping)
 
             result["mappings"] = enhanced_mappings
-            
+
             # Add overall quality assessment
             result["quality_assessment"] = self._assess_overall_mapping_quality(enhanced_mappings)
-            
+
             logger.info(f"Mapping validation completed: {len(enhanced_mappings)} mappings validated")
             return result
 
@@ -1014,18 +1011,17 @@ Map each student answer to the most relevant model answer, focusing on conceptua
             # Check text length adequacy
             answer_text = mapping.get("answer_text", "")
             question_text = mapping.get("question_text", "")
-            
+
             if len(answer_text.strip()) > 10 and len(question_text.strip()) > 10:
                 quality["text_length_adequate"] = True
 
             # Check for identifiers
-            import re
             identifier_patterns = [
                 r'\b[Qq]\d+\b',  # Q1, Q2, etc.
                 r'\b\d+[a-z]?\b',  # 1, 1a, 2b, etc.
                 r'\b[Pp]art\s+[A-Za-z]\b',  # Part A, Part B, etc.
             ]
-            
+
             combined_text = f"{question_text} {answer_text}".lower()
             for pattern in identifier_patterns:
                 if re.search(pattern, combined_text):
@@ -1049,7 +1045,7 @@ Map each student answer to the most relevant model answer, focusing on conceptua
     def _generate_improvement_suggestions(self, mapping: Dict[str, Any]) -> List[str]:
         """Generate suggestions for improving low-confidence mappings."""
         suggestions = []
-        
+
         try:
             confidence = mapping.get("confidence", 0.5)
             answer_text = mapping.get("answer_text", "")
@@ -1131,7 +1127,6 @@ Map each student answer to the most relevant model answer, focusing on conceptua
                 "quality_level": "unknown",
                 "recommendations": ["Quality assessment failed - manual review recommended"]
             }
-
 
 # Backward compatibility aliases
 MappingService = ConsolidatedMappingService

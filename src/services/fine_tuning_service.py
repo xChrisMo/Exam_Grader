@@ -14,17 +14,16 @@ from typing import Any, Dict, List, Optional, Tuple
 from src.services.base_service import BaseService, ServiceStatus
 from utils.logger import logger
 
-
 class FineTuningService(BaseService):
     """Service for fine-tuning AI models with uploaded documents."""
 
     def __init__(self):
         super().__init__("fine_tuning_service")
-        
+
         # Detect which AI provider is being used
         self.provider = self._detect_provider()
         self.fine_tuning_supported = self._check_fine_tuning_support()
-        
+
         logger.info(f"Fine-tuning service initialized for provider: {self.provider}")
         logger.info(f"Fine-tuning supported: {self.fine_tuning_supported}")
 
@@ -53,31 +52,31 @@ class FineTuningService(BaseService):
         return fine_tuning_providers.get(self.provider, False)
 
     async def create_fine_tuning_dataset(
-        self, 
-        training_guides: List[Dict], 
+        self,
+        training_guides: List[Dict],
         format_type: str = "openai"
     ) -> Tuple[str, Dict]:
         """
         Create a fine-tuning dataset from training guides.
-        
+
         Args:
             training_guides: List of processed training guides
             format_type: Dataset format ("openai", "local", etc.)
-            
+
         Returns:
             Tuple of (dataset_path, metadata)
         """
         try:
             with self.track_request("create_dataset"):
                 logger.info(f"Creating fine-tuning dataset for {len(training_guides)} guides")
-                
+
                 if format_type == "openai":
                     return await self._create_openai_dataset(training_guides)
                 elif format_type == "local":
                     return await self._create_local_dataset(training_guides)
                 else:
                     raise ValueError(f"Unsupported dataset format: {format_type}")
-                    
+
         except Exception as e:
             logger.error(f"Failed to create fine-tuning dataset: {e}")
             raise
@@ -86,12 +85,17 @@ class FineTuningService(BaseService):
         """Create OpenAI fine-tuning format dataset."""
         dataset = []
         total_examples = 0
-        
+
         for guide in training_guides:
             guide_content = guide.get('content', '')
             questions = guide.get('questions', [])
-            
+
             for question in questions:
+                # Skip non-dictionary questions
+                if not isinstance(question, dict):
+                    logger.warning(f"Skipping non-dictionary question in fine-tuning dataset")
+                    continue
+
                 # Create training examples in OpenAI format
                 example = {
                     "messages": [
@@ -100,7 +104,7 @@ class FineTuningService(BaseService):
                             "content": f"You are an expert exam grader. Grade student answers based on this marking guide:\n\n{guide_content}"
                         },
                         {
-                            "role": "user", 
+                            "role": "user",
                             "content": f"Question: {question.get('text', '')}\nStudent Answer: [STUDENT_ANSWER_PLACEHOLDER]\nMax Score: {question.get('max_score', 10)}"
                         },
                         {
@@ -111,17 +115,17 @@ class FineTuningService(BaseService):
                 }
                 dataset.append(example)
                 total_examples += 1
-        
+
         # Save dataset to file
         timestamp = int(time.time())
         dataset_path = f"training_data/openai_dataset_{timestamp}.jsonl"
-        
+
         os.makedirs("training_data", exist_ok=True)
-        
+
         with open(dataset_path, 'w', encoding='utf-8') as f:
             for example in dataset:
                 f.write(json.dumps(example) + '\n')
-        
+
         metadata = {
             "format": "openai",
             "total_examples": total_examples,
@@ -129,7 +133,7 @@ class FineTuningService(BaseService):
             "created_at": datetime.now().isoformat(),
             "file_path": dataset_path
         }
-        
+
         logger.info(f"Created OpenAI dataset with {total_examples} examples: {dataset_path}")
         return dataset_path, metadata
 
@@ -143,7 +147,7 @@ class FineTuningService(BaseService):
                 "created_at": datetime.now().isoformat()
             }
         }
-        
+
         for guide in training_guides:
             guide_data = {
                 "guide_id": guide.get('id'),
@@ -152,36 +156,36 @@ class FineTuningService(BaseService):
                 "criteria": guide.get('criteria', [])
             }
             dataset["training_data"].append(guide_data)
-        
+
         # Save dataset
         timestamp = int(time.time())
         dataset_path = f"training_data/local_dataset_{timestamp}.json"
-        
+
         os.makedirs("training_data", exist_ok=True)
-        
+
         with open(dataset_path, 'w', encoding='utf-8') as f:
             json.dump(dataset, f, indent=2, ensure_ascii=False)
-        
+
         metadata = dataset["metadata"]
         metadata["file_path"] = dataset_path
-        
+
         logger.info(f"Created local dataset: {dataset_path}")
         return dataset_path, metadata
 
     async def start_fine_tuning(
-        self, 
-        dataset_path: str, 
+        self,
+        dataset_path: str,
         model_name: str = None,
         training_params: Dict = None
     ) -> Dict[str, Any]:
         """
         Start fine-tuning process.
-        
+
         Args:
             dataset_path: Path to training dataset
             model_name: Base model to fine-tune
             training_params: Training parameters
-            
+
         Returns:
             Fine-tuning job information
         """
@@ -189,31 +193,31 @@ class FineTuningService(BaseService):
             with self.track_request("start_fine_tuning"):
                 if not self.fine_tuning_supported:
                     raise ValueError(f"Fine-tuning not supported for provider: {self.provider}")
-                
+
                 if self.provider == "openai":
                     return await self._start_openai_fine_tuning(dataset_path, model_name, training_params)
                 elif self.provider == "local":
                     return await self._start_local_fine_tuning(dataset_path, model_name, training_params)
                 else:
                     raise ValueError(f"Fine-tuning not implemented for provider: {self.provider}")
-                    
+
         except Exception as e:
             logger.error(f"Failed to start fine-tuning: {e}")
             raise
 
     async def _start_openai_fine_tuning(
-        self, 
-        dataset_path: str, 
+        self,
+        dataset_path: str,
         model_name: str = None,
         training_params: Dict = None
     ) -> Dict[str, Any]:
         """Start OpenAI fine-tuning job."""
         try:
             import openai
-            
+
             # Initialize OpenAI client
             client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-            
+
             # Upload training file
             logger.info(f"Uploading training file: {dataset_path}")
             with open(dataset_path, 'rb') as f:
@@ -221,10 +225,10 @@ class FineTuningService(BaseService):
                     file=f,
                     purpose='fine-tune'
                 )
-            
+
             # Start fine-tuning job
             base_model = model_name or "gpt-3.5-turbo"
-            
+
             fine_tuning_job = client.fine_tuning.jobs.create(
                 training_file=training_file.id,
                 model=base_model,
@@ -234,7 +238,7 @@ class FineTuningService(BaseService):
                     "learning_rate_multiplier": training_params.get("learning_rate", 0.1) if training_params else 0.1
                 }
             )
-            
+
             job_info = {
                 "provider": "openai",
                 "job_id": fine_tuning_job.id,
@@ -244,17 +248,17 @@ class FineTuningService(BaseService):
                 "created_at": datetime.now().isoformat(),
                 "estimated_completion": "20-30 minutes"
             }
-            
+
             logger.info(f"Started OpenAI fine-tuning job: {fine_tuning_job.id}")
             return job_info
-            
+
         except Exception as e:
             logger.error(f"OpenAI fine-tuning failed: {e}")
             raise
 
     async def _start_local_fine_tuning(
-        self, 
-        dataset_path: str, 
+        self,
+        dataset_path: str,
         model_name: str = None,
         training_params: Dict = None
     ) -> Dict[str, Any]:
@@ -263,7 +267,7 @@ class FineTuningService(BaseService):
         # - Hugging Face Transformers
         # - Ollama fine-tuning
         # - LM Studio training
-        
+
         job_info = {
             "provider": "local",
             "job_id": f"local_job_{int(time.time())}",
@@ -273,21 +277,20 @@ class FineTuningService(BaseService):
             "created_at": datetime.now().isoformat(),
             "estimated_completion": "1-2 hours (depending on hardware)"
         }
-        
+
         logger.info(f"Local fine-tuning job created: {job_info['job_id']}")
         logger.warning("Local fine-tuning requires manual setup with training frameworks")
-        
+
         return job_info
 
     async def check_fine_tuning_status(self, job_id: str) -> Dict[str, Any]:
         """Check the status of a fine-tuning job."""
         try:
             if self.provider == "openai":
-                import openai
                 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-                
+
                 job = client.fine_tuning.jobs.retrieve(job_id)
-                
+
                 return {
                     "job_id": job.id,
                     "status": job.status,
@@ -304,7 +307,7 @@ class FineTuningService(BaseService):
                     "status": "not_implemented",
                     "message": f"Status checking not implemented for {self.provider}"
                 }
-                
+
         except Exception as e:
             logger.error(f"Failed to check fine-tuning status: {e}")
             raise
@@ -339,14 +342,13 @@ DeepSeek currently doesn't support public fine-tuning:
 3. Current setup only supports prompt engineering
             """
         }
-        
+
         return {
             "current_provider": self.provider,
             "fine_tuning_supported": self.fine_tuning_supported,
             "instructions": instructions.get(self.provider, "Unknown provider"),
             "all_instructions": instructions
         }
-
 
 # Global fine-tuning service instance
 fine_tuning_service = FineTuningService()

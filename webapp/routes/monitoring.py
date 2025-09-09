@@ -12,7 +12,6 @@ from utils.logger import logger
 
 monitoring_bp = Blueprint("monitoring", __name__, url_prefix="/api/monitoring")
 
-
 @monitoring_bp.route("/health", methods=["GET"])
 @login_required
 def get_system_health():
@@ -24,7 +23,6 @@ def get_system_health():
         logger.error(f"Error getting system health: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
-
 @monitoring_bp.route("/metrics", methods=["GET"])
 @login_required
 def get_system_metrics():
@@ -35,7 +33,6 @@ def get_system_metrics():
     except Exception as e:
         logger.error(f"Error getting system metrics: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
-
 
 @monitoring_bp.route("/health-checks", methods=["GET"])
 @login_required
@@ -53,7 +50,6 @@ def get_health_checks():
         logger.error(f"Error performing health checks: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
-
 @monitoring_bp.route("/dashboard", methods=["GET"])
 @login_required
 def get_performance_dashboard():
@@ -64,7 +60,6 @@ def get_performance_dashboard():
     except Exception as e:
         logger.error(f"Error getting dashboard data: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
-
 
 @monitoring_bp.route("/alerts", methods=["GET"])
 @login_required
@@ -89,7 +84,6 @@ def get_alerts():
     except Exception as e:
         logger.error(f"Error getting alerts: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
-
 
 @monitoring_bp.route("/alerts/<alert_id>/resolve", methods=["POST"])
 @login_required
@@ -121,7 +115,6 @@ def resolve_alert(alert_id):
         logger.error(f"Error resolving alert {alert_id}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
-
 @monitoring_bp.route("/status/simple", methods=["GET"])
 def get_simple_status():
     """Get simple system status (no authentication required for basic monitoring)."""
@@ -140,7 +133,6 @@ def get_simple_status():
     except Exception as e:
         logger.error(f"Error getting simple status: {e}")
         return jsonify({"status": "error", "error": str(e)}), 500
-
 
 @monitoring_bp.route("/metrics/history", methods=["GET"])
 @login_required
@@ -171,12 +163,10 @@ def get_metrics_history():
         logger.error(f"Error getting metrics history: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
-
 # Error handlers
 @monitoring_bp.errorhandler(404)
 def not_found(error):
     return jsonify({"success": False, "error": "Endpoint not found"}), 404
-
 
 @monitoring_bp.errorhandler(500)
 def internal_error(error):

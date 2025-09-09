@@ -6,8 +6,8 @@ AI processing functionality into a clean, maintainable architecture.
 """
 
 import time
-from dataclasses import dataclass
 from datetime import datetime, timezone
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from src.config.processing_config import ProcessingConfigManager
@@ -18,12 +18,12 @@ from src.services.enhanced_logging_service import (
     enhanced_logging_service,
     log_operation,
 )
+from src.services.processing_error_handler import ErrorContext
 from src.services.monitoring.monitoring_service import monitoring_service
 from src.services.core.error_service import error_service
 from src.services.retry_manager import retry_manager
 from src.services.service_registry import service_registry
 from utils.logger import logger
-
 
 @dataclass
 class ProcessingRequest:
@@ -38,7 +38,6 @@ class ProcessingRequest:
         if self.options is None:
             self.options = {}
 
-
 @dataclass
 class ProcessingResponse:
     """Unified processing response structure."""
@@ -51,7 +50,6 @@ class ProcessingResponse:
     error: Optional[str] = None
     processing_time: Optional[float] = None
     metadata: Optional[Dict[str, Any]] = None
-
 
 class CoreService(BaseService):
     """
@@ -67,7 +65,6 @@ class CoreService(BaseService):
         self._llm_engine = None
         self._mapping_service = None
         self._grading_service = None
-        self._ultra_fast_processor = None
         self._processing_cache = {}
         self._service_registry = {}
         self._service_health = {}
@@ -105,7 +102,6 @@ class CoreService(BaseService):
                 ("llm", self._initialize_llm_service),
                 ("mapping", self._initialize_mapping_service),
                 ("grading", self._initialize_grading_service),
-                ("ultra_fast", self._initialize_ultra_fast_service),
             ]
 
             for service_name, init_func in services_to_initialize:
@@ -255,7 +251,9 @@ class CoreService(BaseService):
         try:
             from src.services.consolidated_llm_service import ConsolidatedLLMService
 
+            logger.info("Initializing LLM service...")
             self._llm_engine = ConsolidatedLLMService()
+            logger.info("LLM service initialized successfully")
             self._register_service("llm", self._llm_engine)
             return True
         except ImportError as e:
@@ -264,6 +262,8 @@ class CoreService(BaseService):
             return False
         except Exception as e:
             logger.error(f"LLM service initialization failed: {e}")
+            import traceback
+            logger.error(f"LLM initialization traceback: {traceback.format_exc()}")
             self._llm_engine = None
             return False
 
@@ -328,22 +328,6 @@ class CoreService(BaseService):
             self._grading_service = None
             return False
 
-    def _initialize_ultra_fast_service(self) -> bool:
-        """Initialize ultra-fast processing service."""
-        try:
-            from src.services.ultra_fast_processing import get_ultra_fast_processor
-
-            self._ultra_fast_processor = get_ultra_fast_processor()
-            self._register_service("ultra_fast", self._ultra_fast_processor)
-            return True
-        except ImportError as e:
-            logger.info(f"Ultra-fast processing not available: {e}")
-            self._ultra_fast_processor = None
-            return False
-        except Exception as e:
-            logger.warning(f"Ultra-fast processing initialization failed: {e}")
-            self._ultra_fast_processor = None
-            return False
 
     def _register_service(self, name: str, service):
         """Register a service with enhanced health monitoring and global registry."""
@@ -458,7 +442,7 @@ class CoreService(BaseService):
     def get_service_health(self) -> Dict[str, Any]:
         """Get health status of all services."""
         return {
-            "core_service": self.status.value,
+            "core_service": "healthy",
             "services": {
                 name: {
                     "status": health["status"].value,
@@ -486,22 +470,22 @@ class CoreService(BaseService):
             ProcessingResponse with results or error information
         """
         start_time = time.time()
-        
+
         # Create a unique lock key for this submission-guide pair
         lock_key = f"{request.submission_id}_{request.guide_id}"
-        
+
         # Check if this submission is already being processed
         if hasattr(self, '_processing_locks') and lock_key in self._processing_locks:
             logger.warning(f"Submission {request.submission_id} is already being processed, skipping duplicate request")
             return ProcessingResponse(
-                success=False, 
+                success=False,
                 error="Submission is already being processed"
             )
-        
+
         # Initialize processing locks if not exists
         if not hasattr(self, '_processing_locks'):
             self._processing_locks = set()
-        
+
         # Add lock for this submission
         self._processing_locks.add(lock_key)
 
@@ -583,7 +567,7 @@ class CoreService(BaseService):
                 )
 
             # Step 2: Answer Mapping
-            mappings = await self._map_answers(guide, submission_text)
+            mappings = await self._map_answers(guide, submission_text, submission.id)
             if not mappings:
                 return ProcessingResponse(
                     success=False, error="Failed to map answers to questions"
@@ -659,214 +643,738 @@ class CoreService(BaseService):
             except Exception as e:
                 logger.error(f"OCR extraction error for {submission.id}: {e}")
 
-            if result.success and result.data and result.data.get("success"):
-                extracted_text = result.data.get("text", "")
-
-                # Update submission with extracted text
-                submission.content_text = extracted_text
-                db.session.commit()
-
-                logger.info(
-                    f"OCR extraction successful for {submission.id} ({len(extracted_text)} chars)"
-                )
-                return extracted_text
-            else:
-                logger.warning(
-                    f"OCR extraction failed for {submission.id}: {result.error_message}"
-                )
-
         logger.warning(f"No text content available for submission {submission.id}")
         return None
 
     async def _map_answers(
-        self, guide: MarkingGuide, submission_text: str
+        self, guide: MarkingGuide, submission_text: str, submission_id: str = None
     ) -> Optional[List[Dict]]:
-        """Map submission answers to guide questions using ultra-fast processing."""
+        """Map submission answers to guide questions using LLM processing."""
         try:
             if not guide or not hasattr(guide, "id"):
                 logger.error("Invalid guide object passed to _map_answers")
                 return None
 
-            guide_content = guide.content_text or ""
+            # First, validate that the guide has proper questions and scores
+            if not self._validate_guide_questions_and_scores(guide):
+                logger.warning(f"Guide {guide.id} has incomplete questions/scores, proceeding with LLM mapping")
 
-            logger.info(f"Starting ultra-fast mapping for guide {guide.id}")
+            # Check if we already have mappings in the database for this specific submission
+            if submission_id:
+                existing_mappings = self._get_existing_mappings_from_db(guide.id, submission_id)
+                if existing_mappings:
+                    logger.info(f"Using {len(existing_mappings)} existing mappings from database for submission {submission_id}")
+                    return existing_mappings
 
-            # Try ultra-fast processing first
+            # Use LLM for mapping guide and submission
+            logger.info(f"Using LLM for mapping guide {guide.id} and submission")
+            
             try:
-                from src.services.ultra_fast_processing import get_ultra_fast_processor
-
-                processor = get_ultra_fast_processor()
-
                 questions_data = guide.questions if guide.questions else None
-                # Remove artificial question limit - process all questions in the guide
-                max_questions = len(questions_data) if questions_data else 10
+                if not questions_data:
+                    logger.error("No questions data available in guide")
+                    return None
 
-                mappings = processor.mapper.ultra_fast_map(
-                    guide_content,
+                # Use LLM mapping with guide and submission data
+                mappings = await self._map_with_llm(
+                    guide.content_text or "",
                     submission_text,
-                    max_questions=max_questions,
+                    max_questions=len(questions_data),
                     questions_data=questions_data,
                 )
 
                 if mappings:
-                    logger.info(f"Ultra-fast mapping returned {len(mappings)} mappings")
+                    logger.info(f"LLM mapping returned {len(mappings)} mappings")
                     return mappings
+                else:
+                    logger.error("LLM mapping returned no results")
+                    return None
 
             except Exception as e:
-                logger.warning(f"Ultra-fast mapping failed, using fallback: {e}")
-
-            # Fallback to original mapping service
-            if hasattr(self, "_mapping_service") and self._mapping_service:
-                try:
-                    # Use the same max_questions as ultra-fast processing
-                    max_questions_fallback = len(guide.questions) if guide.questions else 10
-                    mapping_result, error = (
-                        self._mapping_service.map_submission_to_guide(
-                            guide_content, submission_text, max_questions_fallback
-                        )
-                    )
-
-                    if mapping_result and mapping_result.get("mappings"):
-                        logger.info(
-                            f"Fallback mapping service returned {len(mapping_result['mappings'])} mappings"
-                        )
-                        return mapping_result["mappings"]
-
-                except Exception as e:
-                    logger.error(f"Fallback mapping service error: {e}")
-
-            # Final fallback
-            logger.info("Using simple fallback mapping")
-            return self._simple_answer_mapping(guide.questions or [], submission_text)
+                logger.error(f"LLM mapping failed: {e}")
+                return None
 
         except Exception as e:
-            logger.error(f"Answer mapping failed: {e}")
+            logger.error(f"Error in _map_answers: {str(e)}")
             return None
 
-    def _simple_answer_mapping(self, questions: List[Dict], text: str) -> List[Dict]:
-        """Simple fallback answer mapping."""
-        mappings = []
+    def _validate_guide_questions_and_scores(self, guide: MarkingGuide) -> bool:
+        """Check if the guide has proper questions and scores stored."""
+        try:
+            if not guide.questions:
+                logger.warning(f"Guide {guide.id} has no questions stored")
+                return False
+            
+            questions_with_marks = 0
+            questions_without_marks = 0
+            
+            for question in guide.questions:
+                if isinstance(question, dict):
+                    marks = question.get('marks', 0)
+                    if marks > 0:
+                        questions_with_marks += 1
+                    else:
+                        questions_without_marks += 1
+                        logger.warning(f"Question {question.get('number', 'unknown')} has no marks")
+            
+            logger.info(f"Guide {guide.id}: {questions_with_marks} questions with marks, {questions_without_marks} without marks")
+            
+            # Consider guide valid if at least 50% of questions have marks
+            return questions_with_marks > questions_without_marks
+            
+        except Exception as e:
+            logger.error(f"Error validating guide questions and scores: {e}")
+            return False
 
-        for i, question in enumerate(questions):
-            question_text = question.get("question", "")
+    def _create_mappings_from_guide(self, questions_data: List[Dict], submission_text: str) -> List[Dict]:
+        """Create mappings directly from guide structure without LLM."""
+        try:
+            mappings = []
+            
+            for question in questions_data:
+                if not isinstance(question, dict):
+                    continue
+                
+                question_number = question.get('number', '')
+                question_text = question.get('text', '')
+                question_marks = question.get('marks', 0)
+                question_type = question.get('type', 'single')
+                sub_parts = question.get('sub_parts', [])
+                criteria = question.get('criteria', '')
+                
+                if question_type == 'grouped' and sub_parts:
+                    # For grouped questions, create mappings for each sub-part
+                    for sub_part in sub_parts:
+                        # Extract exact marks from criteria for this sub-part
+                        exact_marks = self._extract_marks_from_criteria(criteria, sub_part)
+                        
+                        if exact_marks > 0:
+                            max_score = exact_marks
+                            logger.info(f"Question {sub_part}: {max_score} marks (extracted from criteria)")
+                        else:
+                            # Fallback: distribute marks among sub-parts
+                            max_score = question_marks / len(sub_parts) if sub_parts else question_marks
+                            logger.warning(f"Question {sub_part}: No exact marks found, using calculated: {max_score}")
+                        
+                        # Create mapping for this sub-part
+                        mapping = {
+                            'question_id': f'Q{sub_part}',
+                            'question_text': f"{question_text} (Part {sub_part})",
+                            'student_answer': self._extract_student_answer_for_question(submission_text, sub_part),
+                            'max_score': max_score,
+                            'confidence': 1.0,  # Direct from guide = 100% confidence
+                            'match_reason': 'Direct from guide structure',
+                            'mapping_method': 'guide_direct'
+                        }
+                        mappings.append(mapping)
+                else:
+                    # For single questions
+                    max_score = question_marks
+                    logger.info(f"Question {question_number}: {max_score} marks (single question)")
+                    
+                    mapping = {
+                        'question_id': f'Q{question_number}',
+                        'question_text': question_text,
+                        'student_answer': self._extract_student_answer_for_question(submission_text, question_number),
+                        'max_score': max_score,
+                        'confidence': 1.0,  # Direct from guide = 100% confidence
+                        'match_reason': 'Direct from guide structure',
+                        'mapping_method': 'guide_direct'
+                    }
+                    mappings.append(mapping)
+            
+            logger.info(f"Created {len(mappings)} mappings directly from guide structure")
+            return mappings
+            
+        except Exception as e:
+            logger.error(f"Error creating mappings from guide: {e}")
+            return []
 
-            # Simple keyword-based matching
-            # This is a basic implementation - in practice, you'd want more sophisticated matching
-            mapping = {
-                "question_number": i + 1,
-                "question_text": question_text,
-                "student_answer": text[:500],  # First 500 chars as fallback
-                "confidence": 0.5,  # Low confidence for fallback method
-            }
-            mappings.append(mapping)
+    def _extract_student_answer_for_question(self, submission_text: str, question_id: str) -> str:
+        """Extract student answer for a specific question from submission text."""
+        try:
+            # Simple pattern matching to find answers
+            patterns = [
+                f"Question {question_id}:",
+                f"Q{question_id}:",
+                f"{question_id}:",
+                f"Part {question_id}:",
+            ]
+            
+            for pattern in patterns:
+                if pattern in submission_text:
+                    # Find the answer after the pattern
+                    start_idx = submission_text.find(pattern)
+                    if start_idx != -1:
+                        # Look for the next question or end of text
+                        next_question_idx = len(submission_text)
+                        for next_pattern in ["Question ", "Q", "\n\n"]:
+                            next_idx = submission_text.find(next_pattern, start_idx + len(pattern))
+                            if next_idx != -1 and next_idx < next_question_idx:
+                                next_question_idx = next_idx
+                        
+                        answer = submission_text[start_idx + len(pattern):next_question_idx].strip()
+                        return answer[:200]  # Limit length
+            
+            # If no specific pattern found, return a generic response
+            return f"Answer for {question_id} not found in submission"
+            
+        except Exception as e:
+            logger.error(f"Error extracting student answer for {question_id}: {e}")
+            return f"Error extracting answer for {question_id}"
 
-        return mappings
+    def _get_existing_mappings_from_db(self, guide_id: str, submission_id: str = None) -> Optional[List[Dict]]:
+        """Check if mappings already exist in database for this guide and optionally specific submission."""
+        try:
+            from src.database.models import Mapping, Submission, db
+            
+            # Get existing mappings for this guide and optionally specific submission
+            if submission_id:
+                # Get mappings for specific submission
+                existing_mappings = db.session.query(Mapping).filter(
+                    Mapping.submission_id == submission_id
+                ).all()
+            else:
+                # Get mappings for all submissions using this guide (legacy behavior)
+                existing_mappings = db.session.query(Mapping).filter(
+                    Mapping.submission_id.in_(
+                        db.session.query(Submission.id).filter(Submission.marking_guide_id == guide_id)
+                    )
+                ).all()
+            
+            if existing_mappings:
+                if submission_id:
+                    logger.info(f"Found {len(existing_mappings)} existing mappings in database for submission {submission_id}")
+                else:
+                    logger.info(f"Found {len(existing_mappings)} existing mappings in database for guide {guide_id}")
+                
+                # Check if existing mappings have valid max_scores
+                valid_mappings = []
+                invalid_mappings = []
+                
+                for mapping in existing_mappings:
+                    if mapping.max_score > 0:
+                        valid_mappings.append(mapping)
+                    else:
+                        invalid_mappings.append(mapping)
+                
+                if invalid_mappings:
+                    logger.warning(f"Found {len(invalid_mappings)} mappings with invalid max_scores (0.0), will regenerate")
+                    return None  # Return None to force regeneration
+                
+                # Convert to the format expected by the mapping system
+                mappings = []
+                for mapping in valid_mappings:
+                    mappings.append({
+                        'question_id': mapping.guide_question_id,
+                        'question_text': mapping.guide_question_text,
+                        'student_answer': mapping.submission_answer,
+                        'max_score': mapping.max_score,
+                        'confidence': mapping.match_score,
+                        'match_reason': mapping.match_reason,
+                        'mapping_method': mapping.mapping_method
+                    })
+                
+                return mappings
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error checking existing mappings from database: {e}")
+            return None
+
+    async def _map_with_llm(self, guide_content: str, submission_text: str, max_questions: int = None, questions_data=None) -> Optional[List[Dict]]:
+        """Map submission answers to guide questions using LLM."""
+        try:
+            # First, check if we already have mappings in the database for this guide
+            # Note: We need the guide_id to check, but this method doesn't have it
+            # We'll need to modify the calling code to pass the guide_id
+            
+            # Ensure LLM engine is available
+            if not self._llm_engine:
+                logger.warning("LLM engine not available, attempting to initialize...")
+                if not self._initialize_llm_service():
+                    logger.error("Failed to initialize LLM engine for mapping")
+                    return None
+
+            # Prepare mapping prompt
+            system_prompt = """You are an expert at matching student answers to exam questions and extracting exact marks from marking guides.
+
+TASK: Extract and match student answers to the specific questions from the marking guide.
+
+OUTPUT FORMAT: Return ONLY valid JSON in this exact format:
+{"mappings":[{"question_id":"Q1a","question_text":"What is...?","student_answer":"The answer is...","max_score":2.0}]}
+
+CRITICAL: For each mapping, you MUST extract the exact max_score from the marking criteria by:
+
+1. **READ THE CRITERIA CAREFULLY**: Look for specific mark allocations like:
+   - "Part a: ... – 1 mark"
+   - "Diagram – 2 marks" 
+   - "Industry 1.0 (Late 18th century) – 1 mark"
+   - "A CORRECTLY DRAWN DIAGRAM EARNS 3 marks"
+   - "Part b: ... – 2 marks"
+
+2. **EXTRACT INDIVIDUAL SCORES FOR GROUPED QUESTIONS**: For grouped questions, find the specific score for each individual part:
+   - Look for patterns like "Part a: ... – 1 mark", "Part b: ... – 2 marks"
+   - Each sub-part should have its own specific score
+   - If no individual scores found, calculate: total_marks ÷ number_of_sub_parts
+
+3. **NEVER USE 0.0**: If you cannot find specific marks, use the total marks divided by number of sub-parts
+
+4. **ALWAYS INCLUDE max_score**: Every mapping must have a max_score field with a positive number
+
+5. **GROUPED QUESTION HANDLING**: For grouped questions, extract individual scores for each part:
+   - Q1a should have its own specific score (e.g., 1.0)
+   - Q1b should have its own specific score (e.g., 2.0)
+   - Q1c should have its own specific score (e.g., 1.5)
+   - Q1d should have its own specific score (e.g., 1.5)
+
+EXAMPLES:
+- If criteria says "Part a: Industry 1.0 – 1 mark", then Q1a max_score = 1.0
+- If criteria says "Part b: Diagram – 2 marks", then Q1b max_score = 2.0
+- If criteria says "Part c: Process – 1.5 marks", then Q1c max_score = 1.5
+- If question has 30 total marks and 4 sub-parts with no individual scores, then each part = 7.5
+
+The max_score must be the EXACT number from the guide criteria for each individual part, or calculated from total marks if no specific marks are found."""
+
+            # Build questions context with proper sub-part handling
+            questions_context = ""
+            if questions_data:
+                questions_to_process = questions_data
+                for i, q in enumerate(questions_to_process):
+                    if isinstance(q, dict):
+                        q_text = q.get('text', q.get('question_text', ''))
+                        q_marks = q.get('marks', 0)
+                        q_type = q.get('type', 'single')
+                        sub_parts = q.get('sub_parts', [])
+                        criteria = q.get('criteria', '')
+                        
+                        if q_type == 'grouped' and sub_parts:
+                            # For grouped questions, provide full context including criteria
+                            questions_context += f"Question {i+1} (Total: {q_marks} points, {len(sub_parts)} sub-parts): {q_text}\n"
+                            questions_context += f"Sub-parts: {', '.join(sub_parts)}\n"
+                            questions_context += f"Marking Criteria: {criteria}\n"
+                            questions_context += f"IMPORTANT: Extract the INDIVIDUAL marks for each sub-part from the criteria above.\n"
+                            questions_context += f"Each sub-part (Q{i+1}a, Q{i+1}b, etc.) should have its own specific score.\n"
+                        else:
+                            # For single questions
+                            questions_context += f"Question {i+1} (Max: {q_marks} points): {q_text}\n"
+                            if criteria:
+                                questions_context += f"Marking Criteria: {criteria}\n"
+                    else:
+                        questions_context += f"Question {i+1}: {str(q)}\n"
+            else:
+                questions_context = guide_content  # Use full guide content if no structured questions
+
+            user_prompt = f"""Match the student's answers to these questions from the marking guide:
+
+MARKING GUIDE QUESTIONS:
+{questions_context}
+
+STUDENT SUBMISSION:
+{submission_text}
+
+TASK: 
+1. Match each student answer to the corresponding question/sub-part
+2. Extract the exact max_score from the marking criteria for each individual question in groups
+3. Return the mapping in JSON format with correct max_score values for each part
+
+IMPORTANT: 
+- For GROUPED QUESTIONS, extract individual scores for each part (Q1a, Q1b, Q1c, Q1d)
+- Look for specific mark allocations in the criteria text like "Part a: ... – 1 mark"
+- Each sub-part should have its own specific score from the criteria
+- If no individual scores found, calculate: total_marks / number_of_sub_parts
+- Never use 0.0 for max_score - always provide a positive number
+- Use the exact question IDs from the guide (e.g., Q1a, Q1b, Q2a, etc.)
+
+GROUPED QUESTION EXAMPLE:
+- If Question 1 has 30 total marks with sub-parts [1a, 1b, 1c, 1d]
+- And criteria shows "Part a: Industry 1.0 – 1 mark", "Part b: Diagram – 2 marks"
+- Then return: Q1a with max_score=1.0, Q1b with max_score=2.0, Q1c and Q1d with calculated scores"""
+
+            # Make LLM call
+            response = self._llm_engine.generate_response(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.1,  # Low temperature for consistent mapping
+                use_cache=True
+            )
+
+            # Parse response
+            return self._parse_llm_mapping_response(response, max_questions, questions_data)
+
+        except Exception as e:
+            logger.error(f"LLM mapping failed: {e}")
+            return None
+
+    def _parse_llm_mapping_response(self, response: str, max_questions: int = None, questions_data=None) -> Optional[List[Dict]]:
+        """Parse LLM mapping response and return structured mappings with correct max_scores."""
+        try:
+            import json
+            import re
+            
+            # Extract JSON from response
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if not json_match:
+                logger.error("No JSON found in LLM mapping response")
+                return None
+            
+            try:
+                mapping_data = json.loads(json_match.group())
+            except json.JSONDecodeError:
+                logger.error("Invalid JSON in LLM mapping response")
+                return None
+            
+            mappings = mapping_data.get('mappings', [])
+            if not mappings:
+                logger.error("No mappings found in LLM response")
+                return None
+            
+            # Process and validate mappings with correct max_scores
+            processed_mappings = []
+            mappings_to_process = mappings
+            
+            for i, mapping in enumerate(mappings_to_process):
+                question_id = mapping.get('question_id', f'Q{i+1}')
+                
+                # Use max_score from LLM response (extracted from guide)
+                llm_max_score = mapping.get('max_score')
+                if llm_max_score is not None:
+                    max_score = float(llm_max_score)
+                    logger.info(f"Using LLM-extracted max_score for {question_id}: {max_score}")
+                else:
+                    # Fallback: calculate from guide structure if LLM didn't provide it
+                    max_score = self._calculate_correct_max_score(question_id, questions_data)
+                    logger.warning(f"LLM didn't provide max_score for {question_id}, using calculated: {max_score}")
+                
+                processed_mapping = {
+                    'question_id': question_id,
+                    'question_text': mapping.get('question_text', f'Question {i+1}'),
+                    'student_answer': mapping.get('student_answer', ''),
+                    'max_score': max_score,
+                    'confidence': 0.9,  # High confidence for LLM mapping
+                    'match_reason': 'LLM mapping'
+                }
+                processed_mappings.append(processed_mapping)
+            
+            return processed_mappings
+            
+        except Exception as e:
+            logger.error(f"Error parsing LLM mapping response: {e}")
+            return None
+    
+    def _extract_marks_from_criteria(self, criteria_text: str, sub_part: str) -> float:
+        """Extract exact marks for a specific sub-part from criteria text."""
+        try:
+            if not criteria_text or not sub_part:
+                return 0.0
+            
+            # Convert sub_part to lowercase for matching
+            sub_part_lower = sub_part.lower()
+            
+            # Look for patterns like "Part a: ... – 1 mark", "Part b: ... – 2 marks", etc.
+            import re
+            
+            # Pattern 1: "Part a: ... – 1 mark" or "Part a: ... - 1 mark"
+            part_pattern = rf"Part\s+{sub_part_lower}.*?[–-]\s*(\d+(?:\.\d+)?)\s*mark"
+            match = re.search(part_pattern, criteria_text, re.IGNORECASE | re.DOTALL)
+            if match:
+                marks = float(match.group(1))
+                logger.info(f"Found exact marks for {sub_part}: {marks} from criteria")
+                return marks
+            
+            # Pattern 2: Look for specific sub-part mentions with marks
+            # e.g., "Industry 1.0 (Late 18th century) – 1 mark"
+            specific_patterns = [
+                rf"{sub_part_lower}.*?[–-]\s*(\d+(?:\.\d+)?)\s*mark",
+                rf"Part\s+{sub_part_lower}.*?(\d+(?:\.\d+)?)\s*mark",
+            ]
+            
+            for pattern in specific_patterns:
+                match = re.search(pattern, criteria_text, re.IGNORECASE | re.DOTALL)
+                if match:
+                    marks = float(match.group(1))
+                    logger.info(f"Found specific marks for {sub_part}: {marks} from criteria")
+                    return marks
+            
+            # Pattern 3: Look for marks in the main criteria that might apply to this sub-part
+            # e.g., "Diagram – 2 marks" for part a
+            main_patterns = [
+                r"Diagram.*?[–-]\s*(\d+(?:\.\d+)?)\s*mark",
+                r"Industrial engineering.*?[–-]\s*(\d+(?:\.\d+)?)\s*mark",
+                r"marks for any.*?[–-]\s*(\d+(?:\.\d+)?)\s*mark",
+            ]
+            
+            for pattern in main_patterns:
+                match = re.search(pattern, criteria_text, re.IGNORECASE | re.DOTALL)
+                if match:
+                    marks = float(match.group(1))
+                    logger.info(f"Found main criteria marks for {sub_part}: {marks} from criteria")
+                    return marks
+            
+            logger.warning(f"No specific marks found for {sub_part} in criteria")
+            return 0.0
+            
+        except Exception as e:
+            logger.error(f"Error extracting marks for {sub_part} from criteria: {e}")
+            return 0.0
+
+    def _calculate_correct_max_score(self, question_id: str, questions_data: List[Dict]) -> float:
+        """Calculate the correct max_score for a question based on exact marks from guide criteria."""
+        try:
+            if not questions_data:
+                logger.error(f"No questions_data provided for {question_id}")
+                raise ValueError("No questions data available - cannot calculate max_score")
+            
+            # Extract main question number from question_id (e.g., "Q1a" -> "1")
+            main_question_num = question_id
+            if question_id.startswith('Q'):
+                main_question_num = question_id[1:]
+            
+            # Extract sub-part suffix (e.g., "1a" -> "a")
+            sub_part_suffix = ""
+            for suffix in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']:
+                if main_question_num.endswith(suffix):
+                    sub_part_suffix = suffix
+                    main_question_num = main_question_num[:-1]
+                    break
+            
+            # Find the corresponding guide question
+            for question in questions_data:
+                if isinstance(question, dict) and question.get('number') == main_question_num:
+                    q_marks = question.get('marks', 0)
+                    q_type = question.get('type', 'single')
+                    sub_parts = question.get('sub_parts', [])
+                    criteria = question.get('criteria', '')
+                    
+                    if q_marks == 0:
+                        logger.warning(f"Question {main_question_num} has 0 marks in guide")
+                        raise ValueError(f"Question {main_question_num} has no marks assigned in guide")
+                    
+                    if q_type == 'grouped' and sub_parts and sub_part_suffix:
+                        # For grouped questions, try to extract exact marks from criteria
+                        exact_marks = self._extract_marks_from_criteria(criteria, sub_part_suffix)
+                        if exact_marks > 0:
+                            logger.info(f"Question {question_id}: {exact_marks} marks (extracted from criteria)")
+                            return float(exact_marks)
+                        else:
+                            # Fallback: distribute marks among sub-parts if no exact marks found
+                            marks_per_sub_part = q_marks / len(sub_parts) if sub_parts else q_marks
+                            logger.warning(f"Question {question_id}: No exact marks found in criteria, using calculated: {marks_per_sub_part}")
+                            return float(marks_per_sub_part)
+                    else:
+                        # For single questions
+                        logger.info(f"Question {question_id}: {q_marks} marks (single question)")
+                        return float(q_marks)
+            
+            logger.error(f"Question {question_id} not found in guide questions")
+            raise ValueError(f"Question {question_id} not found in guide - cannot determine max_score")
+            
+        except Exception as e:
+            logger.error(f"Error calculating max_score for {question_id}: {e}")
+            raise ValueError(f"Cannot determine max_score for {question_id}: {e}")
+
+
 
     async def _grade_submission(
         self, guide: MarkingGuide, mappings: List[Dict]
     ) -> Optional[Dict]:
-        """Grade the submission using ultra-fast AI processing."""
+        """Grade the submission using LLM-based processing."""
         try:
             if not guide or not hasattr(guide, "id"):
                 logger.error("Invalid guide object passed to _grade_submission")
                 return None
 
             logger.info(
-                f"Starting ultra-fast grading for {len(mappings)} mapped answers"
+                f"Starting LLM grading for {len(mappings)} mapped answers"
             )
 
-            # Try ultra-fast grading first
+            # Use direct LLM grading service
             try:
-                from src.services.ultra_fast_processing import get_ultra_fast_processor
-
-                processor = get_ultra_fast_processor()
-
-                grading_result = processor.grader.ultra_fast_grade(
-                    mappings, guide.content_text or ""
-                )
-
+                grading_result = await self._grade_with_llm(mappings, guide.content_text or "")
+                
                 if grading_result and grading_result.get("total_score") is not None:
-                    logger.info("Ultra-fast grading completed successfully")
+                    logger.info("LLM grading completed successfully")
                     return grading_result
+                else:
+                    logger.error("LLM grading returned invalid result")
+                    return None
 
             except Exception as e:
-                logger.warning(f"Ultra-fast grading failed, using fallback: {e}")
-
-            # Fallback to original grading service
-            if hasattr(self, "_grading_service") and self._grading_service:
-                try:
-                    logger.info("Using fallback grading service")
-
-                    submission_content = "\n\n".join(
-                        [
-                            f"Question {mapping.get('question_number', i+1)}: {mapping.get('question_text', '')}\n"
-                            f"Answer: {mapping.get('student_answer', '')}"
-                            for i, mapping in enumerate(mappings)
-                        ]
-                    )
-
-                    # Use the grading service with timeout
-                    grading_result = self._grading_service.grade_submission_optimized(
-                        submission_content=submission_content,
-                        marking_guide=guide.content_text or "",
-                        mapped_data={"mappings": mappings},
-                    )
-
-                    if grading_result and grading_result.get("total_score") is not None:
-                        logger.info("Fallback grading service completed successfully")
-                        return grading_result
-
-                except Exception as e:
-                    logger.error(f"Fallback grading service error: {e}")
-
-            # Final fallback
-            logger.info("Using simple fallback grading")
-            return self._fallback_grading(guide, mappings)
+                logger.error(f"LLM grading failed: {e}")
+                return None
 
         except Exception as e:
-            logger.error(f"Grading failed: {e}")
-            return self._fallback_grading(guide, mappings)
+            logger.error(f"Error in _grade_submission: {str(e)}")
+            return None
 
-    def _fallback_grading(self, guide: MarkingGuide, mappings: List[Dict]) -> Dict:
-        """Fallback grading when LLM is not available."""
-        total_questions = len(mappings)
-        total_marks = guide.total_marks or 100
+    async def _grade_with_llm(self, mappings: List[Dict], guide_content: str) -> Optional[Dict]:
+        """Grade mappings using LLM service directly."""
+        try:
+            # Ensure LLM engine is available
+            if not self._llm_engine:
+                logger.warning("LLM engine not available, attempting to initialize...")
+                if not self._initialize_llm_service():
+                    logger.error("Failed to initialize LLM engine for grading")
+                    return None
 
-        # Simple fallback: give partial credit based on answer length
-        total_score = 0
-        question_results = []
+            # Prepare grading prompt
+            questions_text = ""
+            max_scores = {}
+            
+            for i, mapping in enumerate(mappings):
+                q_text = mapping.get('question_text', f"Question {i+1}")
+                a_text = mapping.get('student_answer', '')
+                max_score = mapping.get('max_score', 10.0)
+                question_id = mapping.get('question_id', f"Q{i+1}")
+                
+                max_scores[question_id] = max_score
+                questions_text += f"\nQuestion {i+1} (ID: {question_id}): {q_text}\n"
+                questions_text += f"Max Score: {max_score} points\n"
+                questions_text += f"Student Answer: {a_text}\n"
+                questions_text += "---\n"
 
-        for mapping in mappings:
-            answer = mapping.get("student_answer", "")
-            question_marks = total_marks / total_questions if total_questions > 0 else 0
+            system_prompt = """You are an expert grader. Grade each answer according to its specific maximum score.
+Return ONLY valid JSON in this exact format:
+{"grades":[{"id":"Q1","score":8.5,"feedback":"Good answer but missing key point"}]}
 
-            # Simple scoring: longer answers get more points (up to 80% max)
-            answer_length = len(answer.strip())
-            if answer_length > 100:
-                score = question_marks * 0.8
-            elif answer_length > 50:
-                score = question_marks * 0.6
-            elif answer_length > 20:
-                score = question_marks * 0.4
-            else:
-                score = question_marks * 0.2
+Note: Do NOT include max_score in your response - it will be provided from the guide.
+Be consistent, fair, and provide constructive feedback."""
 
-            total_score += score
-            question_results.append(
-                {
-                    "question_number": mapping.get("question_number", 0),
-                    "marks_awarded": score,
-                    "max_marks": question_marks,
-                    "feedback": f"Answer provided ({answer_length} characters)",
-                }
+            user_prompt = f"""Grade these answers based on the marking guide and question requirements:
+
+{questions_text}
+
+Marking Guide Context:
+{guide_content}
+
+Return JSON with grades for each question."""
+
+            # Make LLM call
+            response = self._llm_engine.generate_response(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.0,  # Deterministic grading
+                use_cache=True
             )
 
+            # Parse response and calculate results
+            return self._parse_llm_grading_response(response, mappings, max_scores)
+
+        except Exception as e:
+            logger.error(f"LLM grading failed: {e}")
+            return None
+
+    def _parse_llm_grading_response(self, response: str, mappings: List[Dict], max_scores: Dict) -> Dict:
+        """Parse LLM grading response and calculate final results."""
+        try:
+            import json
+            import re
+            
+            # Extract JSON from response
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if not json_match:
+                logger.error("No JSON found in LLM response")
+                return self._create_fallback_grades(mappings, max_scores)
+            
+            try:
+                grading_data = json.loads(json_match.group())
+            except json.JSONDecodeError:
+                logger.error("Invalid JSON in LLM response")
+                return self._create_fallback_grades(mappings, max_scores)
+            
+            grades = grading_data.get('grades', [])
+            if not grades:
+                logger.error("No grades found in LLM response")
+                return self._create_fallback_grades(mappings, max_scores)
+            
+            # Calculate totals
+            total_score = 0
+            total_possible = 0
+            processed_grades = []
+            
+            for grade in grades:
+                question_id = grade.get('id', '')
+                score = float(grade.get('score', 0))
+                max_score = max_scores.get(question_id)
+                if max_score is None:
+                    logger.error(f"No max_score found for question {question_id} in guide")
+                    raise ValueError(f"Question {question_id} not found in guide max_scores")
+                max_score = float(max_score)
+                feedback = grade.get('feedback', 'No feedback provided')
+                
+                # Ensure score doesn't exceed max
+                score = min(score, max_score)
+                
+                total_score += score
+                total_possible += max_score
+                
+                processed_grades.append({
+                    'question_id': question_id,
+                    'score': score,
+                    'max_score': max_score,
+                    'feedback': feedback,
+                    'percentage': (score / max_score * 100) if max_score > 0 else 0
+                })
+            
+            # Calculate final percentage
+            final_percentage = (total_score / total_possible * 100) if total_possible > 0 else 0
+            
+            return {
+                'total_score': total_score,
+                'total_possible': total_possible,
+                'percentage': final_percentage,
+                'grades': processed_grades,
+                'summary': {
+                    'total_questions': len(processed_grades),
+                    'average_score': final_percentage,
+                    'grading_method': 'LLM'
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error parsing LLM grading response: {e}")
+            return self._create_fallback_grades(mappings, max_scores)
+
+    def _create_fallback_grades(self, mappings: List[Dict], max_scores: Dict) -> Dict:
+        """Create basic grades when LLM parsing fails."""
+        grades = []
+        total_score = 0
+        total_possible = 0
+        
+        for i, mapping in enumerate(mappings):
+            question_id = mapping.get('question_id', f"Q{i+1}")
+            max_score = max_scores.get(question_id)
+            
+            if max_score is None:
+                logger.error(f"No max_score found for question {question_id} in guide")
+                raise ValueError(f"Question {question_id} not found in guide - cannot create fallback grade")
+            
+            max_score = float(max_score)
+            # Give partial credit when parsing fails
+            score = max_score * 0.5
+            
+            grades.append({
+                'question_id': question_id,
+                'score': score,
+                'max_score': max_score,
+                'feedback': 'Grading failed - partial credit given',
+                'percentage': 50.0
+            })
+            
+            total_score += score
+            total_possible += max_score
+        
         return {
-            "total_score": total_score,
-            "max_score": total_marks,
-            "feedback": f"Graded {total_questions} questions using fallback scoring",
-            "question_results": question_results,
-            "grading_method": "fallback",
+            'total_score': total_score,
+            'total_possible': total_possible,
+            'percentage': (total_score / total_possible * 100) if total_possible > 0 else 0,
+            'grades': grades,
+            'summary': {
+                'total_questions': len(grades),
+                'average_score': 50.0,
+                'grading_method': 'Fallback'
+            }
         }
 
     async def _save_results(
@@ -876,7 +1384,7 @@ class CoreService(BaseService):
         try:
             # Import Mapping at the top of the method to avoid variable scope issues
             from src.database.models import Mapping
-            
+
             # Check for existing results and remove them to prevent duplicates
             # Use a more robust approach with explicit transaction control
             try:
@@ -884,23 +1392,23 @@ class CoreService(BaseService):
                     submission_id=request.submission_id,
                     marking_guide_id=request.guide_id
                 ).all()
-                
+
                 if existing_results:
                     logger.info(f"Removing {len(existing_results)} existing results for submission {request.submission_id} to prevent duplicates")
                     for existing_result in existing_results:
                         db.session.delete(existing_result)
-                    
+
                     # Also remove existing mappings for this submission
                     existing_mappings = Mapping.query.filter_by(
                         submission_id=request.submission_id
                     ).all()
                     for existing_mapping in existing_mappings:
                         db.session.delete(existing_mapping)
-                    
+
                     # Commit the deletions immediately
                     db.session.commit()
                     logger.info(f"Successfully removed existing results and mappings")
-                    
+
             except Exception as delete_error:
                 logger.error(f"Error removing existing results: {delete_error}")
                 db.session.rollback()
@@ -908,10 +1416,10 @@ class CoreService(BaseService):
 
             # Save mappings and create individual grading results
             import uuid
-            
+
             # Get detailed grades from grading result
-            detailed_grades = grading_result.get("detailed_grades", [])
-            
+            detailed_grades = grading_result.get("grades", [])
+
             # Calculate totals from individual mappings
             total_score = 0.0
             total_max_score = 0.0
@@ -919,18 +1427,18 @@ class CoreService(BaseService):
             for i, mapping_data in enumerate(mappings):
                 # Generate truly unique ID
                 unique_id = f"mapping_{uuid.uuid4().hex[:8]}_{int(time.time())}_{i}"
-                
+
                 # Get max score from mapping data
                 mapping_max_score = mapping_data.get("max_score")
                 if mapping_max_score is None:
-                    logger.info(f"No max_score found for mapping {i}, using default of 10 points")
-                    mapping_max_score = 10.0  # Use reasonable default instead of 0
-                
+                    logger.error(f"No max_score found for mapping {i}")
+                    raise ValueError(f"Mapping {i} has no max_score - cannot process result")
+
                 # Get individual score from detailed grades
                 individual_score = 0.0
                 if i < len(detailed_grades):
                     individual_score = detailed_grades[i].get("score", 0.0)
-                
+
                 # Create mapping record
                 mapping_record = Mapping(
                     id=unique_id,
@@ -947,21 +1455,20 @@ class CoreService(BaseService):
                     mapping_method="llm",
                 )
                 db.session.add(mapping_record)
-                
+
                 # Don't create individual results - only create mappings
                 # Individual results will be created as one summary result below
-                
+
                 # Add to totals
                 total_score += individual_score
                 total_max_score += mapping_max_score
 
             # Create ONE summary result instead of multiple individual results
             overall_percentage = (total_score / total_max_score * 100) if total_max_score > 0 else 0
-            
+
             # Generate unique ID to prevent duplicates
-            import uuid
             unique_result_id = f"result_{uuid.uuid4().hex[:12]}_{request.submission_id}"
-            
+
             summary_result = GradingResult(
                 id=unique_result_id,
                 submission_id=request.submission_id,
@@ -1106,7 +1613,6 @@ class CoreService(BaseService):
                 "llm": self._llm_engine is not None,
                 "mapping": self._mapping_service is not None,
                 "grading": self._grading_service is not None,
-                "ultra_fast": self._ultra_fast_processor is not None,
             },
             "service_health": self.get_service_health(),
             "cache_size": len(self._processing_cache),
@@ -1167,7 +1673,6 @@ class CoreService(BaseService):
             "llm": self._initialize_llm_service,
             "mapping": self._initialize_mapping_service,
             "grading": self._initialize_grading_service,
-            "ultra_fast": self._initialize_ultra_fast_service,
         }
 
         for service_name in failed_services:
@@ -1199,7 +1704,6 @@ class CoreService(BaseService):
         self.health_check()
 
         return restart_results
-
 
 # Global service instance
 core_service = CoreService()

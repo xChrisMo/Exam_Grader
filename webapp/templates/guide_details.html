@@ -150,7 +150,19 @@
     <!-- Questions Section -->
     <div class="bg-white shadow rounded-lg mb-8">
         <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-xl font-semibold text-gray-900">Questions & Marking Criteria</h2>
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-semibold text-gray-900">Questions & Marking Criteria</h2>
+                {% if guide.questions and guide.questions|count_grouped_questions > 0 %}
+                <button type="button" id="reprocess-guide-btn" data-guide-id="{{ guide.id }}"
+                    class="inline-flex items-center px-3 py-2 border border-orange-300 shadow-sm text-sm font-medium rounded-md text-orange-700 bg-white hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span id="reprocess-btn-text">Reprocess with AI</span>
+                </button>
+                {% endif %}
+            </div>
         </div>
         <div class="px-6 py-4">
             {% if guide.questions and guide.questions|count_grouped_questions > 0 %}
@@ -520,6 +532,145 @@
             // Navigate to the edit page
             window.location.href = `/guides/${guideId}/edit`;
         } catch (error) {
+            console.error('Edit error:', error);
+            showToast('Failed to navigate to edit page', 'error');
+        }
+    }
+
+    // Process guide functionality
+    function processGuide(guideId) {
+        const button = document.getElementById('process-guide-btn');
+        const buttonText = document.getElementById('process-btn-text');
+        
+        if (button) {
+            button.disabled = true;
+            buttonText.textContent = 'Processing...';
+            button.innerHTML = button.innerHTML.replace('Process Guide', 'Processing...');
+        }
+
+        fetch('/api/process-guide', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name=csrf-token]') ? document.querySelector('meta[name=csrf-token]').getAttribute('content') : ''
+            },
+            body: JSON.stringify({
+                guide_id: guideId
+            })
+        })
+        .then(function(response) {
+            return response.json();
+        })
+        .then(function(data) {
+            if (data.success) {
+                showToast(data.message || 'Guide processed successfully', 'success');
+                setTimeout(function() {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                showToast(data.message || 'Failed to process guide', 'error');
+                if (button) {
+                    button.disabled = false;
+                    buttonText.textContent = 'Process Guide';
+                }
+            }
+        })
+        .catch(function(error) {
+            console.error('Process error:', error);
+            showToast('Failed to process guide', 'error');
+            if (button) {
+                button.disabled = false;
+                buttonText.textContent = 'Process Guide';
+            }
+        });
+    }
+
+    // Reprocess guide functionality
+    function reprocessGuide(guideId) {
+        console.log('reprocessGuide function called with ID:', guideId);
+        if (!confirm('Are you sure you want to reprocess this guide? This will replace the existing questions and marking criteria with new AI-generated content.')) {
+            console.log('User cancelled reprocessing');
+            return;
+        }
+        console.log('User confirmed reprocessing, proceeding...');
+
+        const button = document.getElementById('reprocess-guide-btn');
+        const buttonText = document.getElementById('reprocess-btn-text');
+        
+        if (button) {
+            button.disabled = true;
+            buttonText.textContent = 'Reprocessing...';
+            button.innerHTML = `
+                <svg class="animate-spin mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Reprocessing...</span>
+            `;
+        }
+
+        const csrfToken = document.querySelector('meta[name=csrf-token]') ? document.querySelector('meta[name=csrf-token]').getAttribute('content') : '';
+        console.log('CSRF Token:', csrfToken);
+        console.log('Making fetch request to /api/reprocess-guide');
+        
+        fetch('/api/reprocess-guide', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                guide_id: guideId
+            })
+        })
+        .then(function(response) {
+            console.log('Response status:', response.status);
+            console.log('Response ok:', response.ok);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(function(data) {
+            console.log('Response data:', data);
+            if (data.success) {
+                showToast(data.message || 'Guide reprocessed successfully', 'success');
+                setTimeout(function() {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                console.error('Reprocess failed:', data.message);
+                showToast(data.message || 'Failed to reprocess guide', 'error');
+                if (button) {
+                    button.disabled = false;
+                    buttonText.textContent = 'Reprocess with AI';
+                    button.innerHTML = `
+                        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        <span>Reprocess with AI</span>
+                    `;
+                }
+            }
+        })
+        .catch(function(error) {
+            console.error('Reprocess error:', error);
+            showToast('Failed to reprocess guide', 'error');
+            if (button) {
+                button.disabled = false;
+                buttonText.textContent = 'Reprocess with AI';
+                button.innerHTML = `
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>Reprocess with AI</span>
+                `;
+            }
+        });
+    }
+        } catch (error) {
             console.error('Edit navigation error:', error);
             showToast('Failed to open editor', 'error');
         }
@@ -639,6 +790,25 @@
             });
         }
 
+        // Handle reprocess guide button
+        const reprocessGuideBtn = document.getElementById('reprocess-guide-btn');
+        console.log('Looking for reprocess button:', reprocessGuideBtn);
+        if (reprocessGuideBtn) {
+            console.log('Reprocess button found, attaching event listener');
+            reprocessGuideBtn.addEventListener('click', function () {
+                console.log('Reprocess button clicked');
+                const guideId = this.getAttribute('data-guide-id');
+                console.log('Guide ID:', guideId);
+                if (guideId) {
+                    reprocessGuide(guideId);
+                } else {
+                    console.error('No guide ID found on button');
+                }
+            });
+        } else {
+            console.error('Reprocess button not found in DOM');
+        }
+
         document.addEventListener('click', function (event) {
             const button = event.target.closest('button[data-action]');
             if (!button) return;
@@ -672,4 +842,5 @@
         });
     });
 </script>
+<script src="{{ url_for('static', filename='js/guide-details.js') }}"></script>
 {% endblock %}

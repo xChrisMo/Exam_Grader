@@ -184,6 +184,116 @@ ExamGrader.navigation = {
                 link.classList.add('active');
             }
         });
+
+        // Initialize training dropdown hover functionality
+        this.initTrainingDropdown();
+    },
+
+    initTrainingDropdown: function() {
+        const trainingDropdown = document.getElementById('training-dropdown');
+        const trainingButton = document.getElementById('training-dropdown-button');
+        const trainingMenu = document.getElementById('training-dropdown-menu');
+        const trainingArrow = document.getElementById('training-dropdown-arrow');
+        
+        if (!trainingDropdown || !trainingButton || !trainingMenu || !trainingArrow) {
+            return; // Elements not found, skip initialization
+        }
+
+        let hoverTimeout;
+
+        // Show dropdown on hover
+        const showDropdown = () => {
+            clearTimeout(hoverTimeout);
+            trainingMenu.classList.remove('opacity-0', 'invisible', 'pointer-events-none', 'scale-95');
+            trainingMenu.classList.add('opacity-100', 'visible', 'pointer-events-auto', 'scale-100');
+            trainingArrow.style.transform = 'rotate(180deg)';
+            trainingButton.setAttribute('aria-expanded', 'true');
+        };
+
+        // Hide dropdown with delay
+        const hideDropdown = () => {
+            hoverTimeout = setTimeout(() => {
+                trainingMenu.classList.remove('opacity-100', 'visible', 'pointer-events-auto', 'scale-100');
+                trainingMenu.classList.add('opacity-0', 'invisible', 'pointer-events-none', 'scale-95');
+                trainingArrow.style.transform = 'rotate(0deg)';
+                trainingButton.setAttribute('aria-expanded', 'false');
+            }, 150); // Small delay to allow moving to submenu
+        };
+
+        // Mouse enter events
+        trainingDropdown.addEventListener('mouseenter', showDropdown);
+        trainingButton.addEventListener('mouseenter', showDropdown);
+        trainingMenu.addEventListener('mouseenter', showDropdown);
+
+        // Mouse leave events
+        trainingDropdown.addEventListener('mouseleave', hideDropdown);
+        trainingButton.addEventListener('mouseleave', hideDropdown);
+        trainingMenu.addEventListener('mouseleave', hideDropdown);
+
+        // Click handler for button (fallback for touch devices)
+        trainingButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            const isVisible = trainingMenu.classList.contains('opacity-100');
+            
+            if (isVisible) {
+                hideDropdown();
+            } else {
+                showDropdown();
+            }
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!trainingDropdown.contains(e.target)) {
+                hideDropdown();
+            }
+        });
+
+        // Handle keyboard navigation
+        trainingButton.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                const isVisible = trainingMenu.classList.contains('opacity-100');
+                
+                if (isVisible) {
+                    hideDropdown();
+                } else {
+                    showDropdown();
+                    // Focus first menu item
+                    const firstMenuItem = trainingMenu.querySelector('a');
+                    if (firstMenuItem) {
+                        firstMenuItem.focus();
+                    }
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                showDropdown();
+                const firstMenuItem = trainingMenu.querySelector('a');
+                if (firstMenuItem) {
+                    firstMenuItem.focus();
+                }
+            }
+        });
+
+        // Handle keyboard navigation within menu
+        trainingMenu.addEventListener('keydown', function(e) {
+            const menuItems = trainingMenu.querySelectorAll('a');
+            const currentIndex = Array.from(menuItems).indexOf(document.activeElement);
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const nextIndex = (currentIndex + 1) % menuItems.length;
+                menuItems[nextIndex].focus();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const prevIndex = currentIndex > 0 ? currentIndex - 1 : menuItems.length - 1;
+                menuItems[prevIndex].focus();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                hideDropdown();
+                trainingButton.focus();
+            }
+        });
     }
 };
 
@@ -196,17 +306,8 @@ domReady(function() {
     ExamGrader.upload.init();
     ExamGrader.navigation.init();
     
-    // Global error handler
-    window.addEventListener('error', function(e) {
-        console.error('Global error:', e.error);
-        ExamGrader.utils.showAlert('An unexpected error occurred.', 'error');
-    });
-    
-    // Handle unhandled promise rejections
-    window.addEventListener('unhandledrejection', function(e) {
-        console.error('Unhandled promise rejection:', e.reason);
-        ExamGrader.utils.showAlert('An error occurred while processing your request.', 'error');
-    });
+    // Note: Global error handlers are now managed by app.js to avoid conflicts
+    // This file focuses on page-specific functionality only
 });
 
 // Export for use in other modules

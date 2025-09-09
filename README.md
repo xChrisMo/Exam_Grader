@@ -28,6 +28,8 @@ A comprehensive Flask-based web application that uses AI to automatically grade 
 
 3. **Connect your GitHub repository** and configure environment variables:
    ```
+
+Note: If you previously used the root database file `sqlite:///exam_grader.db`, switch to `sqlite:///instance/exam_grader.db` (set in `.env`) to ensure the schema includes columns like `marking_guides.content_hash`.
    HANDWRITING_OCR_API_KEY=your_ocr_api_key
    DEEPSEEK_API_KEY=your_deepseek_api_key
    ```
@@ -141,7 +143,8 @@ HANDWRITING_OCR_API_KEY=your_ocr_api_key
 DEEPSEEK_API_KEY=your_deepseek_api_key
 
 # Database
-DATABASE_URL=sqlite:///exam_grader.db
+# Use the instance database (default app storage) to match local schema/migrations
+DATABASE_URL=sqlite:///instance/exam_grader.db
 
 # Security
 SECRET_KEY=<generate_secure_random_key>

@@ -1,25 +1,89 @@
 """
-PDF processing helper functions with improved error handling.
+PDF processing helper functions using pdf2image and HandwritingOCR.
 """
 
-import logging
 import os
-from typing import Tuple
+import time
+import logging
+import tempfile
+from typing import List, Tuple
 
 try:
-    import fitz  # PyMuPDF
-
-    PYMUPDF_AVAILABLE = True
+    from pdf2image import convert_from_path
+    PDF2IMAGE_AVAILABLE = True
 except ImportError:
-    PYMUPDF_AVAILABLE = False
-    fitz = None
+    PDF2IMAGE_AVAILABLE = False
+    convert_from_path = None
 
 logger = logging.getLogger(__name__)
 
+def convert_pdf_to_images(file_path: str, dpi: int = 200) -> List[str]:
+    """
+    Convert PDF pages to images using pdf2image.
+
+    Args:
+        file_path: Path to the PDF file
+        dpi: Resolution for image conversion (default: 200)
+
+    Returns:
+        List[str]: List of temporary image file paths
+
+    Raises:
+        Exception: If PDF conversion fails
+    """
+    if not PDF2IMAGE_AVAILABLE:
+        raise Exception("pdf2image is not available. Please install it: pip install pdf2image")
+
+    if not os.path.exists(file_path):
+        raise Exception(f"File not found: {file_path}")
+
+    try:
+        logger.debug(f"Converting PDF to images: {file_path}")
+
+        # Convert PDF to images
+        images = convert_from_path(file_path, dpi=dpi)
+
+        if not images:
+            raise Exception("PDF conversion resulted in no images")
+
+        logger.info(f"Successfully converted PDF to {len(images)} images")
+
+        # Save images to temporary files
+        temp_image_paths = []
+        temp_dir = tempfile.gettempdir()
+
+        for i, image in enumerate(images):
+            temp_filename = f"pdf_page_{i+1}_{int(time.time() * 1000)}_{os.getpid()}.png"
+            temp_path = os.path.join(temp_dir, temp_filename)
+
+            image.save(temp_path, 'PNG')
+            temp_image_paths.append(temp_path)
+            logger.debug(f"Saved page {i+1} to {temp_path}")
+
+        return temp_image_paths
+
+    except Exception as e:
+        logger.error(f"Error converting PDF to images: {str(e)}")
+        raise
+
+def cleanup_temp_images(image_paths: List[str]) -> None:
+    """
+    Clean up temporary image files.
+
+    Args:
+        image_paths: List of temporary image file paths to delete
+    """
+    for image_path in image_paths:
+        try:
+            if os.path.exists(image_path):
+                os.unlink(image_path)
+                logger.debug(f"Cleaned up temporary image: {image_path}")
+        except Exception as e:
+            logger.warning(f"Failed to clean up temporary image {image_path}: {str(e)}")
 
 def analyze_pdf_content(file_path: str) -> Tuple[bool, str, dict]:
     """
-    Analyze PDF content to provide better error messages.
+    Analyze PDF content using pdf2image.
 
     Args:
         file_path: Path to the PDF file
@@ -31,67 +95,34 @@ def analyze_pdf_content(file_path: str) -> Tuple[bool, str, dict]:
         if not os.path.exists(file_path):
             return False, f"File not found: {file_path}", {}
 
-        doc = fitz.open(file_path)
+        if not PDF2IMAGE_AVAILABLE:
+            return False, "pdf2image is not available for PDF analysis", {}
 
-        if doc.page_count == 0:
-            doc.close()
-            return False, "PDF document has no pages", {}
+        # Convert PDF to images to analyze
+        try:
+            images = convert_from_path(file_path, dpi=150)  # Lower DPI for analysis
 
-        analysis = {
-            "page_count": doc.page_count,
-            "has_text": False,
-            "has_images": False,
-            "total_text_length": 0,
-            "pages_with_text": 0,
-            "pages_with_images": 0,
-        }
+            if not images:
+                return False, "PDF document has no pages", {}
 
-        for page_num, page in enumerate(doc, 1):
-            try:
-                page_text = page.get_text()
-                text_length = len(page_text.strip())
-                analysis["total_text_length"] += text_length
+            analysis = {
+                "page_count": len(images),
+                "has_content": True,  # Assume content if we can convert to images
+                "processing_method": "OCR_required",
+            }
 
-                if text_length > 0:
-                    analysis["has_text"] = True
-                    analysis["pages_with_text"] += 1
-
-                image_list = page.get_images()
-                if image_list:
-                    analysis["has_images"] = True
-                    analysis["pages_with_images"] += 1
-
-            except Exception as e:
-                logger.warning(f"Error analyzing page {page_num}: {e}")
-
-        doc.close()
-
-        # Generate helpful message
-        if analysis["total_text_length"] == 0:
-            if analysis["has_images"]:
-                message = (
-                    "This PDF appears to be image-based (scanned document). "
-                    "OCR processing is required but the OCR service is currently unavailable. "
-                    "Please check your OCR configuration or try with a text-based PDF."
-                )
-            else:
-                message = (
-                    "This PDF contains no readable text content. "
-                    "The document may be empty, corrupted, or require special processing."
-                )
-        elif analysis["total_text_length"] < 50:
             message = (
-                f"This PDF contains very little text ({analysis['total_text_length']} characters). "
-                "The document may be mostly images or have formatting issues."
+                f"PDF analysis successful. Contains {len(images)} pages. "
+                "All content will be processed using OCR via HandwritingOCR API."
             )
-        else:
-            message = f"PDF analysis successful. Contains {analysis['total_text_length']} characters of text."
 
-        return True, message, analysis
+            return True, message, analysis
+
+        except Exception as e:
+            return False, f"Error analyzing PDF: {str(e)}", {}
 
     except Exception as e:
         return False, f"Error analyzing PDF: {str(e)}", {}
-
 
 def get_helpful_error_message(file_path: str, original_error: str) -> str:
     """

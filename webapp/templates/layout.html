@@ -190,6 +190,112 @@
     }, 100);
   </script>
 
+  <!-- Training Dropdown Styles -->
+  <style>
+    #training-dropdown-menu {
+      transform-origin: top;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    #training-dropdown-menu.scale-95 {
+      transform: scale(0.95) translateY(-4px);
+    }
+    
+    #training-dropdown-menu.scale-100 {
+      transform: scale(1) translateY(0);
+    }
+    
+    /* Add a subtle glow effect when dropdown is open */
+    #training-dropdown-button[aria-expanded="true"] {
+      background-color: rgba(59, 130, 246, 0.05);
+      border-left: 2px solid rgba(59, 130, 246, 0.3);
+      transform: translateX(2px) scale(1.02);
+    }
+    
+    /* Smooth hover transitions for training button */
+    #training-dropdown-button {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      transform-origin: left center;
+    }
+    
+    #training-dropdown-button:hover {
+      background-color: rgba(249, 250, 251, 1);
+      transform: translateX(4px) scale(1.05);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
+    }
+    
+    /* Enhanced expansion effect for the button text */
+    #training-dropdown-button span {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    #training-dropdown-button:hover span {
+      font-weight: 600;
+      letter-spacing: 0.025em;
+    }
+    
+    /* Icon animation on hover */
+    #training-dropdown-button svg:first-of-type {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    #training-dropdown-button:hover svg:first-of-type {
+      transform: scale(1.1);
+      filter: brightness(1.2);
+    }
+    
+    /* Enhanced dropdown menu styling */
+    #training-dropdown-menu a {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      transform-origin: left center;
+    }
+    
+    #training-dropdown-menu a:hover {
+      transform: translateX(6px) scale(1.02);
+      background-color: rgba(59, 130, 246, 0.05);
+      border-left: 3px solid rgba(59, 130, 246, 0.3);
+      padding-left: 13px; /* Adjust for border */
+    }
+    
+    /* Menu item icon animation */
+    #training-dropdown-menu a:hover svg {
+      transform: scale(1.1);
+      color: rgba(59, 130, 246, 0.8);
+    }
+    
+    /* Menu item text enhancement */
+    #training-dropdown-menu a:hover span {
+      font-weight: 500;
+      color: rgba(59, 130, 246, 0.9);
+    }
+    
+    /* Arrow rotation animation */
+    #training-dropdown-arrow {
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    /* Subtle pulse animation for the training button */
+    @keyframes training-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.1);
+      }
+      50% {
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.05);
+      }
+    }
+    
+    #training-dropdown-button:focus {
+      animation: training-pulse 2s infinite;
+      outline: none;
+    }
+    
+    /* Enhanced arrow animation */
+    #training-dropdown-button:hover #training-dropdown-arrow {
+      transform: scale(1.1);
+    }
+  </style>
+
   {% block extra_css %}{% endblock %}
 </head>
 
@@ -369,34 +475,37 @@
             <!-- LLM Training -->
             <div class="relative" id="training-dropdown">
               <button type="button" id="training-dropdown-button"
-                class="nav-link {% if request.endpoint and request.endpoint.startswith('training.') %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md w-full text-left">
+                class="nav-link {% if request.endpoint and request.endpoint.startswith('training.') %}bg-primary-100 border-r-2 border-primary-600 text-primary-700{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %} group flex items-center px-2 py-2 text-sm font-medium rounded-md w-full text-left transition-all duration-200"
+                aria-expanded="false" aria-haspopup="true">
                 <svg
                   class="{% if request.endpoint and request.endpoint.startswith('training.') %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-5 w-5"
                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
                 <span data-i18n="nav_llm_training">LLM Training</span>
-                <svg class="ml-auto h-4 w-4 transform transition-transform duration-200" id="training-dropdown-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="ml-auto h-4 w-4 transform transition-transform duration-200 ease-in-out" id="training-dropdown-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
               </button>
               
               <!-- Dropdown Menu -->
-              <div class="absolute left-0 mt-1 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 opacity-0 invisible pointer-events-none transition-all duration-200 z-50" id="training-dropdown-menu">
-                <div class="py-1">
+              <div class="absolute left-0 mt-1 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 opacity-0 invisible pointer-events-none transition-all duration-200 ease-in-out transform scale-95 origin-top z-50" id="training-dropdown-menu">
+                <div class="py-1" role="menu" aria-orientation="vertical">
                   <a href="{{ url_for('training.dashboard') }}" 
-                     class="{% if request.endpoint == 'training.dashboard' %}bg-primary-50 text-primary-700{% else %}text-gray-700 hover:bg-gray-100{% endif %} block px-4 py-2 text-sm">
-                    <svg class="inline mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     class="{% if request.endpoint == 'training.dashboard' %}bg-primary-50 text-primary-700{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} group flex items-center px-4 py-2 text-sm transition-colors duration-150"
+                     role="menuitem">
+                    <svg class="{% if request.endpoint == 'training.dashboard' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
                     </svg>
-                    Dashboard
+                    <span>Dashboard</span>
                   </a>
                   <a href="{{ url_for('training.manage_sessions') }}" 
-                     class="{% if request.endpoint == 'training.manage_sessions' %}bg-primary-50 text-primary-700{% else %}text-gray-700 hover:bg-gray-100{% endif %} block px-4 py-2 text-sm">
-                    <svg class="inline mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     class="{% if request.endpoint == 'training.manage_sessions' %}bg-primary-50 text-primary-700{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} group flex items-center px-4 py-2 text-sm transition-colors duration-150"
+                     role="menuitem">
+                    <svg class="{% if request.endpoint == 'training.manage_sessions' %}text-primary-500{% else %}text-gray-400 group-hover:text-gray-500{% endif %} mr-3 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v6a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
                     </svg>
-                    Manage Sessions
+                    <span>Manage Sessions</span>
                   </a>
                 </div>
               </div>
@@ -637,7 +746,8 @@
         }
 
         // Close mobile menu when clicking nav links (mobile only)
-        const navLinks = sidebar.querySelectorAll('.nav-link');
+        // Exclude dropdown buttons to prevent interference
+        const navLinks = sidebar.querySelectorAll('.nav-link:not([id*="dropdown-button"])');
         navLinks.forEach(function(link) {
           link.addEventListener('click', function() {
             if (window.innerWidth < 1024) {
@@ -757,7 +867,7 @@
   <script src="{{ url_for('static', filename='js/responsive-mobile.js') }}?v={{ range(1000, 9999) | random }}"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}?v={{ range(1000, 9999) | random }}"></script>
   <script src="{{ url_for('static', filename='js/fixes.js') }}?v={{ range(1000, 9999) | random }}"></script>
-  <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+  <!-- Settings.js is loaded only in settings.html to avoid conflicts -->
 
   <!-- UI Components and Systems -->
   <script src="{{ url_for('static', filename='js/ui-components.js') }}"></script>
@@ -1009,6 +1119,9 @@
       });
     });
   </script>
+  
+  <!-- Page-specific scripts -->
+  {% block scripts %}{% endblock %}
 </body>
 
 </html>

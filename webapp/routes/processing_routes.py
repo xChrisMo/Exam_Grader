@@ -5,8 +5,8 @@ This module handles AI processing operations including OCR, grading,
 and result generation.
 """
 
-import asyncio
 import time
+import asyncio
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -19,7 +19,6 @@ from src.services.enhanced_result_service import enhanced_result_service
 from utils.logger import logger
 
 processing_bp = Blueprint("processing", __name__, url_prefix="/processing")
-
 
 @processing_bp.route("/")
 @processing_bp.route("")
@@ -35,7 +34,6 @@ def processing_page():
         # No progress ID, redirect to unified processing
         return redirect(url_for("processing.unified_processing"))
 
-
 @processing_bp.route("/unified")
 @login_required
 def unified_processing():
@@ -46,7 +44,7 @@ def unified_processing():
     if progress_id:
         # This is a progress tracking request - render the progress page
         guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
-        
+
         # Filter submissions by selected guide if provided
         if selected_guide_id:
             submissions = Submission.query.filter_by(
@@ -80,36 +78,36 @@ def unified_processing():
     else:
         # No progress_id - show enhanced processing interface with submissions grouped by guide
         guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
-        
+
         # Group submissions by marking guide
         submissions_by_guide = {}
-        
+
         for guide in guides:
             guide_submissions = Submission.query.filter_by(
                 user_id=current_user.id,
                 marking_guide_id=guide.id
             ).order_by(Submission.created_at.desc()).all()
-            
+
             if guide_submissions:  # Only include guides that have submissions
                 submissions_by_guide[guide.id] = {
                     'guide': guide,
                     'submissions': guide_submissions,
                     'count': len(guide_submissions)
                 }
-        
+
         # Also get submissions without a guide
         unassigned_submissions = Submission.query.filter_by(
             user_id=current_user.id,
             marking_guide_id=None
         ).order_by(Submission.created_at.desc()).all()
-        
+
         if unassigned_submissions:
             submissions_by_guide['unassigned'] = {
                 'guide': None,
                 'submissions': unassigned_submissions,
                 'count': len(unassigned_submissions)
             }
-        
+
         # For backward compatibility, also provide the old format
         if selected_guide_id:
             submissions = Submission.query.filter_by(
@@ -139,7 +137,6 @@ def unified_processing():
             ],
             max_file_size=100 * 1024 * 1024,
         )
-
 
 @processing_bp.route("/api/process", methods=["POST"])
 @login_required
@@ -212,7 +209,6 @@ def api_process_single():
         logger.error(f"Processing error: {e}")
         return jsonify({"success": False, "error": "Processing failed"}), 500
 
-
 @processing_bp.route("/api/status/<progress_id>", methods=["GET"])
 @login_required
 def api_progress_status(progress_id):
@@ -267,13 +263,11 @@ def api_progress_status(progress_id):
             500,
         )
 
-
 @processing_bp.route("/process", methods=["POST"])
 @login_required
 def process():
     """Legacy process endpoint - redirects to new API."""
     return api_process_single()
-
 
 @processing_bp.route("/status/<submission_id>")
 @login_required
@@ -344,7 +338,6 @@ def processing_status(submission_id):
         logger.error(f"Status check failed: {e}")
         return jsonify({"success": False, "error": "Status check failed"}), 500
 
-
 @processing_bp.route("/results/<result_id>")
 @login_required
 def view_result(result_id):
@@ -372,7 +365,7 @@ def view_result(result_id):
             result = grading_results[0]
             submission = db.session.get(Submission, result.submission_id)
             guide = db.session.get(MarkingGuide, result.marking_guide_id)
-            
+
             # Load mappings for the submission to display mapped questions and answers
             if submission:
                 submission.mappings = Mapping.query.filter_by(submission_id=submission.id).all()
@@ -420,7 +413,7 @@ def view_result(result_id):
             # Get related records
             submission = db.session.get(Submission, result.submission_id)
             guide = db.session.get(MarkingGuide, result.marking_guide_id)
-            
+
             # Load mappings for the submission to display mapped questions and answers
             if submission:
                 submission.mappings = Mapping.query.filter_by(submission_id=submission.id).all()
@@ -507,7 +500,6 @@ def view_result(result_id):
         flash("Error loading result", "error")
         return redirect(url_for("main.results"))
 
-
 @processing_bp.route("/batch", methods=["GET", "POST"])
 @login_required
 def batch_processing():
@@ -593,7 +585,7 @@ def batch_processing():
     # GET request - show batch processing interface
     selected_guide_id = request.args.get("guide_id")
     guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
-    
+
     # Filter submissions by selected guide if provided
     if selected_guide_id:
         submissions = Submission.query.filter_by(
@@ -624,7 +616,6 @@ def batch_processing():
         max_file_size=100 * 1024 * 1024,
     )
 
-
 @processing_bp.route("/api/retry", methods=["POST"])
 @login_required
 def api_retry_processing():
@@ -635,8 +626,6 @@ def api_retry_processing():
 
         if not progress_id:
             return jsonify({"success": False, "error": "Progress ID is required"}), 400
-
-        from webapp.routes.main_routes import progress_store
 
         if progress_id not in progress_store:
             return (
@@ -667,15 +656,11 @@ def api_retry_processing():
         logger.error(f"Retry processing failed: {e}")
         return jsonify({"success": False, "error": "Failed to retry processing"}), 500
 
-
 @processing_bp.route("/api/cleanup", methods=["POST"])
 @login_required
 def api_cleanup_progress():
     """Clean up old progress entries."""
     try:
-        import time
-
-        from webapp.routes.main_routes import progress_store
 
         current_time = time.time()
         cleanup_threshold = 3600  # 1 hour
@@ -706,7 +691,6 @@ def api_cleanup_progress():
             500,
         )
 
-
 @processing_bp.route("/api/submissions", methods=["GET"])
 @login_required
 def api_get_submissions():
@@ -714,18 +698,18 @@ def api_get_submissions():
     try:
         guide_id = request.args.get("guide_id")
         grouped = request.args.get("grouped", "false").lower() == "true"
-        
+
         if grouped:
             # Return submissions grouped by marking guide
             guides = MarkingGuide.query.filter_by(user_id=current_user.id).all()
             submissions_by_guide = {}
-            
+
             for guide in guides:
                 guide_submissions = Submission.query.filter_by(
                     user_id=current_user.id,
                     marking_guide_id=guide.id
                 ).order_by(Submission.created_at.desc()).all()
-                
+
                 if guide_submissions:  # Only include guides that have submissions
                     submissions_list = []
                     for submission in guide_submissions:
@@ -750,7 +734,7 @@ def api_get_submissions():
                                 else None
                             ),
                         })
-                    
+
                     submissions_by_guide[guide.id] = {
                         "guide": {
                             "id": guide.id,
@@ -760,13 +744,13 @@ def api_get_submissions():
                         "submissions": submissions_list,
                         "count": len(submissions_list)
                     }
-            
+
             # Also get submissions without a guide
             unassigned_submissions = Submission.query.filter_by(
                 user_id=current_user.id,
                 marking_guide_id=None
             ).order_by(Submission.created_at.desc()).all()
-            
+
             if unassigned_submissions:
                 submissions_list = []
                 for submission in unassigned_submissions:
@@ -791,39 +775,39 @@ def api_get_submissions():
                             else None
                         ),
                     })
-                
+
                 submissions_by_guide["unassigned"] = {
                     "guide": None,
                     "submissions": submissions_list,
                     "count": len(submissions_list)
                 }
-            
+
             return jsonify({
                 "success": True,
                 "grouped": True,
                 "submissions_by_guide": submissions_by_guide,
                 "total_guides": len(submissions_by_guide)
             })
-        
+
         elif guide_id:
             # Return submissions for a specific guide
             # Verify guide ownership
             guide = MarkingGuide.query.filter_by(
                 id=guide_id, user_id=current_user.id
             ).first()
-            
+
             if not guide:
                 return jsonify({
-                    "success": False, 
+                    "success": False,
                     "error": "Guide not found or access denied"
                 }), 404
-            
+
             # Get submissions linked to this guide
             submissions = Submission.query.filter_by(
                 user_id=current_user.id,
                 marking_guide_id=guide_id
             ).order_by(Submission.created_at.desc()).all()
-            
+
             submissions_list = []
             for submission in submissions:
                 submissions_list.append({
@@ -847,7 +831,7 @@ def api_get_submissions():
                         else None
                     ),
                 })
-            
+
             return jsonify({
                 "success": True,
                 "guide": {
@@ -858,20 +842,19 @@ def api_get_submissions():
                 "submissions": submissions_list,
                 "total_count": len(submissions_list)
             })
-        
+
         else:
             return jsonify({
-                "success": False, 
+                "success": False,
                 "error": "Either guide_id parameter or grouped=true is required"
             }), 400
-        
+
     except Exception as e:
         logger.error(f"Failed to get submissions: {e}")
         return jsonify({
-            "success": False, 
+            "success": False,
             "error": "Failed to retrieve submissions"
         }), 500
-
 
 @processing_bp.route("/api/submissions/all", methods=["GET"])
 @login_required
@@ -881,7 +864,7 @@ def api_get_all_submissions():
         submissions = Submission.query.filter_by(user_id=current_user.id).order_by(
             Submission.created_at.desc()
         ).all()
-        
+
         submissions_list = []
         for submission in submissions:
             # Get guide info if linked
@@ -893,7 +876,7 @@ def api_get_all_submissions():
                         "id": guide.id,
                         "title": guide.title
                     }
-            
+
             submissions_list.append({
                 "id": submission.id,
                 "filename": submission.filename,
@@ -916,20 +899,19 @@ def api_get_all_submissions():
                     else None
                 ),
             })
-        
+
         return jsonify({
             "success": True,
             "submissions": submissions_list,
             "total_count": len(submissions_list)
         })
-        
+
     except Exception as e:
         logger.error(f"Failed to get all submissions: {e}")
         return jsonify({
-            "success": False, 
+            "success": False,
             "error": "Failed to retrieve submissions"
         }), 500
-
 
 @processing_bp.route("/api/submissions/assign", methods=["POST"])
 @login_required
@@ -944,54 +926,54 @@ def api_assign_submissions_to_guide():
                 "success": False,
                 "error": "CSRF token missing or invalid"
             }), 400
-        
+
         data = request.get_json()
-        
+
         if not data:
             return jsonify({
                 "success": False,
                 "error": "No data provided"
             }), 400
-        
+
         guide_id = data.get("guide_id")
         submission_ids = data.get("submission_ids", [])
-        
+
         if not guide_id:
             return jsonify({
                 "success": False,
                 "error": "guide_id is required"
             }), 400
-        
+
         if not submission_ids or not isinstance(submission_ids, list):
             return jsonify({
                 "success": False,
                 "error": "submission_ids must be a non-empty list"
             }), 400
-        
+
         # Verify guide ownership
         guide = MarkingGuide.query.filter_by(
             id=guide_id, user_id=current_user.id
         ).first()
-        
+
         if not guide:
             return jsonify({
                 "success": False,
                 "error": "Guide not found or access denied"
             }), 404
-        
+
         # Update submissions
         updated_count = 0
         for submission_id in submission_ids:
             submission = Submission.query.filter_by(
                 id=submission_id, user_id=current_user.id
             ).first()
-            
+
             if submission:
                 submission.marking_guide_id = guide_id
                 updated_count += 1
-        
+
         db.session.commit()
-        
+
         return jsonify({
             "success": True,
             "message": f"Successfully assigned {updated_count} submission(s) to guide '{guide.title}'",
@@ -1001,7 +983,7 @@ def api_assign_submissions_to_guide():
                 "title": guide.title
             }
         })
-        
+
     except Exception as e:
         logger.error(f"Failed to assign submissions to guide: {e}")
         db.session.rollback()
@@ -1009,7 +991,6 @@ def api_assign_submissions_to_guide():
             "success": False,
             "error": "Failed to assign submissions"
         }), 500
-
 
 @processing_bp.route("/api/submissions/unassign", methods=["POST"])
 @login_required
@@ -1024,42 +1005,42 @@ def api_unassign_submissions_from_guide():
                 "success": False,
                 "error": "CSRF token missing or invalid"
             }), 400
-        
+
         data = request.get_json()
-        
+
         if not data:
             return jsonify({
                 "success": False,
                 "error": "No data provided"
             }), 400
-        
+
         submission_ids = data.get("submission_ids", [])
-        
+
         if not submission_ids or not isinstance(submission_ids, list):
             return jsonify({
                 "success": False,
                 "error": "submission_ids must be a non-empty list"
             }), 400
-        
+
         # Update submissions
         updated_count = 0
         for submission_id in submission_ids:
             submission = Submission.query.filter_by(
                 id=submission_id, user_id=current_user.id
             ).first()
-            
+
             if submission:
                 submission.marking_guide_id = None
                 updated_count += 1
-        
+
         db.session.commit()
-        
+
         return jsonify({
             "success": True,
             "message": f"Successfully unassigned {updated_count} submission(s) from their guides",
             "updated_count": updated_count
         })
-        
+
     except Exception as e:
         logger.error(f"Failed to unassign submissions: {e}")
         db.session.rollback()
@@ -1068,14 +1049,13 @@ def api_unassign_submissions_from_guide():
             "error": "Failed to unassign submissions"
         }), 500
 
-
 @processing_bp.route("/export/<result_id>")
 @login_required
 def export_result(result_id):
     """Export processing result."""
     try:
         from src.database.models import Mapping
-        
+
         result = GradingResult.query.filter_by(
             id=result_id, user_id=current_user.id
         ).first()
@@ -1086,7 +1066,7 @@ def export_result(result_id):
         # Get related records
         submission = db.session.get(Submission, result.submission_id)
         guide = db.session.get(MarkingGuide, result.marking_guide_id)
-        
+
         # Load mappings for the submission to display mapped questions and answers
         if submission:
             submission.mappings = Mapping.query.filter_by(submission_id=submission.id).all()

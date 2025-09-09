@@ -6,15 +6,15 @@ and retry mechanisms specifically designed for the processing system.
 """
 
 import time
+from datetime import datetime, timezone, timedelta
 import random
 import traceback
 from typing import Dict, List, Optional, Any, Callable, Union
-from datetime import datetime, timezone, timedelta
 from enum import Enum
 from dataclasses import dataclass
 
 from src.exceptions.application_errors import (
-    ApplicationError, ProcessingError, ServiceUnavailableError, 
+    ApplicationError, ProcessingError, ServiceUnavailableError,
     TimeoutError, ErrorSeverity
 )
 from src.models.api_responses import ErrorCode
@@ -72,20 +72,20 @@ class ProcessingErrorHandler:
     """
     Central error handler for processing operations with categorization and fallback strategies.
     """
-    
+
     def __init__(self):
         self.error_categories = {}
         self.fallback_strategies = {}
         self.retry_configs = {}
         self.error_history = []
         self.max_history_size = 1000
-        
+
         # Initialize default configurations
         self._setup_default_configurations()
-    
+
     def _setup_default_configurations(self):
         """Set up default error categorization and retry configurations."""
-        
+
         # Default error categorizations
         self.error_categories.update({
             # Transient errors
@@ -94,29 +94,29 @@ class ProcessingErrorHandler:
             'ServiceUnavailableError': ErrorCategory.TRANSIENT,
             'RateLimitError': ErrorCategory.TRANSIENT,
             'TemporaryFailure': ErrorCategory.TRANSIENT,
-            
+
             # Permanent errors
             'ValidationError': ErrorCategory.PERMANENT,
             'AuthenticationError': ErrorCategory.PERMANENT,
             'AuthorizationError': ErrorCategory.PERMANENT,
             'NotFoundError': ErrorCategory.PERMANENT,
             'FileNotFoundError': ErrorCategory.PERMANENT,
-            
+
             # Configuration errors
             'ConfigurationError': ErrorCategory.CONFIGURATION,
             'MissingConfigError': ErrorCategory.CONFIGURATION,
-            
+
             # Dependency errors
             'ImportError': ErrorCategory.DEPENDENCY,
             'ModuleNotFoundError': ErrorCategory.DEPENDENCY,
             'MissingDependencyError': ErrorCategory.DEPENDENCY,
-            
+
             # Resource errors
             'MemoryError': ErrorCategory.RESOURCE,
             'DiskSpaceError': ErrorCategory.RESOURCE,
             'ResourceExhaustedError': ErrorCategory.RESOURCE,
         })
-        
+
         # Default retry configurations
         self.retry_configs.update({
             'ocr_processing': RetryConfig(max_attempts=3, base_delay=1.0, max_delay=30.0),
@@ -126,7 +126,7 @@ class ProcessingErrorHandler:
             'grading_service': RetryConfig(max_attempts=3, base_delay=1.5, max_delay=45.0),
             'default': RetryConfig(max_attempts=3, base_delay=1.0, max_delay=30.0),
         })
-        
+
         # Default fallback strategies
         self.fallback_strategies.update({
             'ocr_processing': [
@@ -155,19 +155,19 @@ class ProcessingErrorHandler:
                 FallbackStrategy.DEFAULT_VALUE
             ]
         })
-    
+
     def handle_error(
-        self, 
-        error: Exception, 
+        self,
+        error: Exception,
         context: ErrorContext
     ) -> Dict[str, Any]:
         """
         Handle error with comprehensive processing including categorization and fallback.
-        
+
         Args:
             error: The exception that occurred
             context: Context information about the error
-            
+
         Returns:
             Dictionary containing error handling results and recommendations
         """
@@ -176,21 +176,21 @@ class ProcessingErrorHandler:
                 app_error = self._convert_to_application_error(error, context)
             else:
                 app_error = error
-            
+
             # Categorize the error
             category = self._categorize_error(error, context)
-            
+
             # Get fallback strategy
             fallback_strategy = self._get_fallback_strategy(context.operation, category)
-            
+
             should_retry = self._should_retry(error, context, category)
-            
+
             # Log the error with context
             self._log_error_with_context(app_error, context, category)
-            
+
             # Record error in history
             self._record_error_history(app_error, context, category)
-            
+
             # Prepare error response
             error_response = {
                 'error_id': app_error.error_id,
@@ -210,9 +210,9 @@ class ProcessingErrorHandler:
                 'retry_config': self._get_retry_config(context.operation).to_dict() if should_retry else None,
                 'recommendations': self._get_error_recommendations(category, context)
             }
-            
+
             return error_response
-            
+
         except Exception as handler_error:
             logger.error(f"Error in error handler: {handler_error}")
             # Return minimal error response
@@ -230,15 +230,15 @@ class ProcessingErrorHandler:
                     'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             }
-    
+
     def _convert_to_application_error(
-        self, 
-        error: Exception, 
+        self,
+        error: Exception,
         context: ErrorContext
     ) -> ApplicationError:
         """Convert standard exception to ApplicationError."""
         error_type = type(error).__name__
-        
+
         # Map to appropriate ApplicationError subclass
         if error_type in ['ConnectionError', 'requests.ConnectionError']:
             return ServiceUnavailableError(
@@ -258,17 +258,17 @@ class ProcessingErrorHandler:
                 context=context.additional_data,
                 original_error=error
             )
-    
+
     def _categorize_error(self, error: Exception, context: ErrorContext) -> ErrorCategory:
         """Categorize error based on type and context."""
         error_type = type(error).__name__
-        
+
         # Check explicit categorization
         if error_type in self.error_categories:
             return self.error_categories[error_type]
-        
+
         error_message = str(error).lower()
-        
+
         if any(keyword in error_message for keyword in ['timeout', 'connection', 'network']):
             return ErrorCategory.TRANSIENT
         elif any(keyword in error_message for keyword in ['not found', 'missing', 'invalid']):
@@ -279,19 +279,19 @@ class ProcessingErrorHandler:
             return ErrorCategory.RESOURCE
         elif any(keyword in error_message for keyword in ['config', 'setting', 'parameter']):
             return ErrorCategory.CONFIGURATION
-        
+
         return ErrorCategory.TRANSIENT
-    
+
     def _get_fallback_strategy(
-        self, 
-        operation: str, 
+        self,
+        operation: str,
         category: ErrorCategory
     ) -> Optional[FallbackStrategy]:
         """Get appropriate fallback strategy for operation and error category."""
-        
+
         # Get operation-specific strategies
         strategies = self.fallback_strategies.get(operation, [])
-        
+
         if not strategies:
             # Default strategies based on error category
             if category == ErrorCategory.TRANSIENT:
@@ -304,59 +304,59 @@ class ProcessingErrorHandler:
                 return FallbackStrategy.DEFAULT_VALUE
             else:
                 return FallbackStrategy.SKIP_OPERATION
-        
+
         # Return first applicable strategy
         return strategies[0] if strategies else None
-    
+
     def _should_retry(
-        self, 
-        error: Exception, 
-        context: ErrorContext, 
+        self,
+        error: Exception,
+        context: ErrorContext,
         category: ErrorCategory
     ) -> bool:
         """Determine if error should be retried."""
-        
+
         # Never retry permanent errors
         if category in [ErrorCategory.PERMANENT, ErrorCategory.VALIDATION]:
             return False
-        
+
         # Always retry transient errors
         if category == ErrorCategory.TRANSIENT:
             return True
-        
+
         # Check specific error types
         error_type = type(error).__name__
         non_retryable_types = [
             'ValidationError', 'AuthenticationError', 'AuthorizationError',
             'NotFoundError', 'FileNotFoundError'
         ]
-        
+
         if error_type in non_retryable_types:
             return False
-        
+
         error_message = str(error).lower()
         non_retryable_patterns = [
             'invalid', 'unauthorized', 'forbidden', 'not found',
             'bad request', 'malformed', 'syntax error'
         ]
-        
+
         if any(pattern in error_message for pattern in non_retryable_patterns):
             return False
-        
+
         return True
-    
+
     def _get_retry_config(self, operation: str) -> RetryConfig:
         """Get retry configuration for operation."""
         return self.retry_configs.get(operation, self.retry_configs['default'])
-    
+
     def _log_error_with_context(
-        self, 
-        error: ApplicationError, 
-        context: ErrorContext, 
+        self,
+        error: ApplicationError,
+        context: ErrorContext,
         category: ErrorCategory
     ):
         """Log error with comprehensive context information."""
-        
+
         log_data = {
             'error_id': error.error_id,
             'error_type': type(error).__name__,
@@ -369,11 +369,11 @@ class ProcessingErrorHandler:
             'file_path': context.file_path,
             'message': error.message
         }
-        
+
         # Add additional context data
         if context.additional_data:
             log_data.update(context.additional_data)
-        
+
         # Log with appropriate level
         if error.severity == ErrorSeverity.CRITICAL:
             logger.critical(f"Processing error: {log_data}", exc_info=error.original_error)
@@ -383,15 +383,15 @@ class ProcessingErrorHandler:
             logger.warning(f"Processing error: {log_data}")
         else:
             logger.info(f"Processing error: {log_data}")
-    
+
     def _record_error_history(
-        self, 
-        error: ApplicationError, 
-        context: ErrorContext, 
+        self,
+        error: ApplicationError,
+        context: ErrorContext,
         category: ErrorCategory
     ):
         """Record error in history for analysis."""
-        
+
         error_record = {
             'timestamp': context.timestamp,
             'error_id': error.error_id,
@@ -404,22 +404,22 @@ class ProcessingErrorHandler:
             'user_id': context.user_id,
             'request_id': context.request_id
         }
-        
+
         self.error_history.append(error_record)
-        
+
         # Maintain history size limit
         if len(self.error_history) > self.max_history_size:
             self.error_history = self.error_history[-self.max_history_size:]
-    
+
     def _get_error_recommendations(
-        self, 
-        category: ErrorCategory, 
+        self,
+        category: ErrorCategory,
         context: ErrorContext
     ) -> List[str]:
         """Get recommendations for handling the error."""
-        
+
         recommendations = []
-        
+
         if category == ErrorCategory.TRANSIENT:
             recommendations.extend([
                 "Retry the operation after a brief delay",
@@ -456,12 +456,12 @@ class ProcessingErrorHandler:
                 "Check system logs",
                 "Contact support if issue persists"
             ])
-        
+
         return recommendations
-    
+
     def get_error_statistics(self) -> Dict[str, Any]:
         """Get error statistics from history."""
-        
+
         if not self.error_history:
             return {
                 'total_errors': 0,
@@ -471,30 +471,30 @@ class ProcessingErrorHandler:
                 'operations': {},
                 'recent_errors': []
             }
-        
+
         total_errors = len(self.error_history)
-        
+
         # Count by category
         categories = {}
         for record in self.error_history:
             category = record['category']
             categories[category] = categories.get(category, 0) + 1
-        
+
         # Count by service
         services = {}
         for record in self.error_history:
             service = record['service']
             services[service] = services.get(service, 0) + 1
-        
+
         # Count by operation
         operations = {}
         for record in self.error_history:
             operation = record['operation']
             operations[operation] = operations.get(operation, 0) + 1
-        
+
         # Get recent errors (last 10)
         recent_errors = self.error_history[-10:] if len(self.error_history) >= 10 else self.error_history
-        
+
         return {
             'total_errors': total_errors,
             'categories': categories,
@@ -503,22 +503,22 @@ class ProcessingErrorHandler:
             'recent_errors': recent_errors,
             'history_size': len(self.error_history)
         }
-    
+
     def clear_error_history(self):
         """Clear error history."""
         self.error_history.clear()
         logger.info("Error history cleared")
-    
+
     def register_error_category(self, error_type: str, category: ErrorCategory):
         """Register custom error categorization."""
         self.error_categories[error_type] = category
         logger.info(f"Registered error category: {error_type} -> {category.value}")
-    
+
     def register_fallback_strategy(self, operation: str, strategies: List[FallbackStrategy]):
         """Register fallback strategies for operation."""
         self.fallback_strategies[operation] = strategies
         logger.info(f"Registered fallback strategies for {operation}: {[s.value for s in strategies]}")
-    
+
     def register_retry_config(self, operation: str, config: RetryConfig):
         """Register retry configuration for operation."""
         self.retry_configs[operation] = config

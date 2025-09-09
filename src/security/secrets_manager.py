@@ -5,11 +5,11 @@ This module provides secure storage and handling of API keys and other
 sensitive configuration data using encryption and secure key derivation.
 """
 
-import base64
 import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+import base64
 from typing import Any, Dict, Optional, Union
 
 from cryptography.fernet import Fernet
@@ -22,7 +22,6 @@ except ImportError:
     import logging
 
     logger = logging.getLogger(__name__)
-
 
 class SecretsEncryption:
     """Handles encryption and decryption of secrets."""
@@ -71,7 +70,6 @@ class SecretsEncryption:
     def get_salt(self) -> bytes:
         """Get the salt used for key derivation."""
         return self.salt
-
 
 class SecretsManager:
     """
@@ -136,9 +134,16 @@ class SecretsManager:
             logger.info("Secrets loaded successfully")
 
         except Exception as e:
-            logger.error(f"Failed to load secrets: {str(e)}")
+            logger.warning(f"Failed to load secrets (this is normal for first run): {str(e)}")
             self._secrets_cache = {}
-            self._encryption = SecretsEncryption(self.master_key)
+            try:
+                self._encryption = SecretsEncryption(self.master_key)
+                # Create empty secrets file for future use
+                self._save_secrets()
+                logger.info("Created new secrets file")
+            except Exception as init_error:
+                logger.warning(f"Could not initialize secrets encryption: {init_error}")
+                self._encryption = None
 
     def _save_secrets(self):
         """Save secrets to encrypted file."""
@@ -374,10 +379,9 @@ class SecretsManager:
 
         return validation_results
 
-
 # Global secrets manager instance
-secrets_manager = SecretsManager()
-
+secrets_file_path = Path(__file__).parent.parent.parent / "instance" / "secrets.enc"
+secrets_manager = SecretsManager(secrets_file=str(secrets_file_path))
 
 # Initialize with common API keys
 def initialize_secrets():

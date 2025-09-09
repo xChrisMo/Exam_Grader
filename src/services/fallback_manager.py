@@ -5,15 +5,14 @@ This module provides comprehensive fallback mechanisms for processing operations
 allowing the system to continue functioning even when primary services are unavailable.
 """
 
-import asyncio
 import time
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import asyncio
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from utils.logger import logger
-
 
 class FallbackPriority(Enum):
     """Priority levels for fallback methods."""
@@ -22,7 +21,6 @@ class FallbackPriority(Enum):
     SECONDARY = 2
     TERTIARY = 3
     EMERGENCY = 4
-
 
 @dataclass
 class FallbackMethod:
@@ -38,7 +36,6 @@ class FallbackMethod:
     failure_count: int = 0
     success_count: int = 0
 
-
 @dataclass
 class FallbackResult:
     """Result of a fallback operation."""
@@ -49,7 +46,6 @@ class FallbackResult:
     execution_time: float = 0.0
     error: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
-
 
 class FallbackManager:
     """
@@ -89,25 +85,8 @@ class FallbackManager:
             FallbackPriority.TERTIARY,
         )
 
-        # LLM processing fallbacks
-        self.register_fallback(
-            "llm_processing",
-            "cached_response",
-            self._cached_llm_response,
-            FallbackPriority.PRIMARY,
-        )
-        self.register_fallback(
-            "llm_processing",
-            "template_response",
-            self._template_llm_response,
-            FallbackPriority.SECONDARY,
-        )
-        self.register_fallback(
-            "llm_processing",
-            "rule_based_processing",
-            self._rule_based_processing,
-            FallbackPriority.TERTIARY,
-        )
+        # LLM processing fallbacks - REMOVED: Only LLM extraction should be used
+        # No fallbacks for LLM processing to ensure quality
 
         # File processing fallbacks
         self.register_fallback(
@@ -576,42 +555,7 @@ class FallbackManager:
         except Exception as e:
             raise Exception(f"Basic text extraction failed: {e}")
 
-    def _cached_llm_response(self, prompt: str, **kwargs) -> str:
-        """Cached LLM response fallback."""
-        cache_key = f"llm_{hash(prompt)}"
-
-        if cache_key in self.cached_results:
-            cached_data, timestamp = self.cached_results[cache_key]
-            if datetime.now(timezone.utc) - timestamp < self.cache_ttl:
-                logger.info("Using cached LLM response")
-                return cached_data
-
-        raise Exception("No cached response available")
-
-    def _template_llm_response(self, prompt: str, **kwargs) -> str:
-        """Template-based LLM response fallback."""
-        # Simple template responses based on prompt patterns
-        prompt_lower = prompt.lower()
-
-        if "grade" in prompt_lower or "score" in prompt_lower:
-            return "Score: 75/100. Good understanding demonstrated with room for improvement."
-        elif "map" in prompt_lower or "match" in prompt_lower:
-            return "Question 1: Answer found in paragraph 1. Question 2: Answer found in paragraph 2."
-        elif "extract" in prompt_lower:
-            return "Key information extracted from the document."
-        else:
-            return "Processing completed using template response."
-
-    def _rule_based_processing(self, text: str, **kwargs) -> str:
-        """Rule-based processing fallback."""
-        # Simple rule-based text processing
-        if not text:
-            return "No content to process"
-
-        word_count = len(text.split())
-        char_count = len(text)
-
-        return f"Processed {word_count} words and {char_count} characters using rule-based method."
+    # LLM fallback methods removed - only LLM extraction should be used
 
     def _alternative_file_processing(self, file_path: str, **kwargs) -> str:
         """Alternative file processing method."""
@@ -822,7 +766,6 @@ class FallbackManager:
 
         self.cached_results[key] = (result, datetime.now(timezone.utc))
         logger.debug(f"Cached result with key: {key}")
-
 
 # Global instance
 fallback_manager = FallbackManager()

@@ -5,10 +5,12 @@ This service provides robust file processing with fallback mechanisms,
 content validation, and quality scoring for documents.
 """
 
-import hashlib
+import os
 import re
+import subprocess
 import time
 from datetime import datetime, timezone
+import hashlib
 from typing import Any, Dict, List
 
 from src.services.content_validator import content_validator
@@ -16,7 +18,6 @@ from src.services.core.file_processing_service import FileProcessingService as C
 from src.services.extraction_method_registry import extraction_method_registry
 from src.services.processing_error_handler import ErrorContext, processing_error_handler
 from utils.logger import logger
-
 
 class FileProcessingService:
     """Enhanced file processing service with fallback mechanisms"""
@@ -48,14 +49,14 @@ class FileProcessingService:
     def process_file(self, file_info: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process a file and extract text content.
-        
+
         Args:
             file_info: Dictionary containing file information with keys:
                 - name: filename
                 - path: file path
                 - size: file size
                 - type: file type/mime type
-        
+
         Returns:
             Dictionary with processing results
         """
@@ -68,17 +69,17 @@ class FileProcessingService:
                     'text': '',
                     'processing_time': 0
                 }
-            
+
             start_time = time.time()
-            
+
             # Use the existing process_file_with_fallback method
             result = self.process_file_with_fallback(file_path, file_info)
-            
+
             processing_time = time.time() - start_time
             result['processing_time'] = processing_time
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Error in process_file: {e}")
             return {
@@ -131,7 +132,7 @@ class FileProcessingService:
 
             if chain_result.get('success', False):
                 content = chain_result.get('text_content', '')
-                
+
                 # Create a simple validation result since content_validator may not be available
                 try:
                     validation_result = content_validator.validate_content(content, file_info)
@@ -784,7 +785,7 @@ class FileProcessingService:
             import subprocess
 
             result = subprocess.run(
-                ["antiword", file_path], capture_output=True, text=True, timeout=30
+                ["antiword", file_path], capture_output=True, text=True, timeout=int(os.getenv("TIMEOUT_ANTIWORD", "30"))
             )
             if result.returncode == 0:
                 return result.stdout
@@ -1178,7 +1179,6 @@ class FileProcessingService:
             if dep_info.get("type") == "system_command":
                 # Check system commands
                 try:
-                    import subprocess
 
                     result = subprocess.run(
                         [dep_name, "--version"], capture_output=True, timeout=5
@@ -1224,7 +1224,7 @@ class FileProcessingService:
             # Filter out platform-incompatible dependencies for cleaner logging
             platform_incompatible = ['antiword ([WinError 2] The system cannot find the file specified)']
             critical_missing = [dep for dep in missing_deps if dep not in platform_incompatible]
-            
+
             if critical_missing:
                 logger.warning(f"Missing optional dependencies: {', '.join(critical_missing)}")
                 logger.info(

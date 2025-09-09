@@ -6,9 +6,10 @@ with environment-specific settings, validation, and migration utilities.
 """
 
 import os
+from pathlib import Path
 import secrets
 from dataclasses import dataclass, field
-from pathlib import Path
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
@@ -23,7 +24,6 @@ except ImportError:
 
     logger = logging.getLogger(__name__)
 
-
 def load_environment_variables():
     """Load environment variables from multiple .env files with priority."""
     instance_env = Path("instance/.env")
@@ -34,9 +34,7 @@ def load_environment_variables():
     if root_env.exists():
         load_dotenv(root_env, override=False)  # Don't override instance settings
 
-
 load_environment_variables()
-
 
 @dataclass
 class SecurityConfig:
@@ -60,7 +58,6 @@ class SecurityConfig:
         if self.secret_key and len(self.secret_key) < 32:
             raise ValueError("SECRET_KEY must be at least 32 characters long")
 
-
 @dataclass
 class DatabaseConfig:
     """Database configuration settings."""
@@ -75,7 +72,6 @@ class DatabaseConfig:
         """Validate database configuration."""
         if not self.database_url:
             raise ValueError("DATABASE_URL is required")
-
 
 @dataclass
 class FileConfig:
@@ -130,7 +126,6 @@ class FileConfig:
         if self.max_file_size_mb is not None and self.max_file_size_mb <= 0:
             raise ValueError("max_file_size_mb must be positive")
 
-
 @dataclass
 class APIConfig:
     """External API configuration settings."""
@@ -145,9 +140,9 @@ class APIConfig:
         default_factory=lambda: os.getenv("DEEPSEEK_API_URL", "")
     )
     deepseek_model: str = field(
-        default_factory=lambda: os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner")
+        default_factory=lambda: os.getenv("LLM_MODEL", "deepseek-chat")
     )
-    api_timeout: int = 30
+    api_timeout: int = 60
     api_retry_attempts: int = 3
     api_retry_delay: float = 2.0
 
@@ -156,7 +151,7 @@ class APIConfig:
     llm_strict_mode: bool = False  # When True, fails completely if LLM fails
     llm_retry_attempts: int = 3  # Total attempts including initial try
     llm_retry_delay: float = 2.0  # Base delay between attempts in seconds
-    llm_json_timeout: float = 10.0  # Additional time allowance for JSON parsing
+    llm_json_timeout: float = 30.0  # Additional time allowance for JSON parsing
     llm_retry_on_json_error: int = 2  # Retries specifically for JSON parse failures
     llm_json_schema: Optional[Dict] = None  # Optional JSON schema validation
     llm_fallback_to_plaintext: bool = True  # Attempt plaintext parsing if JSON fails
@@ -184,7 +179,6 @@ class APIConfig:
                 "DeepSeek API key not configured - LLM features will be limited"
             )
 
-
 @dataclass
 class CacheConfig:
     """Caching configuration settings."""
@@ -198,7 +192,6 @@ class CacheConfig:
         valid_types = ["simple", "memory"]
         if self.cache_type not in valid_types:
             raise ValueError(f"cache_type must be one of {valid_types}")
-
 
 @dataclass
 class LoggingConfig:
@@ -216,22 +209,22 @@ class LoggingConfig:
         if self.log_level.upper() not in valid_levels:
             raise ValueError(f"log_level must be one of {valid_levels}")
 
-
 @dataclass
 class ServerConfig:
     """Server configuration settings."""
 
-    host: str = "127.0.0.1"
-    port: int = 5000
-    debug: bool = False
-    testing: bool = False
-    threaded: bool = True
+    host: str = field(default_factory=lambda: os.getenv("HOST", "127.0.0.1"))
+    port: int = field(default_factory=lambda: int(os.getenv("PORT", "8501")))
+    debug: bool = field(default_factory=lambda: os.getenv("DEBUG", "False").lower() == "true")
+    testing: bool = field(default_factory=lambda: os.getenv("TESTING", "False").lower() == "true")
+    threaded: bool = field(default_factory=lambda: os.getenv("THREADED", "True").lower() == "true")
+    max_batch_processing_workers: int = field(default_factory=lambda: int(os.getenv("MAX_BATCH_WORKERS", "5")))
+    batch_processing_size: int = field(default_factory=lambda: int(os.getenv("BATCH_PROCESSING_SIZE", "5")))
 
     def __post_init__(self):
         """Validate server configuration."""
         if not (1 <= self.port <= 65535):
             raise ValueError("port must be between 1 and 65535")
-
 
 class ConfigurationMigrator:
     """Handles migration of deprecated environment variables to new names."""
@@ -265,7 +258,6 @@ class ConfigurationMigrator:
             logger.info(f"Migrated {len(migrated)} deprecated environment variables")
 
         return migrated
-
 
 class ConfigurationValidator:
     """Validates configuration settings and provides helpful error messages."""
@@ -337,7 +329,6 @@ class ConfigurationValidator:
 
         return warnings
 
-
 class UnifiedConfig:
     """
     Unified configuration manager that consolidates all application settings.
@@ -353,7 +344,7 @@ class UnifiedConfig:
         Args:
             environment: Environment name (development, testing, production)
         """
-        self.environment = environment or os.getenv("FLASK_ENV", "production")
+        self.environment = environment or os.getenv("FLASK_ENV", "development")
 
         # Migrate deprecated environment variables
         ConfigurationMigrator.migrate_environment_variables()
@@ -430,7 +421,7 @@ class UnifiedConfig:
             ),
             deepseek_api_key=os.getenv("DEEPSEEK_API_KEY", ""),
             deepseek_api_url=os.getenv("DEEPSEEK_API_URL", ""),
-            deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner"),
+            deepseek_model=os.getenv("LLM_MODEL", "deepseek-chat"),
             # LLM-Only Mode Configuration
             llm_require_json_response=os.getenv("LLM_REQUIRE_JSON", "True").lower()
             == "true",
@@ -524,13 +515,9 @@ class UnifiedConfig:
         """
         Get Flask-compatible configuration dictionary.
 
-        elif database_url.startswith("postgres://"):
-            # Convert postgres:// to postgresql:// for SQLAlchemy 2.0+ compatibility
-            return database_url.replace("postgres://", "postgresql://", 1)
-        else:
-            # Not a SQLite or postgres database, return as-is
-            return database_url        from datetime import timedelta
-        
+        Returns:
+            Dictionary containing Flask configuration settings
+        """
         return {
             "SECRET_KEY": self.security.secret_key,
             "DEBUG": self.server.debug,
@@ -729,6 +716,21 @@ class UnifiedConfig:
 
         return "\n".join(template_lines)
 
+    @property
+    def ocr(self):
+        """Get OCR configuration object with enabled property."""
+        class OCRConfig:
+            def __init__(self, api_config):
+                self.api_key = api_config.handwriting_ocr_api_key
+                self.api_url = api_config.handwriting_ocr_api_url
+                self.delete_after = api_config.handwriting_ocr_delete_after
+            
+            @property
+            def enabled(self):
+                """Check if OCR is enabled (has API key)."""
+                return bool(self.api_key and self.api_key.strip())
+        
+        return OCRConfig(self.api)
 
 # Global configuration instance
 config = UnifiedConfig()

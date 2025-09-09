@@ -1,13 +1,12 @@
 """Database migration manager for the Exam Grader application."""
 
-import logging
 from pathlib import Path
+import logging
 from typing import Dict
 
 from sqlalchemy import create_engine, inspect
 
 logger = logging.getLogger(__name__)
-
 
 class MigrationManager:
     """Manages database migrations and schema updates."""

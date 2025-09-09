@@ -1,11 +1,10 @@
 """Standardized API response models for consistent response formatting."""
 
 import json
-from dataclasses import dataclass, field
 from datetime import datetime
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
-
 
 class ResponseStatus(Enum):
     """Standard response status codes."""
@@ -15,7 +14,6 @@ class ResponseStatus(Enum):
     WARNING = "warning"
     PARTIAL = "partial"
     LOADING = "loading"
-
 
 class ErrorCode(Enum):
     """Standard error codes for consistent error handling."""
@@ -30,7 +28,6 @@ class ErrorCode(Enum):
     INVALID_REQUEST = "INVALID_REQUEST"
     PROCESSING_ERROR = "PROCESSING_ERROR"
     TIMEOUT_ERROR = "TIMEOUT_ERROR"
-
 
 @dataclass
 class APIMetadata:
@@ -52,7 +49,6 @@ class APIMetadata:
             "warnings": self.warnings,
         }
 
-
 @dataclass
 class ErrorDetail:
     """Detailed error information."""
@@ -70,7 +66,6 @@ class ErrorDetail:
         if self.details:
             result["details"] = self.details
         return result
-
 
 @dataclass
 class APIResponse:
@@ -131,7 +126,6 @@ class APIResponse:
 
         return cls(status=ResponseStatus.LOADING, data=data, message=message, **kwargs)
 
-
 @dataclass
 class PaginationInfo:
     """Pagination information for paginated responses."""
@@ -176,7 +170,6 @@ class PaginationInfo:
             prev_page=page - 1 if has_prev else None,
         )
 
-
 @dataclass
 class PaginatedResponse(APIResponse):
     """Paginated API response format."""
@@ -210,7 +203,6 @@ class PaginatedResponse(APIResponse):
             pagination=pagination,
             **kwargs,
         )
-
 
 @dataclass
 class ErrorResponse(APIResponse):
@@ -280,18 +272,15 @@ class ErrorResponse(APIResponse):
             message=message, error_code=ErrorCode.PROCESSING_ERROR, details=details
         )
 
-
 def create_success_response(data: Any = None, message: str = None) -> Dict[str, Any]:
     """Create a success response dictionary."""
     return APIResponse.success(data=data, message=message).to_dict()
-
 
 def create_error_response(
     message: str, error_code: ErrorCode = ErrorCode.INTERNAL_ERROR
 ) -> Dict[str, Any]:
     """Create an error response dictionary."""
     return ErrorResponse(message=message, error_code=error_code).to_dict()
-
 
 def create_loading_response(
     operation_id: str, message: str = "Processing...", progress: Dict[str, Any] = None
@@ -300,7 +289,6 @@ def create_loading_response(
     return APIResponse.loading(
         operation_id=operation_id, message=message, progress=progress
     ).to_dict()
-
 
 def create_paginated_response(
     items: List[Any], page: int, per_page: int, total_items: int, message: str = None

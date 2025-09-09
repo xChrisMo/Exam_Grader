@@ -40,7 +40,6 @@ except ImportError:
     class ValidationError(Exception):
         pass
 
-
 class SecurityHeaders:
     """Manages security headers for HTTP responses."""
 
@@ -128,7 +127,6 @@ class SecurityHeaders:
         if include_subdomains:
             hsts += "; includeSubDomains"
         return hsts
-
 
 class RequestValidator:
     """Validates and sanitizes incoming requests."""
@@ -453,7 +451,6 @@ class RequestValidator:
         cls._blocked_ips.clear()
         logger.info("Rate limits reset")
 
-
 class SecurityMiddleware:
     """Main security middleware class."""
 
@@ -661,10 +658,8 @@ class SecurityMiddleware:
                 "status_code": 429,
             }, 429
 
-
 # Global security middleware instance
 security_middleware = SecurityMiddleware()
-
 
 def init_security_middleware(app: Flask, config: Optional[Dict[str, Any]] = None):
     """Initialize security middleware with Flask app.

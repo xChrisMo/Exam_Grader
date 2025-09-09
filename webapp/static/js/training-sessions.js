@@ -511,7 +511,15 @@ class TrainingSessionsManager {
             try {
                 const response = await fetch(`/training/progress/${session.id}`);
                 if (response.ok) {
-                    const progress = await response.json();
+                    let progress;
+                    try {
+                        const responseText = await response.text();
+                        progress = JSON.parse(responseText);
+                    } catch (jsonError) {
+                        console.error(`JSON parsing error for session ${session.id}:`, jsonError);
+                        console.error('Response text:', await response.text());
+                        continue; // Skip this session update
+                    }
                     
                     // Update session in memory
                     const sessionIndex = this.sessions.findIndex(s => s.id === session.id);
@@ -523,7 +531,8 @@ class TrainingSessionsManager {
                     this.updateSessionCard(session.id, progress);
                 }
             } catch (error) {
-                // Error updating progress for session
+                console.error(`Error updating progress for session ${session.id}:`, error);
+                // Continue with other sessions
             }
         }
     }

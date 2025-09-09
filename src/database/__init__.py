@@ -18,11 +18,8 @@ from .models import (
 )
 from .utils import DatabaseUtils
 
-# Import migration manager
-try:
-    from .migrations import MigrationManager
-except ImportError:
-    MigrationManager = None
+# Migration manager has been removed
+MigrationManager = None
 
 # Import optimized models as well
 try:
@@ -39,7 +36,6 @@ __all__ = [
     "GradingResult",
     "GradingSession",
     "Session",
-    "MigrationManager",
     "DatabaseUtils",
     "optimized_models",
 ]
