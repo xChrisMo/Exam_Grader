@@ -20,18 +20,18 @@ jobs:
     
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python3 -m pip install --upgrade pip
         pip install -r requirements.txt
     
     - name: Run basic tests
       run: |
-        python -c "import webapp.app; print('✅ App imports successfully')"
-        python -c "from src.services.consolidated_llm_service import ConsolidatedLLMService; print('✅ Services import successfully')"
+        python3 -c "import webapp.app; print('✅ App imports successfully')"
+        python3 -c "from src.services.consolidated_llm_service import ConsolidatedLLMService; print('✅ Services import successfully')"
     
     - name: Check code quality
       run: |
-        python -m py_compile run_app.py
-        python -m py_compile webapp/app.py
+        python3 -m py_compile run_app.py
+        python3 -m py_compile webapp/app.py
         echo "✅ Code compiles successfully"
 
   deploy:

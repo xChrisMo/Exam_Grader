@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import secrets
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
@@ -514,15 +515,9 @@ class UnifiedConfig:
         """
         Get Flask-compatible configuration dictionary.
 
-
-        elif database_url.startswith("postgres://"):
-            # Convert postgres:// to postgresql:// for SQLAlchemy 2.0+ compatibility
-            return database_url.replace("postgres://", "postgresql://", 1)
-        else:
-            # Not a SQLite or postgres database, return as-is
-            return database_url        from datetime import timedelta
-        
-
+        Returns:
+            Dictionary containing Flask configuration settings
+        """
         return {
             "SECRET_KEY": self.security.secret_key,
             "DEBUG": self.server.debug,
