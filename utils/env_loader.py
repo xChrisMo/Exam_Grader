@@ -72,11 +72,11 @@ def load_environment(env_file: Optional[str] = None, project_root: Optional[Path
                 load_dotenv(env_path, override=True)
                 print(f"✅ Loaded environment from: {env_path}")
             break
+    else:
+        print("⚠️  No .env file found, using system environment variables only")
     
     print(f"   DEEPSEEK_API_KEY after loading: {os.getenv('DEEPSEEK_API_KEY', 'Not set')[:10] + '...' if os.getenv('DEEPSEEK_API_KEY') else 'Not set'}")
     print("=" * 50)
-    else:
-        print("⚠️  No .env file found, using system environment variables only")
 
 def ensure_env_file_exists(project_root: Optional[Path] = None) -> bool:
     """
