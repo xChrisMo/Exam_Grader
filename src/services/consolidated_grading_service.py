@@ -20,8 +20,8 @@ class ConsolidatedGradingService(BaseService):
         llm_service=None,
         mapping_service=None,
         max_batch_size: int = 8,
-        chunk_size: int = 3000,
-        cache_size: int = 1000,
+        chunk_size: int = None,  # No chunk size limit
+        cache_size: int = None,  # No cache size limit
         cache_ttl: int = 3600,  # 1 hour
     ):
         """Initialize the consolidated grading service.
@@ -120,14 +120,8 @@ class ConsolidatedGradingService(BaseService):
         return None
 
     def _cache_result(self, cache_key: str, result: Any) -> None:
-        """Cache result with size limit."""
-        if len(self._grading_cache) >= self.cache_size:
-            oldest_key = min(
-                self._cache_timestamps.keys(), key=lambda k: self._cache_timestamps[k]
-            )
-            del self._grading_cache[oldest_key]
-            del self._cache_timestamps[oldest_key]
-
+        """Cache result with no size limit."""
+        # No cache size limit - always cache
         self._grading_cache[cache_key] = result
         self._cache_timestamps[cache_key] = time.time()
 
@@ -339,7 +333,7 @@ Output JSON format:
 
         # Prepare marking guide excerpt
         guide_excerpt = (
-            marking_guide[:800]
+            marking_guide
             if marking_guide
             else "No specific marking guide provided."
         )
@@ -499,7 +493,7 @@ Return JSON format:
 
                 user_prompt = f"""Question: {question} (Max Score: {max_score} points)
 Student Answer: {answer}
-Marking Guide: {marking_guide[:500]}"""
+Marking Guide: {marking_guide}"""
 
                 response = self.llm_service.generate_response(
                     system_prompt=system_prompt,
@@ -648,9 +642,9 @@ Marking Guide: {marking_guide[:500]}"""
         """Get grading performance statistics."""
         return {
             "max_batch_size": self.max_batch_size,
-            "chunk_size": self.chunk_size,
+            "chunk_size": "unlimited" if self.chunk_size is None else self.chunk_size,
             "cache_size": len(self._grading_cache),
-            "max_cache_size": self.cache_size,
+            "max_cache_size": "unlimited" if self.cache_size is None else self.cache_size,
             "cache_ttl": self.cache_ttl,
             "cache_hits": self.metrics.custom_metrics.get("cache_hits", 0),
             "cache_misses": self.metrics.custom_metrics.get("cache_misses", 0),

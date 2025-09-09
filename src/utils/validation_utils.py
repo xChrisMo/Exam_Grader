@@ -30,9 +30,9 @@ class ValidationUtils:
         "bmp",
     }
 
-    # Maximum file sizes (in bytes)
-    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
-    MAX_TEXT_LENGTH = 1000000  # 1M characters
+    # Maximum file sizes (in bytes) - No limits
+    MAX_FILE_SIZE = None  # No file size limit
+    MAX_TEXT_LENGTH = None  # No text length limit
 
     # Minimum content requirements
     MIN_TEXT_LENGTH = 10  # Minimum 10 characters
@@ -85,14 +85,15 @@ class ValidationUtils:
                     "error_code": "EMPTY_FILE",
                 }
 
-            if file_size > cls.MAX_FILE_SIZE:
-                return {
-                    "success": False,
-                    "error": f"File size ({file_size / 1024 / 1024:.1f}MB) exceeds maximum allowed size ({cls.MAX_FILE_SIZE / 1024 / 1024:.0f}MB)",
-                    "error_code": "FILE_TOO_LARGE",
-                    "file_size": file_size,
-                    "max_size": cls.MAX_FILE_SIZE,
-                }
+            # No file size limit - skip size check
+            # if file_size > cls.MAX_FILE_SIZE:
+            #     return {
+            #         "success": False,
+            #         "error": f"File size ({file_size / 1024 / 1024:.1f}MB) exceeds maximum allowed size ({cls.MAX_FILE_SIZE / 1024 / 1024:.0f}MB)",
+            #         "error_code": "FILE_TOO_LARGE",
+            #         "file_size": file_size,
+            #         "max_size": cls.MAX_FILE_SIZE,
+            #     }
 
             return {
                 "success": True,
@@ -135,15 +136,15 @@ class ValidationUtils:
                 }
             )
 
-        # Check text length upper bound
-        if len(text_content) > cls.MAX_TEXT_LENGTH:
-            warnings.append(
-                {
-                    "type": "excessive_content",
-                    "message": f"Content very long ({len(text_content)} characters), processing may be slow",
-                    "severity": "warning",
-                }
-            )
+        # No text length limit - skip length check
+        # if len(text_content) > cls.MAX_TEXT_LENGTH:
+        #     warnings.append(
+        #         {
+        #             "type": "excessive_content",
+        #             "message": f"Content very long ({len(text_content)} characters), processing may be slow",
+        #             "severity": "warning",
+        #         }
+        #     )
 
         # Check OCR confidence
         if confidence < cls.MIN_CONFIDENCE:

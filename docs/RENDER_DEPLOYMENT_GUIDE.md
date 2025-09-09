@@ -34,6 +34,12 @@ SECRET_KEY=your_generated_secret_key_here
 DEEPSEEK_API_KEY=your_deepseek_api_key_here
 HANDWRITING_OCR_API_KEY=your_handwriting_ocr_api_key_here
 
+# LLM Configuration (unlimited usage)
+LLM_REQUESTS_PER_MINUTE=1000
+LLM_REQUESTS_PER_HOUR=10000
+TIMEOUT_LLM_PROCESSING=1200
+LLM_JSON_TIMEOUT=60.0
+
 # Database (SQLite will be used by default)
 DATABASE_URL=sqlite:///exam_grader.db
 
@@ -132,6 +138,17 @@ ALLOWED_ORIGINS=https://*.onrender.com,https://*.render.com
 # Allow all origins (default, less secure)
 ALLOWED_ORIGINS=*
 ```
+
+### LLM Configuration
+
+The application is configured for unlimited LLM usage with the following settings:
+
+- **Rate Limits**: 1000 requests per minute, 10000 requests per hour
+- **Timeouts**: 20 minutes for LLM processing, 60 seconds for JSON parsing
+- **File Size**: Up to 100MB files supported
+- **Retry Logic**: 5 retry attempts with exponential backoff
+
+These settings ensure that large documents and complex processing tasks can be handled without artificial limitations.
 
 ## Security Considerations
 
