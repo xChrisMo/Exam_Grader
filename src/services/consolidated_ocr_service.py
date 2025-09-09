@@ -82,6 +82,16 @@ class ConsolidatedOCRService(BaseService):
         self.base_url = base_url or os.getenv(
             "HANDWRITING_OCR_API_URL", "https://www.handwritingocr.com/api/v3"
         )
+        
+        # Debug logging for OCR API key loading
+        logger.info(f"🔍 OCR API Key Loading Debug:")
+        logger.info(f"   api_key parameter: {api_key[:10] + '...' if api_key else 'None'}")
+        logger.info(f"   HANDWRITING_OCR_API_KEY env: {os.getenv('HANDWRITING_OCR_API_KEY', 'Not set')[:10] + '...' if os.getenv('HANDWRITING_OCR_API_KEY') else 'Not set'}")
+        logger.info(f"   Final OCR API key: {self.api_key[:10] + '...' if self.api_key else 'None'}")
+        
+        if self.api_key and ("your_" in self.api_key.lower() or "here" in self.api_key.lower()):
+            logger.error(f"❌ PLACEHOLDER OCR API KEY DETECTED: {self.api_key}")
+            logger.error("❌ This means the HANDWRITING_OCR_API_KEY environment variable is not set correctly on Render.com!")
         self.allow_no_key = allow_no_key
 
         # Headers setup

@@ -44,9 +44,11 @@ def debug_render_deployment():
     print("\n🎯 Specific API Key Check:")
     deepseek_key = os.getenv("DEEPSEEK_API_KEY")
     llm_key = os.getenv("LLM_API_KEY")
+    ocr_key = os.getenv("HANDWRITING_OCR_API_KEY")
     
     print(f"DEEPSEEK_API_KEY: {deepseek_key[:10] + '...' if deepseek_key else 'Not set'}")
     print(f"LLM_API_KEY: {llm_key[:10] + '...' if llm_key else 'Not set'}")
+    print(f"HANDWRITING_OCR_API_KEY: {ocr_key[:10] + '...' if ocr_key else 'Not set'}")
     
     if deepseek_key:
         if "your_" in deepseek_key or "here" in deepseek_key:
@@ -55,6 +57,14 @@ def debug_render_deployment():
             print("✅ DEEPSEEK_API_KEY looks real")
     else:
         print("❌ DEEPSEEK_API_KEY is not set!")
+    
+    if ocr_key:
+        if "your_" in ocr_key or "here" in ocr_key:
+            print("❌ HANDWRITING_OCR_API_KEY contains placeholder text!")
+        else:
+            print("✅ HANDWRITING_OCR_API_KEY looks real")
+    else:
+        print("❌ HANDWRITING_OCR_API_KEY is not set!")
     
     # Check if env.example is being loaded
     print("\n📁 Environment File Check:")
