@@ -445,6 +445,18 @@ class ConsolidatedLLMService(BaseService):
         self.api_key = (api_key or
                        os.getenv("LLM_API_KEY") or
                        os.getenv("DEEPSEEK_API_KEY"))
+        
+        # Debug logging for API key loading
+        logger.info(f"🔍 API Key Loading Debug:")
+        logger.info(f"   api_key parameter: {api_key[:10] + '...' if api_key else 'None'}")
+        logger.info(f"   LLM_API_KEY env: {os.getenv('LLM_API_KEY', 'Not set')[:10] + '...' if os.getenv('LLM_API_KEY') else 'Not set'}")
+        logger.info(f"   DEEPSEEK_API_KEY env: {os.getenv('DEEPSEEK_API_KEY', 'Not set')[:10] + '...' if os.getenv('DEEPSEEK_API_KEY') else 'Not set'}")
+        logger.info(f"   Final API key: {self.api_key[:10] + '...' if self.api_key else 'None'}")
+        
+        if self.api_key and ("your_" in self.api_key.lower() or "here" in self.api_key.lower()):
+            logger.error(f"❌ PLACEHOLDER API KEY DETECTED: {self.api_key}")
+            logger.error("❌ This means the environment variable is not set correctly on Render.com!")
+        
         self.base_url = base_url or os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1")
         self.model = (model or
                      os.getenv("LLM_MODEL_NAME") or

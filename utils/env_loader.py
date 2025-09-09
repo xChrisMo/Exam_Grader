@@ -41,14 +41,24 @@ def load_environment(env_file: Optional[str] = None, project_root: Optional[Path
             project_root / "env.example"         # Fallback
         ]
     
+    # Debug logging
+    print("🔍 Environment Loading Debug:")
+    print(f"   RENDER: {os.getenv('RENDER', 'Not set')}")
+    print(f"   FLASK_ENV: {os.getenv('FLASK_ENV', 'Not set')}")
+    print(f"   DEEPSEEK_API_KEY before loading: {os.getenv('DEEPSEEK_API_KEY', 'Not set')[:10] + '...' if os.getenv('DEEPSEEK_API_KEY') else 'Not set'}")
+    
     # Load environment files
     for env_path in env_files:
         if env_path.exists():
+            print(f"   Found env file: {env_path}")
             # Skip env.example if we're in production or if key environment variables are already set
             if env_path.name == "env.example":
                 # Check if we're in production or if key variables are already set
                 is_production = os.getenv("FLASK_ENV") == "production" or os.getenv("RENDER") == "true"
                 has_api_key = os.getenv("DEEPSEEK_API_KEY") and os.getenv("DEEPSEEK_API_KEY") != "your_deepseek_api_key_here"
+                
+                print(f"   is_production: {is_production}")
+                print(f"   has_api_key: {has_api_key}")
                 
                 if is_production or has_api_key:
                     print(f"⏭️  Skipping env.example (production mode or API key already set)")
@@ -62,6 +72,9 @@ def load_environment(env_file: Optional[str] = None, project_root: Optional[Path
                 load_dotenv(env_path, override=True)
                 print(f"✅ Loaded environment from: {env_path}")
             break
+    
+    print(f"   DEEPSEEK_API_KEY after loading: {os.getenv('DEEPSEEK_API_KEY', 'Not set')[:10] + '...' if os.getenv('DEEPSEEK_API_KEY') else 'Not set'}")
+    print("=" * 50)
     else:
         print("⚠️  No .env file found, using system environment variables only")
 
