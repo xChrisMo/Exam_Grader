@@ -97,6 +97,15 @@ def signup():
 
     if request.method == "POST":
         try:
+            # Check CSRF token first
+            from flask_wtf.csrf import validate_csrf
+            try:
+                validate_csrf(request.form.get('csrf_token'))
+            except Exception as csrf_error:
+                logger.warning(f"CSRF validation failed for signup: {csrf_error}")
+                flash("Security validation failed. Please refresh the page and try again.", "error")
+                return render_template("auth/signup.html")
+
             username = request.form.get("username", "").strip()
             email = request.form.get("email", "").strip()
             password = request.form.get("password", "")

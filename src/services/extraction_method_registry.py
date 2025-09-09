@@ -402,12 +402,28 @@ class ExtractionMethodRegistry:
         method_info.last_availability_check = datetime.now(timezone.utc)
 
         for dependency in method_info.dependencies:
-            try:
-                __import__(dependency)
-            except ImportError as e:
-                method_info.availability_error = f"Missing dependency: {dependency}"
-                logger.debug(f"Method {method_info.name} unavailable: {e}")
-                return False
+            if dependency == "antiword":
+                # Special handling for antiword system command
+                try:
+                    result = subprocess.run(
+                        ["which", "antiword"], capture_output=True, timeout=5
+                    )
+                    if result.returncode != 0:
+                        method_info.availability_error = f"Missing system command: {dependency}"
+                        logger.debug(f"Method {method_info.name} unavailable: antiword not found in PATH")
+                        return False
+                except Exception as e:
+                    method_info.availability_error = f"Error checking {dependency}: {str(e)}"
+                    logger.debug(f"Method {method_info.name} unavailable: {e}")
+                    return False
+            else:
+                # Check Python imports
+                try:
+                    __import__(dependency)
+                except ImportError as e:
+                    method_info.availability_error = f"Missing dependency: {dependency}"
+                    logger.debug(f"Method {method_info.name} unavailable: {e}")
+                    return False
 
         method_info.availability_error = None
         return True
@@ -574,17 +590,24 @@ class ExtractionMethodRegistry:
         """Extract DOC using antiword"""
         import subprocess
 
-        result = subprocess.run(
-            ["antiword", file_path], capture_output=True, text=True, timeout=int(os.getenv("TIMEOUT_ANTIWORD", "30"))
-        )
+        try:
+            result = subprocess.run(
+                ["antiword", file_path], capture_output=True, text=True, timeout=int(os.getenv("TIMEOUT_ANTIWORD", "30"))
+            )
 
-        if result.returncode != 0:
-            raise ValueError(f"antiword failed with return code {result.returncode}")
+            if result.returncode != 0:
+                raise ValueError(f"antiword failed with return code {result.returncode}: {result.stderr}")
 
-        content = result.stdout
-        metadata = {"extraction_library": "antiword"}
+            content = result.stdout
+            metadata = {"extraction_library": "antiword"}
 
-        return content, metadata
+            return content, metadata
+        except FileNotFoundError:
+            raise ValueError("antiword command not found - please install antiword for DOC file processing")
+        except subprocess.TimeoutExpired:
+            raise ValueError("antiword processing timed out")
+        except Exception as e:
+            raise ValueError(f"antiword extraction failed: {str(e)}")
 
     def _extract_rtf_striprtf(
         self, file_path: str, context: Dict[str, Any]
